@@ -1214,6 +1214,13 @@ export default function AdminDashboardPage() {
                 Finance Controller
               </Link>
               <Link
+                href="/admin/users"
+                className="flex items-center gap-2 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 px-6 py-3 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all font-bold active:scale-95"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                Users & Roles
+              </Link>
+              <Link
                 href="/admin/entities"
                 className="flex items-center gap-2 bg-purple-600/10 border border-purple-500/20 text-purple-400 px-6 py-3 rounded-2xl hover:bg-purple-600 hover:text-white transition-all font-bold active:scale-95"
               >
