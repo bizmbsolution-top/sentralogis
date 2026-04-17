@@ -1003,7 +1003,7 @@ export default function AdminDashboardPage() {
           wo.execution_date,
           wo.customers?.company_name || wo.customers?.name || "-",
           displayStatus.label,
-          (wo.work_order_items || []).reduce((sum, item) => sum + (item.quantity || 0), 0),
+          (wo.work_order_items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0),
           totalDeal,
           extraCosts,
           totalDeal + extraCosts,
@@ -1012,7 +1012,7 @@ export default function AdminDashboardPage() {
       });
 
       const csvRows = [headers.join(",")];
-      rows.forEach(row => {
+      rows.forEach((row: any) => {
         const escaped = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
         csvRows.push(escaped.join(","));
       });

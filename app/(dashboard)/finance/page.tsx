@@ -177,7 +177,7 @@ export default function FinancePage() {
         paid: 0
       };
 
-      data?.forEach(wo => {
+      data?.forEach((wo: any) => {
         const subtotal = wo.work_order_items?.reduce((sum, item: any) => sum + (item.deal_price * item.quantity), 0) || 0;
         const createdAt = new Date(wo.created_at);
 
