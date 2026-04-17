@@ -2,7 +2,8 @@
 // @ts-nocheck
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { supabase as supabaseRaw } from "@/lib/supabase/client";
+const supabase = supabaseRaw as any;
 import { toast, Toaster } from "react-hot-toast";
 import {
   Building2, Users, Search, Plus, X, Edit2, Trash2, 
