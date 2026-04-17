@@ -78,6 +78,7 @@ type JobOrder = {
   external_driver_name?: string | null;
   external_driver_phone?: string | null;
   tracking_updates?: TrackingUpdate[];
+  extra_costs?: any[];
 };
 
 type WorkOrder = {
