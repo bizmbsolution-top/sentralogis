@@ -70,4 +70,4 @@ Buka [http://localhost:3000](http://localhost:3000) untuk melihat hasilnya.
 
 ---
 
-&copy; 2026 Sentralogis. Seluruh hak cipta dilindungi undang-undang.
+&copy; 2026 Sentralogis. Seluruh hak cipta dilindungi undang - undang.
