@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { supabase as supabaseRaw } from "@/lib/supabase/client";
+const supabase = supabaseRaw as any;
 import { toast, Toaster } from "react-hot-toast";
 import {
   Banknote, FileText, ClipboardCheck, Search, 

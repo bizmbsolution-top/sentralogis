@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
+import { supabase as supabaseRaw } from "@/lib/supabase/client";
+const supabase = supabaseRaw as any;
 import { toast, Toaster } from "react-hot-toast";
 import {
   Truck, Package, AlertCircle, Plus,
