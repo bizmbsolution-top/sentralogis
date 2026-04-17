@@ -74,6 +74,30 @@ export default function EntityHubPage() {
   };
 
   useEffect(() => {
+    const protectRoute = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, sbu_access')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role !== 'superadmin') {
+        toast.error("Akses Terbatas: Hanya Superadmin yang punya kendali atas Master Entities.");
+        if (profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking')) {
+          window.location.href = "/sbu/trucking";
+        } else {
+          window.location.href = "/sbu-launchpad";
+        }
+      }
+    };
+
+    protectRoute();
     fetchData();
   }, []);
 

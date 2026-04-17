@@ -11,7 +11,8 @@ import {
     Building2, RefreshCw, Plus, Globe, Save, Download,
     Shield, AlertTriangle, Printer, Layers, ChevronRight,
     Map as MapIcon, List, LayoutGrid, PlusCircle, X, Banknote, FileText, Upload,
-    Trash2, ShieldCheck, FilePlus2, ArrowRight, ScanLine, Image as ImageIcon, ExternalLink
+    Trash2, ShieldCheck, FilePlus2, ArrowRight, ScanLine, Image as ImageIcon, ExternalLink,
+    LogOut, User
 } from "lucide-react";
 import { GoogleMap, MarkerF, DirectionsRenderer } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/lib/google-maps-context";
@@ -203,6 +204,34 @@ export default function SBUTruckingPage() {
     const [editingTransporterId, setEditingTransporterId] = useState<string | null>(null);
     const [selectedVendorId, setSelectedVendorId] = useState("");
     const [transporterSearch, setTransporterSearch] = useState("");
+    const [userProfile, setUserProfile] = useState<any>(null);
+
+    const handleLogout = async () => {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            toast.success("Berhasil keluar!");
+            window.location.href = "/login";
+        } catch (error: any) {
+            toast.error("Gagal keluar: " + error.message);
+        }
+    };
+
+    const fetchUserProfile = useCallback(async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                setUserProfile(data || { email: user.email, role: 'admin_sbu' });
+            }
+        } catch (error) {
+            console.error("Error fetching profile:", error);
+        }
+    }, []);
     
     // Extra Cost & Advance State
     const [showCostModal, setShowCostModal] = useState(false);
@@ -338,7 +367,30 @@ export default function SBUTruckingPage() {
         }
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        const protectRoute = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                window.location.href = "/login";
+                return;
+            }
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role, sbu_access')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.role !== 'superadmin' && !(profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking'))) {
+                toast.error("Akses Ditolak: Anda tidak memiliki otoritas untuk SBU Trucking.");
+                window.location.href = "/sbu-launchpad";
+            }
+        };
+
+        protectRoute();
+        fetchData();
+        fetchUserProfile();
+    }, [fetchData, fetchUserProfile]);
 
     // =====================================================
     // HANDLERS
@@ -524,6 +576,27 @@ export default function SBUTruckingPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* SBU Floating Profile */}
+                        <div className="hidden md:flex items-center gap-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 py-2 pl-2 pr-6 rounded-full shadow-2xl mr-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                    <User className="w-5 h-5 text-white" />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{userProfile?.full_name || 'Operator SBU'}</p>
+                                    <p className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-widest">{userProfile?.role?.replace('_', ' ') || 'SBU Trucking'}</p>
+                                </div>
+                            </div>
+                            <div className="h-8 w-px bg-white/10" />
+                            <button
+                                onClick={handleLogout}
+                                className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-all font-bold active:scale-95 text-[10px] uppercase tracking-widest"
+                            >
+                                <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                                Logout
+                            </button>
+                        </div>
+
                         <button 
                             onClick={() => setShowMap(true)} 
                             className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"

@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase as supabaseRaw } from "@/lib/supabase/client";
 const supabase = supabaseRaw as any;
 import { toast, Toaster } from "react-hot-toast";
+import Link from "next/link";
 import {
   Users, UserPlus, Shield, ShieldCheck, 
   ShieldAlert, Lock, Search, Filter,
   MoreVertical, Edit2, Trash2, 
   CheckCircle2, XCircle, Mail, Clock,
-  ChevronRight, LayoutGrid, HardHat, 
-  Truck, Ship, Banknote, RefreshCw
+  ChevronRight, ChevronLeft, LayoutGrid, HardHat, 
+  Truck, Ship, Banknote, RefreshCw, LogOut, User
 } from "lucide-react";
 
 type Profile = {
@@ -71,6 +72,34 @@ export default function UserManagementPage() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success("Berhasil keluar!");
+      window.location.href = "/login";
+    } catch (error: any) {
+      toast.error("Gagal keluar: " + error.message);
+    }
+  };
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        setUserProfile(data || { email: user.email, role: 'superadmin' });
+      }
+    } catch (error) {
+      console.error("Error fetching admin profile:", error);
+    }
+  }, []);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -90,8 +119,33 @@ export default function UserManagementPage() {
   }, []);
 
   useEffect(() => {
+    const protectRoute = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, sbu_access')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role !== 'superadmin') {
+        toast.error("Akses Ditolak: Hanya Superadmin yang punya kendali atas Management User.");
+        if (profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking')) {
+          window.location.href = "/sbu/trucking";
+        } else {
+          window.location.href = "/sbu-launchpad";
+        }
+      }
+    };
+
+    protectRoute();
     fetchProfiles();
-  }, [fetchProfiles]);
+    fetchUserProfile();
+  }, [fetchProfiles, fetchUserProfile]);
 
   const handleUpdateRole = async (profileId: string, newRole: string, newSbuAccess: string[]) => {
     try {
@@ -137,6 +191,41 @@ export default function UserManagementPage() {
              <h1 className="text-4xl font-black italic tracking-tighter uppercase">Team Controls<span className="text-emerald-500">.</span></h1>
           </div>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] ml-1">Centralized RBAC Management System v1.0</p>
+        </div>
+
+        <div className="flex items-center gap-6">
+          {/* Admin Floating Profile */}
+          <div className="flex items-center gap-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 py-2 pl-2 pr-6 rounded-full shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <User className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{userProfile?.full_name || 'Admin Sentralogis'}</p>
+                <p className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-widest">{userProfile?.role || 'Superadmin'}</p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-white/10" />
+            <button
+              onClick={handleLogout}
+              className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-all font-bold active:scale-95 text-[10px] uppercase tracking-widest"
+            >
+              <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-6 mb-10">
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/admin"
+            className="flex items-center gap-2 px-6 py-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-bold text-slate-300 active:scale-95 text-xs"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Main Dashboard
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">

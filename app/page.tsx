@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ShieldCheck, Truck, Ship, LayoutGrid, ArrowRight, Lock, Mail, ChevronRight, BarChart3, Globe2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Truck, Ship, LayoutGrid, ArrowRight, Lock, Mail, ChevronRight, BarChart3, Globe2, RefreshCw } from 'lucide-react';
+import { createClient } from "@/lib/supabase/client";
+import toast, { Toaster } from "react-hot-toast";
 import Link from 'next/link';
 
 export default function LandingLoginPage() {
@@ -9,17 +11,76 @@ export default function LandingLoginPage() {
    const [password, setPassword] = useState('');
    const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-   const handleLogin = (e: React.FormEvent) => {
+   const supabase = createClient();
+
+   const performRedirect = (role: string, sbuAccess: string[]) => {
+      if (role === 'superadmin') {
+         window.location.href = "/admin";
+      } else if (role === 'admin_sbu') {
+         if (sbuAccess?.includes('trucking')) {
+            window.location.href = "/sbu/trucking";
+         } else {
+            window.location.href = "/sbu-launchpad";
+         }
+      } else if (role === 'finance') {
+         window.location.href = "/finance";
+      } else {
+         window.location.href = "/admin";
+      }
+   };
+
+   useEffect(() => {
+      const checkSession = async () => {
+         const { data: { session } } = await supabase.auth.getSession();
+         if (session) {
+            const { data: profile } = await supabase
+               .from('profiles')
+               .select('role, sbu_access')
+               .eq('id', session.user.id)
+               .single();
+            if (profile) {
+               performRedirect(profile.role, profile.sbu_access || []);
+            }
+         }
+      };
+      checkSession();
+   }, []);
+
+   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       setIsLoggingIn(true);
-      // Logic login akan dihubungkan ke Supabase nanti
-      setTimeout(() => {
-         window.location.href = '/admin'; // Redirect trial
-      }, 1500);
+      
+      try {
+         const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+         });
+
+         if (error) throw error;
+
+         const { data: { user } } = await supabase.auth.getUser();
+         if (user) {
+            const { data: profile } = await supabase
+               .from('profiles')
+               .select('role, sbu_access')
+               .eq('id', user.id)
+               .single();
+
+            toast.success("Otentikasi Berhasil!");
+            if (profile) {
+               performRedirect(profile.role, profile.sbu_access || []);
+            }
+         }
+      } catch (error: any) {
+         toast.error(error.message || "Gagal masuk");
+      } finally {
+         setIsLoggingIn(false);
+      }
    };
 
    return (
       <div className="min-h-screen bg-slate-950 text-white selection:bg-emerald-500/30 overflow-x-hidden font-sans">
+         <Toaster position="top-right" />
          {/* DYNAMIC BACKGROUND GRAVITY */}
          <div className="fixed inset-0 z-0">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/10 blur-[120px] rounded-full animate-pulse" />
@@ -160,14 +221,17 @@ export default function LandingLoginPage() {
                         </button>
                      </form>
 
-                     <div className="pt-6 border-t border-white/5 text-center">
+                     <div className="pt-6 border-t border-white/5 text-center space-y-3">
                         <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">New Transporter? <button className="text-emerald-500 hover:underline">Apply for Partnership</button></p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                          Need Access? <Link href="/signup" className="text-emerald-500 hover:underline">Request Authorized Account</Link>
+                        </p>
                      </div>
                   </div>
 
                   <div className="text-center">
-                     <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.5em]">
-                        &copy; 2026 PT Sentral Logistik Indonesia. All Rights Reserved.
+                     <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.5em] italic">
+                        @2026 powered by mbsolutions
                      </p>
                   </div>
                </div>

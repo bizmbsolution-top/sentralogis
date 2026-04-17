@@ -12,7 +12,7 @@ import {
   Clock, CheckCircle, XCircle,
   ChevronDown, ChevronUp, MessageSquare, AlertTriangle, Check, Send, Edit2, Edit3, Download,
   CheckCircle2, Ban, Hourglass, UserPlus, Calendar, MapPin, Navigation, Banknote, CircleDollarSign, Save, ExternalLink, ShieldCheck, LayoutGrid, RefreshCw, Target,
-  Ship, Warehouse, HardHat, ChevronRight, ChevronLeft, Activity, Upload, Verified
+  Ship, Warehouse, HardHat, ChevronRight, ChevronLeft, Activity, Upload, Verified, LogOut, User
 } from "lucide-react";
 
 // =====================================================
@@ -153,6 +153,62 @@ export default function AdminDashboardPage() {
   const [selectedSbus, setSelectedSbus] = useState<string[]>(['trucking']);
   const [activeWizardTab, setActiveWizardTab] = useState('trucking');
   const [editingWOId, setEditingWOId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success("Berhasil keluar!");
+      window.location.href = "/login";
+    } catch (error: any) {
+      toast.error("Gagal keluar: " + error.message);
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        setUserProfile(data || { email: user.email, role: 'superadmin' });
+      }
+    } catch (error) {
+    }
+  };
+
+  useEffect(() => {
+    const protectRoute = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, sbu_access')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role !== 'superadmin') {
+        toast.error("Akses Terbatas: Hanya Superadmin yang diizinkan masuk ke Cockpit Master.");
+        if (profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking')) {
+          window.location.href = "/sbu/trucking";
+        } else {
+          window.location.href = "/sbu-launchpad";
+        }
+      }
+    };
+
+    protectRoute();
+    fetchDashboardData();
+    fetchUserProfile();
+  }, []);
 
   const [newWO, setNewWO] = useState({
     customer_id: "",
@@ -1185,13 +1241,37 @@ export default function AdminDashboardPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight">Admin Dashboard</h1>
-            <p className="text-slate-400 mt-1 flex items-center gap-2">
+            <h1 className="text-3xl font-black text-white tracking-tight italic">Admin Dashboard<span className="text-emerald-500">.</span></h1>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center gap-2 mt-1">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                Control Center • Sentra Logistik
+                Fleet Control Gateway • Sentra Logistik
             </p>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:overflow-visible scrollbar-hide w-[calc(100%+3rem)] md:w-auto">
+          <div className="flex items-center gap-4">
+            {/* Admin Floating Profile */}
+            <div className="flex items-center gap-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 py-2 pl-2 pr-6 rounded-full shadow-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{userProfile?.full_name || 'Admin Sentralogis'}</p>
+                  <p className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-widest">{userProfile?.role || 'Superadmin'}</p>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-white/10" />
+              <button
+                onClick={handleLogout}
+                className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-all font-bold active:scale-95 text-[10px] uppercase tracking-widest"
+              >
+                <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 mb-12 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:overflow-visible scrollbar-hide">
               <Link
                 href="/sbu-launchpad"
                 className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-2xl hover:scale-105 transition-all font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-500/20 active:scale-95"
@@ -1235,7 +1315,6 @@ export default function AdminDashboardPage() {
                 Work Order Baru
               </button>
           </div>
-        </div>
 
         {/* BI COCKPIT - Horizontal Scroll on Mobile, Grid on Desktop */}
         <div className="flex lg:grid lg:grid-cols-3 gap-6 overflow-x-auto lg:overflow-visible pb-8 -mx-6 px-6 lg:mx-0 lg:px-0 lg:pb-0 mb-12 snap-x snap-mandatory scrollbar-hide">

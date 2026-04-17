@@ -2,57 +2,40 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ShieldCheck, Mail, Lock, LogIn, ArrowRight, RefreshCw } from "lucide-react";
+import { ShieldCheck, Mail, Lock, User, ArrowRight, RefreshCw } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import Link from "next/link";
 
-export default function LoginPage() {
+export default function SignupPage() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
       });
 
       if (error) throw error;
 
-      // Fetch user profile to determine redirect path
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, sbu_access')
-          .eq('id', user.id)
-          .single();
-
-        toast.success("Otentikasi Berhasil! Mempersiapkan Dashboard...");
-        
-        setTimeout(() => {
-          if (profile?.role === 'superadmin') {
-            window.location.href = "/admin";
-          } else if (profile?.role === 'admin_sbu') {
-            if (profile.sbu_access?.includes('trucking')) {
-              window.location.href = "/sbu/trucking";
-            } else {
-              window.location.href = "/sbu-launchpad";
-            }
-          } else if (profile?.role === 'finance') {
-            window.location.href = "/finance";
-          } else {
-            window.location.href = "/";
-          }
-        }, 1000);
-      }
+      toast.success("Pendaftaran berhasil! Silakan login.");
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 2000);
     } catch (error: any) {
-      toast.error(error.message || "Gagal melakukan otentikasi");
+      toast.error(error.message || "Gagal melakukan pendaftaran");
     } finally {
       setLoading(false);
     }
@@ -63,36 +46,44 @@ export default function LoginPage() {
       <Toaster position="top-right" />
       
       {/* Background Effect */}
-      <div className="fixed inset-0 z-0 text-white">
+      <div className="fixed inset-0 z-0">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 blur-[120px] rounded-full animate-pulse decoration-delay-1000" />
       </div>
 
       <div className="relative z-10 w-full max-w-md space-y-8">
         <div className="text-center space-y-4">
-          <div className="relative inline-flex items-center justify-center w-24 h-24 mb-6">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-blue-600 rounded-[2.5rem] rotate-12 opacity-20 animate-pulse" />
-            <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500 to-blue-600 rounded-[2rem] -rotate-6 opacity-30" />
-            <div className="relative w-20 h-20 bg-slate-900 border border-white/10 rounded-[2.2rem] flex items-center justify-center shadow-2xl overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <span className="text-4xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">
-                SL
-              </span>
-            </div>
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-emerald-500 rounded-[2rem] shadow-2xl shadow-emerald-500/20 mb-4 transform hover:scale-110 transition-transform cursor-pointer">
+            <ShieldCheck className="w-12 h-12 text-white" />
           </div>
-          <h1 className="text-5xl font-black italic tracking-tighter uppercase leading-none">
-            Sentra <br />
-            <span className="text-emerald-500">Logistics</span>
-          </h1>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em] font-mono">GLOBAL SUPPLY CHAIN ECOSYSTEM</p>
+          <h1 className="text-4xl font-black italic tracking-tighter uppercase">Initialize Identity<span className="text-emerald-500">.</span></h1>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] font-mono">Sentralogis Gateway Security v4.5</p>
         </div>
 
         <div className="bg-slate-900/50 backdrop-blur-3xl p-10 rounded-[3rem] border border-white/5 shadow-2xl space-y-8">
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleSignup} className="space-y-6">
             <div className="space-y-4">
+              {/* Full Name */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Legal Name</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-600 group-focus-within:text-emerald-500 transition-colors">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/5 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold focus:border-emerald-500/50 outline-none transition-all placeholder:text-slate-700"
+                    placeholder="Enter your full name"
+                  />
+                </div>
+              </div>
+
               {/* Email */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Official ID Email</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Authorized Email</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-600 group-focus-within:text-emerald-500 transition-colors">
                     <Mail className="w-4 h-4" />
@@ -110,10 +101,7 @@ export default function LoginPage() {
 
               {/* Password */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center px-1">
-                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Access Credentials</label>
-                   <Link href="#" className="text-[9px] font-black text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors">Recover Access</Link>
-                </div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Secure Access Password</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-600 group-focus-within:text-emerald-500 transition-colors">
                     <Lock className="w-4 h-4" />
@@ -136,22 +124,22 @@ export default function LoginPage() {
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] italic flex items-center justify-center gap-4 transition-all shadow-xl shadow-emerald-500/20 active:scale-[0.98] mt-4"
             >
               {loading ? (
-                <><RefreshCw className="w-5 h-5 animate-spin" /> Verifying Credentials...</>
+                <><RefreshCw className="w-5 h-5 animate-spin" /> Provisioning Credentials...</>
               ) : (
-                <><LogIn className="w-5 h-5" /> Engage Operator Session</>
+                <><ArrowRight className="w-5 h-5" /> Execute Registration</>
               )}
             </button>
           </form>
 
           <div className="pt-6 border-t border-white/5 text-center">
             <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-              Unregistered Personnel? <Link href="/signup" className="text-emerald-500 hover:underline">Request Authorization</Link>
+              Already have authorization? <Link href="/login" className="text-emerald-500 hover:underline">Access Portal</Link>
             </p>
           </div>
         </div>
 
         <div className="text-center opacity-40">
-           <p className="text-[9px] font-black uppercase tracking-[0.5em] italic">@2026 powered by mbsolutions</p>
+           <p className="text-[9px] font-black uppercase tracking-[0.5em]">&copy; 2026 PT Sentral Logistik Indonesia</p>
         </div>
       </div>
     </div>
