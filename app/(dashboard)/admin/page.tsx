@@ -1013,7 +1013,7 @@ export default function AdminDashboardPage() {
 
       const csvRows = [headers.join(",")];
       rows.forEach((row: any) => {
-        const escaped = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
+        const escaped = row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`);
         csvRows.push(escaped.join(","));
       });
 
