@@ -99,6 +99,7 @@ type WorkOrder = {
   physical_doc_files?: string[];
   physical_doc_notes?: string;
   physical_doc_collected_at?: string;
+  created_at: string;
 };
 
 // =====================================================
