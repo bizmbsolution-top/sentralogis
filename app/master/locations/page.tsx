@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
     Plus, X, Trash2, Edit2, Save, MapPin, Search,
@@ -39,6 +39,7 @@ const defaultCenter = {
 };
 
 export default function MasterLocationsPage() {
+    const supabase = createClient();
     const [locations, setLocations] = useState<Location[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);

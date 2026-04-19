@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // GET: Ambil data JO berdasarkan token
 export async function GET(
@@ -8,6 +8,7 @@ export async function GET(
 ) {
   try {
     const { token } = await params
+    const supabaseAdmin = createAdminClient()
 
     if (!token) {
       return NextResponse.json(
@@ -191,6 +192,7 @@ export async function PATCH(
     const { token } = await params
     const body = await request.json()
     const { status, location } = body
+    const supabaseAdmin = createAdminClient()
 
     if (!token) {
       return NextResponse.json(
@@ -299,6 +301,7 @@ export async function POST(
     const formData = await request.formData()
     const file = formData.get('file') as File
     const docType = formData.get('doc_type') as string || 'surat_jalan'
+    const supabaseAdmin = createAdminClient()
 
     if (!token) {
       return NextResponse.json(

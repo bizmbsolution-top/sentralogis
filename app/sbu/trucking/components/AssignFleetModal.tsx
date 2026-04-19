@@ -1,6 +1,6 @@
 "use client";
 
-import { XCircle, Loader2, Save, Plus } from "lucide-react";
+import { XCircle, Loader2, Save, Plus, Truck, Users, Banknote, ChevronRight, X, Trash2 } from "lucide-react";
 import { formatThousand } from "../utils";
 
 interface AssignFleetModalProps {
@@ -14,18 +14,24 @@ interface AssignFleetModalProps {
     allFleets: any[];
     allDrivers: any[];
     busyFleetDates: Map<string, Set<string>>;
-    getAvailableFleets: () => any[];
-    getAvailableDrivers: () => any[];
+    getAvailableFleets: (currentId?: string) => any[];
+    getAvailableDrivers: (currentId?: string) => any[];
     fetchLastVendorPrice: (vId: string, type: string, oD: string, dD: string) => Promise<number>;
-    handleAssignUnits: () => void;
+    handleAssignUnits: (mode: 'draft' | 'handover' | 'finalize') => void;
     assigning: boolean;
+    isSingleEdit?: boolean;
 }
 
+/**
+ * ASSIGN FLEET MODAL: ATLAS ERA
+ * Fokus: Putih Bersih, Sectioning Rapi, Atlas Typography.
+ */
 export default function AssignFleetModal({
     show, onClose, selectedItem, getRemainingUnits,
     formRows, setFormRows, allCompanies, allFleets, allDrivers,
     busyFleetDates, getAvailableFleets, getAvailableDrivers,
-    fetchLastVendorPrice, handleAssignUnits, assigning
+    fetchLastVendorPrice, handleAssignUnits, assigning,
+    isSingleEdit
 }: AssignFleetModalProps) {
     if (!show || !selectedItem) return null;
 
@@ -34,75 +40,136 @@ export default function AssignFleetModal({
     const isExternal = (cid: string | null) => !!cid && cid !== ownCompanyId;
 
     return (
-        <div className="fixed inset-0 bg-[#0a0f1e]/90 backdrop-blur-md flex items-center justify-center z-[500] p-4">
-            <div className="bg-[#151f32] border border-white/10 p-6 md:p-8 rounded-[2.5rem] w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
-                <button onClick={onClose} className="absolute top-6 right-6 text-slate-600 hover:text-white transition-colors">
-                    <XCircle className="w-7 h-7" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 lg:p-10">
+            <div className="bg-white p-8 md:p-12 rounded-[3rem] w-full max-w-4xl max-h-[95vh] overflow-y-auto shadow-[0_30px_100px_rgba(0,0,0,0.15)] relative border border-slate-100 flex flex-col">
+                
+                {/* Close Button Atlas Style */}
+                <button onClick={onClose} className="absolute top-8 right-8 w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-[#1E293B] transition-all">
+                    <X className="w-6 h-6" />
                 </button>
 
-                <div className="mb-6">
-                    <h2 className="text-xl md:text-2xl font-black tracking-tighter uppercase italic">Assign Armada</h2>
-                    <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
-                        {selectedItem.work_orders?.wo_number} • Dibutuhkan {getRemainingUnits(selectedItem)} Unit {selectedItem.truck_type}
-                    </p>
-                    
-                    <div className="mt-4 bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-2xl w-fit flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 font-black text-xs">Rp</div>
+                {/* ATLAS HEADER SECTION */}
+                <div className="mb-10 pr-20">
+                    <div className="flex items-center gap-3 mb-2">
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operation Protocol</span>
+                         <div className="h-px flex-1 bg-slate-100" />
+                    </div>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
+                        <div className="flex-1">
+                            <h2 className="text-3xl font-black tracking-tighter uppercase italic text-[#1E293B] leading-none mb-2">
+                                {isSingleEdit ? 'Unit Strategy Revision' : 'DEPLOYMENT CENTER'}
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#1E293B]">
+                                <p className="text-sm font-black italic uppercase group">
+                                    <span className="text-slate-400 not-italic mr-1">WO:</span> {selectedItem.work_orders?.wo_number}
+                                </p>
+                                <span className="text-slate-200 hidden md:inline">|</span>
+                                <p className="text-sm font-black italic uppercase">
+                                    <span className="text-slate-400 not-italic mr-1">REQ:</span> {selectedItem.quantity} {selectedItem.truck_type}
+                                </p>
+                            </div>
+                        </div>
+
+                        {!isSingleEdit ? (
+                            <div className="bg-orange-600 text-white px-8 py-4 rounded-2xl flex flex-col items-center justify-center shadow-xl shadow-orange-500/20 animate-pulse">
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Remaining</span>
+                                <span className="text-2xl font-black italic leading-none">{getRemainingUnits(selectedItem)} UNITS</span>
+                            </div>
+                        ) : (
+                            <div className="bg-emerald-600 text-white px-8 py-4 rounded-2xl flex flex-col items-center justify-center shadow-xl shadow-emerald-500/20">
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Target</span>
+                                <span className="text-2xl font-black italic leading-none">SINGLE REVISION</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Customer Info Mini Box */}
+                    <div className="mt-6 flex items-center gap-3 bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl w-fit">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white">
+                            <Banknote className="w-5 h-5" />
+                        </div>
                         <div>
-                            <p className="text-[9px] text-emerald-500/60 uppercase font-black tracking-widest leading-none mb-1">Harga ke Customer</p>
-                            <p className="text-sm text-emerald-400 font-black leading-none">
-                                {formatThousand(selectedItem.deal_price || 0)}
+                            <p className="text-[9px] text-emerald-500 uppercase font-black tracking-widest leading-none mb-1">Contract Value</p>
+                            <p className="text-lg text-[#1E293B] font-black italic tracking-tighter leading-none">
+                                {formatThousand(selectedItem.deal_price || 0)} <span className="text-[10px] font-black not-italic text-slate-400 uppercase">/ Unit</span>
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="space-y-4 mb-6">
+                {/* MISSION ASSIGNMENT LIST */}
+                <div className="space-y-6 flex-1 overflow-x-hidden">
                     {formRows.map((row, i) => {
-                        const availableFleets = getAvailableFleets().filter(f => {
-                            if (row.type === 'own') return isInternal(f.company_id);
-                            if (row.type === 'vendor') {
-                                if (row.vendor_id) return f.company_id === row.vendor_id;
-                                return isExternal(f.company_id); 
+                        let availableFleets = getAvailableFleets(row.fleet_id);
+                        let availableDrivers = getAvailableDrivers(row.driver_id);
+
+                        // Enforce Guard: Case-insensitive matching for truck type
+                        const matchedFleets = availableFleets.filter(f => 
+                            f.truck_type?.trim().toLowerCase() === selectedItem.truck_type?.trim().toLowerCase()
+                        );
+
+                        // If no perfect match found, fall back to all available fleets to prevent empty dropdown
+                        if (matchedFleets.length > 0) {
+                            availableFleets = matchedFleets;
+                        }
+
+                        if (row.type === 'own') {
+                            availableFleets = availableFleets.filter(f => isInternal(f.company_id));
+                            availableDrivers = availableDrivers.filter(d => isInternal(d.company_id));
+                        } else if (row.type === 'vendor') {
+                            if (row.vendor_id) {
+                                availableFleets = availableFleets.filter(f => f.company_id === row.vendor_id);
+                                availableDrivers = availableDrivers.filter(d => d.company_id === row.vendor_id);
+                            } else {
+                                availableFleets = [];
+                                availableDrivers = [];
                             }
-                            return true;
-                        });
-                        
-                        const availableDrivers = getAvailableDrivers().filter(d => {
-                            if (row.type === 'own') return isInternal(d.company_id);
-                            if (row.type === 'vendor') {
-                                if (row.vendor_id) return d.company_id === row.vendor_id;
-                                return isExternal(d.company_id);
-                            }
-                            return true;
-                        });
+                        }
 
                         return (
-                            <div key={i} className="bg-[#0a0f1e]/50 p-4 md:p-6 rounded-3xl border border-white/5 shadow-inner">
-                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
-                                    <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-500/50">Assignment JO #{i + 1}</p>
+                            <div key={i} style={{ zIndex: formRows.length - i }} className="relative bg-slate-50/50 p-6 md:p-8 rounded-[2.2rem] border border-slate-100 group hover:border-emerald-500/20 transition-all">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5 mb-8">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#1E293B] font-black text-xs shadow-sm">
+                                            {i + 1}
+                                        </div>
+                                        <p className="text-xs font-black uppercase tracking-widest text-[#1E293B] italic">Mission Assignment #{i + 1}</p>
+                                    </div>
                                     
-                                    <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5 w-full md:w-auto">
-                                        {['own', 'vendor'].map(t => (
-                                            <button
-                                                key={t}
+                                    <div className="flex items-center gap-3 w-full md:w-auto">
+                                        <div className="flex gap-1 p-1 bg-white rounded-2xl border border-slate-200 w-full md:w-auto shadow-sm">
+                                            {['own', 'vendor'].map(t => (
+                                                <button
+                                                    key={t}
+                                                    onClick={() => {
+                                                        const newRows = [...formRows];
+                                                        newRows[i] = { ...newRows[i], type: t as 'own' | 'vendor', fleet_id: '', driver_id: '', vendor_id: '' };
+                                                        setFormRows(newRows);
+                                                    }}
+                                                    className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${row.type === t ? 'bg-[#1E293B] text-white' : 'text-slate-400 hover:text-[#1E293B]'}`}
+                                                >
+                                                    {t === 'own' ? 'Internal' : 'Outsourced'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {formRows.length > 1 && (
+                                            <button 
                                                 onClick={() => {
-                                                    const newRows = [...formRows];
-                                                    newRows[i] = { ...newRows[i], type: t as 'own' | 'vendor', fleet_id: '', driver_id: '', vendor_id: '' };
+                                                    const newRows = formRows.filter((_, idx) => idx !== i);
                                                     setFormRows(newRows);
                                                 }}
-                                                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${row.type === t ? (t === 'own' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20') : 'text-slate-500 hover:text-white'}`}
+                                                className="w-10 h-10 rounded-2xl bg-white border border-rose-200 text-rose-500 flex items-center justify-center hover:bg-rose-50 hover:scale-105 active:scale-95 transition-all shadow-sm flex-shrink-0"
                                             >
-                                                {t === 'own' ? 'Internal' : 'Vendor'}
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
-                                        ))}
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     {row.type === 'vendor' && (
-                                        <div className="md:col-span-3 pb-3 border-b border-white/5 mb-2">
-                                            <label className="block text-[11px] text-slate-500 mb-2 uppercase font-black tracking-widest">Pilih Perusahaan Vendor</label>
+                                        <div className="md:col-span-3 pb-4 border-b border-slate-100">
+                                            <label className="block text-[10px] text-slate-400 mb-2 uppercase font-black tracking-widest ml-1">Vendor Provider</label>
                                             <select
                                                 value={row.vendor_id || ''}
                                                 onChange={e => {
@@ -110,9 +177,9 @@ export default function AssignFleetModal({
                                                     newRows[i] = { ...newRows[i], vendor_id: e.target.value, fleet_id: '', driver_id: '' };
                                                     setFormRows(newRows);
                                                 }}
-                                                className="w-full bg-[#151f32] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                                className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm"
                                             >
-                                                <option value="">-- Semua Vendor --</option>
+                                                <option value="">-- Select Vendor --</option>
                                                 {allCompanies.filter(c => c.type === 'vendor').map(c => (
                                                     <option key={c.id} value={c.id}>{c.name}</option>
                                                 ))}
@@ -120,92 +187,154 @@ export default function AssignFleetModal({
                                         </div>
                                     )}
 
-                                    <div>
-                                        <label className="block text-[11px] text-slate-500 mb-2 uppercase font-black tracking-widest">Armada</label>
-                                        <select
-                                            value={row.fleet_id || ''}
-                                            onChange={async (e) => { 
-                                                const fid = e.target.value;
-                                                const fleet = allFleets.find(f => f.id === fid);
-                                                let price = row.vendor_price || 0;
-                                                
-                                                if (fleet && fleet.company_id && selectedItem.truck_type) {
-                                                    const oD = selectedItem.origin_location?.district || "";
-                                                    const dD = selectedItem.destination_location?.district || "";
-                                                    price = await fetchLastVendorPrice(fleet.company_id || ownCompanyId || "", selectedItem.truck_type, oD, dD);
-                                                    if (price === 0 && isInternal(fleet.company_id)) {
-                                                        price = (selectedItem.deal_price || 0) * (row.fee_percentage ? row.fee_percentage/100 : 0.1);
-                                                    }
-                                                }
-
-                                                const newRows = [...formRows]; 
-                                                newRows[i] = { ...newRows[i], fleet_id: fid, vendor_price: price }; 
-                                                setFormRows(newRows);
-                                            }}
-                                            className={`w-full bg-[#151f32] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-2 ${row.type === 'own' ? 'focus:ring-emerald-500/30' : 'focus:ring-blue-500/30'}`}
-                                        >
-                                            <option value="">-- Pilih Plat --</option>
-                                            {(() => {
-                                                const reqType = selectedItem.truck_type?.toLowerCase().trim() || "";
-                                                const targetDate = selectedItem.work_orders?.execution_date;
-                                                const sorted = [...availableFleets].sort((a, b) => {
-                                                    const aType = (a.truck_type || "").toLowerCase();
-                                                    const bType = (b.truck_type || "").toLowerCase();
-                                                    const aMatch = reqType && aType.includes(reqType);
-                                                    const bMatch = reqType && bType.includes(reqType);
-                                                    
-                                                    const aBusyOnDate = targetDate && busyFleetDates.get(a.id)?.has(targetDate);
-                                                    const bBusyOnDate = targetDate && busyFleetDates.get(b.id)?.has(targetDate);
-                                                    
-                                                    if (aMatch && !aBusyOnDate && (!bMatch || bBusyOnDate)) return -1;
-                                                    if (bMatch && !bBusyOnDate && (!aMatch || aBusyOnDate)) return 1;
-                                                    
-                                                    return (a.plate_number || "").localeCompare(b.plate_number || "");
-                                                });
-                                                
-                                                return sorted.map(f => (
-                                                    <option key={f.id} value={f.id} disabled={!!(targetDate && busyFleetDates.get(f.id)?.has(targetDate))}>
-                                                        {f.plate_number} • {f.truck_type || 'Unknown Type'} {targetDate && busyFleetDates.get(f.id)?.has(targetDate) ? '(BUSY)' : ''}
-                                                    </option>
-                                                ));
-                                            })()}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-[11px] text-slate-500 mb-2 uppercase font-black tracking-widest">Driver</label>
-                                        <select
-                                            value={row.driver_id || ''}
-                                            onChange={e => {
-                                                const newRows = [...formRows];
-                                                newRows[i] = { ...newRows[i], driver_id: e.target.value };
-                                                setFormRows(newRows);
-                                            }}
-                                            className={`w-full bg-[#151f32] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-2 ${row.type === 'own' ? 'focus:ring-emerald-500/30' : 'focus:ring-blue-500/30'}`}
-                                        >
-                                            <option value="">-- Pilih Driver --</option>
-                                            {availableDrivers.map(d => (
-                                                <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-[11px] text-slate-500 mb-2 uppercase font-black tracking-widest">Tarif / Jalan</label>
+                                    <div className="space-y-2">
+                                        <label className="block text-[10px] text-slate-400 uppercase font-black tracking-widest ml-1">Fleet Selection</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-black">Rp</span>
-                                            <input 
-                                                type="text"
-                                                value={formatThousand(row.vendor_price)}
-                                                onChange={(e) => {
-                                                    const val = Number(e.target.value.replace(/\D/g, ''));
-                                                    const newRows = [...formRows];
-                                                    newRows[i] = { ...newRows[i], vendor_price: val };
+                                            <select
+                                                value={row.fleet_id || ''}
+                                                onChange={async (e) => { 
+                                                    const fid = e.target.value;
+                                                    const fleet = allFleets.find(f => f.id === fid);
+                                                    let price = row.vendor_price || 0;
+                                                    
+                                                    if (fleet && fleet.company_id && selectedItem.truck_type) {
+                                                        const oD = selectedItem.origin_location?.district || "";
+                                                        const dD = selectedItem.destination_location?.district || "";
+                                                        price = await fetchLastVendorPrice(fleet.company_id || ownCompanyId || "", selectedItem.truck_type, oD, dD);
+                                                        if (price === 0 && isInternal(fleet.company_id)) {
+                                                            price = (selectedItem.deal_price || 0) * (row.fee_percentage ? row.fee_percentage/100 : 0.1);
+                                                        }
+                                                    }
+
+                                                    const newRows = [...formRows]; 
+                                                    newRows[i] = { ...newRows[i], fleet_id: fid, vendor_price: price }; 
                                                     setFormRows(newRows);
                                                 }}
-                                                className="w-full bg-[#0a0f1e] border border-white/10 rounded-xl py-3 pl-9 pr-3 text-xs text-white font-black"
-                                                placeholder="0"
-                                            />
+                                                className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm relative z-0"
+                                            >
+                                                <option value="">-- Choose Plate --</option>
+                                                {availableFleets.map(f => (
+                                                    <option key={f.id} value={f.id}>
+                                                        {f.plate_number} • {f.truck_type}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <Truck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 z-10 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="block text-[10px] text-slate-400 uppercase font-black tracking-widest ml-1">Human Resource</label>
+                                        
+                                        {row.type === 'own' ? (
+                                            <div className="relative">
+                                                <select
+                                                    value={row.driver_id || ''}
+                                                    onChange={e => {
+                                                        const newRows = [...formRows];
+                                                        newRows[i] = { ...newRows[i], driver_id: e.target.value, external_driver_name: '', external_driver_phone: '' };
+                                                        setFormRows(newRows);
+                                                    }}
+                                                    className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm relative z-0"
+                                                >
+                                                    <option value="">-- Assign Driver --</option>
+                                                    {availableDrivers.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                                    ))}
+                                                </select>
+                                                <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 z-10 pointer-events-none" />
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {availableDrivers.length > 0 && (
+                                                    <div className="relative">
+                                                        <select
+                                                            value={row.driver_id || ''}
+                                                            onChange={e => {
+                                                                const newRows = [...formRows];
+                                                                newRows[i] = { ...newRows[i], driver_id: e.target.value };
+                                                                setFormRows(newRows);
+                                                            }}
+                                                            className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm relative z-0"
+                                                        >
+                                                            <option value="">-- Pilih Supir Vendor (Bila Teregistrasi) --</option>
+                                                            {availableDrivers.map(d => (
+                                                                <option key={d.id} value={d.id}>{d.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 z-10 pointer-events-none" />
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-3">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder={availableDrivers.length > 0 ? "Atau Ketik Manual..." : "Ketik Nama Supir External..."}
+                                                        value={row.external_driver_name || ''}
+                                                        onChange={e => {
+                                                            const newRows = [...formRows];
+                                                            newRows[i] = { ...newRows[i], external_driver_name: e.target.value, driver_id: '' };
+                                                            setFormRows(newRows);
+                                                        }}
+                                                        className="w-1/2 bg-white border border-slate-200 rounded-2xl p-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm"
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="No. Telp / WA"
+                                                        value={row.external_driver_phone || ''}
+                                                        onChange={e => {
+                                                            const newRows = [...formRows];
+                                                            newRows[i] = { ...newRows[i], external_driver_phone: e.target.value, driver_id: '' };
+                                                            setFormRows(newRows);
+                                                        }}
+                                                        className="w-1/2 bg-white border border-slate-200 rounded-2xl p-4 text-xs font-bold text-[#1E293B] focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all shadow-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="block text-[10px] text-slate-400 uppercase font-black tracking-widest ml-1">
+                                            {row.type === 'own' ? 'Persentase & Uang Jalan Internal' : 'Biaya Sewa / Vendor Rate'}
+                                        </label>
+                                        <div className="flex gap-2">
+                                            {row.type === 'own' && (
+                                                <div className="relative w-1/3">
+                                                    <input 
+                                                        type="number"
+                                                        value={row.fee_percentage || ''}
+                                                        onChange={(e) => {
+                                                            const pct = Number(e.target.value);
+                                                            const newRows = [...formRows];
+                                                            const dealPrice = selectedItem.deal_price || 0;
+                                                            newRows[i] = { 
+                                                                ...newRows[i], 
+                                                                fee_percentage: pct, 
+                                                                vendor_price: (dealPrice * pct) / 100 
+                                                            };
+                                                            setFormRows(newRows);
+                                                        }}
+                                                        className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-[13px] font-black italic text-emerald-600 focus:outline-none focus:ring-4 focus:ring-slate-100 transition-all shadow-sm"
+                                                        placeholder="10"
+                                                    />
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-black">%</span>
+                                                </div>
+                                            )}
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-black">Rp</span>
+                                                <input 
+                                                    type="text"
+                                                    value={formatThousand(row.vendor_price)}
+                                                    onChange={(e) => {
+                                                        const val = Number(e.target.value.replace(/\D/g, ''));
+                                                        const newRows = [...formRows];
+                                                        newRows[i] = { ...newRows[i], vendor_price: val };
+                                                        setFormRows(newRows);
+                                                    }}
+                                                    className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-[13px] text-[#1E293B] font-black italic focus:outline-none focus:ring-4 focus:ring-slate-100 transition-all shadow-sm"
+                                                    placeholder="0"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -214,20 +343,40 @@ export default function AssignFleetModal({
                     })}
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-4 justify-between">
-                    <div className="flex gap-2">
-                        <button onClick={() => setFormRows([...formRows, { fleet_id: '', driver_id: '', vendor_price: 0, fee_percentage: 10, type: 'own' }])} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest">
-                            <Plus className="w-3.5 h-3.5" /> Baris
+                {/* ATLAS FINAL ACTIONS */}
+                <div className="mt-12 flex flex-col md:flex-row gap-5 items-center justify-between pt-8 border-t border-slate-100">
+                    <button 
+                        onClick={() => setFormRows([...formRows, { fleet_id: '', driver_id: '', vendor_price: 0, fee_percentage: 10, type: 'own' }])} 
+                        className="w-full md:w-auto flex items-center justify-center gap-3 bg-white border border-slate-200 hover:bg-slate-50 px-8 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all shadow-sm"
+                    >
+                        <Plus className="w-4 h-4 text-emerald-600" /> Add Assignment Row
+                    </button>
+                    
+                    <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                        <button
+                            onClick={() => handleAssignUnits('draft')}
+                            disabled={assigning}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                            {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Draft"}
+                        </button>
+                        
+                        <button
+                            onClick={() => handleAssignUnits('handover')}
+                            disabled={assigning}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                            {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Handover to Admin"}
+                        </button>
+
+                        <button
+                            onClick={() => handleAssignUnits('finalize')}
+                            disabled={assigning}
+                            className="bg-[#1E293B] hover:bg-emerald-600 text-white px-10 py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest transition-all disabled:opacity-50 shadow-xl shadow-slate-900/10 active:scale-95"
+                        >
+                            {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Finalize Approval"}
                         </button>
                     </div>
-                    <button
-                        onClick={handleAssignUnits}
-                        disabled={assigning}
-                        className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50"
-                    >
-                        {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Simpan Penugasan
-                    </button>
                 </div>
             </div>
         </div>

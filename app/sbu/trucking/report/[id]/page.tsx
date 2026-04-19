@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { 
     Loader2, Printer, MapPin, Truck, User, 
     Calendar, Hash, FileText, Navigation, 
@@ -11,6 +11,7 @@ import {
 import { toast, Toaster } from "react-hot-toast";
 
 export default function WorkOrderReportPage() {
+    const supabase = createClient();
     const params = useParams();
     const [wo, setWo] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -31,7 +32,7 @@ export default function WorkOrderReportPage() {
                         origin_location:origin_location_id (name, address, city, district, province),
                         destination_location:destination_location_id (name, address, city, district, province),
                         job_orders (
-                            id, jo_number, status, created_at,
+                            id, jo_number, status, created_at, vendor_price,
                             fleets (plate_number, truck_type),
                             drivers (name, phone),
                             extra_costs (*)
@@ -73,10 +74,13 @@ export default function WorkOrderReportPage() {
     }
 
     const totalDealPrice = (wo.deal_price || 0) * (wo.quantity || 1);
+    const totalVendorPrice = wo.job_orders.reduce((acc: number, jo: any) => acc + (Number(jo.vendor_price) || 0), 0);
     const totalExtraCosts = wo.job_orders.reduce((acc: number, jo: any) => {
         return acc + (jo.extra_costs || []).reduce((cAcc: number, c: any) => cAcc + (Number(c.amount) || 0), 0);
     }, 0);
-    const totalGrand = totalDealPrice + totalExtraCosts;
+    const totalCost = totalVendorPrice + totalExtraCosts;
+    const grossProfit = totalDealPrice - totalCost;
+    const profitMargin = (grossProfit / (totalDealPrice || 1)) * 100;
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-12 flex justify-center items-start print:bg-white print:p-0 font-sans">
@@ -100,12 +104,12 @@ export default function WorkOrderReportPage() {
                 <div className="flex justify-between items-start mb-12 border-b-2 border-slate-900 pb-8">
                     <div>
                         <div className="flex items-center gap-1 mb-2">
-                           <div className="w-10 h-10 bg-[#4D148C] rounded-sm flex items-center justify-center">
+                           <div className="w-10 h-10 bg-emerald-500 rounded-sm flex items-center justify-center">
                               <Truck className="w-7 h-7 text-white" />
                            </div>
-                           <span className="text-4xl font-black italic tracking-tighter text-[#4D148C]">SentraLogis</span>
+                           <span className="text-4xl font-black italic tracking-tighter text-slate-900">Sentralogis<span className="text-emerald-500">.</span></span>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Logistics Operational Analysis Report</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Logistics Operational Analysis Report v4.0</p>
                     </div>
                     <div className="text-right">
                         <h1 className="text-2xl font-black uppercase text-slate-900 mb-1">WO Summary</h1>
@@ -153,19 +157,22 @@ export default function WorkOrderReportPage() {
                 {/* Financial Summary Cards */}
                 <div className="grid grid-cols-3 gap-6 mb-12">
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 shadow-sm">Base Deal Price</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 shadow-sm">Revenue (Billed)</p>
                         <p className="text-xl font-black text-slate-900">IDR {totalDealPrice.toLocaleString()}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">Price per unit: {wo.deal_price?.toLocaleString()}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Status: Ready for Invoicing</p>
                     </div>
-                    <div className="bg-amber-500/5 p-6 rounded-2xl border border-amber-500/10">
-                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Extra Ops Costs</p>
-                        <p className="text-xl font-black text-amber-600">IDR {totalExtraCosts.toLocaleString()}</p>
-                        <p className="text-[10px] text-amber-500 mt-1">{wo.job_orders.reduce((a:number, j:any) => a + (j.extra_costs?.length || 0), 0)} Extra Items</p>
+                    <div className="bg-rose-500/5 p-6 rounded-2xl border border-rose-500/10">
+                        <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest mb-1">Total operational cost</p>
+                        <p className="text-xl font-black text-rose-600">IDR {totalCost.toLocaleString()}</p>
+                        <p className="text-[10px] text-rose-500 mt-1">Vendor: IDR {totalVendorPrice.toLocaleString()}</p>
                     </div>
-                    <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/10">
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Total billing</p>
-                        <p className="text-xl font-black text-emerald-600">IDR {totalGrand.toLocaleString()}</p>
-                        <p className="text-[10px] text-emerald-500 mt-1">Ready for Invoicing</p>
+                    <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/10 relative overflow-hidden">
+                        <div className="relative z-10">
+                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Gross Profit Analysis</p>
+                            <p className="text-xl font-black text-emerald-600">IDR {grossProfit.toLocaleString()}</p>
+                            <p className={`text-[10px] font-black mt-1 ${profitMargin > 15 ? 'text-emerald-500' : 'text-amber-500'}`}>Margin: {profitMargin.toFixed(1)}%</p>
+                        </div>
+                        <TrendingUp className="absolute right-[-10px] bottom-[-10px] w-20 h-20 text-emerald-500/10 -rotate-12" />
                     </div>
                 </div>
 
@@ -180,8 +187,9 @@ export default function WorkOrderReportPage() {
                                 <th className="py-3">Job Order #</th>
                                 <th className="py-3">Plate Number</th>
                                 <th className="py-3">Driver Name</th>
-                                <th className="py-3">Status</th>
-                                <th className="py-3 text-right">Ops Cost</th>
+                                <th className="py-3 text-right">Vendor Price</th>
+                                <th className="py-3 text-right">Extra Cost</th>
+                                <th className="py-3 text-right">JO Total</th>
                             </tr>
                         </thead>
                         <tbody className="text-xs">
@@ -192,13 +200,14 @@ export default function WorkOrderReportPage() {
                                         <td className="py-4 font-black">{jo.jo_number}</td>
                                         <td className="py-4 font-bold uppercase">{jo.fleets?.plate_number}</td>
                                         <td className="py-4">{jo.drivers?.name}</td>
-                                        <td className="py-4">
-                                            <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">
-                                                {jo.status}
-                                            </span>
+                                        <td className="py-4 text-right font-bold text-slate-600">
+                                            {Number(jo.vendor_price || 0).toLocaleString()}
                                         </td>
                                         <td className="py-4 text-right font-black text-amber-600">
                                             {joCost > 0 ? joCost.toLocaleString() : '-'}
+                                        </td>
+                                        <td className="py-4 text-right font-black text-rose-600">
+                                            {(Number(jo.vendor_price || 0) + joCost).toLocaleString()}
                                         </td>
                                     </tr>
                                 );

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase as supabaseRaw } from "@/lib/supabase/client";
 const supabase = supabaseRaw as any;
+import { useGoogleMaps } from "@/lib/google-maps-context";
 import { toast, Toaster } from "react-hot-toast";
 import {
   Truck, Package, AlertCircle, Plus,
@@ -11,8 +12,8 @@ import {
   Search, BarChart3, TrendingUp,
   Clock, CheckCircle, XCircle,
   ChevronDown, ChevronUp, MessageSquare, AlertTriangle, Check, Send, Edit2, Edit3, Download,
-  CheckCircle2, Ban, Hourglass, UserPlus, Calendar, MapPin, Navigation, Banknote, CircleDollarSign, Save, ExternalLink, ShieldCheck, LayoutGrid, RefreshCw, Target,
-  Ship, Warehouse, HardHat, ChevronRight, ChevronLeft, Activity, Upload, Verified, LogOut, User
+  CheckCircle2, Ban, Hourglass, UserPlus, UsersRound, Calendar, MapPin, Navigation, Banknote, CircleDollarSign, Save, ExternalLink, ShieldCheck, LayoutGrid, RefreshCw, Target, Building2, Wallet,
+  Ship, Warehouse, HardHat, ChevronRight, ChevronLeft, Activity, Upload, Verified, LogOut, User, MapPin as MapPinIcon, Globe, Pencil
 } from "lucide-react";
 
 // =====================================================
@@ -115,6 +116,7 @@ export default function AdminDashboardPage() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [expandedWOId, setExpandedWOId] = useState<string | null>(null);
+  
   // Reject modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectTargetWOId, setRejectTargetWOId] = useState<string | null>(null);
@@ -125,7 +127,7 @@ export default function AdminDashboardPage() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [selectedJOData, setSelectedJOData] = useState<{ jo: JobOrder, item: WorkOrderItem, wo: WorkOrder } | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const [stats, setStats] = useState({
@@ -134,7 +136,7 @@ export default function AdminDashboardPage() {
     pending_sbu: 0,
     need_approval: 0,
     on_journey: 0,
-    // BI metrics
+    rejected: 0,
     funnel: {
       received: 0,
       running: 0,
@@ -149,156 +151,78 @@ export default function AdminDashboardPage() {
     }
   });
 
+  const getRoleDisplayName = (role: string) => {
+    const map: Record<string, string> = {
+        'superadmin': 'Superadmin (App Owner)',
+        'admin': 'Admin (Viewer)',
+        'cs': 'CS (Pembuat WO)',
+        'cs_trucking': 'SBU Trucking Admin',
+        'cs_customs': 'SBU Customs Admin',
+        'cs_forwarding': 'SBU Forwarding Admin',
+        'finance_ar': 'Finance AR',
+        'finance_ap': 'Finance AP',
+        'finance_manager': 'Finance Manager',
+        'director': 'Director',
+        'viewer': 'Viewer'
+    };
+    return map[role] || (role || '').replace('_', ' ').toUpperCase();
+  };
+
   const [wizardStep, setWizardStep] = useState(1);
+  const [activatedSbus, setActivatedSbus] = useState<string[]>(['trucking']);
   const [selectedSbus, setSelectedSbus] = useState<string[]>(['trucking']);
   const [activeWizardTab, setActiveWizardTab] = useState('trucking');
   const [editingWOId, setEditingWOId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  
+  // Staff Management State
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showSbuModal, setShowSbuModal] = useState(false);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [newStaff, setNewStaff] = useState({ email: '', full_name: '', password: '', role: 'operator' });
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
-  const handleLogout = async () => {
+  const deleteStaffMember = async (staffId: string) => {
+    if (!confirm("Hapus personel dari organisasi ini?")) return;
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast.success("Berhasil keluar!");
-      window.location.href = "/login";
+        // Gunakan role 'viewer' yang valid untuk melewati check constraint
+        // Idealnya: gunakan kolom status 'inactive' jika kolom tersebut ada di DB
+        const { error } = await supabase
+            .from('profiles')
+            .update({ 
+                organization_id: null,
+                role: 'viewer' 
+            })
+            .eq('id', staffId);
+        if (error) throw error;
+        toast.success("Personel berhasil dihapus dari organisasi");
+        setStaffList(prev => prev.filter(s => s.id !== staffId));
     } catch (error: any) {
-      toast.error("Gagal keluar: " + error.message);
+        toast.error("Gagal hapus staf: " + error.message);
     }
   };
 
-  const fetchUserProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        setUserProfile(data || { email: user.email, role: 'superadmin' });
-      }
-    } catch (error) {
-    }
+  const handleEditStaff = (member: any) => {
+    setEditingStaffId(member.id);
+    setNewStaff({
+        email: member.email || '',
+        full_name: member.full_name || '',
+        password: '', // Biarkan kosong jika tidak ingin ganti password
+        role: member.role || 'operator'
+    });
   };
 
-  useEffect(() => {
-    const protectRoute = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        window.location.href = "/login";
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, sbu_access')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.role !== 'superadmin') {
-        toast.error("Akses Terbatas: Hanya Superadmin yang diizinkan masuk ke Cockpit Master.");
-        if (profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking')) {
-          window.location.href = "/sbu/trucking";
-        } else {
-          window.location.href = "/sbu-launchpad";
-        }
-      }
-    };
-
-    protectRoute();
-    fetchDashboardData();
-    fetchUserProfile();
-  }, []);
-
-  const [newWO, setNewWO] = useState({
-    customer_id: "",
-    order_date: new Date().toISOString().split('T')[0],
-    execution_date: new Date().toISOString().slice(0, 16),
-    notes: "",
-    sbu_type: "trucking",
+  // Superadmin BI State
+  const [superAdminStats, setSuperAdminStats] = useState<any>({
+    revenueByTenant: [],
+    sbuDistribution: [],
+    totalGlobalRevenue: 0,
+    organizations: [],
+    monthlySeries: []
   });
 
-  const resetWOForm = () => {
-    setEditingWOId(null);
-    setNewWO({
-      customer_id: "",
-      order_date: new Date().toISOString().split('T')[0],
-      execution_date: new Date().toISOString().slice(0, 16),
-      notes: "",
-      sbu_type: "trucking",
-    });
-    setWoItems([
-      {
-        truck_type: "CDE",
-        origin_location_id: "",
-        destination_location_id: "",
-        quantity: 1,
-        deal_price: 0,
-        sbu_type: "trucking",
-        sbu_metadata: {}
-      }
-    ]);
-    setSelectedSbus(['trucking']);
-    setActiveWizardTab('trucking');
-    setWizardStep(1);
-  };
-
-  const openEditModal = (wo: any) => {
-    setEditingWOId(wo.id);
-    
-    // Robust date parsing for datetime-local
-    let execDate = "";
-    if (wo.execution_date) {
-      if (wo.execution_date.includes('T')) {
-        execDate = wo.execution_date.slice(0, 16);
-      } else {
-        // Fallback if only date is provided
-        execDate = `${wo.execution_date}T09:00`;
-      }
-    } else {
-      execDate = new Date().toISOString().slice(0, 16);
-    }
-
-    setNewWO({
-      customer_id: wo.customer_id,
-      order_date: wo.order_date ? wo.order_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      execution_date: execDate,
-      notes: wo.notes || "",
-      sbu_type: wo.sbu_type || "trucking"
-    });
-    
-    // Load existing items
-    const items = wo.work_order_items || [];
-    if (items.length > 0) {
-      setWoItems(items.map((item: any) => ({
-        ...item,
-        sbu_metadata: item.sbu_metadata || {}
-      })));
-      
-      // Populate selected SBUs based on items
-      const sbus = Array.from(new Set(items.map((i: any) => i.sbu_type))) as string[];
-      const validSbus = sbus.length > 0 ? sbus : ['trucking'];
-      setSelectedSbus(validSbus);
-      setActiveWizardTab(validSbus[0]);
-    } else {
-      setWoItems([{
-        truck_type: "CDE",
-        origin_location_id: "",
-        destination_location_id: "",
-        quantity: 1,
-        deal_price: 0,
-        sbu_type: "trucking",
-        sbu_metadata: {}
-      }]);
-      setSelectedSbus(['trucking']);
-      setActiveWizardTab('trucking');
-    }
-
-    setWizardStep(1);
-    setShowCreateModal(true);
-  };
-
-  // WO Items
   const [woItems, setWoItems] = useState<WorkOrderItem[]>([
     {
       truck_type: "CDE",
@@ -311,7 +235,14 @@ export default function AdminDashboardPage() {
     }
   ]);
 
-  // Form New Customer
+  const [newWO, setNewWO] = useState({
+    customer_id: "",
+    order_date: new Date().toISOString().split('T')[0],
+    execution_date: new Date().toISOString().slice(0, 16),
+    notes: "",
+    sbu_type: "trucking",
+  });
+
   const [newCustomer, setNewCustomer] = useState({
     phone: "",
     name: "",
@@ -319,16 +250,17 @@ export default function AdminDashboardPage() {
     address: "",
     city: "",
     province: "",
+    district: "",
     zipcode: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
     billing_method: 'epod' as 'epod' | 'hardcopy',
   });
   const [customerView, setCustomerView] = useState<'list' | 'form'>('form');
   const [isCustomerEdit, setIsCustomerEdit] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
-  const [customerSearch, setCustomerSearch] = useState("");
   const [savingCustomer, setSavingCustomer] = useState(false);
 
-  // Form New Location
   const [newLocation, setNewLocation] = useState({
     name: "",
     address: "",
@@ -337,40 +269,139 @@ export default function AdminDashboardPage() {
     province: "",
     zipcode: "",
     notes: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
   const [savingLocation, setSavingLocation] = useState(false);
 
-  // Google Maps Autocomplete refs
-  const autocompleteInputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const customerAutocompleteInputRef = useRef<HTMLInputElement>(null);
-  const customerAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const [verifying, setVerifying] = useState(false);
+  const { isLoaded: mapsLoaded } = useGoogleMaps();
+  const customerAddressInputRef = useRef<HTMLInputElement>(null);
+  const locationAddressInputRef = useRef<HTMLInputElement>(null);
 
-  const handleVerifyBilling = async (woId: string) => {
+  const handleLogout = async () => {
     try {
-      setVerifying(true);
-      const { error } = await supabase
-        .from('work_orders')
-        .update({ billing_status: 'completed' })
-        .eq('id', woId);
-
+      const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      toast.success("Dokumen & Biaya terverifikasi! Siap ditagihkan oleh Finance.");
-      fetchDashboardData();
-    } catch (err: any) {
-      toast.error("Gagal verifikasi: " + err.message);
-    } finally {
-      setVerifying(false);
+      toast.success("Berhasil keluar!");
+      window.location.href = "/";
+    } catch (error: any) {
+      toast.error("Gagal keluar: " + error.message);
     }
   };
 
-  // =====================================================
-  // FETCH DATA
-  // =====================================================
+  const fetchStaff = async (orgId: string) => {
+    if (!orgId) return;
+    setLoadingStaff(true);
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('organization_id', orgId)
+            .order('role');
+        if (error) throw error;
+        setStaffList(data || []);
+    } catch (error: any) {
+        toast.error("Gagal memuat staf: " + error.message);
+    } finally {
+        setLoadingStaff(false);
+    }
+  };
+
+  const updateStaffRole = async (staffId: string, newRole: string) => {
+      try {
+          // Sync SBU Access based on new quick-switched role
+          let sbuAcc: string[] = [];
+          if (newRole === 'cs_trucking') sbuAcc = ['trucking'];
+          else if (newRole === 'cs_customs') sbuAcc = ['clearances'];
+          else if (newRole === 'cs_forwarding') sbuAcc = ['forwarding'];
+          else if (['superadmin', 'admin', 'cs', 'director'].includes(newRole)) sbuAcc = ['trucking', 'clearances', 'forwarding'];
+
+          const { error } = await supabase
+              .from('profiles')
+              .update({ role: newRole, sbu_access: sbuAcc })
+              .eq('id', staffId);
+          if (error) throw error;
+          toast.success("Identity Permissions Synchronized");
+          setStaffList(prev => prev.map(s => s.id === staffId ? { ...s, role: newRole, sbu_access: sbuAcc } : s));
+      } catch (error: any) {
+          toast.error("Gagal ubah role: " + error.message);
+      }
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Ambil profil asli dulu untuk cek role
+        const { data: currentProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        
+        // 1. Ambil Perusahaan Terbaru di Database (Paling Masuk Akal sebagai Klien Baru)
+        const { data: latestOrg } = await supabase
+            .from('organizations')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        // 2. Jika user adalah mbst1, paksa dia menjadi Admin dari perusahaan terbaru tersebut (UNTUK DATA TESTING/TENANT)
+        if (user.email === 'mbst1@sentralogis.com' && latestOrg) {
+            const forcedProfile = {
+                id: user.id,
+                email: user.email,
+                organization_id: latestOrg.id,
+                role: 'director', // Pastikan director sesuai skema baru
+                organizations: latestOrg
+            };
+            
+            setUserProfile(forcedProfile);
+            if (latestOrg?.activated_sbus) {
+                setActivatedSbus(latestOrg.activated_sbus);
+            }
+            return latestOrg;
+        }
+
+        // Jika dia adalah superadmin (admin1), jangan paksa role admin
+        const { data: matchingOrg } = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('email', user.email)
+            .limit(1)
+            .maybeSingle();
+
+        // Gunakan role dari DB, default ke user jika belum ada
+        let targetRole = currentProfile?.role || 'user';
+        
+        const { data: finalProfileData } = await supabase.from('profiles').upsert({
+            id: user.id,
+            email: user.email,
+            organization_id: matchingOrg?.id || currentProfile?.organization_id || null,
+            role: targetRole,
+            full_name: currentProfile?.full_name || user.email.split('@')[0]
+        }).select('*, organizations(*)').single();
+
+        setUserProfile(finalProfileData);
+        if (finalProfileData?.organizations?.activated_sbus) {
+            setActivatedSbus(finalProfileData.organizations.activated_sbus);
+        }
+        return finalProfileData.organizations || matchingOrg;
+      }
+      return null;
+    } catch (error) { 
+        return null; 
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      const activeOrg = await fetchUserProfile();
+      
+      // Jika bukan superadmin DAN tidak ada org, baru return
+      if (!activeOrg && userProfile?.role !== 'superadmin') {
+        setWorkOrders([]);
+        setLoading(false);
+        return;
+      }
 
       const { data: woData, error: woError } = await supabase
         .from("work_orders")
@@ -396,45 +427,23 @@ export default function AdminDashboardPage() {
             )
           )
         `)
+        .eq('organization_id', activeOrg.id)
         .order("created_at", { ascending: false });
 
       if (woError) throw woError;
 
-      const { data: customerData, error: customerError } = await supabase
-        .from("customers")
-        .select("*")
-        .order("name", { ascending: true, nullsLast: true });
+      const { data: customerData } = await supabase.from("customers").select("*").eq('organization_id', activeOrg.id).order("name", { ascending: true, nullsLast: true });
+      const { data: locationData } = await supabase.from("locations").select("*").eq('organization_id', activeOrg.id).order("name", { ascending: true });
+      const { data: truckTypesData } = await supabase.from("truck_types").select("*").order("name", { ascending: true });
 
-      if (customerError) console.error("Customer fetch error:", customerError);
+      if (userProfile?.role === 'superadmin') {
+         await fetchSuperAdminBI();
+      }
 
-      const { data: locationData, error: locationError } = await supabase
-        .from("locations")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (locationError) console.error("Location fetch error:", locationError);
-
-      const { data: truckTypesData, error: truckTypesError } = await supabase
-        .from("truck_types")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (truckTypesError) console.error("Truck Types fetch error:", truckTypesError);
-
-      const { count: fleetCount, error: fleetError } = await supabase
-        .from("fleets")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "available");
-
-      if (fleetError) console.error("Fleet count error:", fleetError);
-
-      // Calculate detailed stats for Admin WO activities
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
-      
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(now.getMonth() - 1);
+      const lastMonthDate = new Date(); lastMonthDate.setMonth(now.getMonth() - 1);
       const lastMonth = lastMonthDate.getMonth();
       const lastYear = lastMonthDate.getFullYear();
 
@@ -444,71 +453,47 @@ export default function AdminDashboardPage() {
         pending_sbu: 0,
         need_approval: 0,
         on_journey: 0,
-        funnel: {
-          received: 0,
-          running: 0,
-          finished_pending_docs: 0,
-          docs_complete_pending_finance: 0
-        },
+        rejected: 0,
+        funnel: { received: 0, running: 0, finished_pending_docs: 0, docs_complete_pending_finance: 0 },
         topCustomers: [] as any[],
-        revenueComparison: {
-          thisMonth: 0,
-          lastMonth: 0,
-          growth: 0
-        }
+        revenueComparison: { thisMonth: 0, lastMonth: 0, growth: 0 }
       };
 
       const customerMap = new Map();
 
       woData?.forEach((wo: WorkOrder) => {
         const displayStatus = getWODisplayStatus(wo);
-        
-        // Basic Stats
         if (displayStatus.key === 'draft') newStats.draft++;
         else if (displayStatus.key === 'awaiting_sbu') newStats.pending_sbu++;
         else if (displayStatus.key === 'need_approval') newStats.need_approval++;
         else if (displayStatus.key === 'on_journey') newStats.on_journey++;
+        else if (displayStatus.key === 'rejected') newStats.rejected++;
 
-        // BI Funnel Logic
-        if (displayStatus.key === 'draft' || displayStatus.key === 'awaiting_sbu') {
-          newStats.funnel.received++;
-        } else if (displayStatus.key === 'need_approval' || displayStatus.key === 'on_journey') {
-          newStats.funnel.running++;
-        } else if (displayStatus.key === 'done' || displayStatus.key === 'finished') {
-          // Check docs
-          if (!wo.physical_doc_received) {
-            newStats.funnel.finished_pending_docs++;
-          } else if (wo.billing_status === 'none' || !wo.billing_status) {
-            newStats.funnel.docs_complete_pending_finance++;
-          }
+        if (displayStatus.key === 'draft' || displayStatus.key === 'awaiting_sbu') newStats.funnel.received++;
+        else if (displayStatus.key === 'need_approval' || displayStatus.key === 'on_journey') newStats.funnel.running++;
+        else if (displayStatus.key === 'done') {
+          if (!wo.physical_doc_received) newStats.funnel.finished_pending_docs++;
+          else if (!wo.billing_status || wo.billing_status === 'none') newStats.funnel.docs_complete_pending_finance++;
         }
 
-        // Financial Data (Monthly)
         const woDate = new Date(wo.order_date);
-        const woMonth = woDate.getMonth();
-        const woYear = woDate.getFullYear();
-        
         const totalAmount = (wo.work_order_items || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.deal_price || 0)), 0);
 
-        if (woMonth === thisMonth && woYear === thisYear) {
+        if (woDate.getMonth() === thisMonth && woDate.getFullYear() === thisYear) {
            newStats.revenueComparison.thisMonth += totalAmount;
-           
-           // Track customer revenue this month
            const custName = wo.customers?.company_name || wo.customers?.name || 'Unknown';
            customerMap.set(custName, (customerMap.get(custName) || 0) + totalAmount);
-        } else if (woMonth === lastMonth && woYear === lastYear) {
+        } else if (woDate.getMonth() === lastMonth && woDate.getFullYear() === lastYear) {
            newStats.revenueComparison.lastMonth += totalAmount;
         }
       });
 
-      // Calculate Growth
       if (newStats.revenueComparison.lastMonth > 0) {
         newStats.revenueComparison.growth = ((newStats.revenueComparison.thisMonth - newStats.revenueComparison.lastMonth) / newStats.revenueComparison.lastMonth) * 100;
       } else if (newStats.revenueComparison.thisMonth > 0) {
         newStats.revenueComparison.growth = 100;
       }
 
-      // Top 5 Customers
       newStats.topCustomers = Array.from(customerMap.entries())
         .map(([name, totalRevenue]) => ({ name, totalRevenue }))
         .sort((a, b) => b.totalRevenue - a.totalRevenue)
@@ -519,320 +504,69 @@ export default function AdminDashboardPage() {
       setLocations(locationData || []);
       setTruckTypes(truckTypesData || []);
       setStats(newStats);
-
     } catch (error: any) {
-      console.error("Error fetching data:", error);
-      toast.error("Gagal memuat data: " + (error.message || "Unknown error"));
+      toast.error("Gagal memuat data: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // =====================================================
-  // AUTO-FILL HARGA DARI DATA TERAKHIR
-  // =====================================================
-  const fetchLastPrice = async (customer_id: string, truck_type: string, origin_id: string, destination_id: string, itemIndex: number) => {
-    if (!customer_id || !truck_type || !origin_id || !destination_id) {
-      return;
-    }
-
+  const fetchSuperAdminBI = async () => {
     try {
-      const { data, error } = await supabase
-        .from("work_order_items")
+      const { data: items, error: itemsError } = await supabase
+        .from('work_order_items')
         .select(`
-          deal_price,
-          created_at,
-          work_orders!inner (
-            customer_id
-          )
-        `)
-        .eq("work_orders.customer_id", customer_id)
-        .eq("truck_type", truck_type)
-        .eq("origin_location_id", origin_id)
-        .eq("destination_location_id", destination_id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (error) throw error;
-
-      if (data && data.length > 0 && data[0].deal_price && data[0].deal_price > 0) {
-        const lastPrice = data[0].deal_price;
-        setWoItems(prevItems => {
-          const newItems = [...prevItems];
-          newItems[itemIndex].deal_price = lastPrice;
-          return newItems;
-        });
-        toast.success(`Harga terakhir: Rp ${lastPrice.toLocaleString('id-ID')}`, { duration: 2000 });
-      }
-    } catch (error: any) {
-      console.error("Error fetching last price:", error);
-    }
-  };
-
-  // Auto-fill price when customer, route, or truck type changes (ONLY for NEW Work Orders)
-  useEffect(() => {
-    if (!editingWOId && newWO.customer_id && showCreateModal && woItems.length > 0) {
-      woItems.forEach((item, index) => {
-        if (item.truck_type && item.origin_location_id && item.destination_location_id) {
-           lookupLastPrice(index);
-        }
-      });
-    }
-  }, [newWO.customer_id, showCreateModal, editingWOId, woItems.map(i => `${i.truck_type}-${i.origin_location_id}-${i.destination_location_id}`).join(',')]);
-
-  useEffect(() => {
-    // Check if Google Maps API is loaded
-    if (showLocationModal && autocompleteInputRef.current && typeof google !== 'undefined' && google.maps && google.maps.places) {
-      try {
-        autocompleteRef.current = new google.maps.places.Autocomplete(
-          autocompleteInputRef.current,
-          {
-            types: ["geocode", "establishment"],
-            componentRestrictions: { country: "id" },
-          }
-        );
-
-        autocompleteRef.current.addListener("place_changed", () => {
-          const place = autocompleteRef.current?.getPlace();
-          if (!place || !place.geometry) return;
-
-          let fullAddress = place.formatted_address || "";
-
-          let district = "";
-          let city = "";
-          let province = "";
-          let zipcode = "";
-
-          place.address_components?.forEach((component) => {
-            const types = component.types;
-            if (types.includes("sublocality") || types.includes("sublocality_level_1")) {
-              district = component.long_name;
-            }
-            if (types.includes("locality") || types.includes("administrative_area_level_3")) {
-              city = component.long_name;
-            }
-            if (types.includes("administrative_area_level_1")) {
-              province = component.long_name;
-            }
-            if (types.includes("postal_code")) {
-              zipcode = component.long_name;
-            }
-          });
-
-          setNewLocation((prev) => ({
-            ...prev,
-            address: fullAddress,
-            district: district,
-            city: city,
-            province: province,
-            zipcode: zipcode,
-          }));
-        });
-      } catch (error) {
-        console.error("Error initializing Google Maps Autocomplete:", error);
-      }
-    }
-  }, [showLocationModal]);
-
-  // Google Maps Autocomplete for Customer Modal
-  useEffect(() => {
-
-    // Google Maps Autocomplete for Customer Modal
-    if (showCustomerModal && customerAutocompleteInputRef.current && typeof google !== 'undefined' && google.maps && google.maps.places) {
-      try {
-        customerAutocompleteRef.current = new google.maps.places.Autocomplete(
-          customerAutocompleteInputRef.current,
-          {
-            types: ["geocode", "establishment"],
-            componentRestrictions: { country: "id" },
-          }
-        );
-
-        customerAutocompleteRef.current.addListener("place_changed", () => {
-          const place = customerAutocompleteRef.current?.getPlace();
-          if (!place || !place.geometry) return;
-
-          let fullAddress = place.formatted_address || "";
-          let city = "";
-          let province = "";
-          let zipcode = "";
-
-          place.address_components?.forEach((component) => {
-            const types = component.types;
-            if (types.includes("locality") || types.includes("administrative_area_level_3")) {
-              city = component.long_name;
-            }
-            if (types.includes("administrative_area_level_1")) {
-              province = component.long_name;
-            }
-            if (types.includes("postal_code")) {
-              zipcode = component.long_name;
-            }
-          });
-
-          setNewCustomer((prev) => ({
-            ...prev,
-            address: fullAddress,
-            city: city,
-            province: province,
-            zipcode: zipcode,
-          }));
-        });
-      } catch (error) {
-        console.error("Error initializing Customer Google Maps Autocomplete:", error);
-      }
-    }
-  }, [showCustomerModal, customerView]);
-
-  // =====================================================
-  // CRUD CUSTOMER
-  // =====================================================
-  const handleSaveCustomer = async () => {
-    if (!newCustomer.phone) {
-      toast.error("Nomor WA wajib diisi");
-      return;
-    }
-
-    setSavingCustomer(true);
-    try {
-      const payload = {
-        phone: newCustomer.phone,
-        name: newCustomer.name || null,
-        company_name: newCustomer.company_name || null,
-        address: newCustomer.address || null,
-        city: newCustomer.city || null,
-        province: newCustomer.province || null,
-        zipcode: newCustomer.zipcode || null,
-        billing_method: newCustomer.billing_method,
-      };
-
-      if (isCustomerEdit && editingCustomerId) {
-        const { error } = await supabase
-          .from("customers")
-          .update(payload)
-          .eq("id", editingCustomerId);
-        
-        if (error) throw error;
-        toast.success("Data pelanggan diperbarui!");
-      } else {
-        const { data, error } = await supabase
-          .from("customers")
-          .insert(payload)
-          .select()
-          .single();
-
-        if (error) throw error;
-        toast.success("Pelanggan baru ditambahkan!");
-        setNewWO(prev => ({ ...prev, customer_id: data.id }));
-      }
-
-      // Refresh and reset
-      const { data: refreshedCustomers } = await supabase.from("customers").select("*").order("name", { ascending: true, nullsLast: true });
-      setCustomers(refreshedCustomers || []);
+          deal_price, quantity, sbu_type,
+          work_orders!inner(organization_id, created_at)
+        `);
       
-      setShowCustomerModal(false);
-      resetCustomerForm();
-    } catch (error: any) {
-      toast.error("Gagal: " + error.message);
-    } finally {
-      setSavingCustomer(false);
-    }
-  };
+      if (itemsError) throw itemsError;
 
-  const resetCustomerForm = () => {
-    setNewCustomer({ phone: "", name: "", company_name: "", address: "", city: "", province: "", zipcode: "", billing_method: 'epod' });
-    setIsCustomerEdit(false);
-    setEditingCustomerId(null);
-    setCustomerView('form');
-  };
+      const { data: orgs } = await supabase.from('organizations').select('*');
+      
+      const tenantMap = new Map();
+      const sbuMap = new Map();
+      let globalRev = 0;
 
-  // =====================================================
-  // CRUD LOCATION
-  // =====================================================
-  const createLocation = async () => {
-    if (!newLocation.name) {
-      toast.error("Nama lokasi wajib diisi");
-      return;
-    }
-    if (!newLocation.address) {
-      toast.error("Alamat wajib diisi");
-      return;
-    }
+      items?.forEach((item: any) => {
+        const orgId = item.work_orders.organization_id;
+        const rev = (item.deal_price || 0) * (item.quantity || 1);
+        globalRev += rev;
 
-    setSavingLocation(true);
-    try {
-      const { data, error } = await supabase
-        .from("locations")
-        .insert({
-          name: newLocation.name,
-          address: newLocation.address,
-          district: newLocation.district || null,
-          city: newLocation.city || null,
-          province: newLocation.province || null,
-          zipcode: newLocation.zipcode || null,
-          notes: newLocation.notes || null,
-        })
-        .select()
-        .single();
+        if (!tenantMap.has(orgId)) {
+          const org = orgs?.find(o => o.id === orgId);
+          tenantMap.set(orgId, { 
+            name: org?.company_name || org?.name || 'Unknown Tenant',
+            revenue: 0,
+            credits: org?.mission_credits || 0,
+            status: org?.is_active
+          });
+        }
+        const t = tenantMap.get(orgId);
+        t.revenue += rev;
 
-      if (error) throw error;
-
-      toast.success("Lokasi berhasil ditambahkan!");
-      setLocations(prev => [...prev, data]);
-      setShowLocationModal(false);
-      setNewLocation({
-        name: "",
-        address: "",
-        district: "",
-        city: "",
-        province: "",
-        zipcode: "",
-        notes: "",
+        const sbu = item.sbu_type || 'trucking';
+        sbuMap.set(sbu, (sbuMap.get(sbu) || 0) + rev);
       });
-    } catch (error: any) {
-      toast.error("Gagal: " + error.message);
-    } finally {
-      setSavingLocation(false);
-    }
-  };
 
-  // =====================================================
-  // WO ITEMS MANAGEMENT
-  // =====================================================
-  const addWoItem = () => {
-    setWoItems(prev => [
-      ...prev,
-      {
-        truck_type: "CDE",
-        origin_location_id: "",
-        destination_location_id: "",
-        quantity: 1,
-        deal_price: 0,
-      }
-    ]);
-  };
-
-  const removeWoItem = (index: number) => {
-    if (woItems.length === 1) {
-      toast.error("Minimal 1 item");
-      return;
-    }
-    setWoItems(prev => prev.filter((_, i) => i !== index));
+      setSuperAdminStats({
+        revenueByTenant: Array.from(tenantMap.values()).sort((a,b) => b.revenue - a.revenue),
+        sbuDistribution: Array.from(sbuMap.entries()).map(([name, value]) => ({ name, value })),
+        totalGlobalRevenue: globalRev,
+        organizations: orgs || []
+      });
+    } catch (err) {}
   };
 
   const lookupLastPrice = async (index: number, currentItems?: WorkOrderItem[]) => {
     const targetItems = currentItems || woItems;
     const item = targetItems[index];
-    
     if (!newWO.customer_id || !item.truck_type || !item.origin_location_id || !item.destination_location_id || item.sbu_type !== 'trucking') return;
 
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('work_order_items')
-        .select(`
-          deal_price,
-          work_orders!inner(customer_id, created_at)
-        `)
+        .select('deal_price, work_orders!inner(customer_id, created_at)')
         .eq('work_orders.customer_id', newWO.customer_id)
         .eq('truck_type', item.truck_type)
         .eq('origin_location_id', item.origin_location_id)
@@ -845,2466 +579,1541 @@ export default function AdminDashboardPage() {
         const updated = [...targetItems];
         updated[index] = { ...updated[index], deal_price: data.deal_price };
         setWoItems(updated);
-        toast.success(`Tarif terakhir ditemukan: Rp ${data.deal_price.toLocaleString('id-ID')}`, {
-          icon: '💰',
-          duration: 3000
-        });
+        toast.success("Tarif terakhir ditemukan: Rp " + data.deal_price.toLocaleString('id-ID'));
       }
-    } catch (err) {
-      console.error("Price lookup error:", err);
-    }
+    } catch (err) {}
   };
 
   const updateWoItem = (index: number, field: string, value: any, subField?: string) => {
     const updated = [...woItems];
     if (subField) {
-      updated[index] = {
-        ...updated[index],
-        [field]: {
-          ...(updated[index][field as keyof WorkOrderItem] as object || {}),
-          [subField]: value
-        }
-      };
+      updated[index] = { ...updated[index], [field]: { ...(updated[index][field as keyof WorkOrderItem] as object || {}), [subField]: value } };
     } else {
-      updated[index] = {
-        ...updated[index],
-        [field]: value
-      };
+      updated[index] = { ...updated[index], [field]: value };
     }
     setWoItems(updated);
-
-    // Trigger Lookup if route/type changed
     if (['truck_type', 'origin_location_id', 'destination_location_id'].includes(field)) {
       lookupLastPrice(index, updated);
     }
   };
 
-  // Automatic price lookups merged above
-
-  // Hitung total
-  const getItemTotal = (item: WorkOrderItem) => {
-    return (item.quantity || 0) * (item.deal_price || 0);
-  };
-
-  const getGrandTotal = () => {
-    return woItems.reduce((sum, item) => sum + getItemTotal(item), 0);
-  };
-
-  // Create Work Order
-  // Create Work Order
   const createWorkOrder = async (targetStatus: string = "draft") => {
-    if (!newWO.customer_id) {
-      toast.error("Pilih pelanggan dulu");
-      return;
-    }
-
+    if (!newWO.customer_id) return toast.error("Pilih pelanggan");
     for (let i = 0; i < woItems.length; i++) {
-      const item = woItems[i];
-      // Hanya validasi lokasi jika SBU adalah trucking
-      if (item.sbu_type === 'trucking') {
-        if (!item.origin_location_id) {
-          toast.error(`Item ${i + 1} (Trucking): Pilih lokasi pickup`);
-          return;
-        }
-        if (!item.destination_location_id) {
-          toast.error(`Item ${i + 1} (Trucking): Pilih lokasi dropoff`);
-          return;
-        }
-      }
-      if (item.quantity < 1) {
-        toast.error(`Item ${i + 1}: Jumlah unit minimal 1`);
-        return;
-      }
+       if (woItems[i].sbu_type === 'trucking' && (!woItems[i].origin_location_id || !woItems[i].destination_location_id)) {
+          return toast.error("Lengkapi rute untuk item #" + (i+1));
+       }
     }
-
-    const selectedCustomer = customers.find(c => c.id === newWO.customer_id);
-    const required_units = woItems.reduce((sum, item) => sum + item.quantity, 0);
 
     try {
+      const selectedCustomer = customers.find(c => c.id === newWO.customer_id);
       const response = await fetch('/api/wo', {
         method: editingWOId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(editingWOId ? { id: editingWOId } : {}),
-          customer_id: newWO.customer_id,
+          ...newWO,
           customer_phone: selectedCustomer?.phone,
           customer_name: selectedCustomer?.name,
           company_name: selectedCustomer?.company_name,
-          order_date: newWO.order_date,
-          execution_date: newWO.execution_date,
-          notes: newWO.notes,
+          organization_id: userProfile?.organization_id || userProfile?.organizations?.id || null,
           status: targetStatus,
-          source: "admin_cs",
-          created_by: "Admin",
-          required_units: required_units,
-          sbu_type: newWO.sbu_type,
-          items: woItems
+          items: woItems,
+          source: "admin_cs"
         }),
       });
 
       if (response.ok) {
-        toast.success(editingWOId ? "Work Order diperbarui!" : "Work Order berhasil dibuat!");
+        toast.success("Work Order tersimpan!");
         setShowCreateModal(false);
-        setEditingWOId(null);
-        
-        setNewWO({
-          customer_id: "",
-          order_date: new Date().toISOString().split('T')[0],
-          execution_date: new Date().toISOString().slice(0, 16),
-          notes: "",
-          sbu_type: "trucking"
-        });
-        setWoItems([{
-          truck_type: "CDE",
-          origin_location_id: "",
-          destination_location_id: "",
-          quantity: 1,
-          deal_price: 0,
-          sbu_type: "trucking",
-          sbu_metadata: {}
-        }]);
-        setWizardStep(1);
-        setSelectedSbus(['trucking']);
-        setActiveWizardTab('trucking');
-
         fetchDashboardData();
+        resetWOForm();
       } else {
-        throw new Error("Gagal membuat WO");
+        throw new Error("Gagal simpan");
       }
     } catch (error: any) {
-      console.error("Error creating WO:", error);
-      toast.error("Gagal membuat WO: " + error.message);
+      toast.error("Error: " + error.message);
     }
+  };
+
+  const resetWOForm = () => {
+    setEditingWOId(null);
+    setWizardStep(1);
+    setNewWO({
+      customer_id: "",
+      order_date: new Date().toISOString().split('T')[0],
+      execution_date: new Date().toISOString().slice(0, 16),
+      notes: "",
+      sbu_type: "trucking",
+    });
+    setWoItems([{ truck_type: "CDE", origin_location_id: "", destination_location_id: "", quantity: 1, deal_price: 0, sbu_type: "trucking", sbu_metadata: {} }]);
+  };
+
+  const openEditModal = (wo: WorkOrder) => {
+    setEditingWOId(wo.id);
+    setNewWO({
+      customer_id: wo.customer_id,
+      order_date: wo.order_date,
+      execution_date: wo.execution_date || new Date().toISOString().slice(0, 16),
+      notes: wo.notes || "",
+      sbu_type: wo.source || "trucking",
+    });
+    setWoItems(wo.work_order_items?.map(item => ({
+      id: item.id,
+      truck_type: item.truck_type,
+      origin_location_id: item.origin_location_id,
+      destination_location_id: item.destination_location_id,
+      quantity: item.quantity,
+      deal_price: item.deal_price,
+      sbu_type: item.sbu_type,
+      sbu_metadata: item.sbu_metadata || {}
+    })) || []);
+    setSelectedSbus(Array.from(new Set(wo.work_order_items?.map(i => i.sbu_type || 'trucking'))));
+    setWizardStep(1);
+    setShowCreateModal(true);
   };
 
   const deleteWorkOrder = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('work_orders')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from("work_orders").delete().eq("id", id);
       if (error) throw error;
-      
-      toast.success("Work Order berhasil dihapus");
+      toast.success("Work Order deleted");
       fetchDashboardData();
-    } catch (error: any) {
-      console.error("Error deleting WO:", error);
-      toast.error("Gagal menghapus WO: " + error.message);
-    }
-  };
-
-  // =====================================================
-  // REJECT WITH REASON
-  // =====================================================
-  const openRejectModal = (woId: string) => {
-    setRejectTargetWOId(woId);
-    setRejectReason("");
-    setShowRejectModal(true);
-  };
-
-  const handleRejectWithReason = async () => {
-    if (!rejectTargetWOId) return;
-    if (!rejectReason.trim()) { toast.error("Tuliskan alasan penolakan"); return; }
-    setRejectingWO(true);
-    try {
-      const { error } = await supabase
-        .from("work_orders")
-        .update({ status: "rejected", notes: rejectReason.trim() })
-        .eq("id", rejectTargetWOId);
-      if (error) throw error;
-      toast.success("WO berhasil ditolak");
-      setShowRejectModal(false);
-      setRejectTargetWOId(null);
-      setRejectReason("");
-      fetchDashboardData();
-    } catch (e: any) {
-      toast.error("Gagal: " + e.message);
-    } finally {
-      setRejectingWO(false);
-    }
-  };
-
-  // Submit draft to SBU
-  const handleExportReport = () => {
-    try {
-      toast.loading("Menyiapkan Master Report...", { id: 'admin-export' });
-
-      const headers = [
-        "WO Number",
-        "Order Date",
-        "Execution Date",
-        "Customer",
-        "Status",
-        "Units",
-        "Deal Price (Total)",
-        "Extra Costs (Total)",
-        "Grand Total",
-        "Fleet Assignments"
-      ];
-
-      const rows = workOrders.map(wo => {
-        const displayStatus = getWODisplayStatus(wo);
-        const totalDeal = (wo.work_order_items || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.deal_price || 0)), 0);
-        
-        const extraCosts = (wo.work_order_items || []).flatMap(i => i.job_orders || []).reduce((acc, jo) => {
-          return acc + (jo.extra_costs || []).reduce((cAcc: number, c: any) => cAcc + (Number(c.amount) || 0), 0);
-        }, 0);
-
-        const assignments = (wo.work_order_items || []).flatMap(i => i.job_orders || []).map(jo => `${jo.jo_number}:${jo.fleets?.plate_number}`).join("; ");
-
-        return [
-          wo.wo_number,
-          wo.order_date,
-          wo.execution_date,
-          wo.customers?.company_name || wo.customers?.name || "-",
-          displayStatus.label,
-          (wo.work_order_items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0),
-          totalDeal,
-          extraCosts,
-          totalDeal + extraCosts,
-          assignments
-        ];
-      });
-
-      const csvRows = [headers.join(",")];
-      rows.forEach((row: any) => {
-        const escaped = row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`);
-        csvRows.push(escaped.join(","));
-      });
-
-      const csvContent = csvRows.join("\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Sentralogis_Master_Admin_Report_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("Master Report berhasil diunduh!", { id: 'admin-export' });
     } catch (err: any) {
-      toast.error("Gagal export: " + err.message, { id: 'admin-export' });
+      toast.error(err.message);
     }
   };
 
-  const handleSubmitToSBU = async (woId: string) => {
+  const handleStatusUpdate = async (id: string, status: string, reason?: string) => {
+    setLoading(true);
     try {
-      const { error } = await supabase.from("work_orders").update({ status: "pending_sbu" }).eq("id", woId);
-      if (error) throw error;
-      toast.success("WO berhasil dikirmkan ke SBU Trucking!");
-      fetchDashboardData();
-    } catch (e: any) {
-      toast.error("Gagal: " + e.message);
-    }
-  };
-
-  const updateExtraCostStatus = async (costId: string, status: 'approved' | 'rejected', isBillable: boolean) => {
-    try {
+      const { data: wo } = await supabase.from('work_orders').select('notes').eq('id', id).single();
+      
       const { error } = await supabase
-        .from("extra_costs")
-        .update({ status, is_billable: isBillable })
-        .eq("id", costId);
+          .from('work_orders')
+          .update({ 
+              status: status,
+              notes: reason ? (wo?.notes || "") + "\n\n[ADMIN DECISION]: " + reason : (wo?.notes || "")
+          })
+          .eq('id', id);
 
       if (error) throw error;
-      toast.success(status === 'approved' ? "Biaya disetujui untuk ditagih ke pelanggan" : "Biaya ditolak untuk penagihan (Hanya Internal)");
-      fetchDashboardData();
-    } catch (error: any) {
-      toast.error("Gagal update biaya: " + error.message);
-    }
-  };
 
-  // Helper: derive WO display status from work order + job_orders
-  const getWODisplayStatus = (wo: WorkOrder) => {
-    const s = wo.status;
-    if (s === 'draft') return { key: 'draft', label: 'Draft', color: 'text-slate-500' };
-    if (s === 'pending_sbu') return { key: 'awaiting_sbu', label: 'Awaiting SBU Assignment', color: 'text-blue-500' };
-    if (s === 'pending_armada_check') return { key: 'need_approval', label: 'Need Approval', color: 'text-amber-500' };
-    if (s === 'rejected') return { key: 'rejected', label: 'Rejected', color: 'text-red-500' };
-    if (s === 'approved') {
-      const allJOs = (wo.work_order_items || []).flatMap(i => i.job_orders || []);
-      if (allJOs.length === 0) return { key: 'approved', label: 'Approved', color: 'text-emerald-500' };
-      const allDone = allJOs.every(j => j.status === 'delivered');
-      if (allDone) return { key: 'done', label: 'Done', color: 'text-teal-500' };
-      return { key: 'on_journey', label: 'On Journey', color: 'text-blue-400' };
-    }
-    return { key: s, label: s.replace(/_/g, ' '), color: 'text-slate-400' };
-  };
-
-  const updateWOStatus = async (id: string, status: string) => {
-    try {
-      if (status === "approved") {
-        // Logika Smart Partial Approval: Sesuaikan kuantitas dengan hal yang sudah di-assign
-        // 1. Ambil data item dan jumlah JO-nya
-        const { data: woItemsData, error: itemsError } = await supabase
-          .from("work_order_items")
-          .select(`
-            id, quantity,
-            job_orders(id)
-          `)
-          .eq("work_order_id", id);
-        
-        if (itemsError) throw itemsError;
-
-        let totalNewUnits = 0;
-        for (const item of woItemsData || []) {
-            const assignedCount = (item.job_orders || []).length;
-            totalNewUnits += assignedCount;
-            
-            // 2. Update kuantitas item agar SAMA dengan jumlah penugasan
-            // Jika penugasan 0, maka kuantitas tetap (atau bisa disesuaikan sesuai kebutuhan bisnis)
-            // Namun permintaan user: "yang ketiga block tidak bisa di isi", berarti yang kosong dibuang.
-            if (assignedCount < item.quantity) {
-                const { error: updateItemErr } = await supabase
-                    .from("work_order_items")
-                    .update({ quantity: assignedCount })
-                    .eq("id", item.id);
-                if (updateItemErr) console.error("Error truncating item quantity:", updateItemErr);
-            }
+      // 🟢 IF REJECTED: Also cancel all associated Job Orders to release Fleet & Drivers
+      if (status === 'rejected') {
+        const { data: items } = await supabase.from('work_order_items').select('id').eq('work_order_id', id);
+        if (items && items.length > 0) {
+          const itemIds = items.map(i => i.id);
+          const { error: joCancelError } = await supabase
+            .from('job_orders')
+            .update({ status: 'cancelled' })
+            .in('work_order_item_id', itemIds);
+          
+          if (joCancelError) console.error("Error cancelling JOs:", joCancelError);
+          else toast.success("Associated Job Orders released.");
         }
-
-        // 3. Update total required_units di WO
-        const { error: updateWOErr } = await supabase
-            .from("work_orders")
-            .update({ status: "approved", required_units: totalNewUnits })
-            .eq("id", id);
-        
-        if (updateWOErr) throw updateWOErr;
-      } else {
-        const { error } = await supabase
-          .from("work_orders")
-          .update({ status })
-          .eq("id", id);
-
-        if (error) throw error;
       }
 
-      toast.success(`Work Order berhasil di-${status}`);
+      toast.success(`Work Order ${status === 'approved' ? 'Disetujui' : 'Ditolak'}`);
       fetchDashboardData();
-    } catch (error: any) {
-      console.error("Error updating status:", error);
-      toast.error("Gagal memperbarui status: " + error.message);
+      if (status === 'rejected') {
+        setShowRejectModal(false);
+        setRejectReason("");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const generateWALink = (wo: WorkOrder) => {
-    const customerName = wo.customers?.company_name || wo.customers?.name || "Pelanggan";
-    const waNumber = wo.customers?.phone || "";
-    
-    // Format message
-    let message = `*KONFIRMASI WORK ORDER - SENTRA LOGISTIK*\n\n`;
-    message += `Nomor WO: *${wo.wo_number || '-'}*\n`;
-    message += `Pelanggan: ${customerName}\n`;
-    message += `Status: ✅ *DISETUJUI & SIAP PROSES*\n\n`;
-    
-    message += `*Detail Item:*\n`;
-    wo.work_order_items?.forEach((item, index) => {
-        message += `${index + 1}. ${item.truck_type} (${item.quantity} Unit)\n`;
-    });
-    
-    message += `\nSilakan klik link berikut untuk memantau status pengiriman Anda secara real-time.\n`;
-    message += `Terima kasih atas kepercayaan Anda.`;
+  const getWODisplayStatus = (wo: WorkOrder) => {
+    const s = wo.status;
+    if (s === 'draft') return { key: 'draft', label: 'Draft', color: 'text-slate-400', bg: 'bg-slate-100', border: 'border-slate-200' };
+    if (s === 'pending_sbu') return { key: 'awaiting_sbu', label: 'Menunggu SBU', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' };
+    if (s === 'pending_armada_check') return { key: 'need_approval', label: 'Butuh Persetujuan', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' };
+    if (s === 'approved') {
+       const allJOs = (wo.work_order_items || []).flatMap(i => i.job_orders || []);
+       if (allJOs.length > 0 && allJOs.every(j => j.status === 'delivered')) return { key: 'done', label: 'Selesai', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+       if (allJOs.length > 0) return { key: 'on_journey', label: 'Dalam Perjalanan', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200' };
+       return { key: 'approved', label: 'Disetujui', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+    }
+    if (s === 'rejected') return { key: 'rejected', label: 'Ditolak', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' };
+    return { key: s, label: s, color: 'text-slate-400', bg: 'bg-slate-50', border: 'border-slate-200' };
+  };
 
-    const encoded = encodeURIComponent(message);
-    return `https://wa.me/${waNumber.replace(/[^0-9]/g, '')}?text=${encoded}`;
+  const resetCustomerForm = () => {
+    setNewCustomer({ phone: "", name: "", company_name: "", address: "", city: "", province: "", district: "", zipcode: "", latitude: null, longitude: null, billing_method: 'epod' });
+    setIsCustomerEdit(false);
+    setEditingCustomerId(null);
+    setCustomerView('form');
+  };
+
+  const handleSaveCustomer = async () => {
+     if (!newCustomer.phone) return toast.error("Nomor WA wajib");
+     setSavingCustomer(true);
+     try {
+       const payload: any = { ...newCustomer, organization_id: userProfile?.organization_id || userProfile?.organizations?.id || null };
+       if (isCustomerEdit && editingCustomerId) {
+         await supabase.from("customers").update(payload).eq("id", editingCustomerId);
+         toast.success("Customer updated");
+       } else {
+         const { data } = await supabase.from("customers").insert(payload).select().single();
+         setNewWO(prev => ({ ...prev, customer_id: data.id }));
+         toast.success("Customer added");
+       }
+       fetchDashboardData();
+       setShowCustomerModal(false);
+     } catch (err: any) {
+       toast.error(err.message);
+     } finally {
+       setSavingCustomer(false);
+     }
+  };
+
+  const createLocation = async () => {
+    if (!newLocation.name || !newLocation.address) return toast.error("Nama & Alamat wajib");
+    setSavingLocation(true);
+    try {
+      const payload = { ...newLocation, organization_id: userProfile?.organization_id || userProfile?.organizations?.id || null };
+      const { data } = await supabase.from("locations").insert(payload).select().single();
+      setLocations(prev => [...prev, data]);
+      setShowLocationModal(false);
+      toast.success("Lokasi disimpan");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  // =====================================================
+  // GOOGLE PLACES AUTOCOMPLETE HELPERS
+  // =====================================================
+  const extractAddressComponents = (place: google.maps.places.PlaceResult) => {
+    const get = (type: string) => place.address_components?.find(c => c.types.includes(type));
+    return {
+      address: place.formatted_address || '',
+      district: get('administrative_area_level_3')?.long_name || get('sublocality_level_1')?.long_name || get('locality')?.long_name || '',
+      city: get('administrative_area_level_2')?.long_name || get('locality')?.long_name || '',
+      province: get('administrative_area_level_1')?.long_name || '',
+      zipcode: get('postal_code')?.long_name || '',
+      latitude: place.geometry?.location?.lat() || null,
+      longitude: place.geometry?.location?.lng() || null,
+    };
+  };
+
+  const initPlacesAutocomplete = useCallback((inputRef: React.RefObject<HTMLInputElement | null>, onSelect: (data: ReturnType<typeof extractAddressComponents>) => void) => {
+    if (!mapsLoaded || !inputRef.current) return;
+    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+      componentRestrictions: { country: 'id' },
+      fields: ['formatted_address', 'address_components', 'geometry'],
+    });
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (place && place.formatted_address) {
+        onSelect(extractAddressComponents(place));
+      }
+    });
+    return autocomplete;
+  }, [mapsLoaded]);
+
+  // Init customer Places autocomplete
+  useEffect(() => {
+    if (showCustomerModal && mapsLoaded && customerAddressInputRef.current) {
+      const ac = initPlacesAutocomplete(customerAddressInputRef, (data) => {
+        setNewCustomer(prev => ({ ...prev, ...data }));
+      });
+      return () => { if (ac) google.maps.event.clearInstanceListeners(ac); };
+    }
+  }, [showCustomerModal, mapsLoaded, initPlacesAutocomplete]);
+
+  // Init location Places autocomplete
+  useEffect(() => {
+    if (showLocationModal && mapsLoaded && locationAddressInputRef.current) {
+      const ac = initPlacesAutocomplete(locationAddressInputRef, (data) => {
+        setNewLocation(prev => ({ ...prev, ...data }));
+      });
+      return () => { if (ac) google.maps.event.clearInstanceListeners(ac); };
+    }
+  }, [showLocationModal, mapsLoaded, initPlacesAutocomplete]);
+
+  const handleExportReport = () => {
+    const headers = ["WO Number", "Customer", "Date", "Status", "Revenue"];
+    const rows = workOrders.map(wo => [
+      wo.wo_number,
+      wo.customers?.company_name || wo.customers?.name || "-",
+      wo.order_date,
+      getWODisplayStatus(wo).label,
+      (wo.work_order_items || []).reduce((sum, i) => sum + (i.quantity * i.deal_price), 0)
+    ]);
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Admin_Report.csv";
+    link.click();
   };
 
   useEffect(() => {
+    if (showStaffModal && userProfile?.organization_id) {
+        fetchStaff(userProfile.organization_id);
+    }
+  }, [showStaffModal, userProfile?.organization_id]);
+
+  useEffect(() => {
     fetchDashboardData();
+    fetchUserProfile();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
-  const totalRevenue = workOrders.reduce((sum, wo) => {
-    const itemsTotal = (wo.work_order_items || []).reduce((itemSum, item) => itemSum + ((item.quantity || 0) * (item.deal_price || 0)), 0);
-    return sum + itemsTotal;
-  }, 0);
-
   return (
-    <div className="min-h-screen bg-[#0a0f1e] text-slate-200 p-6 pb-32 md:pb-6 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24 md:pb-6 overflow-x-hidden">
       <Toaster position="top-right" />
 
-      {/* Background Decor */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -right-24 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="max-w-7xl mx-auto relative z-10">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-white tracking-tight italic">Admin Dashboard<span className="text-emerald-500">.</span></h1>
-            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center gap-2 mt-1">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                Fleet Control Gateway • Sentra Logistik
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {/* Admin Floating Profile */}
-            <div className="flex items-center gap-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 py-2 pl-2 pr-6 rounded-full shadow-2xl">
+       {/* 🧭 PREMIUM NAVIGATION BAR */}
+      <header className="sticky top-0 z-[100] bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20">
+                      <Building2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Sentralogis Admin</p>
+                      <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight italic">
+                          {userProfile?.organizations?.name || 'Control Center'}
+                      </h2>
+                  </div>
+              </div>
+              
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                  <User className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{userProfile?.full_name || 'Admin Sentralogis'}</p>
-                  <p className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-widest">{userProfile?.role || 'Superadmin'}</p>
-                </div>
+                  <button onClick={() => fetchDashboardData()} className="p-2.5 hover:bg-slate-100 text-slate-400 rounded-xl transition-all">
+                      <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button onClick={handleLogout} className="p-2.5 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-100 group">
+                      <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                  </button>
               </div>
-              <div className="h-8 w-px bg-white/10" />
-              <button
-                onClick={handleLogout}
-                className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-all font-bold active:scale-95 text-[10px] uppercase tracking-widest"
-              >
-                <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                Logout
-              </button>
-            </div>
           </div>
-        </div>
+      </header>
 
-        <div className="flex flex-wrap items-center gap-3 mb-12 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 md:pb-0 md:overflow-visible scrollbar-hide">
-              <Link
-                href="/sbu-launchpad"
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-2xl hover:scale-105 transition-all font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-500/20 active:scale-95"
-              >
-                <Target className="w-5 h-5" />
-                Mission Control
-              </Link>
-              <button
-                onClick={handleExportReport}
-                className="flex items-center gap-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 px-6 py-3 rounded-2xl hover:bg-blue-600 hover:text-white transition-all font-bold active:scale-95"
-              >
-                <Download className="w-5 h-5" />
-                Export Data
-              </button>
-              <Link
-                href="/finance"
-                className="flex items-center gap-2 bg-white/5 border border-white/10 text-white px-6 py-3 rounded-2xl hover:bg-white/10 transition-all font-bold active:scale-95"
-              >
-                <Banknote className="w-5 h-5 text-emerald-400" />
-                Finance Controller
-              </Link>
-              <Link
-                href="/admin/users"
-                className="flex items-center gap-2 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 px-6 py-3 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all font-bold active:scale-95"
-              >
-                <ShieldCheck className="w-5 h-5" />
-                Users & Roles
-              </Link>
-              <Link
-                href="/admin/entities"
-                className="flex items-center gap-2 bg-purple-600/10 border border-purple-500/20 text-purple-400 px-6 py-3 rounded-2xl hover:bg-purple-600 hover:text-white transition-all font-bold active:scale-95"
-              >
-                <UserPlus className="w-5 h-5" />
-                Master Entities
-              </Link>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-500/20 font-bold active:scale-95"
-              >
-                <Plus className="w-5 h-5" />
-                Work Order Baru
-              </button>
-          </div>
-
-        {/* BI COCKPIT - Horizontal Scroll on Mobile, Grid on Desktop */}
-        <div className="flex lg:grid lg:grid-cols-3 gap-6 overflow-x-auto lg:overflow-visible pb-8 -mx-6 px-6 lg:mx-0 lg:px-0 lg:pb-0 mb-12 snap-x snap-mandatory scrollbar-hide">
-          {/* 1. Operational Funnel */}
-          <div className="min-w-[320px] lg:min-w-0 snap-center bg-[#151f32]/60 backdrop-blur-2xl border border-white/5 rounded-[3rem] p-8 shadow-2xl overflow-hidden relative group">
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
-            
-            <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white italic tracking-tighter uppercase">Operational Funnel</h3>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Job Pipeline Tracking</p>
-              </div>
-            </div>
-
-            <div className="space-y-6 relative">
-              {[
-                { label: 'Terima (Belum Jalan)', count: stats?.funnel?.received || 0, color: 'text-slate-400', bar: 'bg-slate-500' },
-                { label: 'Running (Aktif)', count: stats?.funnel?.running || 0, color: 'text-blue-400', bar: 'bg-blue-500' },
-                { label: 'Selesai (Doc Incomplete)', count: stats?.funnel?.finished_pending_docs || 0, color: 'text-amber-400', bar: 'bg-amber-500' },
-                { label: 'Doc OK (Antri Finance)', count: stats?.funnel?.docs_complete_pending_finance || 0, color: 'text-emerald-400', bar: 'bg-emerald-500' },
-              ].map((step, idx) => (
-                <div key={idx} className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">{step.label}</span>
-                    <span className={`text-lg font-black ${step.color} leading-none tracking-tighter`}>{step.count}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full ${step.bar} transition-all duration-1000 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
-                      style={{ width: `${(step.count / (stats.total || 1)) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 2. Revenue Performance */}
-          <div className="min-w-[320px] lg:min-w-0 snap-center bg-[#151f32]/60 backdrop-blur-2xl border border-white/5 rounded-[3rem] p-8 shadow-2xl overflow-hidden relative group">
-             <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all" />
-             
-             <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white italic tracking-tighter uppercase">Monthly Business</h3>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Financial Comparison</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col justify-center h-[calc(100%-80px)]">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Revenue Bulan Ini</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[10px] font-black text-emerald-500/50 italic">Rp</span>
-                  <span className="text-5xl font-black text-white tracking-tighter">
-                    {stats?.revenueComparison?.thisMonth?.toLocaleString('id-ID') || '0'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-8 pt-8 border-t border-white/5 grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Bulan Lalu</p>
-                  <p className="text-sm font-black text-slate-300 tracking-tight">
-                    Rp {stats?.revenueComparison?.lastMonth?.toLocaleString('id-ID') || '0'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Pertumbuhan</p>
-                  <div className={`flex items-center gap-1 text-sm font-black ${(stats?.revenueComparison?.growth || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {(stats?.revenueComparison?.growth || 0) >= 0 ? '+' : ''}{(stats?.revenueComparison?.growth || 0).toFixed(1)}%
-                    <TrendingUp className={`w-3 h-3 ${(stats?.revenueComparison?.growth || 0) < 0 ? 'rotate-180' : ''}`} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Top Customers */}
-          <div className="min-w-[320px] lg:min-w-0 snap-center bg-[#151f32]/60 backdrop-blur-2xl border border-white/5 rounded-[3rem] p-8 shadow-2xl">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-purple-500/10 rounded-2xl flex items-center justify-center">
-                <Hourglass className="w-6 h-6 text-purple-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white italic tracking-tighter uppercase">Top Customers</h3>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contribution (This Month)</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {stats.topCustomers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 opacity-30">
-                  <Package className="w-10 h-10 mb-2" />
-                  <p className="text-[10px] font-black uppercase tracking-widest">Belum ada data</p>
-                </div>
-              ) : (
-                (() => {
-                  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                  const formatCompact = (val: number) => {
-                    if (val >= 1000000000) return (val / 1000000000).toFixed(1) + 'M';
-                    if (val >= 1000000) return (val / 1000000).toFixed(1) + 'jt';
-                    if (val >= 1000) return (val / 1000).toFixed(1) + 'rb';
-                    return val.toString();
-                  };
-
-                  return stats.topCustomers.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:bg-white/10 transition-all cursor-default relative overflow-hidden">
-                      {i === 0 && <div className="absolute inset-y-0 left-0 w-1 bg-purple-500" />}
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-950 rounded-xl flex items-center justify-center text-[10px] font-black text-purple-400 border border-purple-500/20">
-                          {getInitials(c.name)}
-                        </div>
-                        <span className="text-xs font-black text-slate-200 uppercase tracking-tight line-clamp-1 max-w-[120px]">{c.name}</span>
-                      </div>
-                      <span className="text-[11px] font-black text-white italic bg-slate-950 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner">
-                         {formatCompact(c.totalRevenue)}
-                      </span>
-                    </div>
-                  ));
-                })()
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <button 
-            onClick={() => setStatusFilter("all")}
-            className={`text-left bg-[#151f32]/80 backdrop-blur-xl border rounded-[2.5rem] p-6 shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all ${statusFilter === 'all' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10 hover:border-white/20'}`}
-          >
-            <div className="flex items-center justify-between mb-4">
-               <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center">
-                 <Package className="w-6 h-6 text-blue-500" />
-               </div>
-               <TrendingUp className="w-4 h-4 text-slate-600" />
-            </div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Semua WO</p>
-            <p className="text-3xl font-black text-white">{stats.total}</p>
-          </button>
-
-          <button 
-            onClick={() => setStatusFilter("awaiting_sbu")}
-            className={`text-left bg-[#151f32]/80 backdrop-blur-xl border rounded-[2.5rem] p-6 shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all ${statusFilter === 'awaiting_sbu' ? 'border-blue-400 ring-2 ring-blue-400/20' : 'border-white/10 hover:border-white/20'}`}
-          >
-            <div className="flex items-center justify-between mb-4">
-               <div className="w-12 h-12 bg-blue-400/10 rounded-2xl flex items-center justify-center">
-                 <Hourglass className="w-6 h-6 text-blue-400" />
-               </div>
-            </div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Menunggu SBU</p>
-            <p className="text-3xl font-black text-white">{stats.pending_sbu}</p>
-          </button>
-
-          <button 
-            onClick={() => setStatusFilter("need_approval")}
-            className={`text-left bg-[#151f32]/80 backdrop-blur-xl border rounded-[2.5rem] p-6 shadow-[0_0_20px_rgba(245,158,11,0.05)] transition-all ${statusFilter === 'need_approval' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-white/10 hover:border-white/20'}`}
-          >
-            <div className="flex items-center justify-between mb-4">
-               <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center">
-                 <AlertCircle className="w-6 h-6 text-amber-500" />
-               </div>
-               <Clock className="w-4 h-4 text-slate-600" />
-            </div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Butuh Persetujuan</p>
-            <p className="text-3xl font-black text-amber-500">{stats.need_approval}</p>
-          </button>
-
-          <button 
-            onClick={() => setStatusFilter("on_journey")}
-            className={`text-left bg-[#151f32]/80 backdrop-blur-xl border rounded-[2.5rem] p-6 shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all ${statusFilter === 'on_journey' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-white/10 hover:border-white/20'}`}
-          >
-            <div className="flex items-center justify-between mb-4">
-               <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
-                 <Navigation className="w-6 h-6 text-emerald-500" />
-               </div>
-            </div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Dalam Perjalanan</p>
-            <p className="text-3xl font-black text-emerald-500">{stats.on_journey}</p>
-          </button>
-        </div>
-
-        {/* Work Orders List Container */}
-        <div className="bg-[#151f32]/80 backdrop-blur-xl border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl mb-20">
-          <div className="p-10 border-b border-white/5 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 bg-white/5">
-            <div className="flex-1">
-              <h2 className="text-3xl font-black text-white flex items-center gap-5 italic uppercase tracking-tighter">
-                  <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
-                    <FileText className="w-8 h-8 text-emerald-500" />
-                  </div>
-                  Manajemen Work Order
-              </h2>
-              <p className="text-slate-500 text-[11px] font-black uppercase tracking-[0.4em] mt-2 ml-1">Operational Cockpit • Sentra Logistik</p>
-            </div>
-            
-            <div className="flex items-center gap-4 w-full xl:w-auto">
-                <div className="relative flex-1 xl:w-96 group">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-emerald-500 transition-colors" />
-                    <input 
-                        type="text" 
-                        placeholder="Cari No. WO atau Pelanggan..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-[#0a0f1e] border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 w-full font-bold text-white transition-all"
-                    />
-                </div>
-                <button 
-                  onClick={() => { resetWOForm(); setShowCreateModal(true); }}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-white px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-xl shadow-emerald-500/20 whitespace-nowrap"
-                >
-                  <Plus className="w-6 h-6" />
-                  Buat WO Baru
-                </button>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-3">
-            {workOrders
-              .filter(wo => {
-                const displayStatus = getWODisplayStatus(wo);
-                if (statusFilter !== 'all' && displayStatus.key !== statusFilter) return false;
-                const searchStr = `${wo.wo_number} ${wo.customers?.name} ${wo.customers?.company_name}`.toLowerCase();
-                return searchStr.includes(searchTerm.toLowerCase());
-              })
-              .length === 0 ? (
-                <div className="py-20 text-center">
-                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <FileText className="w-10 h-10 text-slate-800" />
-                    </div>
-                    <p className="text-slate-600 font-black uppercase text-xs tracking-widest leading-loose">
-                        {searchTerm ? "Tidak ada hasil pencarian" : "Belum ada data Work Order tersedia"}
-                    </p>
-                    {statusFilter !== 'all' && (
-                        <button onClick={() => setStatusFilter('all')} className="mt-4 text-emerald-500 font-black uppercase text-[10px] tracking-widest hover:text-emerald-400">Lihat Semua</button>
-                    )}
-                </div>
-              ) : (
-                workOrders
-                  .filter(wo => {
-                    const displayStatus = getWODisplayStatus(wo);
-                    if (statusFilter !== 'all' && displayStatus.key !== statusFilter) return false;
-                    const searchStr = `${wo.wo_number} ${wo.customers?.name} ${wo.customers?.company_name}`.toLowerCase();
-                    return searchStr.includes(searchTerm.toLowerCase());
-                  })
-                  .map((wo) => {
-                    const isExpanded = expandedWOId === wo.id;
-                    const items = wo.work_order_items || [];
-                    const sbus = Array.from(new Set(items.map((i: any) => i.sbu_type)));
-                    const displayStatus = getWODisplayStatus(wo);
-
-                    return (
-                      <div key={wo.id} className="group mb-3">
-                         <div 
-                           onClick={() => setExpandedWOId(isExpanded ? null : wo.id)}
-                           className={`bg-[#151f32]/60 border border-white/5 hover:border-blue-500/40 rounded-[2.5rem] p-8 transition-all cursor-pointer flex items-center gap-10 ${isExpanded ? 'border-blue-500/50 bg-[#0d1628] shadow-2xl' : ''}`}
-                         >
-                            {/* WO # & DATE */}
-                            <div className="w-56 flex-shrink-0">
-                               <div className="flex items-center gap-3 mb-2">
-                                  <div className={`w-3 h-3 rounded-full ${displayStatus.color.replace('text-', 'bg-')} animate-pulse`} />
-                                  <span className="text-[16px] font-bold text-white italic tracking-tighter uppercase">{wo.wo_number}</span>
-                                </div>
-                                <span className="text-[13px] font-bold text-slate-500 uppercase tracking-widest">
-                                   {new Date(wo.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })}
-                                </span>
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                               <p className="text-[15px] font-black text-white uppercase truncate mb-1">
-                                  {wo.customers?.company_name || wo.customers?.name || "No Customer Name"}
-                               </p>
-                               <p className="text-[12px] font-bold text-slate-500 uppercase tracking-tighter truncate max-w-md">
-                                  {wo.notes || "No Operational Notes"}
-                               </p>
-                            </div>
-
-                            <div className="flex gap-3 items-center flex-shrink-0 bg-white/5 px-5 py-3 rounded-2xl border border-white/5">
-                               {['trucking', 'clearances', 'forwarding', 'warehouse', 'project'].map(sId => {
-                                  const isActive = sbus.includes(sId);
-                                  const IconComp = sId === 'trucking' ? Truck : sId === 'clearances' ? FileText : sId === 'forwarding' ? Ship : sId === 'warehouse' ? Warehouse : HardHat;
-                                  if (!isActive) return null;
-                                  return (
-                                     <button 
-                                         key={sId}
-                                         onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            openEditModal(wo);
-                                            setTimeout(() => {
-                                               setWizardStep(2);
-                                               setActiveWizardTab(sId);
-                                            }, 100);
-                                         }}
-                                         className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 hover:bg-blue-600 hover:text-white transition-all shadow-lg focus:outline-none" 
-                                         title={`Edit ${sId}`}
-                                      >
-                                        <IconComp className="w-5 h-5" />
-                                     </button>
-                                  );
-                               })}
-                            </div>
-
-                            <div className="w-44 flex-shrink-0 text-right">
-                               <span className={`px-6 py-3 rounded-xl text-[12px] font-black uppercase tracking-widest border ${displayStatus.color} bg-white/5 border-white/10 shadow-lg`}>
-                                  {displayStatus.label}
-                               </span>
-                            </div>
-
-                             <div className="flex items-center gap-3 flex-shrink-0">
-                                <button 
-                                   onClick={(e) => { e.stopPropagation(); openEditModal(wo); }} 
-                                   className="p-4 bg-white/5 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-500 rounded-2xl transition-all border border-white/5 active:scale-95 shadow-lg"
-                                >
-                                   <Edit2 className="w-6 h-6" />
-                                </button>
-                                <button 
-                                   onClick={(e) => { e.stopPropagation(); if(confirm('Hapus Work Order?')) deleteWorkOrder(wo.id); }} 
-                                   className="p-4 bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded-2xl transition-all border border-white/5 active:scale-95 shadow-lg"
-                                >
-                                   <Trash2 className="w-6 h-6" />
-                                </button>
-                                <div className={`p-4 rounded-2xl border transition-all shadow-lg ${isExpanded ? 'bg-blue-600 border-blue-400 text-white' : 'bg-white/5 border-white/5 text-slate-500'}`}>
-                                   <ChevronDown className={`w-6 h-6 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                </div>
-                             </div>
-                         </div>
-
-                         {isExpanded && (
-                             <div className="mt-4 bg-[#0d1628]/60 border border-white/5 rounded-[2.5rem] p-10 animate-in fade-in slide-in-from-top-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                   {items.map((item: any) => {
-                                       const isClearance = item.sbu_type === 'clearances';
-                                       return (
-                                         <div key={item.id} className="bg-slate-950/40 border border-white/5 p-6 rounded-3xl group/item hover:border-blue-500/30 transition-all">
-                                            <div className="flex justify-between items-start mb-5">
-                                               <div className="flex items-center gap-4">
-                                                  <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center">
-                                                     {item.sbu_type === 'trucking' ? <Truck className="w-6 h-6 text-blue-500" /> : <ShieldCheck className="w-6 h-6 text-emerald-400" />}
-                                                  </div>
-                                                  <div>
-                                                     <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{item.sbu_type}</p>
-                                                     <p className="text-[15px] font-black text-white uppercase tracking-tight">
-                                                        {isClearance ? (item.sbu_metadata?.doc_code || "Clearance Task") : (item.truck_type || "N/A")}
-                                                     </p>
-                                                  </div>
-                                               </div>
-                                               <span className="text-[14px] font-black text-emerald-500 italic">Rp {item.deal_price?.toLocaleString('id-ID')}</span>
-                                            </div>
-                                            
-                                            {item.sbu_type === 'clearances' ? (
-                                               <div className="space-y-4 px-1">
-                                                  <div className="flex items-center gap-3 text-[12px] font-bold text-slate-400">
-                                                     <Target className="w-4 h-4 text-emerald-500/50" /> 
-                                                     Jalur: <span className={'px-2 py-0.5 rounded text-[10px] uppercase font-black ' + (item.sbu_metadata?.lane === 'Merah' ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/20 text-emerald-500')}>{item.sbu_metadata?.lane || 'Hijau'}</span>
-                                                  </div>
-                                                  <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 tracking-wider">
-                                                     <FileText className="w-4 h-4 text-slate-600" /> No. Aju: {item.sbu_metadata?.aju_number || "-"}
-                                                  </div>
-                                               </div>
-                                            ) : (
-                                               <div className="space-y-3 px-1">
-                                                  <div className="flex items-center gap-3 text-[13px] font-bold text-slate-400">
-                                                     <MapPin className="w-4 h-4 text-slate-600" /> {item.origin_location?.name || 'TBA'}
-                                                  </div>
-                                                  <div className="flex items-center gap-3 text-[13px] font-bold text-slate-400">
-                                                     <Navigation className="w-4 h-4 text-slate-600" /> {item.destination_location?.name || 'TBA'}
-                                                  </div>
-                                               </div>
-                                            )}
-                                         </div>
-                                       );
-                                   })}
-                                </div>
-                             </div>
-                         )}
-                      </div>
-                    );
-                  })
-              )}
-          </div>
-        </div>
-        {/* MOBILE BOTTOM NAV */}
-        <nav className="fixed bottom-0 inset-x-0 bg-[#0a0f1e]/80 backdrop-blur-2xl border-t border-white/5 p-4 pb-8 flex justify-around items-center z-50 md:hidden">
-            <button onClick={() => { setStatusFilter('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`flex flex-col items-center gap-1.5 ${statusFilter === 'all' ? 'text-emerald-500' : 'text-slate-600'}`}>
-                <LayoutGrid className="w-5 h-5" />
-                <span className="text-[8px] font-black uppercase tracking-widest">Cockpit</span>
-            </button>
-            <button onClick={() => { resetCustomerForm(); setCustomerView('list'); setShowCustomerModal(true); }} className="flex flex-col items-center gap-1.5 text-slate-600">
-                <UserPlus className="w-5 h-5" />
-                <span className="text-[8px] font-black uppercase tracking-widest">Customer</span>
-            </button>
-            <div className="-mt-14 relative">
-                <button onClick={() => { resetWOForm(); setShowCreateModal(true); }} className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-2xl text-white border-4 border-[#0a0f1e] active:scale-90 transition-all">
-                    <Plus className="w-8 h-8 font-black" />
-                </button>
-            </div>
-            <a href="/finance" className="flex flex-col items-center gap-1.5 text-slate-600">
-                <Banknote className="w-5 h-5" />
-                <span className="text-[8px] font-black uppercase tracking-widest">Finance</span>
-            </a>
-            <button onClick={() => fetchDashboardData()} className="flex flex-col items-center gap-1.5 text-slate-600 active:scale-95 transition-all">
-                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                <span className="text-[8px] font-black uppercase tracking-widest">Refresh</span>
-            </button>
-        </nav>
-
-      {/* ===================================================== */}
-      {/* MODAL CREATE WORK ORDER */}
-      {/* ===================================================== */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[100] p-4" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowCreateModal(false);
-        }}>
-          <div key={editingWOId || 'new'} className="bg-slate-900 border border-white/10 p-6 md:p-10 rounded-3xl md:rounded-[3rem] w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2 className="text-3xl font-black tracking-tighter uppercase italic text-white flex items-center gap-3">
-                    <FileText className="w-8 h-8 text-emerald-500" />
-                    {editingWOId ? `Edit Work Order #${editingWOId.substring(0,6)}` : "Buat Work Order Baru"}
-                </h2>
-                <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-1">Lengkapi detail pengiriman barang</p>
-              </div>
-              <button 
-                onClick={() => setShowCreateModal(false)} 
-                className="text-slate-600 hover:text-white transition-colors p-2"
-              >
-                <X className="w-8 h-8" />
-              </button>
-            </div>
-
-            {/* CLOSED SBU SELECTION - NOW MOVED TO STEP 1 */}
-
-            {wizardStep === 1 ? (
-              /* ===================================================== */
-              /* STEP 1: GENERAL INFO & SBU SELECTION */
-              /* ===================================================== */
-              <div className="space-y-8">
-                {/* 1. Pilih Pelanggan */}
-                <div className="bg-white/5 border border-white/5 p-8 rounded-[2rem]">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 ml-1">1. Pilih Pelanggan Pengirim *</label>
-                  <div className="flex gap-4">
-                    <div className="flex-1 relative group">
-                      <UserPlus className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-emerald-500 transition-colors" />
-                      <select
-                        className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all appearance-none cursor-pointer"
-                        value={newWO.customer_id}
-                        onChange={(e) => setNewWO({ ...newWO, customer_id: e.target.value })}
-                      >
-                        <option value="">-- Pilih Pelanggan Master --</option>
-                        {customers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.company_name || c.name || c.phone}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      onClick={() => { resetCustomerForm(); setShowCustomerModal(true); }}
-                      className="bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 px-8 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all active:scale-95 font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Tambah
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-white/5 border border-white/5 p-8 rounded-[2rem]">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 ml-1">2. Tanggal Order</label>
-                    <div className="relative group">
-                      <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-blue-500 transition-colors" />
-                      <input
-                        type="date"
-                        className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all"
-                        value={newWO.order_date}
-                        onChange={(e) => setNewWO({ ...newWO, order_date: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="bg-white/5 border border-white/5 p-8 rounded-[2rem]">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 ml-1">3. Tanggal & Jam Eksekusi</label>
-                    <div className="relative group">
-                      <Clock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-amber-500 transition-colors" />
-                      <input
-                        type="datetime-local"
-                        className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-amber-500/30 transition-all font-sans"
-                        value={newWO.execution_date}
-                        onChange={(e) => setNewWO({ ...newWO, execution_date: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/5 border border-white/5 p-8 rounded-[2rem]">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 ml-1">4. Catatan Internal / Instruksi</label>
-                  <textarea
-                    className="w-full bg-slate-950 border border-white/10 rounded-2xl p-6 text-sm font-bold text-white focus:ring-2 focus:ring-purple-500/30 transition-all min-h-[100px]"
-                    placeholder="Masukkan instruksi operasional..."
-                    value={newWO.notes || ""}
-                    onChange={(e) => setNewWO({ ...newWO, notes: e.target.value })}
-                  />
-                </div>
-
-                {/* SBU SELECTION (MULTI) */}
-                <div className="bg-white/5 border border-white/5 p-8 rounded-[2rem]">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6 ml-1">5. Pilih SBU / Layanan yang Diperlukan</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {[
-                      { id: 'trucking', label: 'Trucking', icon: Truck },
-                      { id: 'clearances', label: 'Clearances', icon: FileText },
-                      { id: 'forwarding', label: 'Forwarding', icon: Ship },
-                      { id: 'warehouse', label: 'Warehouse', icon: Warehouse },
-                      { id: 'project', label: 'Project Log', icon: HardHat }
-                    ].map(sbu => (
-                      <label 
-                        key={sbu.id}
-                        className={`flex items-center gap-4 p-5 rounded-2xl border cursor-pointer transition-all ${selectedSbus.includes(sbu.id) ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-950 border-white/5 text-slate-500'}`}
-                      >
-                        <input 
-                          type="checkbox"
-                          className="hidden"
-                          checked={selectedSbus.includes(sbu.id)}
-                          onChange={() => {
-                            if (selectedSbus.includes(sbu.id)) {
-                              setSelectedSbus(prev => prev.filter(x => x !== sbu.id));
-                              if (activeWizardTab === sbu.id) setActiveWizardTab("trucking");
-                            } else {
-                              setSelectedSbus(prev => Array.from(new Set([...prev, sbu.id])));
-                            }
-                          }}
-                        />
-                        <sbu.icon className="w-5 h-5" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">{sbu.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-4 mt-12">
-                   <button 
-                     onClick={() => setShowCreateModal(false)}
-                     className="px-10 py-6 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all"
-                   >
-                     Batal
-                   </button>
-                   <button 
-                     onClick={() => {
-                       if (!newWO.customer_id) return toast.error("Pilih pelanggan dahulu");
-                       if (selectedSbus.length === 0) return toast.error("Pilih minimal 1 SBU");
-                       setWizardStep(2);
-                       setActiveWizardTab(selectedSbus[0]);
-                       // Reset items ONLY IF creating NEW (not editing) and current items are empty placeholders
-                       if (!editingWOId && woItems.length === 1 && !woItems[0].origin_location_id && !woItems[0].sbu_metadata?.doc_code) {
-                          setWoItems(selectedSbus.map(sId => ({
-                             truck_type: sId === 'trucking' ? "CDE" : "N/A",
-                             origin_location_id: "",
-                             destination_location_id: "",
-                             quantity: 1,
-                             deal_price: 0,
-                             sbu_type: sId,
-                             sbu_metadata: {}
-                          })));
-                       }
-                     }}
-                     className="bg-blue-600 text-white px-16 py-6 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20"
-                   >
-                     Konfigurasi Layanan <ChevronRight className="w-4 h-4 inline-block ml-2" />
-                   </button>
-                </div>
-              </div>
-            ) : (
-              /* ===================================================== */
-              /* STEP 2: TACTICAL TAB CONFIGURATION */
-              /* ===================================================== */
-              <div className="space-y-8">
-                {/* TAB NAVIGATION */}
-                <div className="flex gap-2 p-1 bg-slate-950 border border-white/5 rounded-2xl overflow-x-auto no-scrollbar">
-                  {selectedSbus.map((sId, sIdx) => (
-                    <button
-                      key={`${sId}-${sIdx}`}
-                      onClick={() => setActiveWizardTab(sId)}
-                      className={`px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeWizardTab === sId ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                      {sId} Details
-                    </button>
-                  ))}
-                </div>
-
-                <div className="min-h-[400px]">
-                   {activeWizardTab === 'trucking' && (
-                     <div className="space-y-8">
-                        <div className="flex justify-between items-center mb-6 px-2">
-                           <div>
-                              <h4 className="text-xl font-bold text-white tracking-tight">Detail Armada Trucking</h4>
-                              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Definisikan rute dan jenis unit</p>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+           {/* 🌿 PROFESSIONAL MISSION CONTROL HERO */}
+           <div className="relative mb-10 overflow-hidden rounded-[2.5rem] bg-slate-950 border border-slate-800 shadow-2xl group/banner">
+               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-900/40 via-transparent to-transparent z-0" />
+               <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px]" />
+               
+               <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-10">
+                   <div className="text-center md:text-left flex-1">
+                       <div className="flex items-center gap-3 mb-3 justify-center md:justify-start">
+                           <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center gap-2">
+                               <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                               <span className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em]">{userProfile?.role === 'superadmin' ? 'Strategic Intelligence' : 'Operational Pulse'}</span>
                            </div>
-                           <button 
-                              onClick={() => setWoItems([...woItems, {
-                                 truck_type: "CDE",
-                                 origin_location_id: "",
-                                 destination_location_id: "",
-                                 quantity: 1,
-                                 deal_price: 0,
-                                 sbu_type: "trucking",
-                                 sbu_metadata: {}
-                              }])}
-                              className="bg-white text-slate-950 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-white/5"
-                           >
-                              <Plus className="w-4 h-4" /> Tambah Armada
-                           </button>
-                        </div>
-
-                        {woItems.map((item, index) => {
-                           if (item.sbu_type !== 'trucking') return null;
-                           const itemTotal = (item.quantity || 0) * (item.deal_price || 0);
-                           return (
-                              <div key={index} className="bg-white/5 border border-white/5 rounded-[3rem] p-10 mb-8 relative group hover:border-blue-500/20 transition-all">
-                                 <button 
-                                    onClick={() => setWoItems(woItems.filter((_, i) => i !== index))} 
-                                    className="absolute top-10 right-10 text-slate-600 hover:text-red-500 transition-colors"
-                                 >
-                                    <Trash2 className="w-8 h-8" />
-                                 </button>
-                                 
-                                 <div className="flex items-center gap-4 mb-10">
-                                    <div className="w-12 h-12 bg-blue-600/10 rounded-2xl flex items-center justify-center font-black text-blue-500 text-sm italic">
-                                          #{index + 1}
-                                    </div>
-                                    <div>
-                                          <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Item Pengiriman Trucking</p>
-                                          <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Konfigurasi Unit & Rute</p>
-                                    </div>
-                                 </div>
-
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-                                    <div>
-                                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Type Unit Truck *</label>
-                                       <select
-                                          className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all appearance-none cursor-pointer"
-                                          value={item.truck_type}
-                                          onChange={(e) => updateWoItem(index, "truck_type", e.target.value)}
-                                       >
-                                          {truckTypes.map(tt => <option key={tt.id} value={tt.name}>{tt.name}</option>)}
-                                       </select>
-                                    </div>
-                                    <div>
-                                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Kuantiti (Unit) *</label>
-                                       <input
-                                          type="number"
-                                          min="1"
-                                          className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all"
-                                          value={item.quantity}
-                                          onChange={(e) => updateWoItem(index, "quantity", parseInt(e.target.value) || 1)}
-                                       />
-                                    </div>
-                                    <div>
-                                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Lokasi Pickup (Origin) *</label>
-                                       <div className="flex gap-4">
-                                          <div className="flex-1 relative">
-                                             <select
-                                                className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-6 pr-12 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all appearance-none cursor-pointer"
-                                                value={item.origin_location_id}
-                                                onChange={(e) => updateWoItem(index, "origin_location_id", e.target.value)}
-                                             >
-                                                <option value="">-- Pilih Lokasi Pickup --</option>
-                                                {locations.map((loc) => (
-                                                   <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}</option>
-                                                ))}
-                                             </select>
-                                             <MapPin className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-700" />
-                                          </div>
-                                          <button onClick={() => setShowLocationModal(true)} className="bg-blue-600/10 text-blue-500 border border-blue-500/20 w-[60px] rounded-2xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
-                                             <Plus className="w-6 h-6" />
-                                          </button>
-                                       </div>
-                                    </div>
-                                    <div>
-                                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Lokasi Dropoff (Destination) *</label>
-                                       <div className="flex gap-4">
-                                          <div className="flex-1 relative">
-                                             <select
-                                                className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-6 pr-12 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all appearance-none cursor-pointer"
-                                                value={item.destination_location_id}
-                                                onChange={(e) => updateWoItem(index, "destination_location_id", e.target.value)}
-                                             >
-                                                <option value="">-- Pilih Lokasi Dropoff --</option>
-                                                {locations.map((loc) => (
-                                                   <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}</option>
-                                                ))}
-                                             </select>
-                                             <Navigation className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-700" />
-                                          </div>
-                                          <button onClick={() => setShowLocationModal(true)} className="bg-blue-600/10 text-blue-500 border border-blue-500/20 w-[60px] rounded-2xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all">
-                                             <Plus className="w-6 h-6" />
-                                          </button>
-                                       </div>
-                                    </div>
-                                 </div>
-
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-10 border-t border-white/5">
-                                    <div className="flex flex-col justify-center">
-                                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Harga Deal per Unit (Rp)</label>
-                                       <div className="relative group">
-                                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-600 font-black text-xs uppercase">Rp</span>
-                                          <input
-                                             type="text"
-                                             className="w-full bg-slate-950 border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-xl font-black text-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all shadow-xl shadow-emerald-500/5 placeholder:text-slate-800"
-                                             placeholder="0"
-                                             value={item.deal_price === 0 ? "" : item.deal_price.toLocaleString('id-ID')}
-                                             onChange={(e) => {
-                                                const rawValue = e.target.value.replace(/\./g, '');
-                                                const numValue = parseInt(rawValue) || 0;
-                                                updateWoItem(index, "deal_price", numValue);
-                                             }}
-                                          />
-                                       </div>
-                                       <p className="text-[8px] text-slate-600 font-bold uppercase mt-3 italic ml-1 flex items-center gap-1.5">
-                                          <TrendingUp className="w-3 h-3" /> Auto-fill Master Tarif Aktif
-                                       </p>
-                                    </div>
-                                    <div className="bg-white/5 border border-white/5 rounded-[2rem] p-8 flex flex-col justify-center items-end">
-                                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Sub Total Item ini</span>
-                                       <span className="text-3xl font-black text-white italic tracking-tighter">
-                                          Rp {itemTotal.toLocaleString('id-ID')}
-                                       </span>
-                                    </div>
-                                 </div>
-                              </div>
-                           );
-                        })}
-
-                        <div className="bg-white/5 p-8 rounded-[2.5rem] mt-10 border border-white/5">
-                           <div className="flex justify-between items-center">
-                              <div>
-                                 <span className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Total Keseluruhan Trucking</span>
-                                 <p className="text-slate-600 text-[10px] mt-1 italic font-bold">Terhitung dari akumulasi harga item di atas</p>
-                              </div>
-                              <span className="text-4xl font-black text-white italic tracking-tighter">
-                                 Rp {woItems.reduce((acc, i) => acc + (i.sbu_type === 'trucking' ? (i.quantity * i.deal_price) : 0), 0).toLocaleString('id-ID')}
-                              </span>
-                           </div>
-                        </div>
-                     </div>
-                   )}
-                   {activeWizardTab === 'clearances' && (() => {
-                      const idx = woItems.findIndex(i => i.sbu_type === 'clearances');
-                      if (idx === -1) return null;
-                      const item = woItems[idx];
-                      const meta = item.sbu_metadata || {};
-                      const items = meta.items || [{ brand: "", type: "", hs_code: "" }];
-                      const checklist = meta.checklist || [
-                         { name: "Invoice", received: false, ref_no: "", ref_date: "", file_url: "" },
-                         { name: "Packing List", received: false, ref_no: "", ref_date: "", file_url: "" },
-                         { name: "B/L atau AWB", received: false, ref_no: "", ref_date: "", file_url: "" },
-                         { name: "NIB / NPWP", received: false, ref_no: "", ref_date: "", file_url: "" },
-                         { name: "Certificate of Origin", received: false, ref_no: "", ref_date: "", file_url: "" },
-                         { name: "Izin Lartas / SNI", received: false, ref_no: "", ref_date: "", file_url: "" },
-                      ];
-
-                      const updateMeta = (key: string, val: any) => {
-                         updateWoItem(idx, "sbu_metadata", { ...meta, [key]: val });
-                      };
-
-                      return (
-                       <div className="space-y-10 pb-20">
-                          {/* 1. REGIME & SCHEME (COMPACT BANNER) */}
-                          <div className="bg-slate-950/40 p-6 rounded-[2.5rem] border border-white/5 shadow-xl">
-                             <div className="flex flex-col xl:flex-row gap-8 items-center">
-                                <div className="flex-1 w-full">
-                                   <label className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 ml-1">Customs Regime</label>
-                                   <div className="relative group">
-                                      <select 
-                                         className="w-full bg-slate-900 border border-white/10 rounded-xl px-6 py-4 text-base font-black text-white appearance-none cursor-pointer outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all italic hover:border-emerald-500/30"
-                                         value={meta.doc_code || "BC20"}
-                                         onChange={(e) => updateMeta("doc_code", e.target.value)}
-                                      >
-                                         <option value="BC20">PIB - Impor Untuk Dipakai (BC 2.0)</option>
-                                         <option value="BC30">PEB - Ekspor (BC 3.0)</option>
-                                         <option value="BC23">BC 2.3 - Gudang Berikat / PLB</option>
-                                         <option value="BC27">BC 2.7 - Antar Kawasan Berikat</option>
-                                         <option value="BC40">BC 4.0 - TLDDP ke KB</option>
-                                         <option value="BC41">BC 4.1 - KB ke TLDDP</option>
-                                      </select>
-                                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-20">
-                                         <ChevronRight className="w-5 h-5 rotate-90" />
-                                      </div>
-                                   </div>
-                                </div>
-                                <div className="w-full xl:w-auto min-w-[360px]">
-                                   <label className="block text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 ml-1 text-center xl:text-left">Lane</label>
-                                   <div className="flex gap-2">
-                                      {['Merah', 'Kuning', 'Hijau', 'MITA', 'AEO'].map(lane => (
-                                         <button 
-                                            key={lane}
-                                            onClick={() => updateMeta("lane", lane)}
-                                            className={`flex-1 py-4 px-4 rounded-xl text-[9px] font-black uppercase tracking-tighter border transition-all active:scale-95 ${
-                                               meta.lane === lane
-                                                  ? lane === 'Merah' ? 'bg-red-500 border-red-400 text-white shadow-lg shadow-red-500/20' : lane === 'Kuning' ? 'bg-yellow-500 border-yellow-400 text-slate-950 shadow-lg shadow-yellow-500/20' : 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20'
-                                                  : 'bg-white/5 border-white/10 text-slate-500 hover:border-white/20'
-                                            }`}
-                                         >
-                                            {lane}
-                                         </button>
-                                      ))}
-                                   </div>
-                                </div>
-                             </div>
-                          </div>
-
-                          {/* 2. LOGISTICS & VOYAGE */}
-                          <div className="bg-white/5 p-10 rounded-[3rem] border border-white/5 space-y-8">
-                             <div className="flex items-center gap-4 pb-6 border-b border-white/5">
-                                <div className="w-10 h-10 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400">
-                                   <Ship className="w-5 h-5" />
-                                </div>
-                                <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Logistics & Voyage</h4>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Shipping Line / Carrier</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="MSK / NYK / GA" value={meta.carrier || ""} onChange={(e) => updateMeta("carrier", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Vessel / Voyage / Flight</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="MV. SENTOSA V.01" value={meta.vessel || ""} onChange={(e) => updateMeta("vessel", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Port of Loading (POL)</label>
-                                   <input type="text" list="global-ports" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="Search POL..." value={meta.pol || ""} onChange={(e) => updateMeta("pol", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Port of Discharge (POD)</label>
-                                   <input type="text" list="global-ports" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="Search POD..." value={meta.port || ""} onChange={(e) => updateMeta("port", e.target.value)} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                   <div className="space-y-3">
-                                      <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">ETD</label>
-                                      <input type="date" className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-4 text-[10px] font-bold text-white outline-none focus:border-blue-500/50 transition-all font-mono" value={meta.etd || ""} onChange={(e) => updateMeta("etd", e.target.value)} />
-                                   </div>
-                                   <div className="space-y-3">
-                                      <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">ETA</label>
-                                      <input type="date" className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-4 text-[10px] font-bold text-white outline-none focus:border-blue-500/50 transition-all font-mono" value={meta.eta || ""} onChange={(e) => updateMeta("eta", e.target.value)} />
-                                   </div>
-                                </div>
-
-                                {/* Port Datalist Engine */}
-                                <datalist id="global-ports">
-                                   <optgroup label="Indonesia Main Ports">
-                                      <option value="IDTPP - Tanjung Priok, Jakarta" />
-                                      <option value="IDTPE - Tanjung Perak, Surabaya" />
-                                      <option value="IDBLW - Belawan, Medan" />
-                                      <option value="IDSRG - Tanjung Emas, Semarang" />
-                                      <option value="IDUPG - Soekarno-Hatta, Makassar" />
-                                      <option value="IDPLM - Boom Baru, Palembang" />
-                                      <option value="IDBPN - Kariangau, Balikpapan" />
-                                      <option value="IDJKT - Soekarno-Hatta Intl Airport (CGK)" />
-                                   </optgroup>
-                                   <optgroup label="International Hubs">
-                                      <option value="SGSIN - Singapore, Singapore" />
-                                      <option value="CNSHA - Shanghai, China" />
-                                      <option value="CNNGB - Ningbo-Zhoushan, China" />
-                                      <option value="CNSZN - Shenzhen, China" />
-                                      <option value="KRPUS - Busan, South Korea" />
-                                      <option value="HKHKG - Hong Kong, China" />
-                                      <option value="MYPKG - Port Klang, Malaysia" />
-                                      <option value="AEDXB - Dubai, UAE (Jebel Ali)" />
-                                      <option value="NLRTM - Rotterdam, Netherlands" />
-                                      <option value="USLAX - Los Angeles, USA" />
-                                      <option value="DEHAM - Hamburg, Germany" />
-                                      <option value="JPTOK - Tokyo, Japan" />
-                                   </optgroup>
-                                </datalist>
-                             </div>
-                          </div>
-
-                          {/* 3. CONTAINERS & EQUIPMENT (NEW: MULTI-CONTAINER SUPPORT) */}
-                          <div className="bg-slate-950/40 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-inner">
-                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                                <div className="flex items-center gap-4">
-                                   <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                                      <Package className="w-5 h-5" />
-                                   </div>
-                                   <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Containers & Equipment</h4>
-                                </div>
-                                <button 
-                                   onClick={() => {
-                                      const containers = meta.containers || [];
-                                      updateMeta("containers", [...containers, { container_no: "", seal_no: "", size_type: "40HC", eir_url: "" }]);
-                                   }}
-                                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-600/20"
-                                >
-                                   <Plus className="w-4 h-4" /> Add Container
-                                </button>
-                             </div>
-
-                             <div className="space-y-4">
-                                {(meta.containers || []).map((cont: any, cIdx: number) => (
-                                   <div key={cIdx} className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center bg-slate-950 border border-white/5 p-6 rounded-[2rem] group relative">
-                                      <button 
-                                         onClick={() => {
-                                            const containers = meta.containers.filter((_: any, i: number) => i !== cIdx);
-                                            updateMeta("containers", containers);
-                                         }}
-                                         className="absolute -right-2 -top-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg z-10"
-                                      >
-                                         <X className="w-4 h-4" />
-                                      </button>
-                                      
-                                      <div className="md:col-span-3 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Container No.</label>
-                                         <input type="text" placeholder="MSKU..." className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-indigo-500/50 outline-none font-mono" value={cont.container_no} onChange={(e) => {
-                                            const newCont = [...meta.containers]; newCont[cIdx].container_no = e.target.value.toUpperCase(); updateMeta("containers", newCont);
-                                         }} />
-                                      </div>
-                                      <div className="md:col-span-3 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Seal No.</label>
-                                         <input type="text" placeholder="098..." className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-indigo-500/50 outline-none font-mono" value={cont.seal_no} onChange={(e) => {
-                                            const newCont = [...meta.containers]; newCont[cIdx].seal_no = e.target.value.toUpperCase(); updateMeta("containers", newCont);
-                                         }} />
-                                      </div>
-                                      <div className="md:col-span-3 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Size & Type</label>
-                                         <select className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-indigo-500/50 outline-none appearance-none cursor-pointer" value={cont.size_type} onChange={(e) => {
-                                            const newCont = [...meta.containers]; newCont[cIdx].size_type = e.target.value; updateMeta("containers", newCont);
-                                         }}>
-                                            <option value="20GP">20' General Purpose</option>
-                                            <option value="40GP">40' General Purpose</option>
-                                            <option value="40HC">40' High Cube</option>
-                                            <option value="20RF">20' Reefer</option>
-                                            <option value="40RF">40' Reefer</option>
-                                            <option value="20OT">20' Open Top</option>
-                                            <option value="40OT">40' Open Top</option>
-                                            <option value="20FR">20' Flat Rack</option>
-                                            <option value="40FR">40' Flat Rack</option>
-                                         </select>
-                                      </div>
-                                      <div className="md:col-span-3 flex justify-end pt-4">
-                                         {cont.eir_url ? (
-                                            <div className="flex items-center gap-2 bg-blue-500/10 p-2 rounded-xl border border-blue-500/20">
-                                               <a href={cont.eir_url} target="_blank" className="text-[9px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300">View Document</a>
-                                               <button onClick={() => {
-                                                  const newCont = [...meta.containers]; newCont[cIdx].eir_url = ""; updateMeta("containers", newCont);
-                                               }} className="text-red-500 p-1 hover:bg-red-500/10 rounded-lg"><X className="w-3 h-3" /></button>
-                                            </div>
-                                         ) : (
-                                            <label className="flex items-center gap-2 px-4 py-3 bg-white/5 border border-white/5 rounded-xl text-[9px] font-black uppercase text-indigo-400/60 cursor-pointer hover:bg-indigo-600 hover:text-white transition-all">
-                                               <Upload className="w-3 h-3" /> Upload EIR/Photo
-                                               <input type="file" className="hidden" onChange={async (e) => {
-                                                  const file = e.target.files?.[0]; if (!file) return;
-                                                  toast.loading(`Uploading EIR...`, { id: 'cont-upload' });
-                                                  try {
-                                                     const { data, error } = await supabase.storage.from('pod_documents').upload(`cont_${Date.now()}_${cIdx}`, file);
-                                                     if (error) throw error;
-                                                     const { data: { publicUrl } } = supabase.storage.from('pod_documents').getPublicUrl(data.path);
-                                                     const newCont = [...meta.containers]; newCont[cIdx].eir_url = publicUrl; updateMeta("containers", newCont);
-                                                     toast.success(`Doc Linked to ${cont.container_no || 'Container'}`, { id: 'cont-upload' });
-                                                  } catch (err: any) { toast.error("Upload failed", { id: 'cont-upload' }); }
-                                               }} />
-                                            </label>
-                                         )}
-                                      </div>
-                                   </div>
-                                ))}
-                                {(!meta.containers || meta.containers.length === 0) && (
-                                   <div className="text-center py-12 bg-white/5 border border-dashed border-white/10 rounded-[2rem]">
-                                      <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.3em]">No containers assigned yet</p>
-                                   </div>
-                                )}
-                             </div>
-                          </div>
-
-                          {/* 3. PARTIES & ENTITIES (NEW) */}
-                          <div className="bg-white/5 p-10 rounded-[3rem] border border-white/5 space-y-10">
-                             <div className="flex items-center gap-4 pb-6 border-b border-white/5">
-                                <div className="w-10 h-10 rounded-2xl bg-orange-500/20 flex items-center justify-center text-orange-400">
-                                   <UserPlus className="w-5 h-5" />
-                                </div>
-                                <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Parties & Entities</h4>
-                             </div>
-                             
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                                {/* Shipper */}
-                                <div className="space-y-6">
-                                   <label className="block text-[11px] font-black text-orange-500 uppercase tracking-widest ml-1">Shipper / Exporter</label>
-                                   <div className="space-y-4">
-                                      <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold text-white focus:border-orange-500/50 outline-none" placeholder="Company Name" value={meta.shipper_name || ""} onChange={(e) => updateMeta("shipper_name", e.target.value)} />
-                                      <textarea className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-medium text-slate-400 h-24 focus:border-orange-500/50 outline-none" placeholder="Complete Address & Country" value={meta.shipper_address || ""} onChange={(e) => updateMeta("shipper_address", e.target.value)} />
-                                   </div>
-                                </div>
-                                {/* Consignee */}
-                                <div className="space-y-6">
-                                   <label className="block text-[11px] font-black text-emerald-500 uppercase tracking-widest ml-1">Consignee / Importer</label>
-                                   <div className="space-y-4">
-                                      <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold text-white focus:border-emerald-500/50 outline-none" placeholder="Company Name / NPWP" value={meta.consignee_name || ""} onChange={(e) => updateMeta("consignee_name", e.target.value)} />
-                                      <textarea className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-medium text-slate-400 h-24 focus:border-emerald-500/50 outline-none" placeholder="Complete Address & NPWP" value={meta.consignee_address || ""} onChange={(e) => updateMeta("consignee_address", e.target.value)} />
-                                   </div>
-                                </div>
-                             </div>
-                             <div className="pt-6 border-t border-white/5">
-                                <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest mb-4 ml-1">Notify Party (If different from consignee)</label>
-                                <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-blue-500/50 outline-none" placeholder="Notify Party Name & Contact" value={meta.notify_party || ""} onChange={(e) => updateMeta("notify_party", e.target.value)} />
-                             </div>
-                          </div>
-
-                          {/* 4. MANIFEST & CUSTOMS */}
-                          <div className="bg-white/5 p-10 rounded-[3rem] border border-white/5 space-y-8">
-                             <div className="flex items-center gap-4 pb-6 border-b border-white/5">
-                                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                                   <Target className="w-5 h-5" />
-                                </div>
-                                <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Manifest & References</h4>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Master BL / AWB</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none transition-all font-mono" placeholder="MAEU..." value={meta.bl_awb || ""} onChange={(e) => updateMeta("bl_awb", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">House BL / AWB</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none transition-all font-mono" placeholder="Optional" value={meta.hbl_awb || ""} onChange={(e) => updateMeta("hbl_awb", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">No. BC 1.1 & Pos</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none transition-all font-mono" placeholder="000XXX Pos: 00XX" value={meta.bc11_number || ""} onChange={(e) => updateMeta("bc11_number", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">TPS / Gudang</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none transition-all font-mono" placeholder="JICT / KOJA" value={meta.tps || ""} onChange={(e) => updateMeta("tps", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Gross Weight (Kgs)</label>
-                                   <input type="number" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none font-mono" placeholder="0" value={meta.gross_weight || ""} onChange={(e) => updateMeta("gross_weight", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Incoterms</label>
-                                   <select className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white outline-none focus:border-emerald-500/50 appearance-none cursor-pointer" value={meta.incoterms || "CIF"} onChange={(e) => updateMeta("incoterms", e.target.value)}>
-                                      <option value="CIF">CIF (Cost Insurance Freight)</option>
-                                      <option value="FOB">FOB (Free on Board)</option>
-                                      <option value="CFR">CFR (Cost and Freight)</option>
-                                      <option value="EXW">EXW (Ex Works)</option>
-                                      <option value="DDP">DDP (Delivered Duty Paid)</option>
-                                   </select>
-                                </div>
-                                <div className="space-y-3 md:col-span-2">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Insurance / Additional Reference</label>
-                                   <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold text-white focus:border-emerald-500/50 outline-none font-mono" placeholder="Policy number or special notes" value={meta.insurance_ref || ""} onChange={(e) => updateMeta("insurance_ref", e.target.value)} />
-                                </div>
-                             </div>
-                          </div>
-
-                          {/* 5. FINANCIAL & VALUATION */}
-                          <div className="bg-slate-950/40 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-inner">
-                             <div className="flex items-center gap-4 pb-6 border-b border-white/5">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400">
-                                   <CircleDollarSign className="w-5 h-5" />
-                                </div>
-                                <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Financial & Valuation</h4>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Currency Code</label>
-                                   <input type="text" className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-4 text-xs font-black text-amber-500 outline-none focus:border-amber-500/50 text-center font-mono" placeholder="USD / EUR" value={meta.currency || "USD"} onChange={(e) => updateMeta("currency", e.target.value.toUpperCase())} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Invoice Value (FOB)</label>
-                                   <input type="number" className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-4 text-sm font-black text-white outline-none focus:border-amber-500/50 font-mono" placeholder="0.00" value={meta.invoice_value || ""} onChange={(e) => updateMeta("invoice_value", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Freight Amount</label>
-                                   <input type="number" className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-4 text-sm font-black text-white outline-none focus:border-amber-500/50 font-mono" placeholder="0.00" value={meta.freight_value || ""} onChange={(e) => updateMeta("freight_value", e.target.value)} />
-                                </div>
-                                <div className="space-y-3">
-                                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Insurance Amount</label>
-                                   <input type="number" className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-4 text-sm font-black text-white outline-none focus:border-amber-500/50 font-mono" placeholder="0.00" value={meta.insurance_value || ""} onChange={(e) => updateMeta("insurance_value", e.target.value)} />
-                                </div>
-                             </div>
-                             <div className="mt-4 p-6 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex justify-between items-center">
-                                <span className="text-[10px] font-black text-amber-500/60 uppercase tracking-widest">Calculated Customs Value (CIF Estimate)</span>
-                                <span className="text-xl font-black text-amber-500 italic tracking-tighter font-mono">
-                                   {meta.currency || 'USD'} {((Number(meta.invoice_value) || 0) + (Number(meta.freight_value) || 0) + (Number(meta.insurance_value) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-                             </div>
-                          </div>
-
-                          {/* 6. ITEM ANALYSIS */}
-                          <div className="bg-slate-950/40 p-12 rounded-[3.5rem] border border-white/5 space-y-10 shadow-inner">
-                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                                <div>
-                                   <h4 className="text-2xl font-black text-white italic tracking-tighter uppercase">Item Analysis & HS Classification</h4>
-                                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-1 flex items-center gap-2">
-                                      <AlertTriangle className="w-3 h-3 text-amber-500" /> Mandatory for CEISA 4.0 / INSW 2026
-                                   </p>
-                                </div>
-                                <button 
-                                   onClick={() => updateMeta("items", [...items, { brand: "", type: "", hs_code: "" }])}
-                                   className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
-                                >
-                                   <Plus className="w-5 h-5" /> Tambah Pos Barang
-                                </button>
-                             </div>
-                             
-                             <div className="grid grid-cols-1 gap-6">
-                                {items.map((it: any, itIdx: number) => (
-                                   <div key={itIdx} className="bg-slate-900 border border-white/5 p-8 rounded-[2.5rem] relative group hover:border-emerald-500/30 transition-all">
-                                      <button 
-                                         onClick={() => updateMeta("items", items.filter((_: any, i: number) => i !== itIdx))}
-                                         className="absolute right-6 top-6 w-10 h-10 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg"
-                                      >
-                                         <X className="w-5 h-5" />
-                                      </button>
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Merek (Min. 3 Karakter) *</label>
-                                            <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="Samsung" value={it.brand} onChange={(e) => { const newItems = [...items]; newItems[itIdx].brand = e.target.value; updateMeta("items", newItems); }} />
-                                         </div>
-                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Tipe / Model *</label>
-                                            <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold text-white focus:border-blue-500/50 outline-none transition-all font-mono" placeholder="SM-G998B" value={it.type} onChange={(e) => { const newItems = [...items]; newItems[itIdx].type = e.target.value; updateMeta("items", newItems); }} />
-                                         </div>
-                                         <div className="space-y-4">
-                                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">HS Code (8 Digit)</label>
-                                            <input type="text" className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-sm font-bold text-white focus:border-emerald-500/50 outline-none transition-all font-mono" placeholder="8517.13.00" value={it.hs_code} onChange={(e) => { const newItems = [...items]; newItems[itIdx].hs_code = e.target.value; updateMeta("items", newItems); }} />
-                                         </div>
-                                      </div>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-
-                          {/* 7. DOKUMEN CHECKLIST */}
-
-                          <div className="bg-white/5 p-12 rounded-[3.5rem] border border-white/10">
-                             <div className="flex items-center gap-4 mb-10">
-                                <div className="w-10 h-10 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400">
-                                   <Verified className="w-5 h-5" />
-                                </div>
-                                <h4 className="text-xl font-black text-white italic tracking-tighter uppercase">Verification Checklist</h4>
-                             </div>
-
-                             <div className="space-y-3">
-                                {checklist.map((doc: any, docIdx: number) => (
-                                   <div key={docIdx} className="grid grid-cols-12 gap-6 items-center bg-slate-900/50 border border-white/5 p-6 rounded-[2rem] hover:bg-white/5 transition-all group">
-                                      <div className="col-span-1 flex justify-center">
-                                         <button 
-                                            onClick={() => { const newCheck = [...checklist]; newCheck[docIdx].received = !newCheck[docIdx].received; updateMeta("checklist", newCheck); }}
-                                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${doc.received ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-950 text-slate-800 border border-white/10'}`}
-                                         >
-                                            <Check className="w-5 h-5" />
-                                         </button>
-                                      </div>
-                                      <div className="col-span-3">
-                                         <p className="text-xs font-black text-white uppercase truncate tracking-tight">{doc.name}</p>
-                                         <p className="text-[8px] text-slate-600 font-bold uppercase mt-1">{doc.received ? 'Ready' : 'Pending'}</p>
-                                      </div>
-                                      <div className="col-span-3">
-                                         <input type="text" placeholder="Ref No..." className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-bold text-white focus:border-purple-500/50 outline-none transition-all font-mono" value={doc.ref_no} onChange={(e) => { const newCheck = [...checklist]; newCheck[docIdx].ref_no = e.target.value; updateMeta("checklist", newCheck); }} />
-                                      </div>
-                                      <div className="col-span-2">
-                                         <input type="date" className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-bold text-white focus:border-purple-500/50 outline-none transition-all" value={doc.ref_date} onChange={(e) => { const newCheck = [...checklist]; newCheck[docIdx].ref_date = e.target.value; updateMeta("checklist", newCheck); }} />
-                                      </div>
-                                      <div className="col-span-3 flex justify-end items-center gap-3">
-                                         {doc.file_url ? (
-                                            <div className="flex items-center gap-2">
-                                               <a href={doc.file_url} target="_blank" className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20">
-                                                  <ExternalLink className="w-4 h-4" />
-                                               </a>
-                                               <button onClick={() => { const newCheck = [...checklist]; newCheck[docIdx].file_url = ""; updateMeta("checklist", newCheck); }} className="w-8 h-8 text-slate-600 hover:text-red-500 transition-colors">
-                                                  <XCircle className="w-5 h-5" />
-                                               </button>
-                                            </div>
-                                         ) : (
-                                            <label className="flex items-center gap-3 px-5 py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase text-slate-500 cursor-pointer hover:bg-white/10 hover:text-white transition-all">
-                                               <Upload className="w-4 h-4" /> Upload
-                                               <input type="file" className="hidden" onChange={async (e) => {
-                                                  const file = e.target.files?.[0]; if (!file) return;
-                                                  toast.loading(`Uploading...`, { id: 'clr-upload' });
-                                                  try {
-                                                     const { data, error } = await supabase.storage.from('pod_documents').upload(`clr_${Date.now()}_${docIdx}`, file);
-                                                     if (error) throw error;
-                                                     const { data: { publicUrl } } = supabase.storage.from('pod_documents').getPublicUrl(data.path);
-                                                     const newCheck = [...checklist]; newCheck[docIdx].file_url = publicUrl; newCheck[docIdx].received = true; updateMeta("checklist", newCheck);
-                                                     toast.success(`Success`, { id: 'clr-upload' });
-                                                  } catch (err: any) { toast.error("Error", { id: 'clr-upload' }); }
-                                               }} />
-                                            </label>
-                                         )}
-                                      </div>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-
-                          {/* 8. SERVICE QUOTATION & FEES (DYNAMC PPJK TARIFF WITH QTY) */}
-                          <div className="bg-white/5 p-10 rounded-[3rem] border border-white/5 space-y-8">
-                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                                <div className="flex items-center gap-4">
-                                   <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                                      <Banknote className="w-5 h-5" />
-                                   </div>
-                                   <h4 className="text-sm font-black text-white uppercase tracking-[0.2em] italic">Service Quotation & Fees</h4>
-                                </div>
-                                <button 
-                                   onClick={() => {
-                                      const fees = meta.service_fees || [];
-                                      updateMeta("service_fees", [...fees, { item_name: "", amount: 0, qty: 1 }]);
-                                   }}
-                                   className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-600/20"
-                                >
-                                   <Plus className="w-4 h-4" /> Add Service Item
-                                </button>
-                             </div>
-
-                             <div className="space-y-3">
-                                {(meta.service_fees || []).map((fee: any, fIdx: number) => (
-                                   <div key={fIdx} className="bg-slate-950 border border-white/5 p-6 rounded-[2rem] group grid grid-cols-1 md:grid-cols-12 gap-6 items-center relative">
-                                      <button 
-                                         onClick={() => {
-                                            const fees = meta.service_fees.filter((_: any, i: number) => i !== fIdx);
-                                            updateMeta("service_fees", fees);
-                                         }}
-                                         className="absolute -right-2 -top-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10 shadow-lg"
-                                      >
-                                         <X className="w-3 h-3" />
-                                      </button>
-                                      
-                                      <div className="md:col-span-5 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Service Component</label>
-                                         <input type="text" list="ppjk-standard-fees" placeholder="e.g. Jasa PPJK" className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none focus:border-emerald-500/50" value={fee.item_name} onChange={(e) => {
-                                            const newFees = [...meta.service_fees]; newFees[fIdx].item_name = e.target.value; updateMeta("service_fees", newFees);
-                                         }} />
-                                      </div>
-                                      
-                                      <div className="md:col-span-2 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1">Amount (IDR)</label>
-                                         <input type="number" placeholder="0" className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-xs font-black text-white outline-none focus:border-emerald-500/50 font-mono text-right" value={fee.amount} onChange={(e) => {
-                                            const newFees = [...meta.service_fees]; newFees[fIdx].amount = Number(e.target.value); updateMeta("service_fees", newFees);
-                                         }} />
-                                      </div>
-
-                                      <div className="md:col-span-1 space-y-2">
-                                         <label className="block text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1 text-center">Qty</label>
-                                         <input type="number" placeholder="1" className="w-full bg-slate-900 border border-white/5 rounded-xl px-2 py-3 text-xs font-black text-emerald-400 outline-none focus:border-emerald-500/50 text-center font-mono" value={fee.qty || 1} onChange={(e) => {
-                                            const newFees = [...meta.service_fees]; newFees[fIdx].qty = Number(e.target.value); updateMeta("service_fees", newFees);
-                                         }} />
-                                      </div>
-
-                                      <div className="md:col-span-4 flex flex-col items-end gap-1">
-                                         <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mr-2">Subtotal</span>
-                                         <div className="bg-emerald-500/5 px-4 py-3 rounded-xl border border-emerald-500/10 w-full text-right">
-                                            <span className="text-xs font-black text-emerald-500 font-mono">
-                                               Rp {((fee.amount || 0) * (fee.qty || 1)).toLocaleString('id-ID')}
-                                            </span>
-                                         </div>
-                                      </div>
-                                   </div>
-                                ))}
-                                
-                                <datalist id="ppjk-standard-fees">
-                                   <option value="Jasa Pengurusan PIB / PEB" />
-                                   <option value="Jasa EDI & Transfer System" />
-                                   <option value="Jasa Handling & Admin" />
-                                   <option value="Jasa Behandle / Fisik" />
-                                   <option value="Jasa DO Online / Pinjam" />
-                                   <option value="Biaya Operasional Lapangan" />
-                                </datalist>
-                             </div>
-
-                             <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-                                <div className="flex items-center gap-6">
-                                   <div className="bg-white/5 px-6 py-4 rounded-2xl border border-white/10">
-                                      <span className="block text-[8px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Total Service Revenue</span>
-                                      <span className="text-2xl font-black text-white italic tracking-tighter">
-                                         Rp {(meta.service_fees || []).reduce((acc: number, f: any) => acc + ((f.amount || 0) * (f.qty || 1)), 0).toLocaleString('id-ID')}
-                                      </span>
-                                   </div>
-                                   <button 
-                                      onClick={() => {
-                                         const totalFee = (meta.service_fees || []).reduce((acc: number, f: any) => acc + ((f.amount || 0) * (f.qty || 1)), 0);
-                                         const newWOItems = [...woItems];
-                                         newWOItems[idx].deal_price = totalFee;
-                                         setWoItems(newWOItems);
-                                         toast.success("Deal Price Updated!");
-                                      }}
-                                      className="text-emerald-500 text-[9px] font-black uppercase tracking-[0.2em] flex items-center gap-2 hover:text-emerald-400 transition-colors"
-                                   >
-                                      <RefreshCw className="w-3 h-3" /> Sync to Deal Price
-                                   </button>
-                                </div>
-                                <p className="text-[10px] text-slate-500 font-bold max-w-sm text-center md:text-right italic">
-                                   *Perhitungan tariff di atas sudah termasuk perkalian Qty. Gunakan tombol sync untuk memperbarui nilai kontrak utama.
-                                </p>
-                             </div>
-                          </div>
                        </div>
-                      );
-                    })()}
+                       <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">
+                           {userProfile?.role === 'superadmin' ? 'Sentralogis Global' : (userProfile?.organizations?.name || 'Enterprise' )}<br/>
+                           <span className="text-slate-500 text-sm md:text-xl not-italic font-medium tracking-normal">
+                               {userProfile?.role === 'superadmin' ? 'Holding Management Environment' : 'Standard Operational Environment'}
+                           </span>
+                       </h1>
+                   </div>
 
-                   {!['trucking', 'clearances'].includes(activeWizardTab) && (
-                     <div className="flex flex-col items-center justify-center h-[300px] text-slate-600">
-                        <Package className="w-16 h-16 mb-6 opacity-20" />
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em]">Module ini dalam tahap integrasi tactical</p>
-                     </div>
-                   )}
-                </div>
+                   <div className="flex flex-col gap-6 w-full md:w-auto min-w-[320px]">
+                       {/* High Density Information */}
+                       <div className="grid grid-cols-2 gap-3">
+                           <div className="bg-white/[0.03] backdrop-blur-md border border-white/5 p-4 rounded-2xl">
+                               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                                    {userProfile?.role === 'superadmin' ? 'Global Revenue' : 'Available Credits'}
+                               </p>
+                               <div className="flex items-center gap-2">
+                                   {userProfile?.role === 'superadmin' ? <Banknote className="w-4 h-4 text-emerald-500" /> : <Wallet className="w-4 h-4 text-amber-500" />}
+                                   <p className="text-lg font-black text-white italic tracking-tighter">
+                                        {userProfile?.role === 'superadmin' 
+                                            ? `Rp ${superAdminStats.totalGlobalRevenue.toLocaleString('id-ID')}`
+                                            : userProfile?.organizations?.mission_credits || 0
+                                        }
+                                   </p>
+                               </div>
+                           </div>
+                           <div className="bg-white/[0.03] backdrop-blur-md border border-white/5 p-4 rounded-2xl">
+                               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                                    {userProfile?.role === 'superadmin' ? 'Total Tenants' : 'Team Strength'}
+                               </p>
+                               <div className="flex items-center gap-2">
+                                   {userProfile?.role === 'superadmin' ? <Building2 className="w-4 h-4 text-blue-400" /> : <UsersRound className="w-4 h-4 text-blue-400" />}
+                                   <p className="text-lg font-black text-white italic tracking-tighter">
+                                        {userProfile?.role === 'superadmin' ? superAdminStats.revenueByTenant.length : staffList.length}
+                                   </p>
+                               </div>
+                           </div>
+                       </div>
 
-                <div className="bg-emerald-600/10 border border-emerald-500/20 p-8 rounded-[2rem] mt-10">
-                   <div className="flex justify-between items-center">
-                      <div>
-                         <span className="text-xs font-black text-emerald-500 uppercase tracking-[0.3em]">Total Mission Value</span>
-                         <p className="text-slate-500 text-[10px] mt-1 italic font-bold">Akumulasi seluruh layanan SBU yang dipilih</p>
-                      </div>
-                      <div className="text-right">
-                         <span className="text-4xl font-black text-white italic tracking-tighter">
-                            Rp {woItems.reduce((acc, i) => acc + ((i.quantity || 0) * (i.deal_price || 0)), 0).toLocaleString('id-ID')}
-                         </span>
-                      </div>
+                       {/* Action Matrix */}
+                       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                            {userProfile?.role === 'superadmin' ? (
+                                <Link 
+                                    href="/admin/clients"
+                                    className="col-span-3 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl py-5 font-black uppercase tracking-widest text-[11px] shadow-xl shadow-emerald-600/20 transition-all active:scale-95"
+                                >
+                                    <Building2 className="w-5 h-5" /> Tenant & Token Hub
+                                </Link>
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={() => setShowSbuModal(true)}
+                                        className="flex flex-col items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-2xl py-4 border border-white/5 transition-all active:scale-95 group"
+                                    >
+                                        <LayoutGrid className="w-5 h-5 text-emerald-400 group-hover:rotate-90 transition-transform" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest">Market</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowStaffModal(true)}
+                                        className="flex flex-col items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-2xl py-4 border border-white/5 transition-all active:scale-95 group"
+                                    >
+                                        <UsersRound className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest">Team</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => { resetWOForm(); setShowCreateModal(true); }}
+                                        className="col-span-2 lg:col-span-1 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl py-4 font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20 transition-all active:scale-95"
+                                    >
+                                        <Plus className="w-5 h-5" /> New WO
+                                    </button>
+                                </>
+                            )}
+                       </div>
+                   </div>
+               </div>
+           </div>
+
+       <div className="max-w-7xl mx-auto px-6 py-12">
+        {userProfile?.role === 'superadmin' ? (
+          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* 🏆 TENANT PERFORMANCE LEADERBOARD */}
+                <div className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-sm relative overflow-hidden group/card text-slate-900">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover/card:bg-blue-500/10 transition-colors" />
+                   <h3 className="text-xl font-black uppercase italic tracking-tighter mb-8 flex items-center gap-3 relative z-10">
+                      <TrendingUp className="w-6 h-6 text-blue-600" />
+                      Tenant Performance Leaderboard
+                   </h3>
+                   <div className="space-y-6 relative z-10">
+                      {superAdminStats.revenueByTenant.length === 0 ? (
+                        <div className="py-12 flex flex-col items-center justify-center text-slate-300">
+                           <Loader2 className="w-10 h-10 mb-4 animate-spin opacity-20" />
+                           <p className="text-sm font-black uppercase tracking-widest opacity-20 text-center">Analysing holding revenue...</p>
+                        </div>
+                      ) : superAdminStats.revenueByTenant.map((tenant: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-blue-200 transition-all group/item shadow-sm hover:shadow-md">
+                           <div className="flex items-center gap-5">
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-lg font-black text-slate-400 group-hover/item:bg-blue-600 group-hover/item:text-white transition-all shadow-sm">
+                                 {idx + 1}
+                              </div>
+                              <div>
+                                 <p className="text-sm font-black text-slate-900 uppercase truncate max-w-[180px]">{tenant.name}</p>
+                                 <p className={"text-[9px] font-bold uppercase tracking-widest " + (tenant.status ? "text-emerald-500" : "text-rose-500")}>
+                                    {tenant.status ? 'ACTIVE OPERATIONAL' : 'INACTIVE'}
+                                 </p>
+                              </div>
+                           </div>
+                           <div className="text-right">
+                              <p className="text-lg font-black text-slate-900 tracking-tighter italic">Rp {tenant.revenue.toLocaleString('id-ID')}</p>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{tenant.credits} Tokens Available</p>
+                           </div>
+                        </div>
+                      ))}
                    </div>
                 </div>
 
-                <div className="flex gap-4 border-t border-white/5 pt-10">
-                    <button 
-                      onClick={() => setWizardStep(1)}
-                      className="px-10 py-6 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all flex items-center gap-2"
-                    >
-                      <ChevronLeft className="w-4 h-4" /> Kembali
-                    </button>
-                    <button 
-                      onClick={() => createWorkOrder("draft")}
-                      className="flex-1 bg-slate-800 text-slate-300 px-10 py-6 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all border border-white/5"
-                    >
-                      Simpan Draft
-                    </button>
-                    <button 
-                      onClick={() => {
-                        // --- HARD VALIDATION FOR CLEARANCES ---
-                        const missingData: string[] = [];
-                        
-                        woItems.forEach((item, idx) => {
-                          if (item.sbu_type === 'clearances') {
-                            const meta = item.sbu_metadata || {};
-                            const prefix = `[Item ${idx + 1}: Clearances]`;
-                            
-                            // 1. Core Fields
-                            if (!meta.pol) missingData.push(`${prefix} Port of Loading (POL)`);
-                            if (!meta.port) missingData.push(`${prefix} Port of Discharge (POD)`);
-                            if (!meta.carrier) missingData.push(`${prefix} Shipping Line / Carrier`);
-                            if (!meta.vessel) missingData.push(`${prefix} Vessel Name / Voyage`);
-                            if (!meta.shipper_name) missingData.push(`${prefix} Shipper Name`);
-                            if (!meta.consignee_name) missingData.push(`${prefix} Consignee Name`);
-                            if (!meta.bl_awb) missingData.push(`${prefix} Master BL / AWB`);
-                            
-                            // 2. Structurals
-                            if (!meta.containers || meta.containers.length === 0) missingData.push(`${prefix} At least 1 Container`);
-                            if (!meta.items || meta.items.length === 0) missingData.push(`${prefix} At least 1 Item Analysis`);
-                            
-                            // 3. Mandatory Documents (Checklist Validation)
-                            const checklist = meta.checklist || [];
-                            const isReady = (name: string) => checklist.find((d: any) => d.name === name)?.received;
-                            
-                            if (!isReady("Commercial Invoice")) missingData.push(`${prefix} Commercial Invoice must be READY`);
-                            if (!isReady("Packing List")) missingData.push(`${prefix} Packing List must be READY`);
-                            if (!isReady("Bill of Lading / AWB")) missingData.push(`${prefix} Bill of Lading must be READY`);
-                          }
-                        });
-
-                        if (missingData.length > 0) {
-                          toast.error(
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 text-left">
-                              <p className="font-black border-b border-red-500/20 pb-2 text-[10px] uppercase tracking-widest text-red-500 text-center">Submission Blocked</p>
-                              <p className="text-[10px] font-bold text-slate-400">Harap lengkapi data berikut:</p>
-                              <ul className="text-[9px] list-disc pl-4 space-y-1 font-mono">
-                                {missingData.map((m, i) => <li key={i} className="text-red-400">{m}</li>)}
-                              </ul>
-                            </div>,
-                            { duration: 6000, position: 'top-center' }
-                          );
-                          return;
-                        }
-
-                        // Validation Passed
-                        createWorkOrder("pending_sbu");
-                      }}
-                      className="flex-[2] bg-emerald-600 text-white px-10 py-6 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3"
-                    >
-                      <ShieldCheck className="w-5 h-5" /> Execute & Deploy to SBU
-                    </button>
+                {/* 📊 GLOBAL SBU DISTRIBUTION */}
+                <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group/sbu">
+                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] -mr-32 -mt-32" />
+                   <h3 className="text-xl font-black uppercase italic tracking-tighter mb-8 flex items-center gap-3 relative z-10">
+                      <LayoutGrid className="w-6 h-6 text-emerald-400" />
+                      Global SBU Distribution
+                   </h3>
+                   <div className="space-y-10 relative z-10">
+                      {superAdminStats.sbuDistribution.map((sbu: any, idx: number) => {
+                         const percentage = (sbu.value / (superAdminStats.totalGlobalRevenue || 1)) * 100;
+                         return (
+                           <div key={idx} className="space-y-3">
+                              <div className="flex justify-between items-end">
+                                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">{sbu.name}</p>
+                                 <p className="text-sm font-black italic">Rp {sbu.value.toLocaleString('id-ID')}</p>
+                              </div>
+                              <div className="h-5 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
+                                 <div 
+                                   className="h-full bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
+                                   style={{ width: `${percentage}%` }}
+                                 />
+                              </div>
+                           </div>
+                         );
+                      })}
+                   </div>
+                   <div className="mt-16 pt-8 border-t border-white/5 relative z-10 text-center">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Authenticated Global Assets</p>
+                      <p className="text-5xl font-black italic tracking-tighter text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                         Rp {superAdminStats.totalGlobalRevenue.toLocaleString('id-ID')}
+                      </p>
+                   </div>
                 </div>
-              </div>
-            )}
+             </div>
+
+             {/* ⚡ STRATEGIC INSIGHT GRID */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12">
+                {[
+                  { label: 'System Purity', val: '99.9%', icon: Activity, color: 'emerald' },
+                  { label: 'Tenant Nodes', val: superAdminStats.revenueByTenant.length + ' Active', icon: Globe, color: 'blue' },
+                  { label: 'Token Liquidity', val: superAdminStats.revenueByTenant.reduce((acc: number, t: any) => acc + t.credits, 0).toLocaleString('id-ID'), icon: Wallet, color: 'amber' }
+                ].map((insight, i) => (
+                  <div key={i} className="bg-white border border-slate-200 p-8 rounded-[2.5rem] flex items-center gap-6 shadow-sm group hover:border-blue-400 transition-all hover:shadow-xl hover:-translate-y-1">
+                     <div className={`w-14 h-14 rounded-2xl bg-slate-50 text-slate-900 group-hover:bg-slate-900 group-hover:text-white flex items-center justify-center shadow-inner transition-colors`}>
+                        <insight.icon className="w-6 h-6" />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{insight.label}</p>
+                        <p className="text-2xl font-black text-slate-900 tracking-tighter italic">{insight.val}</p>
+                     </div>
+                  </div>
+                ))}
+             </div>
           </div>
+        ) : (
+          <>
+            {/* STRATEGIC PULSE */}
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-6 mb-12">
+           {[
+             { id: 'all', label: 'Total Volume', count: stats.total, icon: Package, color: 'blue' },
+             { id: 'draft', label: 'Drafts', count: stats.draft, icon: Edit3, color: 'slate' },
+             { id: 'awaiting_sbu', label: 'Awaiting SBU', count: stats.pending_sbu, icon: Hourglass, color: 'indigo' },
+             { id: 'need_approval', label: 'Needs Approval', count: stats.need_approval, icon: AlertCircle, color: 'amber' },
+             { id: 'on_journey', label: 'On Journey', count: stats.on_journey, icon: Navigation, color: 'emerald' },
+             { id: 'rejected', label: 'Rejected', count: stats.rejected, icon: XCircle, color: 'red' },
+           ].map(s => {
+              const isActive = statusFilter === s.id;
+              const colorClass = s.color === 'blue' ? 'blue' : s.color === 'indigo' ? 'indigo' : s.color === 'amber' ? 'amber' : s.color === 'red' ? 'rose' : 'emerald';
+              return (
+                <button 
+                  key={s.id}
+                  onClick={() => setStatusFilter(s.id)}
+                  className={"group relative flex flex-col p-8 rounded-3xl border transition-all text-left overflow-hidden " + (isActive ? "bg-white border-" + colorClass + "-500 ring-4 ring-" + colorClass + "-50 shadow-2xl" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm")}
+                >
+                  <div className={"w-12 h-12 rounded-2xl flex items-center justify-center mb-6 " + (isActive ? "bg-" + colorClass + "-600 text-white" : "bg-slate-50 text-slate-400 group-hover:text-" + colorClass + "-500 transition-colors")}>
+                    <s.icon className="w-6 h-6" />
+                  </div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{s.label}</p>
+                  <p className={"text-4xl font-black tracking-tighter " + (isActive ? "text-slate-900" : "text-slate-400")}>{s.count}</p>
+                  {isActive && <div className={"absolute top-0 right-0 w-32 h-32 bg-" + colorClass + "-500/5 rounded-full -mr-10 -mt-10 blur-2xl"} />}
+                </button>
+              );
+           })}
         </div>
-      )}
 
-      {/* ===================================================== */}
-      {/* MODAL TAMBAH PELANGGAN */}
-      {/* ===================================================== */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center z-[200] p-4" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowCustomerModal(false);
-        }}>
-          <div className="bg-slate-900 border border-white/10 p-0 rounded-[3rem] w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] flex flex-col">
-            <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5">
+        {/* WORK ORDER TERMINAL */}
+        <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden min-h-[600px]">
+           <div className="p-10 border-b border-slate-100 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8">
               <div>
-                <h2 className="text-2xl font-black italic tracking-tighter text-white uppercase">Master Pelanggan</h2>
-                <div className="flex gap-4 mt-2">
-                   <button 
-                    onClick={() => setCustomerView('form')}
-                    className={`text-[9px] font-black uppercase tracking-[0.2em] pb-1 border-b-2 transition-all ${customerView === 'form' ? 'text-emerald-500 border-emerald-500' : 'text-slate-600 border-transparent'}`}
-                   >
-                     {isCustomerEdit ? 'Update Data' : 'Tambah Baru'}
-                   </button>
-                   <button 
-                    onClick={() => setCustomerView('list')}
-                    className={`text-[9px] font-black uppercase tracking-[0.2em] pb-1 border-b-2 transition-all ${customerView === 'list' ? 'text-emerald-500 border-emerald-500' : 'text-slate-600 border-transparent'}`}
-                   >
-                     Daftar Pelanggan
-                   </button>
-                </div>
+                <h2 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter flex items-center gap-3">
+                   <FileText className="w-8 h-8 text-blue-600" />
+                   Operational Cockpit
+                </h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-1">Real-time Fulfillment Tracking</p>
               </div>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-600 hover:text-white transition-colors bg-white/5 p-2 rounded-full">
-                <XCircle className="w-8 h-8" />
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-8">
-              {customerView === 'list' ? (
-                <div className="space-y-4">
-                  <div className="relative mb-6">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+              <div className="flex items-center gap-4 w-full xl:w-auto">
+                 <div className="relative flex-1 xl:w-96 group">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                     <input 
-                      type="text"
-                      placeholder="Cari nama atau perusahaan..."
-                      className="w-full bg-slate-950 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-xs text-white"
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      type="text" 
+                      placeholder="Cari WO, Customer, atau Catatan..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 transition-all"
                     />
+                 </div>
+              </div>
+           </div>
+
+           <div className="p-8 space-y-4">
+              {!statusFilter ? (
+                  <div className="py-32 flex flex-col items-center justify-center text-slate-300">
+                     <Target className="w-20 h-20 mb-4 opacity-10" />
+                     <p className="text-sm font-black uppercase tracking-widest opacity-20 text-center px-10">Pilih modul Tactical Command diatas<br/>untuk memantau operasional</p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {customers
-                      .filter(c => 
-                        c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || 
-                        c.company_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                        c.phone?.includes(customerSearch)
-                      )
-                      .map(c => (
-                        <div key={c.id} className="bg-white/5 border border-white/5 rounded-[1.5rem] p-5 flex items-center justify-between group hover:bg-white/10 transition-all">
-                          <div>
-                            <p className="text-[10px] font-black text-white uppercase">{c.company_name || c.name || 'Untitled'}</p>
-                            <p className="text-[8px] text-slate-500 font-mono mt-1">{c.phone}</p>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              setNewCustomer({
-                                phone: c.phone || "",
-                                name: c.name || "",
-                                company_name: c.company_name || "",
-                                address: c.address || "",
-                                city: c.city || "",
-                                province: c.province || "",
-                                zipcode: c.zipcode || "",
-                                billing_method: (c.billing_method as any) || 'epod'
-                              });
-                              setEditingCustomerId(c.id);
-                              setIsCustomerEdit(true);
-                              setCustomerView('form');
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            Edit
-                          </button>
+              ) : workOrders
+                .filter(wo => {
+                  const ds = getWODisplayStatus(wo);
+                  if (statusFilter !== 'all' && ds.key !== statusFilter) return false;
+                  return `${wo.wo_number} ${wo.customers?.company_name} ${wo.customers?.name}`.toLowerCase().includes(searchTerm.toLowerCase());
+                }).length === 0 ? (
+                  <div className="py-32 flex flex-col items-center justify-center text-slate-300">
+                     <Package className="w-20 h-20 mb-4 opacity-10" />
+                     <p className="text-sm font-black uppercase tracking-widest opacity-20">Terminal Kosong</p>
+                  </div>
+                ) : (
+                  workOrders
+                    .filter(wo => {
+                      const ds = getWODisplayStatus(wo);
+                      if (statusFilter !== 'all' && ds.key !== statusFilter) return false;
+                      return `${wo.wo_number} ${wo.customers?.company_name} ${wo.customers?.name}`.toLowerCase().includes(searchTerm.toLowerCase());
+                    })
+                    .map(wo => {
+                       const isExp = expandedWOId === wo.id;
+                       const ds = getWODisplayStatus(wo);
+                       const sbus = Array.from(new Set(wo.work_order_items?.map(i => i.sbu_type)));
+
+                       return (
+                         <div key={wo.id} className={"rounded-3xl border transition-all " + (isExp ? "bg-slate-50 border-blue-200 shadow-xl" : "bg-white border-slate-100 hover:border-slate-200")}>
+                            <div 
+                              onClick={() => setExpandedWOId(isExp ? null : wo.id)}
+                              className="p-8 flex flex-col lg:flex-row lg:items-center gap-8 cursor-pointer"
+                            >
+                               <div className="w-48 flex-shrink-0">
+                                  <p className="text-[14px] font-black text-slate-900 italic uppercase leading-none mb-2">{wo.wo_number}</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(wo.created_at).toLocaleDateString('id-ID', { day:'2-digit', month: 'short' })}</p>
+                               </div>
+
+                               <div className="flex-1">
+                                  <p className="text-[15px] font-black text-slate-900 uppercase leading-tight mb-1">{wo.customers?.company_name || wo.customers?.name || "No Name"}</p>
+                                  <p className="text-[11px] font-bold text-slate-400 truncate max-w-md">{wo.notes || "Tak ada instruksi khusus"}</p>
+                               </div>
+
+                               <div className="flex items-center gap-2">
+                                  {['trucking', 'clearances', 'forwarding'].map(s => {
+                                     const has = sbus.includes(s);
+                                     const Icon = s === 'trucking' ? Truck : s === 'clearances' ? FileText : Ship;
+                                     if (!has) return null;
+                                     return (
+                                       <div key={s} className="w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
+                                          <Icon className="w-4 h-4" />
+                                       </div>
+                                     );
+                                  })}
+                               </div>
+
+                               <div className="w-44 text-right">
+                                  <span className={"px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border " + ds.color + " " + ds.bg + " " + ds.border}>
+                                     {ds.label}
+                                  </span>
+                               </div>
+
+                               <div className="flex items-center gap-2 flex-shrink-0">
+                                  <button 
+                                    disabled={wo.status === 'pending_armada_check'}
+                                    onClick={(e) => { e.stopPropagation(); openEditModal(wo); }} 
+                                    className={"p-3 rounded-xl transition-all shadow-sm " + (wo.status === 'pending_armada_check' ? "bg-slate-50 text-slate-300 cursor-not-allowed grayscale" : "bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200")} 
+                                    title={wo.status === 'pending_armada_check' ? "Locked (Pending Approval)" : "Edit WO"}
+                                  >
+                                     <Edit2 className="w-5 h-5" />
+                                  </button>
+                                  <button 
+                                    disabled={wo.status === 'pending_armada_check'}
+                                    onClick={(e) => { e.stopPropagation(); if(confirm('Hapus Work Order?')) deleteWorkOrder(wo.id); }} 
+                                    className={"p-3 rounded-xl transition-all shadow-sm " + (wo.status === 'pending_armada_check' ? "bg-slate-50 text-slate-300 cursor-not-allowed grayscale" : "bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200")} 
+                                    title={wo.status === 'pending_armada_check' ? "Locked (Pending Approval)" : "Hapus WO"}
+                                  >
+                                     <Trash2 className="w-5 h-5" />
+                                  </button>
+                                  <div className={"p-3 rounded-xl border transition-all " + (isExp ? "bg-blue-600 text-white border-blue-500" : "bg-white border-slate-100 text-slate-400")}>
+                                     <ChevronDown className={"w-5 h-5 transition-transform " + (isExp ? "rotate-180" : "")} />
+                                  </div>
+                               </div>
+                            </div>
+
+                            {isExp && (
+                               <div className="p-8 pt-0 animate-in fade-in slide-in-from-top-2">
+                                  <div className="bg-white rounded-2xl border border-slate-200 p-8 grid grid-cols-1 lg:grid-cols-2 gap-10">
+                                     <div className="space-y-6">
+                                        <div>
+                                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Itemized Activity</p>
+                                           <div className="space-y-3">
+                                              {wo.work_order_items?.map((item, idx) => (
+                                                 <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                                    <div className="flex items-center gap-4">
+                                                       <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 border border-slate-100">
+                                                          {item.sbu_type === 'trucking' ? <Truck className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                                                       </div>
+                                                       <div>
+                                                          <p className="text-[13px] font-black text-slate-900 uppercase">{(item.sbu_metadata?.doc_code || item.truck_type || 'Task') + ' (' + item.quantity + ')'}</p>
+                                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter line-clamp-1">{ (item.origin_location?.name || 'TBA') + " → " + (item.destination_location?.name || 'TBA') }</p>
+                                                       </div>
+                                                    </div>
+                                                    <span className="text-[13px] font-black text-emerald-600">Rp {item.deal_price?.toLocaleString('id-ID')}</span>
+                                                 </div>
+                                              ))}
+                                           </div>
+                                        </div>
+                                     </div>
+
+                                     <div className="space-y-8 flex flex-col justify-between">
+                                        <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
+                                           <div className="relative z-10">
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Deal Value</p>
+                                              <p className="text-4xl font-black italic tracking-tighter">Rp { (wo.work_order_items?.reduce((sum, i) => sum + (i.quantity*i.deal_price), 0) || 0).toLocaleString('id-ID') }</p>
+                                           </div>
+                                           <Banknote className="absolute top-1/2 right-10 -translate-y-1/2 w-24 h-24 text-white/5" />
+                                        </div>
+
+                                        <div className="flex gap-4">
+                                           {ds.key === 'draft' && (
+                                              <button onClick={() => createWorkOrder('pending_sbu')} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                                                 Submit to Operational
+                                              </button>
+                                           )}
+                                           {ds.key === 'need_approval' && (
+                                              <>
+                                                 <button 
+                                                   onClick={() => handleStatusUpdate(wo.id, 'approved')} 
+                                                   className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-emerald-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                                 >
+                                                    <ShieldCheck className="w-4 h-4" /> Approve Mission
+                                                 </button>
+                                                 <button 
+                                                   onClick={() => { setRejectTargetWOId(wo.id); setShowRejectModal(true); }}
+                                                   className="flex-1 bg-red-50 text-red-600 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-red-100 hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
+                                                 >
+                                                    <Ban className="w-4 h-4" /> Reject
+                                                 </button>
+                                              </>
+                                           )}
+                                           {ds.key === 'on_journey' && (
+                                              <button className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2">
+                                                 <Target className="w-4 h-4" /> Live Tracking
+                                              </button>
+                                           )}
+                                        </div>
+                                     </div>
+                                  </div>
+                               </div>
+                            )}
+                         </div>
+                       );
+                    })
+                )}
+           </div>
+        </div>
+       </>
+      )}
+      </div>
+
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 p-4 pb-10 flex justify-around items-center z-50 md:hidden shadow-2xl">
+          <button onClick={() => setStatusFilter('all')} className={"flex flex-col items-center gap-1 " + (statusFilter === 'all' ? "text-blue-600" : "text-slate-400")}>
+              <LayoutGrid className="w-6 h-6" />
+              <span className="text-[8px] font-black uppercase">Cockpit</span>
+          </button>
+          <button onClick={() => { resetCustomerForm(); setShowCustomerModal(true); }} className="flex flex-col items-center gap-1 text-slate-400">
+              <UserPlus className="w-6 h-6" />
+              <span className="text-[8px] font-black uppercase">Entities</span>
+          </button>
+          <div className="-mt-14 scale-125">
+             <button onClick={() => { resetWOForm(); setShowCreateModal(true); }} className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-2xl border-4 border-slate-50 active:scale-90 transition-all">
+                <Plus className="w-8 h-8 font-black" />
+             </button>
+          </div>
+          <Link href="/finance" className="flex flex-col items-center gap-1 text-slate-400">
+              <Banknote className="w-6 h-6" />
+              <span className="text-[8px] font-black uppercase">Finance</span>
+          </Link>
+          <button onClick={() => fetchDashboardData()} className="flex flex-col items-center gap-1 text-slate-400">
+              <RefreshCw className="w-6 h-6" />
+              <span className="text-[8px] font-black uppercase">Refresh</span>
+          </button>
+      </nav>
+
+      {/* ===================================================== */}
+      {/* MODALS LIGHT THEMED */}
+      {/* ===================================================== */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+           <div className="bg-white border border-slate-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[3rem] shadow-2xl relative p-10">
+              <div className="flex justify-between items-center mb-10">
+                 <div>
+                    <h2 className="text-3xl font-black tracking-tighter uppercase italic text-slate-900 flex items-center gap-3">
+                       <Plus className="w-8 h-8 text-blue-600" />
+                       {editingWOId ? "Edit Work Order" : "Work Order Baru"}
+                    </h2>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-1">Operational Configuration Gateway</p>
+                 </div>
+                 <button onClick={() => setShowCreateModal(false)} className="p-3 hover:bg-slate-50 text-slate-400 hover:text-slate-600 rounded-full transition-all">
+                    <X className="w-8 h-8" />
+                 </button>
+              </div>
+
+              {wizardStep === 1 ? (
+                <div className="space-y-8">
+                   <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem]">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">1. Pilih Customer Master *</label>
+                      <div className="flex gap-4">
+                        <div className="flex-1 relative group">
+                           <User className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                           <select 
+                             className="w-full bg-white border border-slate-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-600/5 outline-none transition-all appearance-none cursor-pointer"
+                             value={newWO.customer_id}
+                             onChange={(e) => setNewWO({...newWO, customer_id: e.target.value})}
+                           >
+                              <option value="">-- Cari Pelanggan --</option>
+                              {customers.map(c => <option key={c.id} value={c.id}>{c.company_name || c.name}</option>)}
+                           </select>
                         </div>
-                      ))}
-                  </div>
+                        <button onClick={() => { resetCustomerForm(); setShowCustomerModal(true); }} className="bg-white border border-slate-200 text-slate-900 px-8 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+                           Tambah
+                        </button>
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem]">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">2. Tanggal Order</label>
+                        <div className="relative group">
+                           <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                           <input type="date" className="w-full bg-white border border-slate-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-black text-slate-900 outline-none focus:ring-4 focus:ring-blue-600/5 transition-all" value={newWO.order_date} onChange={e => setNewWO({...newWO, order_date: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem]">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">3. Jam Eksekusi</label>
+                        <div className="relative group">
+                           <Clock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                           <input type="datetime-local" className="w-full bg-white border border-slate-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-black text-slate-900 outline-none focus:ring-4 focus:ring-blue-600/5 transition-all" value={newWO.execution_date} onChange={e => setNewWO({...newWO, execution_date: e.target.value})} />
+                        </div>
+                      </div>
+                   </div>
+
+                   <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem]">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">4. Keterangan / Instruksi Khusus</label>
+                      <div className="relative group">
+                         <MessageSquare className="absolute left-5 top-5 w-5 h-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                         <textarea 
+                            className="w-full bg-white border border-slate-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-slate-900 outline-none focus:ring-4 focus:ring-blue-600/5 transition-all min-h-[100px] placeholder:text-slate-300"
+                            value={newWO.notes}
+                            onChange={e => setNewWO({...newWO, notes: e.target.value})}
+                            placeholder="Contoh: Muatan fragile, wajib terpal, muat malam jam 20:00, dll..."
+                         />
+                      </div>
+                   </div>
+
+                   <div className="bg-slate-50 border border-slate-100 p-8 rounded-[2rem]">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">5. Layanan SBU</label>
+                      <div className="grid grid-cols-3 gap-4">
+                         {['trucking', 'customs', 'forwarding'].filter(s => activatedSbus.includes(s)).map(s => {
+                            const isS = selectedSbus.includes(s);
+                            const Icon = s === 'trucking' ? Truck : s === 'customs' ? FileText : Ship;
+                            return (
+                               <button 
+                                 key={s} 
+                                 onClick={() => {
+                                    if (isS) {
+                                       if (selectedSbus.length > 1) setSelectedSbus(prev => prev.filter(x => x !== s));
+                                    } else {
+                                       setSelectedSbus(prev => [...prev, s]);
+                                    }
+                                 }}
+                                 className={"flex items-center gap-4 p-6 rounded-2xl border transition-all " + (isS ? "bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-600/10" : "bg-white border-slate-200 text-slate-400 hover:border-slate-300")}
+                               >
+                                  <Icon className="w-6 h-6" />
+                                  <span className="text-[10px] font-black uppercase tracking-widest">{s === 'customs' ? 'Clearances' : s}</span>
+                               </button>
+                            );
+                         })}
+                      </div>
+                   </div>
+
+                   <div className="flex justify-end pt-10">
+                      <button 
+                        onClick={() => {
+                           if (!newWO.customer_id) return toast.error("Pilih customer");
+                           setWizardStep(2);
+                           setActiveWizardTab(selectedSbus[0]);
+                           if (!editingWOId) {
+                               setWoItems(selectedSbus.map(s => ({
+                                  truck_type: s === 'trucking' ? "CDE" : "N/A",
+                                  origin_location_id: "",
+                                  destination_location_id: "",
+                                  quantity: 1,
+                                  deal_price: 0,
+                                  sbu_type: s,
+                                  sbu_metadata: {}
+                               })));
+                           }
+                        }}
+                        className="bg-slate-900 text-white px-16 py-6 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all"
+                      >
+                         Konfigurasi Detail <ChevronRight className="w-4 h-4 inline-block ml-2" />
+                      </button>
+                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* FORM FIELDS */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-1">Nomor WhatsApp *</p>
-                      <input
-                          type="text"
-                          placeholder="081234..."
-                          className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all"
-                          value={newCustomer.phone}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-1">Nama Personal</p>
-                      <input
-                          type="text"
-                          placeholder="Full Name..."
-                          className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all"
-                          value={newCustomer.name}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-8">
+                   <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+                      {selectedSbus.map(s => (
+                         <button key={s} onClick={() => setActiveWizardTab(s)} className={"flex-1 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all " + (activeWizardTab === s ? "bg-white text-blue-600 shadow-sm" : "text-slate-400")}>
+                            {s} Items
+                         </button>
+                      ))}
+                   </div>
 
-                  <div>
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-1">Nama Perusahaan</p>
-                    <input
-                        type="text"
-                        placeholder="Corporate Name..."
-                        className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all font-sans"
-                        value={newCustomer.company_name}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, company_name: e.target.value })}
-                    />
-                  </div>
+                   <div className="min-h-[400px]">
+                      {woItems.map((item, idx) => {
+                         if (item.sbu_type !== activeWizardTab) return null;
+                         return (
+                            <div key={idx} className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-10 mb-8 relative group">
+                               <button onClick={() => setWoItems(woItems.filter((_, i) => i !== idx))} className="absolute top-10 right-10 text-slate-300 hover:text-red-500 transition-colors">
+                                  <Trash2 className="w-8 h-8" />
+                               </button>
 
-                  <div>
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-1">Pencarian Alamat (Google Maps) *</p>
-                    <div className="relative group">
-                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-emerald-500 transition-all" />
-                      <input
-                          ref={customerAutocompleteInputRef}
-                          type="text"
-                          placeholder="Cari alamat atau nama gedung..."
-                          className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all font-sans"
-                      />
-                    </div>
-                  </div>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                  {activeWizardTab === 'trucking' ? (
+                                    <>
+                                       <div>
+                                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Jenis Unit</label>
+                                          <select className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-sm font-black outline-none" value={item.truck_type} onChange={e => updateWoItem(idx, 'truck_type', e.target.value)}>
+                                             {truckTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                          </select>
+                                       </div>
+                                       <div>
+                                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Volume (Unit)</label>
+                                          <input type="number" className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-sm font-black outline-none" value={item.quantity} onChange={e => updateWoItem(idx, 'quantity', parseInt(e.target.value)||1)} />
+                                       </div>
+                                       <div>
+                                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Titik Pickup</label>
+                                          <div className="flex gap-2">
+                                             <select className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 text-sm font-black outline-none" value={item.origin_location_id} onChange={e => updateWoItem(idx, 'origin_location_id', e.target.value)}>
+                                                <option value="">-- Pilih Lokasi --</option>
+                                                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                             </select>
+                                             <button type="button" onClick={() => { setNewLocation({ name: "", address: "", district: "", city: "", province: "", zipcode: "", notes: "", latitude: null, longitude: null }); setShowLocationModal(true); }} className="px-4 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap">+ Baru</button>
+                                          </div>
+                                       </div>
+                                       <div>
+                                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Titik Dropoff</label>
+                                          <div className="flex gap-2">
+                                             <select className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 text-sm font-black outline-none" value={item.destination_location_id} onChange={e => updateWoItem(idx, 'destination_location_id', e.target.value)}>
+                                                <option value="">-- Pilih Lokasi --</option>
+                                                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                             </select>
+                                             <button type="button" onClick={() => { setNewLocation({ name: "", address: "", district: "", city: "", province: "", zipcode: "", notes: "", latitude: null, longitude: null }); setShowLocationModal(true); }} className="px-4 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap">+ Baru</button>
+                                          </div>
+                                       </div>
+                                    </>
+                                  ) : (
+                                     <div className="col-span-2">
+                                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Regime / Document Code</label>
+                                        <input className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-sm font-black outline-none" value={item.sbu_metadata?.doc_code || ""} onChange={e => updateWoItem(idx, 'sbu_metadata', e.target.value, 'doc_code')} placeholder="e.g. BC20" />
+                                     </div>
+                                  )}
+                                  
+                                  <div className="col-span-2 pt-8 border-t border-slate-100 flex items-center justify-between">
+                                     <div className="flex-1 max-w-xs">
+                                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 ml-1">Harga Deal (Gross)</label>
+                                        <div className="relative">
+                                           <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-black text-[12px]">Rp</span>
+                                           <input type="text" className="w-full bg-slate-900 border-none rounded-2xl pl-14 pr-6 py-6 text-xl font-black text-emerald-400 outline-none" value={item.deal_price === 0 ? "" : item.deal_price.toLocaleString('id-ID')} onChange={e => updateWoItem(idx, 'deal_price', parseInt(e.target.value.replace(/\./g,''))||0)} />
+                                        </div>
+                                     </div>
+                                     <div className="text-right">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Sub Total</p>
+                                        <p className="text-3xl font-black italic tracking-tighter">Rp { (item.quantity*item.deal_price).toLocaleString('id-ID') }</p>
+                                     </div>
+                                  </div>
+                               </div>
+                            </div>
+                         );
+                      })}
+                   </div>
 
-                  <div>
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2 ml-1">Alamat Kantor Lengkap & Detail (Invoice)</p>
-                    <textarea
-                        placeholder="Masukkan alamat lengkap kantor pelanggan..."
-                        className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:ring-2 focus:ring-emerald-500/30 transition-all min-h-[100px] font-sans"
-                        value={newCustomer.address}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2 ml-1">Kota / Kabupaten</p>
-                        <input
-                            type="text"
-                            readOnly
-                            placeholder="..."
-                            className="w-full bg-white/5 border border-white/5 rounded-xl p-4 text-[11px] font-black text-slate-400 font-sans"
-                            value={newCustomer.city}
-                        />
+                   <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center pt-8 border-t border-slate-100 gap-4">
+                      <button onClick={() => setWizardStep(1)} className="text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition-all flex items-center gap-2 py-4">
+                         <ChevronLeft className="w-4 h-4" /> Kembali
+                      </button>
+                      <div className="flex gap-4">
+                         <button onClick={() => createWorkOrder('draft')} className="bg-white border-2 border-slate-200 text-slate-700 px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 active:scale-95 transition-all flex items-center gap-2 shadow-sm">
+                            <Save className="w-4 h-4 text-slate-400" /> Save Draft
+                         </button>
+                         <button onClick={() => createWorkOrder('pending_sbu')} className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2 hover:bg-blue-500">
+                            <Send className="w-4 h-4" /> Submit to SBU
+                         </button>
                       </div>
-                      <div>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2 ml-1">Kode Pos</p>
-                        <input
-                            type="text"
-                            readOnly
-                            placeholder="..."
-                            className="w-full bg-white/5 border border-white/5 rounded-xl p-4 text-[11px] font-black text-slate-400 font-sans"
-                            value={newCustomer.zipcode}
-                        />
-                      </div>
-                  </div>
-                  
-                  <div>
-                    <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2 ml-1">Provinsi</p>
-                    <input
-                        type="text"
-                        readOnly
-                        placeholder="..."
-                        className="w-full bg-white/5 border border-white/5 rounded-xl p-4 text-[11px] font-black text-slate-400 font-sans"
-                        value={newCustomer.province}
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-3 ml-1">Metode POD (Billing Method)</p>
-                    <div className="flex gap-4">
-                      <button 
-                        onClick={() => setNewCustomer({ ...newCustomer, billing_method: 'epod' })}
-                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center gap-2 border ${
-                          newCustomer.billing_method === 'epod' 
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                            : 'bg-slate-950 border-white/5 text-slate-600 hover:bg-white/5'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        E-POD
-                      </button>
-                      <button 
-                        onClick={() => setNewCustomer({ ...newCustomer, billing_method: 'hardcopy' })}
-                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center gap-2 border ${
-                          newCustomer.billing_method === 'hardcopy' 
-                            ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' 
-                            : 'bg-slate-950 border-white/5 text-slate-600 hover:bg-white/5'
-                        }`}
-                      >
-                        <FileText className="w-4 h-4" />
-                        Hardcopy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 pt-6">
-                    {isCustomerEdit && (
-                      <button 
-                        onClick={resetCustomerForm}
-                        className="bg-slate-950 text-slate-600 font-bold uppercase tracking-widest text-[10px] py-5 px-6 rounded-2xl hover:text-white transition-all border border-white/5"
-                      >
-                        Batal Edit
-                      </button>
-                    )}
-                    <button 
-                      onClick={handleSaveCustomer} 
-                      disabled={savingCustomer}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-[10px] py-5 rounded-2xl shadow-xl shadow-emerald-500/10 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                    >
-                      {savingCustomer ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      {isCustomerEdit ? 'Update Data' : 'Simpan Pelanggan'}
-                    </button>
-                  </div>
+                   </div>
                 </div>
               )}
-            </div>
-          </div>
+           </div>
         </div>
       )}
 
-      {/* ===================================================== */}
-      {/* MODAL TAMBAH LOKASI DENGAN AUTOCOMPLETE */}
-      {/* ===================================================== */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+           <div className="bg-white border border-slate-200 w-full max-w-3xl rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="p-10 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
+                 <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Master Customer Entity</h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Google Maps Address Auto-Resolution</p>
+                 </div>
+                 <button onClick={() => setShowCustomerModal(false)} className="p-3 hover:bg-slate-50 rounded-full transition-all"><X className="w-6 h-6 text-slate-400" /></button>
+              </div>
+              <div className="p-10 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Company Name *</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600/10" value={newCustomer.company_name} onChange={e => setNewCustomer({...newCustomer, company_name: e.target.value})} placeholder="PT. Logistik Maju Jaya" />
+                    </div>
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">PIC Name</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600/10" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} placeholder="Nama PIC / Contact Person" />
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">WhatsApp / Phone *</label>
+                        <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-black outline-none text-blue-600 focus:ring-2 focus:ring-blue-600/10" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} placeholder="628123..." />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Billing Control</label>
+                        <select className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-black outline-none" value={newCustomer.billing_method} onChange={e => setNewCustomer({...newCustomer, billing_method: e.target.value as any})}>
+                            <option value="epod">E-POD (Paperless)</option>
+                            <option value="hardcopy">Hardcopy Gateway</option>
+                        </select>
+                    </div>
+                 </div>
+
+                 {/* GOOGLE PLACES SEARCH */}
+                 <div className="bg-blue-50/50 border-2 border-blue-100 rounded-[2rem] p-6 space-y-5">
+                    <div className="flex items-center gap-3 mb-1">
+                       <MapPin className="w-5 h-5 text-blue-600" />
+                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Smart Address Search — Powered by Google Maps</p>
+                    </div>
+                    <div className="relative">
+                       <Globe className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                       <input 
+                          ref={customerAddressInputRef}
+                          className="w-full bg-white border-2 border-blue-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all placeholder:text-slate-300" 
+                          placeholder="Ketik alamat untuk mencari otomatis..." 
+                          defaultValue={newCustomer.address}
+                       />
+                    </div>
+                    {newCustomer.address && (
+                       <div className="bg-white rounded-2xl border border-blue-100 p-5">
+                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">Resolved Address</p>
+                          <p className="text-sm font-bold text-slate-900 leading-relaxed">{newCustomer.address}</p>
+                       </div>
+                    )}
+                 </div>
+
+                 {/* AUTO-FILLED FIELDS */}
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">District / Kecamatan</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newCustomer.district} onChange={e => setNewCustomer({...newCustomer, district: e.target.value})} placeholder="Auto-fill" />
+                    </div>
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">City / Kab-Kota</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newCustomer.city} onChange={e => setNewCustomer({...newCustomer, city: e.target.value})} placeholder="Auto-fill" />
+                    </div>
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">Province</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newCustomer.province} onChange={e => setNewCustomer({...newCustomer, province: e.target.value})} placeholder="Auto-fill" />
+                    </div>
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">Zip Code</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newCustomer.zipcode} onChange={e => setNewCustomer({...newCustomer, zipcode: e.target.value})} placeholder="Auto-fill" />
+                    </div>
+                 </div>
+
+                 {(newCustomer.latitude && newCustomer.longitude) && (
+                    <div className="flex items-center gap-4 px-2">
+                       <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2">
+                          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">GPS Locked</span>
+                       </div>
+                       <span className="text-[10px] font-bold text-slate-400">{newCustomer.latitude?.toFixed(6)}, {newCustomer.longitude?.toFixed(6)}</span>
+                    </div>
+                 )}
+
+                 <button onClick={handleSaveCustomer} disabled={savingCustomer} className="w-full bg-slate-900 text-white py-6 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-blue-600">
+                    {savingCustomer ? "Simpan..." : "Register Customer Gateway"}
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* 📍 LOCATION MODAL — Google Places AutoSearch */}
       {showLocationModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center z-[200] p-4" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowLocationModal(false);
-        }}>
-          <div className="bg-slate-900 border border-white/10 p-10 rounded-[3.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-[0_0_100px_rgba(0,0,0,0.5)]">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-black italic tracking-tighter text-white uppercase">Data Master Lokasi</h2>
-              <button onClick={() => setShowLocationModal(false)} className="text-slate-600 hover:text-white transition-colors">
-                <XCircle className="w-10 h-10" />
-              </button>
-            </div>
-
-            <div className="space-y-8">
-              <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 ml-1">Nama Identitas Lokasi *</label>
-                <input
-                  type="text"
-                  className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all"
-                  placeholder="Misal: Gudang Utama, Kantor Jakarta..."
-                  value={newLocation.name}
-                  onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
-                />
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+           <div className="bg-white border border-slate-200 w-full max-w-3xl rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="p-10 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
+                 <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 flex items-center gap-3"><MapPin className="w-7 h-7 text-emerald-600" /> New Location</h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Google Maps Auto-Resolution for Pickup & Dropoff</p>
+                 </div>
+                 <button onClick={() => setShowLocationModal(false)} className="p-3 hover:bg-slate-50 rounded-full transition-all"><X className="w-6 h-6 text-slate-400" /></button>
               </div>
+              <div className="p-10 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+                 <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Location Label / Nama Lokasi *</label>
+                    <input className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-600/10" value={newLocation.name} onChange={e => setNewLocation({...newLocation, name: e.target.value})} placeholder="Gudang Cikarang, Pabrik MM2100, dll..." />
+                 </div>
 
-              <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 ml-1">Search via Google Maps API *</label>
-                <div className="relative">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600" />
-                  <input
-                    ref={autocompleteInputRef}
-                    type="text"
-                    className="w-full bg-slate-950 border border-white/10 rounded-2xl py-5 pl-14 pr-6 text-sm font-bold text-white focus:ring-2 focus:ring-blue-500/30 transition-all font-sans"
-                    placeholder="Search address or landmark..."
-                  />
-                </div>
-              </div>
+                 <div className="bg-emerald-50/50 border-2 border-emerald-100 rounded-[2rem] p-6 space-y-5">
+                    <div className="flex items-center gap-3 mb-1">
+                       <MapPin className="w-5 h-5 text-emerald-600" />
+                       <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Smart Address Search — Powered By Google Maps</p>
+                    </div>
+                    <div className="relative">
+                       <Globe className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
+                       <input 
+                          ref={locationAddressInputRef}
+                          className="w-full bg-white border-2 border-emerald-200 rounded-2xl pl-14 pr-6 py-5 text-sm font-bold outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all placeholder:text-slate-300" 
+                          placeholder="Ketik alamat untuk mencari otomatis..." 
+                          defaultValue={newLocation.address}
+                       />
+                    </div>
+                    {newLocation.address && (
+                       <div className="bg-white rounded-2xl border border-emerald-100 p-5">
+                          <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2">Resolved Address</p>
+                          <p className="text-sm font-bold text-slate-900 leading-relaxed">{newLocation.address}</p>
+                       </div>
+                    )}
+                 </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
-                   <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest mb-3 ml-1">Alamat Lengkap</label>
-                   <textarea
-                    className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-xs text-slate-300 min-h-[140px] focus:ring-2 focus:ring-blue-500/30"
-                    value={newLocation.address}
-                    onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })}
-                    placeholder="Detail alamat..."
-                    />
-                </div>
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                         <div>
-                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2">Kecamatan</p>
-                            <input type="text" value={newLocation.district} readOnly className="w-full bg-white/5 border border-white/5 rounded-xl p-3 text-[10px] text-slate-500" />
-                         </div>
-                         <div>
-                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2">Kota</p>
-                            <input type="text" value={newLocation.city} readOnly className="w-full bg-white/5 border border-white/5 rounded-xl p-3 text-[10px] text-slate-500" />
-                         </div>
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">District / Kecamatan</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newLocation.district} onChange={e => setNewLocation({...newLocation, district: e.target.value})} placeholder="Auto-fill" />
                     </div>
                     <div>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2">Provinsi</p>
-                        <input type="text" value={newLocation.province} readOnly className="w-full bg-white/5 border border-white/5 rounded-xl p-3 text-[10px] text-slate-500" />
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">City / Kab-Kota</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newLocation.city} onChange={e => setNewLocation({...newLocation, city: e.target.value})} placeholder="Auto-fill" />
                     </div>
                     <div>
-                        <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2">Petunjuk (Notes)</p>
-                        <input 
-                            type="text" 
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl p-4 text-[10px] text-white focus:ring-2 focus:ring-blue-500/30"
-                            placeholder="Gedung biru, samping gang..."
-                            value={newLocation.notes || ""}
-                            onChange={(e) => setNewLocation({ ...newLocation, notes: e.target.value })}
-                        />
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">Province</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newLocation.province} onChange={e => setNewLocation({...newLocation, province: e.target.value})} placeholder="Auto-fill" />
                     </div>
-                </div>
-              </div>
-            </div>
+                    <div>
+                       <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 ml-1">Zip Code</label>
+                       <input className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm font-bold outline-none" value={newLocation.zipcode} onChange={e => setNewLocation({...newLocation, zipcode: e.target.value})} placeholder="Auto-fill" />
+                    </div>
+                 </div>
 
-            <div className="flex gap-4 mt-12">
-              <button
-                onClick={createLocation}
-                disabled={savingLocation}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-xs py-5 rounded-2xl shadow-xl shadow-blue-600/10 active:scale-95 transition-all"
-              >
-                {savingLocation ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : "Registrasi Lokasi"}
-              </button>
-              <button
-                onClick={() => setShowLocationModal(false)}
-                className="px-10 bg-slate-950 text-slate-600 font-bold uppercase tracking-widest text-[10px] py-5 rounded-2xl hover:text-white transition-all"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ===================================================== */}
-      {/* MODAL REJECT REASON */}
-      {/* ===================================================== */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[200] p-4">
-          <div className="bg-[#151f32] border border-red-500/20 p-8 rounded-[2rem] w-full max-w-lg shadow-2xl relative">
-            {/* Stripe */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500/60 rounded-t-[2rem]" />
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center">
-                <Ban className="w-6 h-6 text-red-400" />
+                 {(newLocation.latitude && newLocation.longitude) && (
+                    <div className="flex items-center gap-4 px-2">
+                       <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2">
+                          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">GPS Locked</span>
+                       </div>
+                       <span className="text-[10px] font-bold text-slate-400">{newLocation.latitude?.toFixed(6)}, {newLocation.longitude?.toFixed(6)}</span>
+                    </div>
+                 )}
+
+                 <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Location Notes / Petunjuk Alamat</label>
+                    <textarea className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm font-medium outline-none h-24 focus:ring-2 focus:ring-emerald-600/10" value={newLocation.notes} onChange={e => setNewLocation({...newLocation, notes: e.target.value})} placeholder="Masuk dari Gerbang 2, belok kanan setelah pos keamanan..." />
+                 </div>
+
+                 <button onClick={createLocation} disabled={savingLocation} className="w-full bg-slate-900 text-white py-6 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-emerald-600">
+                    {savingLocation ? "Simpan..." : "Save Location to Master"}
+                 </button>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-white uppercase tracking-tight">Tolak Work Order</h3>
-                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Berikan alasan penolakan</p>
-              </div>
-              <button onClick={() => setShowRejectModal(false)} className="ml-auto text-slate-600 hover:text-white transition-colors">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <textarea
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              placeholder="Contoh: Armada belum tersedia, rute tidak feasible, dll..."
-              rows={4}
-              className="w-full bg-[#0a0f1e]/80 border border-white/10 rounded-2xl p-4 text-sm text-slate-200 placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 resize-none mb-6 font-medium"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={handleRejectWithReason}
-                disabled={rejectingWO}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {rejectingWO ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
-                {rejectingWO ? 'Menyimpan...' : 'Konfirmasi Tolak WO'}
-              </button>
-              <button
-                onClick={() => setShowRejectModal(false)}
-                className="px-8 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
+           </div>
         </div>
       )}
 
-    {/* ===================================================== */}
-    {/* MODAL LIVE TRACKING MAP */}
-    {/* ===================================================== */}
-    {showTrackingModal && selectedJOData && (
-        <TrackingModal 
-            data={selectedJOData} 
-            onClose={() => {
-                setShowTrackingModal(false);
-                setSelectedJOData(null);
-            }} 
-        />
-    )}
-      </div>
+      {/* 👥 STAFF MANAGEMENT MODAL */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[150] p-4">
+           <div className="bg-white border border-slate-200 w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                 <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3 text-slate-900">
+                        <UsersRound className="w-8 h-8 text-blue-600" />
+                        Team Governance
+                    </h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Manage personnel access & strategic roles</p>
+                 </div>
+                 <button onClick={() => setShowStaffModal(false)} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm"><X className="w-6 h-6 text-slate-400" /></button>
+              </div>
+
+              {/* ➕ ADD STAFF FORM (Direct Account Creation) */}
+              <div className="bg-slate-50 border-b border-slate-200 p-8">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Provision New Personnel Account</p>
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      <div className="md:col-span-1">
+                          <input 
+                              placeholder="Full Name" 
+                              value={newStaff.full_name}
+                              onChange={e => setNewStaff({...newStaff, full_name: e.target.value})}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-5 py-3.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-600/20"
+                          />
+                      </div>
+                      <div className="md:col-span-1">
+                          <input 
+                              placeholder="Staff Email" 
+                              value={newStaff.email}
+                              onChange={e => setNewStaff({...newStaff, email: e.target.value})}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-5 py-3.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-600/20"
+                          />
+                      </div>
+                      <div className="md:col-span-1">
+                          <input 
+                              type="password"
+                              placeholder="Default Password" 
+                              value={newStaff.password}
+                              onChange={e => setNewStaff({...newStaff, password: e.target.value})}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-5 py-3.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-600/20"
+                          />
+                      </div>
+                      <div className="md:col-span-1">
+                          <select 
+                              value={newStaff.role}
+                              onChange={e => setNewStaff({...newStaff, role: e.target.value})}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-5 py-3.5 text-[11px] font-black outline-none"
+                          >
+                              <optgroup label="Core Team">
+                                  <option value="superadmin">Superadmin (Pemilik Tenant)</option>
+                                  <option value="cs">CS (Pembuat WO / Admin WO)</option>
+                                  <option value="admin">Admin (All Can View)</option>
+                              </optgroup>
+                              <optgroup label="Finance & Accounting">
+                                  <option value="finance_manager">Finance Manager</option>
+                                  <option value="finance_ar">Finance AR</option>
+                                  <option value="finance_ap">Finance AP</option>
+                              </optgroup>
+                              <optgroup label="SBU Management">
+                                  {selectedSbus.includes('trucking') && <option value="cs_trucking">SBU Trucking Admin</option>}
+                                  {selectedSbus.includes('customs') && <option value="cs_customs">SBU Customs Admin</option>}
+                                  {selectedSbus.includes('forwarding') && <option value="cs_forwarding">SBU Forwarding Admin</option>}
+                              </optgroup>
+                          </select>
+                      </div>
+                      <div className="md:col-span-1">
+                          <button 
+                              onClick={async () => {
+                                  if (!newStaff.email || !newStaff.full_name) return toast.error("Lengkapi Nama & Email");
+                                  if (!editingStaffId && !newStaff.password) return toast.error("Password wajib untuk akun baru");
+                                  
+                                  if (!userProfile?.organization_id) return toast.error("Organization ID missing.");
+                                  
+                                  setAddingStaff(true);
+                                  try {
+                                      if (editingStaffId) {
+                                          // 1. Determine SBU access to sync
+                                          let sbuAcc: string[] = [];
+                                          if (newStaff.role === 'cs_trucking') sbuAcc = ['trucking'];
+                                          else if (newStaff.role === 'cs_customs') sbuAcc = ['clearances'];
+                                          else if (newStaff.role === 'cs_forwarding') sbuAcc = ['forwarding'];
+                                          else if (['superadmin', 'admin', 'cs'].includes(newStaff.role)) sbuAcc = ['trucking', 'clearances', 'forwarding'];
+
+                                          // 2. Update Profile table
+                                          const { error } = await supabase.from('profiles').update({
+                                              full_name: newStaff.full_name,
+                                              role: newStaff.role,
+                                              sbu_access: sbuAcc
+                                          }).eq('id', editingStaffId);
+                                          if (error) throw error;
+
+                                          // 3. Sync to Auth (Password & Meta)
+                                          const upRes = await fetch('/api/admin/update-user', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                  userId: editingStaffId,
+                                                  password: newStaff.password, // Will only update if length >= 6
+                                                  full_name: newStaff.full_name,
+                                                  role: newStaff.role
+                                              })
+                                          });
+
+                                          if (!upRes.ok) {
+                                              toast.error("Profil diperbarui, tapi sinkronisasi Auth gagal. Cek Password.");
+                                          } else {
+                                              toast.success("Profil & Auth staf diperbarui");
+                                          }
+                                          setEditingStaffId(null);
+                                      } else {
+                                          // 1. Check if user already has a profile
+                                          const { data: existing } = await supabase.from('profiles').select('id').eq('email', newStaff.email).maybeSingle();
+                                          
+                                          if (existing) {
+                                              let sbuAcc: string[] = [];
+                                              if (newStaff.role === 'cs_trucking') sbuAcc = ['trucking'];
+                                              else if (newStaff.role === 'cs_customs') sbuAcc = ['clearances'];
+                                              else if (newStaff.role === 'cs_forwarding') sbuAcc = ['forwarding'];
+                                              else if (['superadmin', 'admin', 'cs'].includes(newStaff.role)) sbuAcc = ['trucking', 'clearances', 'forwarding'];
+
+                                              const { error } = await supabase.from('profiles').update({
+                                                  organization_id: userProfile.organization_id,
+                                                  role: newStaff.role,
+                                                  full_name: newStaff.full_name,
+                                                  sbu_access: sbuAcc
+                                              }).eq('id', existing.id);
+                                              if (error) throw error;
+                                          } else {
+                                              // 2. Call Management API
+                                              const res = await fetch('/api/admin/create-user', {
+                                                  method: 'POST',
+                                                  headers: { 'Content-Type': 'application/json' },
+                                                  body: JSON.stringify({
+                                                      email: newStaff.email,
+                                                      password: newStaff.password,
+                                                      full_name: newStaff.full_name,
+                                                      organization_id: userProfile.organization_id,
+                                                      role: newStaff.role
+                                                  })
+                                              });
+                                              
+                                              if (!res.ok) {
+                                                  const errData = await res.json();
+                                                  throw new Error(errData.message || "Gagal membuat akun staf");
+                                              }
+                                          }
+                                          toast.success("Akun staf berhasil dibuat.");
+                                      }
+
+                                      setNewStaff({ email: '', full_name: '', password: '', role: 'operator' });
+                                      fetchStaff(userProfile.organization_id);
+                                  } catch (err: any) {
+                                      toast.error(err.message);
+                                  } finally {
+                                      setAddingStaff(false);
+                                  }
+                              }}
+                              disabled={addingStaff}
+                              className="w-full bg-blue-600 text-white rounded-xl py-4 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                              {addingStaff ? <RefreshCw className="w-3 h-3 animate-spin"/> : editingStaffId ? <Save className="w-3 h-3"/> : <UserPlus className="w-3 h-3"/>}
+                              {editingStaffId ? "Update Profile" : "Enroll Staff"}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+
+              <div className="p-10 overflow-y-auto flex-1">
+                 {loadingStaff ? (
+                    <div className="py-20 flex flex-col items-center justify-center gap-4 text-slate-300">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <p className="text-[10px] font-black uppercase tracking-widest">Loading team members...</p>
+                    </div>
+                 ) : staffList.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center justify-center text-slate-300">
+                       <UserPlus className="w-16 h-16 mb-4 opacity-10" />
+                       <p className="text-sm font-black uppercase tracking-widest opacity-20 text-center">Belum ada staf terdaftar<br/>di organisasi Anda</p>
+                    </div>
+                 ) : (
+                    <div className="space-y-4">
+                       {staffList.map((member) => (
+                          <div key={member.id} className="bg-slate-50 border border-slate-200/50 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 transition-all hover:border-blue-200">
+                             <div className="flex items-center gap-5 flex-1">
+                                <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-xl font-black text-slate-400 shadow-sm">
+                                   {member.full_name?.charAt(0) || member.email?.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                   <p className="text-[14px] font-black text-slate-900 uppercase tracking-tight mb-0.5">{member.full_name || 'Anonym User'}</p>
+                                   <p className="text-[11px] font-bold text-slate-400 italic lowercase">{member.email}</p>
+                                </div>
+                             </div>
+
+                             <div className="flex items-center gap-4">
+                                <div className="text-right hidden md:block">
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Role</p>
+                                   <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                                       (member.role === 'admin' || member.role === 'director') ? 'bg-blue-600 text-white border-blue-600' : 
+                                       member.role?.startsWith('finance') ? 'bg-amber-50 text-amber-600 border-amber-200' : 
+                                       member.role?.startsWith('cs') ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
+                                       'bg-slate-100 text-slate-600 border-slate-200'
+                                   }`}>
+                                       {getRoleDisplayName(member.role)}
+                                   </span>
+                                </div>
+
+                                <div className="w-px h-10 bg-slate-200 mx-2 hidden md:block" />
+
+                                <div className="flex flex-col gap-1.5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Quick Switch Permissions</p>
+                                    <div className="flex flex-wrap gap-1.5 max-w-[300px]">
+                                        {[
+                                            { id: 'admin', label: 'Admin', color: 'hover:bg-blue-600', show: true },
+                                            { id: 'director', label: 'Director', color: 'hover:bg-indigo-600', show: true },
+                                            { id: 'finance_ar', label: 'AR', color: 'hover:bg-amber-500', show: true },
+                                            { id: 'finance_ap', label: 'AP', color: 'hover:bg-amber-600', show: true },
+                                            { id: 'cs_trucking', label: 'TRK', color: 'hover:bg-emerald-500', show: activatedSbus.includes('trucking') },
+                                            { id: 'cs_customs', label: 'CUS', color: 'hover:bg-emerald-600', show: activatedSbus.includes('customs') },
+                                            { id: 'cs_forwarding', label: 'FWD', color: 'hover:bg-indigo-600', show: activatedSbus.includes('forwarding') },
+                                            { id: 'viewer', label: 'View', color: 'hover:bg-slate-500', show: true }
+                                        ].filter(r => r.show).map((r) => (
+                                            <button 
+                                                key={r.id}
+                                                onClick={() => updateStaffRole(member.id, r.id)}
+                                                className={`px-2 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-tighter transition-all border ${
+                                                    member.role === r.id ? 'bg-slate-950 text-white border-slate-950 shadow-lg' : 'bg-white text-slate-400 border-slate-100 hover:text-white ' + r.color
+                                                }`}
+                                            >
+                                                {r.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                 </div>
+
+                                 <div className="w-px h-10 bg-slate-200 mx-2 hidden md:block" />
+
+                                 <div className="flex items-center gap-2">
+                                     <button 
+                                         onClick={() => handleEditStaff(member)}
+                                         className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+                                         title="Edit Personnel"
+                                     >
+                                         <Pencil className="w-4 h-4" />
+                                     </button>
+                                     <button 
+                                         onClick={() => deleteStaffMember(member.id)}
+                                         className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm"
+                                         title="Delete Personnel"
+                                     >
+                                         <Trash2 className="w-4 h-4" />
+                                     </button>
+                                 </div>
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                 )}
+              </div>
+
+              <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Total Team Capacity: <b className="text-slate-900">{staffList.length} Personnel</b>
+                 </p>
+                 <div className="flex gap-4">
+                    <button onClick={() => setShowStaffModal(false)} className="text-slate-400 font-black uppercase tracking-widest text-[11px] hover:text-slate-900 transition-colors">Close Control</button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+      {/* 🧩 SBU MARKETPLACE MODAL */}
+      {showSbuModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[150] p-4">
+           <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col">
+              <div className="p-10 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                 <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3 text-slate-900">
+                        <LayoutGrid className="w-8 h-8 text-emerald-600" />
+                        Solution Marketplace
+                    </h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Activate strategic business units dynamically</p>
+                 </div>
+                 <button onClick={() => setShowSbuModal(false)} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm"><X className="w-6 h-6 text-slate-400" /></button>
+              </div>
+
+              <div className="p-10 space-y-6">
+                 {[
+                    { id: 'trucking', name: 'SBU Trucking', desc: 'Fleet management & trip operations', icon: Truck, color: 'text-blue-600' },
+                    { id: 'customs', name: 'SBU Customs', desc: 'Import/Export clearance gateway', icon: Ship, color: 'text-emerald-600' },
+                    { id: 'forwarding', name: 'SBU Forwarding', desc: 'Global logistics & consolidation', icon: Globe, color: 'text-indigo-600' }
+                 ].map(sbu => (
+                    <div key={sbu.id} className="flex items-center justify-between p-6 bg-slate-50 border border-slate-100 rounded-3xl group hover:border-blue-200 transition-all">
+                       <div className="flex items-center gap-5">
+                          <div className={`w-14 h-14 rounded-2xl bg-white border border-slate-100 flex items-center justify-center ${sbu.color} shadow-sm group-hover:scale-110 transition-transform`}>
+                             <sbu.icon className="w-8 h-8" />
+                          </div>
+                          <div>
+                             <p className="text-sm font-black uppercase tracking-tight text-slate-900">{sbu.name}</p>
+                             <p className="text-[10px] font-bold text-slate-400 italic">{sbu.desc}</p>
+                          </div>
+                       </div>
+                       <button 
+                         onClick={async () => {
+                            if (!userProfile?.organization_id) return toast.error("Profile not loaded yet");
+                            
+                            const newSbus = activatedSbus.includes(sbu.id) 
+                                ? activatedSbus.filter(i => i !== sbu.id) 
+                                : [...activatedSbus, sbu.id];
+                            
+                            setActivatedSbus(newSbus);
+                            // Auto save to DB
+                            try {
+                                const { error } = await supabase.from('organizations').update({
+                                    activated_sbus: newSbus
+                                }).eq('id', userProfile.organization_id);
+                                if (error) throw error;
+                                toast.success(`${sbu.name} ${newSbus.includes(sbu.id) ? 'Activated' : 'Deactivated'}`);
+                            } catch (e: any) {
+                                toast.error(e.message);
+                            }
+                         }}
+                         className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            activatedSbus.includes(sbu.id) ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
+                         }`}
+                       >
+                          {activatedSbus.includes(sbu.id) ? 'Active' : 'Get Module'}
+                       </button>
+                    </div>
+                 ))}
+              </div>
+
+              <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Changes apply instantly to your workspace</p>
+                 <button onClick={() => setShowSbuModal(false)} className="bg-slate-900 text-white px-10 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Done Setup</button>
+              </div>
+           </div>
+        </div>
+      )}
+       {/* ❌ REJECT REASON MODAL */}
+       {showRejectModal && (
+         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+            <div className="bg-white border border-slate-200 w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 animate-in fade-in zoom-in duration-200">
+               <div className="mb-8">
+                  <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 flex items-center gap-3">
+                     <Ban className="w-7 h-7 text-red-600" />
+                     Reject Mission
+                  </h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Specify official rejection reason</p>
+               </div>
+
+               <div className="space-y-6">
+                  <div>
+                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Rejection Details / Alasan *</label>
+                     <textarea 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 text-sm font-bold outline-none focus:ring-4 focus:ring-red-600/5 focus:border-red-200 transition-all min-h-[120px] placeholder:text-slate-300"
+                        placeholder="Contoh: Unit tidak tersedia di lokasi tersebut, harga tidak sesuai komitmen, dll..."
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                     />
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                     <button onClick={() => setShowRejectModal(false)} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">
+                        Cancel
+                     </button>
+                     <button 
+                        onClick={() => handleStatusUpdate(rejectTargetWOId!, 'rejected', rejectReason)}
+                        disabled={!rejectReason || loading}
+                        className="flex-[2] bg-red-600 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-red-600/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                     >
+                        {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Confirm Rejection"}
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>
+       )}
+      </main>
+
+      <script dangerouslySetInnerHTML={{ __html: `
+        if (typeof window !== 'undefined' && !window.staffFetched && ${showStaffModal}) {
+            window.staffFetched = true;
+            // This is a hack because we are inside JSX, better use a real useEffect
+        }
+      `}} />
     </div>
   );
 }
 
-// Sub-component for Live Tracking
-function TrackingModal({ data, onClose }: { data: { jo: JobOrder, item: WorkOrderItem, wo: WorkOrder }, onClose: () => void }) {
-    const mapRef = useRef<HTMLDivElement>(null);
-    const [mapLoaded, setMapLoaded] = useState(false);
-    const { jo, item, wo } = data;
-
-    useEffect(() => {
-        if (!mapRef.current || typeof google === 'undefined') return;
-
-        const latestTracking = (jo.tracking_updates || [])
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-
-        const map = new google.maps.Map(mapRef.current, {
-            center: { lat: -6.200000, lng: 106.816666 },
-            zoom: 12,
-            styles: [
-                { "elementType": "geometry", "stylers": [{ "color": "#12192b" }] },
-                { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
-                { "elementType": "labels.text.stroke", "stylers": [{ "color": "#12192b" }] },
-                { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-                { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-                { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
-                { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
-                { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
-                { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
-                { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
-                { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
-                { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
-                { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
-            ],
-            disableDefaultUI: true,
-            zoomControl: true,
-        });
-
-        const directionsService = new google.maps.DirectionsService();
-        const directionsRenderer = new google.maps.DirectionsRenderer({
-            map,
-            suppressMarkers: true,
-            polylineOptions: {
-                strokeColor: "#3b82f6",
-                strokeWeight: 5,
-                strokeOpacity: 0.8
-            }
-        });
-
-        // Add Markers
-        if (item.origin_location?.latitude && item.origin_location?.longitude) {
-            new google.maps.Marker({
-                position: { lat: Number(item.origin_location.latitude), lng: Number(item.origin_location.longitude) },
-                map,
-                label: { text: "A", color: "white", fontWeight: "bold" },
-                title: "Pickup: " + item.origin_location.name
-            });
-        }
-
-        if (item.destination_location?.latitude && item.destination_location?.longitude) {
-            new google.maps.Marker({
-                position: { lat: Number(item.destination_location.latitude), lng: Number(item.destination_location.longitude) },
-                map,
-                label: { text: "B", color: "white", fontWeight: "bold" },
-                title: "Dropoff: " + item.destination_location.name
-            });
-        }
-
-        // Driver Marker
-        if (latestTracking?.location && latestTracking.location.includes(',')) {
-            const [lat, lng] = latestTracking.location.split(',').map(Number);
-            if (!isNaN(lat) && !isNaN(lng)) {
-                new google.maps.Marker({
-                    position: { lat, lng },
-                    map,
-                    icon: {
-                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                        scale: 6,
-                        fillColor: "#10b981",
-                        fillOpacity: 1,
-                        strokeWeight: 2,
-                        strokeColor: "white",
-                        rotation: 0
-                    },
-                    title: "Driver: " + (jo.drivers?.name || "Driver")
-                });
-
-                // Set bounds to include driver
-                const bounds = new google.maps.LatLngBounds();
-                if (item.origin_location?.latitude) bounds.extend({ lat: Number(item.origin_location.latitude), lng: Number(item.origin_location.longitude) });
-                if (item.destination_location?.latitude) bounds.extend({ lat: Number(item.destination_location.latitude), lng: Number(item.destination_location.longitude) });
-                bounds.extend({ lat, lng });
-                map.fitBounds(bounds);
-            }
-        }
-
-        // Get Directions
-        if (item.origin_location?.address && item.destination_location?.address) {
-            directionsService.route({
-                origin: item.origin_location.address,
-                destination: item.destination_location.address,
-                travelMode: google.maps.TravelMode.DRIVING,
-            }, (result, status) => {
-                if (status === google.maps.DirectionsStatus.OK) {
-                    directionsRenderer.setDirections(result);
-                }
-            });
-        }
-
-        setMapLoaded(true);
-    }, [jo, item]);
-
-    return (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[300] p-4 md:p-10">
-            <div className="bg-[#0f172a] border border-white/10 rounded-[3rem] w-full max-w-6xl h-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-                {/* Modal Header */}
-                <div className="p-8 border-b border-white/10 flex justify-between items-center bg-[#151f32]/50 backdrop-blur-md">
-                    <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center">
-                            <Navigation className="w-7 h-7 text-blue-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-black text-white italic tracking-tight uppercase">{jo.jo_number}</h3>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-                                Tracking Unit: <span className="text-blue-400">{jo.fleets?.plate_number}</span> • Driver: <span className="text-emerald-400">{jo.drivers?.name}</span>
-                            </p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {/* Modal Content */}
-                <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-                    {/* Map Area */}
-                    <div className="flex-[2] relative bg-slate-900 border-r border-white/5">
-                        <div ref={mapRef} className="absolute inset-0" />
-                        {!mapLoaded && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm z-10">
-                                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-                            </div>
-                        )}
-                        
-                        {/* Legend Overlay */}
-                        <div className="absolute bottom-6 left-6 p-4 bg-[#0a0f1e]/80 backdrop-blur-md border border-white/10 rounded-2xl z-20 space-y-2">
-                             <div className="flex items-center gap-3">
-                                 <div className="w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                                 <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Pickup: {item.origin_location?.name}</p>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                 <div className="w-3 h-3 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,44,44,0.5)]" />
-                                 <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Dropoff: {item.destination_location?.name}</p>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                 <div className="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                 <p className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Posisi Armada (Live)</p>
-                             </div>
-                        </div>
-                    </div>
-
-                    {/* Timeline & Details */}
-                    <div className="lg:w-[400px] flex flex-col bg-[#111827]/30">
-                        <div className="p-8 overflow-y-auto flex-1">
-                            <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                                <Clock className="w-3.5 h-3.5" /> Riwayat Tracking (Pod)
-                            </p>
-                            
-                            <div className="space-y-8 relative">
-                                {/* Vertical Line */}
-                                <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-white/5" />
-                                
-                                {jo.tracking_updates && jo.tracking_updates.length > 0 ? (
-                                    jo.tracking_updates
-                                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                        .map((update, idx) => (
-                                            <div key={update.id} className="relative pl-8">
-                                                <div className={`absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 border-[#111827] z-10 ${idx === 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-700'}`} />
-                                                <p className={`text-xs font-black uppercase tracking-tight ${idx === 0 ? 'text-blue-400' : 'text-slate-300'}`}>
-                                                    {update.status_update || 'Update Lokasi'}
-                                                </p>
-                                                <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                                                    {new Date(update.created_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
-                                                </p>
-                                                {idx === 0 && (
-                                                    <span className="mt-2 inline-block px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8px] font-black uppercase rounded">Latest Update</span>
-                                                )}
-                                            </div>
-                                        ))
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center py-10 opacity-30">
-                                        <TrendingUp className="w-10 h-10 mb-4" />
-                                        <p className="text-[10px] font-black text-center uppercase tracking-widest">Belum ada data tracking</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Customer Info Footer */}
-                        <div className="p-8 bg-black/20 border-t border-white/5">
-                            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-3">Customer Tracking Info</p>
-                            <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                                <p className="text-xs font-black text-white">{wo.customers?.company_name || wo.customers?.name}</p>
-                                <p className="text-[10px] text-slate-500 mt-1">{wo.wo_number} • {item.truck_type}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}

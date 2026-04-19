@@ -29,16 +29,16 @@ export async function sendWhatsAppMessage(to: string, body: string) {
 
         console.log(`WhatsApp message sent: ${message.sid}`);
         return { success: true, sid: message.sid };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error sending WhatsApp message:', error);
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }
 
 export async function sendWhatsAppTemplate(
     to: string,
     templateName: string,
-    components?: any[]
+    components?: Record<string, unknown>
 ) {
     try {
         let formattedNumber = to.replace(/\D/g, '');

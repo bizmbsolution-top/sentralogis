@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// =====================================================
-// INIT SUPABASE (SERVER SIDE)
-// =====================================================
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // WAJIB pakai service role
-);
+import { createAdminClient } from '@/lib/supabase/admin';
 
 // =====================================================
 // POST: ACCEPT JOB
@@ -16,6 +8,7 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { token } = body;
+        const supabase = createAdminClient();
 
         console.log("Accept JO request:", token);
 

@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
     FileText, ShieldCheck, Target, Clock, Activity, 
     Search, RefreshCw, LayoutGrid, CheckCircle2, 
     AlertCircle, FilePlus2, ArrowRight, Save, 
     ChevronDown, ChevronUp, MapPin, Building2,
-    CheckCircle, XCircle, Loader2, Filter
+    CheckCircle, XCircle, Loader2, Filter, LogOut
 } from "lucide-react";
 
 // =====================================================
@@ -44,6 +44,7 @@ type ClearanceItem = {
 // MAIN COMPONENT
 // =====================================================
 export default function SBUClearancesPage() {
+    const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [items, setItems] = useState<ClearanceItem[]>([]);
@@ -123,6 +124,16 @@ export default function SBUClearancesPage() {
         }
     };
 
+    const handleLogout = async () => {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            window.location.href = "/";
+        } catch (error: any) {
+            toast.error("Logout gagal: " + error.message);
+        }
+    };
+
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0f1e]">
             <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
@@ -158,12 +169,21 @@ export default function SBUClearancesPage() {
                             <p className="text-[10px] font-black text-slate-500 tracking-[0.3em] uppercase opacity-60">Customs & Regulatory Dashboard</p>
                         </div>
                     </div>
-                    <button 
-                        onClick={fetchData}
-                        className="bg-white/5 hover:bg-white/10 p-3 rounded-xl transition-all border border-white/10"
-                    >
-                        <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={fetchData}
+                            className="bg-white/5 hover:bg-white/10 p-3 rounded-xl transition-all border border-white/10"
+                        >
+                            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button 
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20 group"
+                        >
+                            <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Logout</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { Loader2, Printer, MapPin, Truck, User, Calendar, Hash, FileText, Navigation } from "lucide-react";
 
 export default function DeliveryNotePage() {
+    const supabase = createClient();
     const params = useParams();
     const [jo, setJo] = useState<any>(null);
     const [loading, setLoading] = useState(true);

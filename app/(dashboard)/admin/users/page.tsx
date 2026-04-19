@@ -11,161 +11,241 @@ import {
   MoreVertical, Edit2, Trash2, 
   CheckCircle2, XCircle, Mail, Clock,
   ChevronRight, ChevronLeft, LayoutGrid, HardHat, 
-  Truck, Ship, Banknote, RefreshCw, LogOut, User
+  Truck, Ship, Banknote, RefreshCw, LogOut, User,
+  Building2, Save, X
 } from "lucide-react";
 
 type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
-  role: 'superadmin' | 'admin_sbu' | 'finance' | 'viewer';
+  role: 'superadmin' | 'director' | 'admin_wo' | 'admin_sbu' | 'admin_finance' | 'viewer';
+  organization_id: string | null;
+  organizations?: { name: string } | null;
   sbu_access: string[];
   is_active: boolean;
   created_at: string;
 };
 
-const ROLE_CONFIG = {
+const ROLE_CONFIG: any = {
   superadmin: {
-    label: 'Super Admin',
+    label: 'System Superadmin',
     color: 'text-rose-400',
     bg: 'bg-rose-400/10',
     border: 'border-rose-400/20',
-    icon: ShieldAlert
+    icon: ShieldAlert,
+    desc: 'Otoritas tertinggi Corporate / Holding.'
+  },
+  director: {
+    label: 'Superadmin (Director)',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-400/10',
+    border: 'border-emerald-400/20',
+    icon: ShieldCheck,
+    desc: 'Owner Apps / Direksi utama tenant.'
+  },
+  admin_wo: {
+    label: 'Admin Work Order',
+    color: 'text-indigo-400',
+    bg: 'bg-indigo-400/10',
+    border: 'border-indigo-400/20',
+    icon: Mail,
+    desc: 'Pengelola administrasi order & customer.'
   },
   admin_sbu: {
-    label: 'Admin SBU',
+    label: 'Admin SBU (Operation)',
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
     border: 'border-amber-400/20',
-    icon: ShieldCheck
+    icon: Truck,
+    desc: 'Pengelola armada, supir, dan planning.'
   },
-  finance: {
-    label: 'Finance',
+  admin_finance: {
+    label: 'Admin Finance (AP/AR)',
     color: 'text-blue-400',
     bg: 'bg-blue-400/10',
     border: 'border-blue-400/20',
-    icon: Banknote
+    icon: Banknote,
+    desc: 'Pengelola penagihan dan keuangan.'
   },
   viewer: {
-    label: 'Viewer',
+    label: 'Standard Viewer',
     color: 'text-slate-400',
     bg: 'bg-slate-400/10',
     border: 'border-slate-400/20',
-    icon: Shield
+    icon: Shield,
+    desc: 'Akses baca data terbatas.'
   }
 };
 
-// Placeholder for Globe2 since it might be missing in some lucide versions
-const Globe2 = (props: any) => <LayoutGrid {...props} />;
-
 const SBU_TYPES = [
   { id: 'trucking', label: 'Trucking', icon: Truck },
-  { id: 'clearances', label: 'Clearances', icon: Ship },
-  { id: 'warehouse', label: 'Warehouse', icon: LayoutGrid },
-  { id: 'forwarding', label: 'Forwarding', icon: Globe2 }
+  { id: 'warehouse', label: 'Warehouse', icon: LayoutGrid }
 ];
 
 export default function UserManagementPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
+  
+  const [showModal, setShowModal] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
   const [updating, setUpdating] = useState(false);
+  
   const [userProfile, setUserProfile] = useState<any>(null);
-
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast.success("Berhasil keluar!");
-      window.location.href = "/login";
-    } catch (error: any) {
-      toast.error("Gagal keluar: " + error.message);
-    }
-  };
+  const [formData, setFormData] = useState<any>({
+    id: "",
+    full_name: "",
+    email: "",
+    password: "", // Only for new users
+    role: "viewer",
+    organization_id: "",
+    sbu_access: []
+  });
 
   const fetchUserProfile = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        setUserProfile(data || { email: user.email, role: 'superadmin' });
+        const { data } = await supabase.from('profiles').select('*, organizations(name)').eq('id', user.id).single();
+        setUserProfile(data);
       }
-    } catch (error) {
-      console.error("Error fetching admin profile:", error);
-    }
+    } catch (error) { console.error(error); }
   }, []);
 
-  const fetchProfiles = useCallback(async () => {
+  const fetchInitialData = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // 1. Get current user profile first to determine filter
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: currentProfile } = await supabase
         .from('profiles')
-        .select('*')
+        .select('role, organization_id')
+        .eq('id', user.id)
+        .single();
+
+      // 2. Fetch Profiles with conditional filtering
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('*, organizations(name)')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setProfiles(data || []);
+      if (currentProfile?.role !== 'superadmin') {
+        profilesQuery = profilesQuery.eq('organization_id', currentProfile?.organization_id);
+      }
+
+      const { data: pData, error: pError } = await profilesQuery;
+      if (pError) throw pError;
+      setProfiles(pData || []);
+
+      // 3. Fetch Organizations with conditional filtering
+      let orgsQuery = supabase.from('organizations').select('id, name').order('name');
+      
+      if (currentProfile?.role !== 'superadmin') {
+        orgsQuery = orgsQuery.eq('id', currentProfile?.organization_id);
+      }
+
+      const { data: oData } = await orgsQuery;
+      setOrganizations(oData || []);
+
     } catch (error: any) {
-      toast.error("Gagal mengambil data user: " + error.message);
+      toast.error("Gagal sinkronisasi data kredensial.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const protectRoute = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        window.location.href = "/login";
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, sbu_access')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.role !== 'superadmin') {
-        toast.error("Akses Ditolak: Hanya Superadmin yang punya kendali atas Management User.");
-        if (profile?.role === 'admin_sbu' && profile.sbu_access?.includes('trucking')) {
-          window.location.href = "/sbu/trucking";
-        } else {
-          window.location.href = "/sbu-launchpad";
-        }
-      }
-    };
-
-    protectRoute();
-    fetchProfiles();
+    fetchInitialData();
     fetchUserProfile();
-  }, [fetchProfiles, fetchUserProfile]);
+  }, [fetchInitialData, fetchUserProfile]);
 
-  const handleUpdateRole = async (profileId: string, newRole: string, newSbuAccess: string[]) => {
+  const handleSaveUser = async () => {
+    if (!formData.email || !formData.full_name) return toast.error("Lengkapi data identitas.");
+    setUpdating(true);
     try {
-      setUpdating(true);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          role: newRole,
-          sbu_access: newSbuAccess,
+      if (isEdit) {
+        // Update Profile
+        const { error } = await supabase.from('profiles').update({
+          full_name: formData.full_name,
+          role: formData.role,
+          organization_id: formData.organization_id || null,
+          sbu_access: formData.sbu_access,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', profileId);
-
-      if (error) throw error;
-      
-      toast.success("Izin User Berhasil Diperbarui!");
-      setShowEditModal(false);
-      fetchProfiles();
+        }).eq('id', formData.id);
+        if (error) throw error;
+        toast.success("Informasi profil diperbarui.");
+      } else {
+        // Create User (Auth requires Edge Function or Admin Client generally)
+        toast.loading("Memproses pendaftaran user baru...");
+        const res = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Gagal membuat user");
+        toast.dismiss();
+        toast.success("User baru berhasil didaftarkan.");
+      }
+      setShowModal(false);
+      fetchInitialData();
     } catch (error: any) {
-      toast.error("Gagal perbarui role: " + error.message);
+      toast.error(error.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openEdit = (p: Profile) => {
+    setFormData({
+      id: p.id,
+      full_name: p.full_name || "",
+      email: p.email || "",
+      role: p.role,
+      organization_id: p.organization_id || "",
+      sbu_access: p.sbu_access || []
+    });
+    setIsEdit(true);
+    setShowModal(true);
+  };
+
+  const openAdd = () => {
+    setFormData({
+      id: "",
+      full_name: "",
+      email: "",
+      password: "",
+      role: "viewer",
+      organization_id: userProfile?.role === 'superadmin' ? "" : userProfile?.organization_id,
+      sbu_access: []
+    });
+    setIsEdit(false);
+    setShowModal(true);
+  };
+
+  const handleDeleteUser = async (id: string, name: string) => {
+    if (id === userProfile?.id) return toast.error("Anda tidak bisa menghapus diri sendiri.");
+    if (!confirm(`Hapus personel ${name}? Akses user ini akan dicabut permanen.`)) return;
+    
+    setUpdating(true);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: id })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || result.message || "Gagal menghapus user");
+      
+      toast.success("Personel berhasil dihapus.");
+      fetchInitialData();
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setUpdating(false);
     }
@@ -174,295 +254,280 @@ export default function UserManagementPage() {
   const filteredProfiles = profiles.filter(p => 
     p.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.role.toLowerCase().includes(searchTerm.toLowerCase())
+    p.organizations?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0f18] text-white p-4 lg:p-10 font-sans selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-[#05080F] text-white p-6 lg:p-12 font-sans selection:bg-emerald-500/30">
       <Toaster position="top-right" />
 
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-             <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/20">
-                <Users className="w-6 h-6 text-white" />
+      {/* 🏛️ HEADER / NAVIGATION */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
+        <div className="space-y-3">
+          <div className="flex items-center gap-4">
+             <div className="w-14 h-14 bg-emerald-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/20">
+                <ShieldCheck className="w-7 h-7 text-white" />
              </div>
-             <h1 className="text-4xl font-black italic tracking-tighter uppercase">Team Controls<span className="text-emerald-500">.</span></h1>
+             <div>
+                <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Manajemen Otoritas</h1>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mt-2">Identity & Access Management (IAM)</p>
+             </div>
           </div>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] ml-1">Centralized RBAC Management System v1.0</p>
-        </div>
-
-        <div className="flex items-center gap-6">
-          {/* Admin Floating Profile */}
-          <div className="flex items-center gap-6 bg-slate-900/50 backdrop-blur-xl border border-white/5 py-2 pl-2 pr-6 rounded-full shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <User className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-[10px] font-black text-white uppercase tracking-tighter line-clamp-1">{userProfile?.full_name || 'Admin Sentralogis'}</p>
-                <p className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-widest">{userProfile?.role || 'Superadmin'}</p>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
-            <button
-              onClick={handleLogout}
-              className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-all font-bold active:scale-95 text-[10px] uppercase tracking-widest"
-            >
-              <LogOut className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-6 mb-10">
-        <div className="flex items-center gap-3">
-          <Link 
-            href="/admin"
-            className="flex items-center gap-2 px-6 py-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-bold text-slate-300 active:scale-95 text-xs"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Main Dashboard
-          </Link>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
+          {(userProfile?.role === 'superadmin' || userProfile?.role === 'director') && (
+            <button 
+              onClick={openAdd}
+              className="h-14 bg-emerald-600 hover:bg-emerald-500 text-white px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/10 active:scale-95 flex items-center gap-3"
+            >
+              <UserPlus className="w-4 h-4" /> Tambah Personel
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 🔍 CONTROLS */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
+         <div className="flex items-center gap-3 w-full md:w-auto">
+            <Link href="/admin" className="h-14 px-6 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all">
+               <ChevronLeft className="w-4 h-4" /> Beranda Utama
+            </Link>
+         </div>
+         <div className="relative group w-full md:w-[400px]">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
             <input 
               type="text" 
-              placeholder="Search user or role..."
-              className="bg-white/5 border border-white/10 rounded-2xl pl-12 pr-6 py-4 text-sm font-bold focus:border-emerald-500/50 outline-none w-full md:w-80 transition-all"
+              placeholder="Cari user, email, atau organisasi..."
+              className="w-full h-14 bg-white/5 border border-white/5 rounded-2xl pl-16 pr-6 text-[11px] font-black uppercase tracking-widest outline-none focus:border-emerald-500/50 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-          <button 
-            onClick={fetchProfiles}
-            className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all active:scale-95"
-          >
-            <RefreshCw className={`w-5 h-5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+         </div>
       </div>
 
-      {/* USER LIST */}
-      <div className="grid grid-cols-1 gap-4">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-50">
-            <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-            <p className="text-[10px] font-black uppercase tracking-widest italic">Decrypting User Data...</p>
-          </div>
-        ) : filteredProfiles.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4 bg-white/5 border border-dashed border-white/10 rounded-[3rem]">
-            <Search className="w-12 h-12 text-slate-700" />
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-sm italic">No users matching search found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-y-3">
+      {/* 📊 USER DIRECTORY */}
+      <div className="bg-slate-900/30 backdrop-blur-3xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
+         {loading ? (
+           <div className="py-40 flex flex-col items-center justify-center gap-6 opacity-30">
+              <RefreshCw className="w-12 h-12 animate-spin" />
+              <p className="text-[10px] font-black uppercase tracking-widest italic">Sinkronisasi Data...</p>
+           </div>
+         ) : (
+           <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left">
-                  <th className="px-8 pb-4">Full Identity</th>
-                  <th className="px-8 pb-4">System Role</th>
-                  <th className="px-8 pb-4">Module Access</th>
-                  <th className="px-8 pb-4 text-right">Operational Actions</th>
-                </tr>
+                 <tr className="bg-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    <th className="px-10 py-6">Profil Pengguna</th>
+                    <th className="px-10 py-6">Organisasi</th>
+                    <th className="px-10 py-6">Level Otoritas</th>
+                    <th className="px-10 py-6 text-right">Tindakan</th>
+                 </tr>
               </thead>
-              <tbody>
-                {filteredProfiles.map((p) => {
-                  const r = ROLE_CONFIG[p.role];
-                  return (
-                    <tr key={p.id} className="group bg-white/5 hover:bg-white/10 transition-all rounded-3xl border border-white/5">
-                      <td className="px-8 py-6 rounded-l-[2rem]">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-xl font-black italic shadow-inner">
-                            {p.full_name?.[0] || p.email?.[0]?.toUpperCase()}
-                          </div>
-                          <div className="space-y-1">
-                            <p className="font-black text-white italic tracking-tight">{p.full_name || 'Guest User'}</p>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                              <Mail className="w-3 h-3" /> {p.email}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${r.bg} ${r.border} ${r.color}`}>
-                          <r.icon className="w-4 h-4" />
-                          <span className="text-[10px] font-black uppercase tracking-widest">{r.label}</span>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <div className="flex flex-wrap gap-2">
-                          {(p.sbu_access || []).map(s => (
-                            <span key={s} className="px-3 py-1 bg-white/5 border border-white/5 rounded-lg text-[9px] font-black uppercase text-slate-400 tracking-widest">
-                              {s}
-                            </span>
-                          ))}
-                          {(!p.sbu_access || p.sbu_access.length === 0) && (
-                            <span className="text-[9px] font-black text-slate-600 italic tracking-widest">RESTRICTED ACCESS</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 rounded-r-[2rem] text-right">
-                        <button 
-                          onClick={() => {
-                            setSelectedProfile(p);
-                            setShowEditModal(true);
-                          }}
-                          className="p-3 bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 rounded-xl hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-white/5">
+                 {filteredProfiles.map((p) => {
+                    const r = ROLE_CONFIG[p.role] || ROLE_CONFIG.viewer;
+                    return (
+                      <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
+                         <td className="px-10 py-8">
+                            <div className="flex items-center gap-5">
+                               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-lg font-black italic shadow-inner">
+                                  {p.full_name?.[0] || p.email?.[0]?.toUpperCase()}
+                               </div>
+                               <div>
+                                  <p className="text-sm font-black italic uppercase tracking-tight text-white">{p.full_name || 'Tanpa Nama'}</p>
+                                  <p className="text-[10px] font-bold text-slate-500 tracking-wider lowercase mt-1">{p.email}</p>
+                               </div>
+                            </div>
+                         </td>
+                         <td className="px-10 py-8">
+                            <div className="flex items-center gap-3">
+                               <Building2 className="w-4 h-4 text-slate-600" />
+                               <span className="text-[11px] font-black font-mono text-slate-400 uppercase tracking-wider">
+                                  {p.organizations?.name || 'SENTRALOGIS Holding'}
+                               </span>
+                            </div>
+                         </td>
+                          <td className="px-10 py-8">
+                             <div className={`inline-flex items-center gap-3 px-4 py-2 rounded-xl border ${r.bg} ${r.border} ${r.color}`}>
+                                <r.icon className="w-4 h-4" />
+                                <div className="flex flex-col">
+                                   <span className="text-[10px] font-black uppercase tracking-widest">{r.label}</span>
+                                   {p.role === 'director' && (
+                                     <span className="text-[8px] font-black text-rose-500 uppercase tracking-tighter mt-0.5 animate-pulse">Owner Apps</span>
+                                   )}
+                                </div>
+                             </div>
+                          </td>
+                         <td className="px-10 py-8 text-right">
+                            {(userProfile?.role === 'superadmin' || userProfile?.role === 'director') && (
+                               <div className="flex items-center justify-end gap-3">
+                                  <button 
+                                    onClick={() => openEdit(p)}
+                                    className="w-10 h-10 bg-white/5 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90"
+                                    title="Edit Profile"
+                                  >
+                                     <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteUser(p.id, p.full_name || p.email || 'User')}
+                                    className="w-10 h-10 bg-white/5 hover:bg-rose-600 text-slate-400 hover:text-white rounded-xl flex items-center justify-center transition-all border border-white/5 active:scale-90"
+                                    title="Hapus Personel"
+                                  >
+                                     <Trash2 className="w-4 h-4" />
+                                  </button>
+                               </div>
+                            )}
+                         </td>
+                      </tr>
+                    );
+                 })}
               </tbody>
-            </table>
-          </div>
-        )}
+           </table>
+         )}
       </div>
 
-      {/* EDIT MODAL */}
-      {showEditModal && selectedProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-10 pointer-events-auto">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowEditModal(false)} />
-          <div className="relative w-full max-w-2xl bg-[#111827] rounded-[3rem] border border-white/10 shadow-3xl overflow-hidden animate-in fade-in zoom-in duration-300">
-            {/* Modal Header */}
-            <div className="p-8 border-b border-white/5 bg-gradient-to-r from-emerald-600/5 to-transparent flex justify-between items-center">
-              <div className="space-y-1">
-                <h3 className="text-2xl font-black italic tracking-tighter uppercase italic">Secure Role Assignment</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">User Identity: {selectedProfile.email}</p>
-              </div>
-              <button 
-                onClick={() => setShowEditModal(false)}
-                className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all"
-              >
-                <XCircle className="w-6 h-6 text-slate-500" />
-              </button>
-            </div>
-
-            <div className="p-8 space-y-8">
-              {/* Role Selection */}
-              <div className="space-y-4">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> Select Authority Level
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(ROLE_CONFIG).map(([role, config]) => (
-                    <button
-                      key={role}
-                      onClick={() => setSelectedProfile({...selectedProfile, role: role as any})}
-                      className={`flex items-center gap-4 p-5 rounded-3xl border transition-all text-left group ${
-                        selectedProfile.role === role 
-                          ? config.bg + ' ' + config.border + ' ' + config.color
-                          : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/20'
-                      }`}
-                    >
-                      <config.icon className={`w-8 h-8 ${selectedProfile.role === role ? 'scale-110' : 'group-hover:scale-110'} transition-all`} />
-                      <div>
-                        <p className="font-black uppercase tracking-widest text-xs italic">{config.label}</p>
-                        <p className="text-[9px] font-bold opacity-60 mt-1 uppercase tracking-tight">System Access Permission</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+      {/* 🚀 FORM MODAL */}
+      {showModal && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-6">
+           <div className="absolute inset-0 bg-[#05080F]/80 backdrop-blur-xl" onClick={() => setShowModal(false)} />
+           <div className="relative w-full max-w-3xl bg-[#0F172A] rounded-[3.5rem] border border-white/10 shadow-3xl overflow-hidden animate-in zoom-in-95 duration-300">
+              {/* Modal Header */}
+              <div className="p-10 border-b border-white/5 bg-gradient-to-r from-emerald-600/[0.03] to-transparent flex justify-between items-center">
+                 <div>
+                    <h3 className="text-3xl font-black italic uppercase tracking-tighter italic">Kredensial Personel</h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">ID: {isEdit ? formData.id : 'Pendaftaran Baru'}</p>
+                 </div>
+                 <button onClick={() => setShowModal(false)} className="w-14 h-14 bg-white/5 rounded-3xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
+                    <X className="w-6 h-6" />
+                 </button>
               </div>
 
-              {/* SBU Access Selection */}
-              <div className="space-y-4 pt-4">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4" /> Configure SBU Permissions
-                </label>
-                <div className="grid grid-cols-4 gap-4">
-                  {SBU_TYPES.map(sbu => {
-                    const isActive = selectedProfile.sbu_access.includes(sbu.id);
-                    return (
-                      <button
-                        key={sbu.id}
-                        onClick={() => {
-                          const current = [...selectedProfile.sbu_access];
-                          const idx = current.indexOf(sbu.id);
-                          if (idx > -1) current.splice(idx, 1);
-                          else current.push(sbu.id);
-                          setSelectedProfile({...selectedProfile, sbu_access: current});
-                        }}
-                        className={`p-6 rounded-[2rem] border transition-all flex flex-col items-center gap-3 active:scale-95 ${
-                          isActive 
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
-                            : 'bg-white/5 border-white/5 text-slate-500 hover:border-white/10'
-                        }`}
-                      >
-                        <sbu.icon className={`w-6 h-6 ${isActive ? 'scale-110' : ''} transition-all`} />
-                        <span className="text-[10px] font-black uppercase tracking-widest italic">{sbu.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+              <div className="p-10 space-y-10 max-h-[70vh] overflow-y-auto">
+                 {/* ID & Org */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                       <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Nama Lengkap</label>
+                       <input 
+                         type="text" 
+                         className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none focus:border-emerald-500/50"
+                         value={formData.full_name}
+                         onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                       />
+                    </div>
+                    <div className="space-y-3">
+                       <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Email Akun</label>
+                       <input 
+                         type="email" 
+                         disabled={isEdit}
+                         className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none disabled:opacity-30"
+                         value={formData.email}
+                         onChange={(e) => setFormData({...formData, email: e.target.value})}
+                       />
+                    </div>
+                 </div>
 
-              {/* Save Button */}
-              <div className="pt-8">
-                <button 
-                  disabled={updating}
-                  onClick={() => handleUpdateRole(selectedProfile.id, selectedProfile.role, selectedProfile.sbu_access)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] italic flex items-center justify-center gap-4 transition-all shadow-xl shadow-emerald-500/20 active:scale-[0.98]"
-                >
-                  {updating ? (
-                    <><RefreshCw className="w-5 h-5 animate-spin" /> Finalizing Permissions...</>
-                  ) : (
-                    <><ShieldCheck className="w-5 h-5" /> Commit Permissions Change</>
-                  )}
-                </button>
+                 {!isEdit && (
+                   <div className="space-y-3">
+                      <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Kata Sandi Awal</label>
+                      <input 
+                        type="password" 
+                        className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none focus:border-emerald-500/50 tracking-widest"
+                        placeholder="••••••••"
+                        value={formData.password}
+                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      />
+                   </div>
+                 )}
+
+                 {/* Role & Org Selector */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                       <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Afiliasi Organisasi</label>
+                       <select 
+                         disabled={userProfile?.role !== 'superadmin'}
+                         className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none"
+                         value={formData.organization_id}
+                         onChange={(e) => setFormData({...formData, organization_id: e.target.value})}
+                       >
+                          <option value="">Holding / Internal</option>
+                          {organizations.map(o => (
+                            <option key={o.id} value={o.id} className="text-slate-900">{o.name}</option>
+                          ))}
+                       </select>
+                    </div>
+                    <div className="space-y-3">
+                       <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Level Akses</label>
+                       <select 
+                         className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none"
+                         value={formData.role}
+                         onChange={(e) => setFormData({...formData, role: e.target.value})}
+                       >
+                          {Object.entries(ROLE_CONFIG)
+                            .filter(([key]) => userProfile?.role === 'superadmin' || key !== 'superadmin')
+                            .map(([key, cfg]: any) => (
+                             <option key={key} value={key} className="text-slate-900">{cfg.label}</option>
+                          ))}
+                       </select>
+                    </div>
+                 </div>
+
+                 {/* SBU ACCESS */}
+                 <div className="space-y-4">
+                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Izin Akses Modul SBU</label>
+                    <div className="grid grid-cols-2 gap-4">
+                       {SBU_TYPES.map(sbu => {
+                          const active = formData.sbu_access.includes(sbu.id);
+                          return (
+                            <button 
+                              key={sbu.id}
+                              onClick={() => {
+                                 let updated = [...formData.sbu_access];
+                                 if (active) updated = updated.filter(x => x !== sbu.id);
+                                 else updated.push(sbu.id);
+                                 setFormData({...formData, sbu_access: updated});
+                              }}
+                              className={`h-20 rounded-3xl border flex items-center justify-center gap-4 transition-all ${active ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-white/5 border-white/5 text-slate-500'}`}
+                            >
+                               <sbu.icon className="w-5 h-5" />
+                               <span className="text-[11px] font-black uppercase tracking-widest">{sbu.label}</span>
+                            </button>
+                          )
+                       })}
+                    </div>
+                 </div>
+
+                 {/* SUBMIT */}
+                 <button 
+                   onClick={handleSaveUser}
+                   disabled={updating}
+                   className="w-full h-20 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] text-sm font-black uppercase tracking-[0.3em] italic flex items-center justify-center gap-4 transition-all shadow-2xl shadow-emerald-500/20 active:scale-95"
+                 >
+                    {updating ? <RefreshCw className="animate-spin" /> : <Save className="w-6 h-6" />}
+                    {isEdit ? "Perbarui Kredensial" : "Daftarkan Personel Baru"}
+                 </button>
               </div>
-            </div>
-          </div>
+           </div>
         </div>
       )}
 
-      {/* FOOTER STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12 p-8 bg-white/5 rounded-[3rem] border border-white/5">
-        <div className="flex items-center gap-4 px-4 border-r border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Staff</p>
-            <p className="text-xl font-black italic">{profiles.length}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 px-4 border-r border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Superadmins</p>
-            <p className="text-xl font-black italic">{profiles.filter(p => p.role === 'superadmin').length}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 px-4 border-r border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-            <HardHat className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Admin SBUs</p>
-            <p className="text-xl font-black italic">{profiles.filter(p => p.role === 'admin_sbu').length}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 px-4">
-          <div className="w-10 h-10 rounded-xl bg-slate-500/10 flex items-center justify-center text-slate-500">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pending Config</p>
-            <p className="text-xl font-black italic">{profiles.filter(p => p.role === 'viewer').length}</p>
-          </div>
-        </div>
+      {/* 📊 FOOTER STATS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 mt-20 p-10 bg-white/5 rounded-[3.5rem] border border-white/5">
+         {[
+          { label: 'Total Personel', val: profiles.length, icon: Users, color: 'text-blue-500' },
+          { label: 'Holding Super', val: profiles.filter(p => p.role === 'superadmin').length, icon: ShieldAlert, color: 'text-rose-500' },
+          { label: 'Owners / Directors', val: profiles.filter(p => p.role === 'director').length, icon: ShieldCheck, color: 'text-emerald-500' },
+          { label: 'Finance Team', val: profiles.filter(p => p.role === 'admin_finance').length, icon: Banknote, color: 'text-indigo-500' }
+         ].map((stat, i) => (
+           <div key={i} className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                 <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</p>
+              </div>
+              <p className="text-4xl font-black italic tracking-tighter">{stat.val}</p>
+           </div>
+         ))}
       </div>
+      
     </div>
   );
 }

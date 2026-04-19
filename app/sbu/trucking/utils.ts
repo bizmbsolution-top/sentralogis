@@ -11,6 +11,7 @@ export function getStatusConfig(opStatus: string) {
         case 'rejected': return { label: 'REJECTED', color: 'text-red-400', dot: 'bg-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20', stripe: 'bg-red-500' };
         case 'need_approval': return { label: 'NEED APPROVAL', color: 'text-amber-400', dot: 'bg-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30', stripe: 'bg-amber-400' };
         case 'approved': return { label: 'APPROVED', color: 'text-emerald-400', dot: 'bg-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', stripe: 'bg-emerald-500' };
+        case 'billing_revision': return { label: 'BILLING REVISION', color: 'text-rose-600', dot: 'bg-rose-500', bg: 'bg-rose-50', border: 'border-rose-200', stripe: 'bg-rose-600' };
         default: return { label: 'DRAFT', color: 'text-slate-300', dot: 'bg-slate-400', bg: 'bg-slate-400/10', border: 'border-slate-500/30', stripe: 'bg-slate-500' };
     }
 }
@@ -30,14 +31,18 @@ export function getOperationalStatus(item: any): string {
     const assignments = item.assignments || [];
     const assignedCount = assignments.length;
     
-    const allDone = assignedCount > 0 && assignments.every((a: any) => a.status === 'delivered');
-    if (allDone) return 'finished';
+    const hasRevision = assignments.some((a: any) => a.billing_status === 'rejected');
+    if (hasRevision) return 'billing_revision';
+
+    const hasSettledInfo = assignedCount > 0 && assignments.some((a: any) => a.status === 'delivered');
+    if (hasSettledInfo) return 'finished';
     
-    const hasLinkSent = assignments.some((a: any) => a.is_link_sent);
-    if (hasLinkSent) return 'on_journey';
+    // Strict definition of On Journey per user request (driver must have clicked accepted)
+    const hasActive = assignments.some((a: any) => ['accepted', 'picking_up', 'delivering'].includes(a.status));
+    if (hasActive) return 'on_journey';
     
     if (status === 'rejected') return 'rejected';
     if (status === 'pending_armada_check') return 'need_approval';
-    if (status === 'approved') return 'approved';
+    if (status === 'approved' || (assignedCount > 0 && assignedCount >= item.quantity)) return 'approved';
     return 'draft';
 }

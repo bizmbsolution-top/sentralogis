@@ -1,22 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google"; // Switch to Atlas Standard Font
 import { Toaster } from "react-hot-toast";
 import { GoogleMapsProvider } from "@/lib/google-maps-context";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"], // High weights for Atlas style
 });
 
 export const metadata: Metadata = {
-  title: "Sentralogis - Platform Manajemen Trucking",
-  description: "Kelola armada, tracking real-time, dan invoice otomatis dalam satu platform",
+  title: "Sentralogis. - Operational Dashboard",
+  description: "Advanced Multi-Tenant Logistics Platform",
 };
 
 export default function RootLayout({
@@ -27,9 +23,9 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${plusJakartaSans.variable} h-full antialiased font-sans`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col font-sans">
         <GoogleMapsProvider>
           {children}
         </GoogleMapsProvider>

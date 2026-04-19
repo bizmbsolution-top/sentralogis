@@ -30,7 +30,7 @@ export async function PUT(req: Request) {
     const { 
       id, customer_id, customer_phone, 
       order_date, execution_date, notes, status, 
-      required_units, sbu_type, items 
+      required_units, sbu_type, items, organization_id 
     } = await req.json();
 
     if (!id) return NextResponse.json({ success: false, error: "Missing ID" }, { status: 400 });
@@ -46,7 +46,8 @@ export async function PUT(req: Request) {
         notes: notes || null,
         status,
         required_units,
-        sbu_type
+        sbu_type,
+        organization_id: organization_id || null
       })
       .eq('id', id);
 
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       customer_id, customer_phone, order_date, execution_date,
-      notes, status, source, created_by, sbu_type, items
+      notes, status, source, created_by, sbu_type, items, organization_id
     } = body
 
     if (!customer_id) return NextResponse.json({ success: false, error: "Customer ID wajib" }, { status: 400 });
@@ -110,7 +111,8 @@ export async function POST(request: NextRequest) {
         status: status || 'draft', 
         source: source || 'admin_cs',
         created_by: created_by || 'Admin',
-        sbu_type: sbu_type || 'trucking'
+        sbu_type: sbu_type || 'trucking',
+        organization_id: organization_id || null
       })
       .select().single()
 

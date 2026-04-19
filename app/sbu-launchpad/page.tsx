@@ -1,229 +1,217 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import {
   Truck, FileText, Ship, Warehouse, HardHat,
   ChevronRight, Activity, Globe2, Layers,
   LayoutGrid, RefreshCw, BarChart3, TrendingUp, History,
-  ArrowUpRight, Target, Zap, Wallet
+  ArrowUpRight, Target, Zap, Wallet, Home,
+  Package, Navigation, User, Search, Bell,
+  PlusCircle, Sparkles, Box, ShieldCheck, Globe
 } from "lucide-react";
 import Link from "next/link";
+import SBUActivationModal from "./components/SBUActivationModal";
+import toast, { Toaster } from "react-hot-toast";
 
+/**
+ * SBU LAUNCHPAD: ATLAS ENTERPRISE MARKETPLACE
+ * Fokus: Dynamic SBU Activation (Respecting Database `active_sbus`).
+ */
 const SBULaunchpad = () => {
-  const [stats, setStats] = useState({
-    trucking: 0,
-    clearances: 0,
-    forwarding: 0,
-    warehouse: 0,
-    project: 0
-  });
-
+  const supabase = createClient();
+   const [activeSbus, setActiveSbus] = useState<string[]>(['trucking']);
+  const [companyInfo, setCompanyInfo] = useState({ id: '', name: 'Subsidiary Loading...', logo: null });
   const [loading, setLoading] = useState(true);
 
+  // Activation State
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [selectedSbuForActivation, setSelectedSbuForActivation] = useState<any>(null);
+
   useEffect(() => {
-    const fetchLiveCounts = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
-          .from("work_order_items")
-          .select("sbu_type");
-        
-        if (error) throw error;
-
-        const counts = {
-          trucking: data.filter(i => i.sbu_type === 'trucking').length,
-          clearances: data.filter(i => i.sbu_type === 'clearances').length,
-          forwarding: 0,
-          warehouse: 0,
-          project: 0
-        };
-
-        setStats(counts);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*, companies(*)')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile?.companies) {
+            setCompanyInfo({ 
+              id: profile.companies.id,
+              name: profile.companies.name, 
+              logo: profile.companies.logo_url 
+            });
+            
+            // 🎯 SYNC DATA MODUL DARI DATABASE
+            if (profile.companies.active_sbus) {
+                setActiveSbus(profile.companies.active_sbus);
+            }
+          }
+        }
       } catch (err) {
-        console.error("Failed to fetch SBU counts:", err);
+        console.error("Matrix Sync Error", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchLiveCounts();
-  }, []);
+    fetchData();
+  }, [supabase]);
 
-  const sbuModules = [
-    {
-      id: 'trucking',
-      name: 'SBU Trucking',
-      subtitle: 'Surface Transport & Fleet',
-      icon: Truck,
-      color: 'blue',
-      status: 'High Load',
-      path: '/sbu/trucking',
-      metric: `${stats.trucking} Active`
+  const marketplaceModules = [
+    { 
+      group: 'SURFACES TRANSPORT & FLEET',
+      items: [
+        { id: 'trucking', title: 'TRUCKING OPS', desc: 'TACTICAL MISSION CONTROL', icon: Navigation, color: 'text-emerald-600', bg: 'bg-emerald-50', link: '/sbu/trucking' },
+        { id: 'fleet', title: 'FLEET HUB', desc: 'PILOT & UNIT MATRIX', icon: Truck, color: 'text-emerald-600', bg: 'bg-emerald-50', link: '/sbu/trucking/fleet' },
+      ]
     },
     {
-      id: 'clearances',
-      name: 'Customs Clearances',
-      subtitle: 'Documentation & Regulatory',
-      icon: FileText,
-      color: 'amber',
-      status: 'Processing',
-      path: '/sbu/clearances',
-      metric: `${stats.clearances} Pending`
+      group: 'CUSTOMS & COMPLIANCE GATEWAY',
+      items: [
+        { id: 'clearances', title: 'CLEARANCES', desc: 'EXPORT/IMPORT FILING', icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', link: '/sbu/clearances' },
+        { id: 'forwarding', title: 'FREIGHT SYNC', desc: 'INTERNATIONAL FORWARDING', icon: Ship, color: 'text-indigo-600', bg: 'bg-indigo-50', link: '#' },
+      ]
     },
     {
-      id: 'forwarding',
-      name: 'Freight Forwarding',
-      subtitle: 'Ocean & Air Logistics',
-      icon: Ship,
-      color: 'indigo',
-      status: 'Global Transit',
-      path: '#',
-      metric: `${stats.forwarding} Shipments`
-    },
-    {
-      id: 'warehouse',
-      name: 'SBU Warehouse',
-      subtitle: 'Inventory & Fulfillment',
-      icon: Warehouse,
-      color: 'emerald',
-      status: 'Optimized',
-      path: '#',
-      metric: `${stats.warehouse}% Cap.`
-    },
-    {
-      id: 'project',
-      name: 'Project Logistics',
-      subtitle: 'Heavy Lift & Industrial',
-      icon: HardHat,
-      color: 'rose',
-      status: 'Strategic',
-      path: '#',
-      metric: `${stats.project} Contracts`
+      group: 'INFRASTRUCTURE & STORAGE',
+      items: [
+        { id: 'warehouse', title: 'WAREHOUSING', desc: 'COLD & DRY STORAGE', icon: Warehouse, color: 'text-emerald-600', bg: 'bg-emerald-50', link: '#' },
+        { id: 'project', title: 'HEAVY LIFT', desc: 'PROJECT LOGISTICS', icon: HardHat, color: 'text-rose-600', bg: 'bg-rose-50', link: '#' },
+      ]
     }
   ];
 
   return (
-    <div className="min-h-screen bg-[#050a18] text-slate-200 p-8 pb-32 relative overflow-hidden font-sans">
-      {/* Tactical Grid Background */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none" 
-           style={{ 
-             backgroundImage: 'radial-gradient(circle at 2px 2px, #334155 1px, transparent 0)', 
-             backgroundSize: '40px 40px' 
-           }} 
-      />
+    <div className="min-h-screen bg-[#F1F5F9] text-[#1E293B] font-sans pb-32 overflow-x-hidden">
+      <Toaster position="top-right" />
       
-      {/* Decorative Orbs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="max-w-7xl mx-auto relative z-10">
-        {/* Command Header */}
-        <header className="mb-20 flex flex-col md:flex-row justify-between items-start md:items-end gap-10">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-2xl shadow-blue-600/40">
-                <Target className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em]">Central Command</span>
-            </div>
-            <h1 className="text-6xl font-black text-white italic tracking-tighter leading-none">
-              SENTRALOGIS <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">MISSION CONTROL</span>
-            </h1>
-            <p className="max-w-xl text-slate-500 text-sm font-bold uppercase tracking-widest leading-relaxed">
-              Managing 5 Strategic Business Units through a unified tactical engine. Choose a sector to initialize operations.
-            </p>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl">
-               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Network Health</p>
-               <div className="flex items-center gap-3">
-                  <div className="flex -space-x-2">
-                     {[1,2,3,4].map(i => (
-                       <div key={i} className="w-8 h-8 rounded-full border-2 border-[#050a18] bg-blue-500/20 flex items-center justify-center">
-                          <Zap className="w-3 h-3 text-blue-400" />
-                       </div>
-                     ))}
-                  </div>
-                  <span className="text-xl font-black text-white italic">SYNK_OK</span>
-               </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Launchpad Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {sbuModules.map((sbu) => (
-            <Link 
-              href={sbu.path} 
-              key={sbu.id}
-              className="group relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-[3rem] opacity-0 group-hover:opacity-100 transition-all duration-500 blur-xl" />
-              <div className="relative h-full bg-[#151f32]/60 backdrop-blur-2xl border border-white/5 p-10 rounded-[3.5rem] group-hover:border-white/20 transition-all duration-300 flex flex-col justify-between group-hover:-translate-y-2">
-                
-                <div className="flex justify-between items-start mb-12">
-                   <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center border transition-all duration-500 shadow-2xl ${
-                     sbu.color === 'blue' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500 group-hover:bg-blue-500 group-hover:text-white' :
-                     sbu.color === 'amber' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 group-hover:bg-amber-500 group-hover:text-white' :
-                     sbu.color === 'indigo' ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white' :
-                     sbu.color === 'emerald' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white' :
-                     'bg-rose-500/10 border-rose-500/20 text-rose-500 group-hover:bg-rose-500 group-hover:text-white'
-                   }`}>
-                      <sbu.icon className="w-8 h-8" />
-                   </div>
-                   <div className="flex flex-col items-end">
-                      <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                         <Activity className="w-3 h-3 text-emerald-500" /> {sbu.status}
-                      </div>
-                      <span className="text-lg font-black text-white italic mt-1">{sbu.metric}</span>
-                   </div>
-                </div>
-
-                <div className="space-y-4">
-                   <h2 className="text-3xl font-black text-white italic tracking-tighter leading-tight">{sbu.name}</h2>
-                   <p className="text-sm font-bold text-slate-500 uppercase tracking-widest leading-none">{sbu.subtitle}</p>
-                </div>
-
-                <div className="mt-12 flex justify-between items-center">
-                   <div className="w-1/2 h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full bg-${sbu.color}-500/50 w-full animate-progress`} />
-                   </div>
-                   <button className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-white group-hover:text-blue-400 transition-colors">
-                      Initialize <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                   </button>
-                </div>
-              </div>
-            </Link>
-          ))}
-          
-          {/* External Network Tile */}
-          <div className="bg-gradient-to-br from-blue-600/20 to-transparent border border-blue-500/10 p-10 rounded-[3.5rem] flex flex-col justify-center items-center text-center group cursor-pointer hover:border-blue-500/30 transition-all">
-             <Globe2 className="w-12 h-12 text-blue-500 mb-6 group-hover:rotate-12 transition-transform" />
-             <h3 className="text-xl font-black text-white italic tracking-tight uppercase">External Network</h3>
-             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-2">Connecting to 24 Partners</p>
-          </div>
+      {/* 🚀 PREMIUM TOP GLASS NAVIGATION */}
+      <nav className="sticky top-0 z-[100] bg-white/80 backdrop-blur-xl border-b border-slate-200 px-8 py-5 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 bg-[#1E293B] rounded-2xl flex items-center justify-center shadow-xl shadow-slate-900/20">
+              <ShieldCheck className="text-white w-7 h-7" />
+           </div>
+           <div>
+              <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none">Sentralogis<span className="text-emerald-500">.</span></h1>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                 <Globe2 className="w-3.5 h-3.5 text-emerald-500" strokeWidth={3} /> Unified Operational Matrix
+              </p>
+           </div>
         </div>
-      </div>
 
-      {/* Persistent Bottom Nav Overlay */}
-      <nav className="fixed bottom-0 inset-x-0 bg-[#0a0f1e]/80 backdrop-blur-2xl border-t border-white/5 p-4 pb-8 flex justify-around items-center z-50">
-        <Link href="/admin" className="flex flex-col items-center gap-1.5 text-slate-600 hover:text-white transition-colors">
-            <LayoutGrid className="w-5 h-5" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Admin</span>
-        </Link>
-        <div className="-mt-14 relative">
-            <button className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-[0_20px_40px_rgba(59,130,246,0.3)] text-white border-4 border-[#0a0f1e] active:scale-90 transition-all">
-                <RefreshCw className="w-8 h-8" />
-            </button>
+        <div className="flex items-center gap-4">
+           <div className="hidden md:flex flex-col items-end mr-2 text-right">
+              <span className="text-[10px] font-black uppercase text-slate-400">Authorized Subsidiary</span>
+              <span className="text-[12px] font-black italic uppercase text-[#1E293B] truncate max-w-[200px]">{companyInfo.name}</span>
+           </div>
+           <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+              <User className="w-5 h-5 text-slate-300" />
+           </div>
         </div>
-        <Link href="/finance" className="flex flex-col items-center gap-1.5 text-slate-600 hover:text-white transition-colors">
-            <Wallet className="w-5 h-5" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Finance</span>
-        </Link>
       </nav>
+
+      <main className="max-w-7xl mx-auto px-8 py-14 lg:py-20">
+        <div className="mb-20">
+           <h2 className="text-5xl font-black italic tracking-tighter uppercase text-[#1E293B] mb-2 leading-tight">Welcome Back, <br /> Operational Matrix</h2>
+           <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Select your SBU Command Node to continue</p>
+        </div>
+
+        {/* 🛒 MODULAR MARKETPLACE SECTIONS */}
+        <div className="space-y-24">
+           {marketplaceModules.map((section, idx) => (
+             <div key={idx} className="space-y-10 animate-in fade-in slide-in-from-bottom-5 duration-700" style={{ animationDelay: `${idx * 150}ms` }}>
+                <div className="flex items-center gap-4">
+                   <h2 className="text-[12px] font-black text-slate-300 uppercase tracking-[0.5em] italic shrink-0">{section.group}</h2>
+                   <div className="h-px flex-1 bg-slate-200" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
+                   {section.items.map((item) => {
+                     const isSubscribed = activeSbus.includes(item.id) || item.id === 'fleet';
+                     return (
+                       <div 
+                         key={item.id} 
+                         className={`group relative bg-white border border-slate-200 p-10 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.01)] transition-all overflow-hidden flex items-center justify-between ${!isSubscribed ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-2xl hover:border-[#1E293B] active:scale-[0.98]'}`}
+                       >
+                          <Link 
+                            href={isSubscribed ? item.link : '#'}
+                            className="flex items-center gap-8 relative z-10 flex-1"
+                          >
+                             <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center ${item.bg} ${item.color} shadow-sm border border-black/5 transition-all group-hover:scale-110 group-hover:rotate-3`}>
+                                <item.icon className="w-10 h-10" />
+                             </div>
+                             <div>
+                                <h3 className="text-[16px] font-black italic tracking-tighter uppercase text-[#1E293B] leading-none mb-2.5">{item.title}</h3>
+                                {isSubscribed ? (
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.desc}</p>
+                                ) : (
+                                   <div className="flex items-center gap-2">
+                                      <Zap className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
+                                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Available in Marketplace</p>
+                                   </div>
+                                )}
+                             </div>
+                          </Link>
+
+                          {isSubscribed ? (
+                            <div className="relative z-10 w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-[#1E293B] group-hover:text-white transition-all">
+                               <ArrowUpRight className="w-6 h-6" />
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                setSelectedSbuForActivation(item);
+                                setShowActivationModal(true);
+                              }}
+                              className="relative z-10 px-6 py-2.5 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all active:scale-95"
+                            >
+                              ACTIVATE
+                            </button>
+                          )}
+
+                          {isSubscribed && (
+                            <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-slate-50/30 rounded-full blur-3xl group-hover:bg-[#1E293B]/5 transition-all" />
+                          )}
+                       </div>
+                     );
+                   })}
+                </div>
+             </div>
+           ))}
+        </div>
+      </main>
+
+      {/* 📱 NAVIGATION CONSOLE */}
+      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur-3xl border-t border-slate-200 p-8 flex justify-around items-center z-[110]">
+          {[
+            { label: 'MARKET', icon: LayoutGrid, active: true },
+            { label: 'FINANCE', icon: Wallet, link: '/finance' },
+            { label: 'ADMIN', icon: ShieldCheck, link: '/admin' },
+          ].map((nav, i) => (
+             <button 
+              key={i} 
+              onClick={() => nav.link && (window.location.href = nav.link)}
+              className={`flex flex-col items-center gap-2.5 transition-all ${nav.active ? 'text-[#1E293B] scale-110' : 'text-slate-300 hover:text-slate-400'}`}
+             >
+                <nav.icon className="w-6 h-6" strokeWidth={nav.active ? 3 : 2} />
+                <span className="text-[9px] font-black tracking-[0.2em] uppercase">{nav.label}</span>
+             </button>
+          ))}
+      </footer>
+
+      {/* 🚀 SBU ACTIVATION MODAL */}
+      <SBUActivationModal 
+        show={showActivationModal}
+        onClose={() => setShowActivationModal(false)}
+        sbu={selectedSbuForActivation}
+        companyId={companyInfo.id}
+        currentActiveSbus={activeSbus}
+        onSuccess={(newSbus) => setActiveSbus(newSbus)}
+      />
     </div>
   );
 };
