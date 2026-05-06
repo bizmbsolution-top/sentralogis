@@ -229,7 +229,7 @@ export default function SBUTruckingPage() {
                             origin_location:origin_location_id (id, name, address, city, district, province, latitude, longitude),
                             destination_location:destination_location_id (id, name, address, city, district, province, latitude, longitude),
                             job_orders (
-                                id, work_order_item_id, fleet_id, driver_id, jo_number, driver_link_token, status, is_link_sent, created_at,
+                                id, wo_item_id, fleet_id, driver_id, jo_number, driver_link_token, status, is_link_sent, created_at,
                                 vendor_price, physical_doc_received, billing_status,
                                 external_driver_name, external_driver_phone, transporter_id,
                                 transporter:md_entities!transporter_id(name),

@@ -40,9 +40,24 @@ export default function AssignmentModal({ item, onClose, onSuccess }: Assignment
       setLoading(true);
 
       try {
-        const orgId = profile?.organization_id;
         const tenantId = profile?.tenant_id;
         
+        // 1. Fetch existing Job Orders first
+        const { data: jos } = await supabase
+          .from('job_orders')
+          .select('*, routes:job_routes(*)')
+          .eq('wo_item_id', item.id)
+          .eq('tenant_id', tenantId)
+          .not('status', 'eq', 'cancelled')
+          .order('jo_number', { ascending: true });
+
+        setExistingJOs(jos || []);
+
+        const assignedFleetIds = (jos || []).map(j => j.fleet_id).filter(Boolean);
+        const assignedDriverIds = (jos || []).map(j => j.driver_id).filter(Boolean);
+
+        // 2. Fetch available assets and transporters
+        // We use .or() to include specifically assigned items even if they are not 'available'
         const [fleetRes, driverRes, transporterRes] = await Promise.all([
           supabase.from('md_fleets').select(`
             id,
@@ -54,15 +69,15 @@ export default function AssignmentModal({ item, onClose, onSuccess }: Assignment
             status,
             md_fleet_types (type_name)
           `)
-          .eq('status', 'available')
           .eq('is_active', true)
-          .eq('tenant_id', tenantId),
+          .eq('tenant_id', tenantId)
+          .or(`status.eq.available${assignedFleetIds.length > 0 ? `,id.in.(${assignedFleetIds.join(',')})` : ''}`),
           
           supabase.from('md_drivers')
           .select('*')
-          .eq('status', 'available')
           .eq('is_active', true)
-          .eq('tenant_id', tenantId),
+          .eq('tenant_id', tenantId)
+          .or(`status.eq.available${assignedDriverIds.length > 0 ? `,id.in.(${assignedDriverIds.join(',')})` : ''}`),
           
           supabase.from('md_entities')
             .select('id, name, is_vendor, tenant_id')
@@ -73,9 +88,7 @@ export default function AssignmentModal({ item, onClose, onSuccess }: Assignment
         setFleets(fleetRes.data || []);
         setDrivers(driverRes.data || []);
         
-        // Transporters processing
         const tenantNameFromProfile = (profile?.tenants?.name || '').toLowerCase().trim();
-        
         const trans = (transporterRes.data || []).map(t => {
           const entityName = (t.name || '').toLowerCase();
           const isActuallyOwn = t.tenant_id === tenantId || (!t.is_vendor && (entityName.includes('internal') || entityName.includes('hq') || (tenantNameFromProfile && entityName.includes(tenantNameFromProfile))));
@@ -90,17 +103,7 @@ export default function AssignmentModal({ item, onClose, onSuccess }: Assignment
 
         setTransporters(trans);
 
-        // Fetch existing Job Orders
-        const { data: jos } = await supabase
-          .from('job_orders')
-          .select('*, routes:job_routes(*)')
-          .eq('wo_item_id', item.id)
-          .not('status', 'eq', 'cancelled')
-          .order('jo_number', { ascending: true });
-
-        setExistingJOs(jos || []);
-
-        // Initialize assignments
+        // 3. Initialize assignments
         const unitCount = Number(itemData.unit_count) || 1;
         const internalHqId = trans.find(t => t.is_own)?.id || '';
 

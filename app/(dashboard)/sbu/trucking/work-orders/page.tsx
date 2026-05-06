@@ -36,7 +36,7 @@ export default function SBUTruckingWorkOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<WOItem | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<string>('pending');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -92,6 +92,7 @@ export default function SBUTruckingWorkOrdersPage() {
     
     if (!matchesSearch) return false;
 
+    if (selectedStatus === 'all') return true;
     if (selectedStatus === 'pending') {
       return ['pending', 'need_assignment'].includes(item.status);
     }
@@ -102,7 +103,7 @@ export default function SBUTruckingWorkOrdersPage() {
       return item.status === 'handover_rejected';
     }
     if (selectedStatus === 'assigned') {
-      return ['assigned', 'in_progress'].includes(item.status);
+      return ['assigned', 'in_progress', 'on_road', 'on_duty'].includes(item.status);
     }
     if (selectedStatus === 'completed') {
       return item.status === 'completed';
@@ -278,6 +279,13 @@ export default function SBUTruckingWorkOrdersPage() {
            <Card className="p-8 border-slate-900 border-2 shadow-2xl shadow-slate-900/10">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] italic mb-6">Ops Dashboard</h3>
                <div className="space-y-4">
+                  <button 
+                    onClick={() => setSelectedStatus('all')}
+                    className={`w-full p-4 rounded-2xl flex items-center justify-between border transition-all ${selectedStatus === 'all' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-indigo-50/50 border-indigo-100 text-indigo-900 hover:border-indigo-300'}`}
+                  >
+                     <span className={`text-[10px] font-black uppercase tracking-widest ${selectedStatus === 'all' ? 'text-indigo-200' : 'text-indigo-400'}`}>All Manifests</span>
+                     <span className="text-xl font-black">{items.length}</span>
+                  </button>
                   <button 
                     onClick={() => setSelectedStatus('pending')}
                     className={`w-full p-4 rounded-2xl flex items-center justify-between border transition-all ${selectedStatus === 'pending' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-900 hover:border-slate-300'}`}

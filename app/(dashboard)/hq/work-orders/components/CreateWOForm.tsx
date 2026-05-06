@@ -7,7 +7,8 @@ import { toast } from 'react-hot-toast';
 import { 
   ArrowLeft, Plus, Trash2, Edit2, Truck, 
   MapPin, Calendar, MessageSquare, Save, Send, Loader2,
-  ChevronRight, Building2, Warehouse, Globe, ShieldCheck, DollarSign
+  ChevronRight, Building2, Warehouse, Globe, ShieldCheck, DollarSign,
+  User
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { generateWONumber } from '@/lib/utils/woNumber';
@@ -52,44 +53,131 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     if (!editId || !profile?.tenant_id) return;
 
     const loadWOData = async () => {
+      if (!editId || !profile?.tenant_id) return;
+      
       setIsLoadingEdit(true);
       try {
+        console.log('Loading WO data for ID:', editId);
+        
+        // STEP 1: Ambil Work Order header
         const { data: wo, error: woError } = await supabase
           .from('work_orders')
-          .select(`
-            *, 
-            wo_items(
-              *, 
-              job_orders(
-                *, 
-                transporter:md_entities!transporter_id(name), 
-                fleets(plate_number, company_id), 
-                drivers(name)
-              )
-            )
-          `)
+          .select('*')
           .eq('id', editId)
-          .single();
+          .maybeSingle();
 
-        if (woError) throw woError;
+        if (woError) {
+          console.error('WO header error:', woError);
+          throw new Error(woError.message);
+        }
+        
+        if (!wo) {
+          console.warn('Work Order not found for ID:', editId);
+          toast.error('Work Order tidak ditemukan');
+          return;
+        }
 
-        console.log('LOAD EDIT DATA:', wo);
+        console.log('WO loaded:', wo);
 
-          if (wo) {
-            setWoStatus(wo.status);
-            setFormData({
-              customer_id: wo.customer_id,
-              order_date: wo.order_date,
-              execution_date: wo.execution_date,
-              execution_time: wo.execution_time || '08:00',
-              notes: wo.notes || '',
-            });
-            console.log('SETTING WO ITEMS:', wo.wo_items);
-            setWoItems(wo.wo_items || []);
-          }
-      } catch (err) {
-        console.error('Load Edit Error:', err);
-        toast.error('Gagal memuat data Work Order');
+        // STEP 2: Ambil WO Items
+        const { data: woItems, error: itemsError } = await supabase
+          .from('wo_items')
+          .select('*')
+          .eq('wo_id', editId);
+
+        if (itemsError) {
+          console.error('WO Items error:', itemsError);
+          throw new Error(itemsError.message);
+        }
+
+        console.log('WO Items loaded:', woItems?.length || 0);
+
+        // STEP 3: Untuk setiap WO Item, ambil Job Orders (jika ada)
+        const woItemsWithJobs = await Promise.all(
+          (woItems || []).map(async (item) => {
+            const { data: jobOrders, error: jobsError } = await supabase
+              .from('job_orders')
+              .select(`
+                id,
+                jo_number,
+                status,
+                fleet_id,
+                driver_id,
+                driver_phone,
+                purchase_price,
+                transporter_id,
+                tracking_token
+              `)
+              .eq('wo_item_id', item.id);
+
+            if (jobsError) {
+              console.warn(`Job Orders error for item ${item.id}:`, jobsError);
+            }
+
+            // Ambil detail transporter, fleet, driver jika ada
+            let transporter = null;
+            let fleet = null;
+            let driver = null;
+
+            if (jobOrders && jobOrders.length > 0) {
+              const firstJob = jobOrders[0];
+              
+              if (firstJob.transporter_id) {
+                const { data: transData } = await supabase
+                  .from('md_entities')
+                  .select('id, name')
+                  .eq('id', firstJob.transporter_id)
+                  .maybeSingle();
+                transporter = transData;
+              }
+              
+              if (firstJob.fleet_id) {
+                const { data: fleetData } = await supabase
+                  .from('md_fleets')
+                  .select('id, plate_number, brand, model')
+                  .eq('id', firstJob.fleet_id)
+                  .maybeSingle();
+                fleet = fleetData;
+              }
+              
+              if (firstJob.driver_id) {
+                const { data: driverData } = await supabase
+                  .from('md_drivers')
+                  .select('id, name, phone')
+                  .eq('id', firstJob.driver_id)
+                  .maybeSingle();
+                driver = driverData;
+              }
+            }
+
+            return {
+              ...item,
+              job_orders: (jobOrders || []).map(jo => ({
+                ...jo,
+                transporter,
+                fleets: fleet,
+                drivers: driver
+              }))
+            };
+          })
+        );
+
+        // STEP 4: Set state dengan data yang sudah di-load
+        setWoStatus(wo.status);
+        setFormData({
+          customer_id: wo.customer_id || '',
+          order_date: wo.order_date || new Date().toISOString().split('T')[0],
+          execution_date: wo.execution_date || new Date().toISOString().split('T')[0],
+          execution_time: wo.execution_time || '08:00',
+          notes: wo.notes || '',
+        });
+        setWoItems(woItemsWithJobs);
+
+        console.log('WO data loaded successfully');
+
+      } catch (err: any) {
+        console.error('Load Edit Error detail:', err);
+        toast.error(`Gagal memuat data Work Order: ${err.message || 'Unknown error'}`);
       } finally {
         setIsLoadingEdit(false);
       }
