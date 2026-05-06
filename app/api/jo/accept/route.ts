@@ -63,6 +63,24 @@ export async function POST(req: NextRequest) {
             throw updateError;
         }
 
+        // =====================================================
+        // 4. KIRIM NOTIFIKASI KE FINANCE SBU
+        // =====================================================
+        try {
+            await supabase
+                .from('notifications')
+                .insert({
+                    role: 'sbu_fin_tr',
+                    title: 'New Disbursement Ready',
+                    message: `Job ${jobOrder.jo_number} accepted by driver. Ready for payout.`,
+                    link: '/sbu/trucking/cost-management',
+                    is_read: false
+                });
+        } catch (notifError) {
+            console.error("Failed to send notification:", notifError);
+            // Don't fail the whole request if notification fails
+        }
+
         console.log("JO accepted:", jobOrder.id);
 
         return NextResponse.json({

@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { supabase as supabaseRaw } from "@/lib/supabase/client";
-const supabase = supabaseRaw as any;
+import { supabase } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
   FileText, Download, ChevronLeft, Calendar, Filter, 
@@ -176,7 +175,7 @@ export default function ReportingPage() {
         });
       });
       setData(flattened);
-    } catch (err: any) { toast.error("Sync Failed"); } finally { setLoading(false); }
+    } catch (err: unknown) { toast.error("Sync Failed"); } finally { setLoading(false); }
   }, [startDate, endDate, sbuFilter, statusFilter, customerFilter, vendorFilter, truckTypeFilter, routeFilter, transporterFilter, clearanceTypeFilter]);
 
   const handleExportExcel = async () => {
@@ -196,7 +195,7 @@ export default function ReportingPage() {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Atlas Report");
       XLSX.writeFile(workbook, `Atlas_Export_${reportMode}_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast.success("Excel Ready", { id: tid });
-    } catch (err: any) { toast.error(`Excel Error: ${err.message}`, { id: tid }); }
+    } catch (err: unknown) { toast.error(`Excel Error: ${err.message}`, { id: tid }); }
   };
 
   const handleExportPDF = async () => {
@@ -214,7 +213,7 @@ export default function ReportingPage() {
       autoTable(doc, { headStyle: { fillColor: [15, 23, 42] }, head: head, body: body, startY: 90, theme: 'grid', styles: { fontSize: 8 } });
       doc.save(`Sentralogis_Matrix_${new Date().getTime()}.pdf`);
       toast.success("PDF Downloaded", { id: tid });
-    } catch (err: any) { toast.error(`PDF Error: ${err.message}`, { id: tid }); }
+    } catch (err: unknown) { toast.error(`PDF Error: ${err.message}`, { id: tid }); }
   };
 
   useEffect(() => { fetchMasterData(); fetchReportData(); }, [fetchReportData, reportMode]);

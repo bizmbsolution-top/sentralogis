@@ -1,0 +1,40 @@
+"use client";
+
+import React, { useEffect } from 'react';
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { LoadingSpinner } from './LoadingSpinner';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  allowedRoles?: string[];
+}
+
+export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { profile, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!profile) {
+        router.push('/login');
+      } else if (allowedRoles && !allowedRoles.includes(profile.role)) {
+        router.push('/');
+      }
+    }
+  }, [profile, loading, allowedRoles, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <LoadingSpinner message="Authenticating Sequence..." />
+      </div>
+    );
+  }
+
+  if (!profile || (allowedRoles && !allowedRoles.includes(profile.role))) {
+    return null;
+  }
+
+  return <>{children}</>;
+}

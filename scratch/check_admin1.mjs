@@ -1,0 +1,17 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function checkAdmin1() {
+    console.log('Checking for admin1...');
+    const { data, error } = await supabase.from('profiles').select('*').ilike('email', '%admin1%');
+    if (error) {
+        console.error(error);
+    } else {
+        console.log(data);
+    }
+}
+
+checkAdmin1();

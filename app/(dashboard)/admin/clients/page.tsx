@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { supabase as supabaseRaw } from "@/lib/supabase/client";
-const supabase = supabaseRaw as any;
+import { supabase } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import { 
   Building2, Users, Wallet, Plus, Search, 
@@ -51,7 +50,7 @@ export default function ClientControlCenter() {
       
       if (error) throw error;
       setClients(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Gagal sinkron data clients.");
     } finally {
       setLoading(false);
@@ -132,7 +131,7 @@ export default function ClientControlCenter() {
         admin_email: "", admin_password: "" 
       });
       fetchClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message);
     } finally {
       setUpdating(false);
@@ -146,7 +145,7 @@ export default function ClientControlCenter() {
       if (error) throw error;
       toast.success("Client berhasil dihapus.");
       fetchClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Gagal hapus: " + error.message);
     }
   };
@@ -169,7 +168,7 @@ export default function ClientControlCenter() {
       setShowTopUpModal(false);
       setTopUpAmount(0);
       fetchClients();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Gagal top-up: " + error.message);
     } finally {
       setUpdating(false);

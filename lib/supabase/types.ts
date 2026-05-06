@@ -38,7 +38,289 @@ export type Database = {
         }
         Relationships: []
       }
-      documents: {
+
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          logo_url: string | null
+          address: string | null
+          city: string | null
+          province: string | null
+          zipcode: string | null
+          phone: string | null
+          email: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          logo_url?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          phone?: string | null
+          email?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          logo_url?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          phone?: string | null
+          email?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizations_profiles_fk"
+            columns: ["id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          id: string
+          full_name: string | null
+          email: string | null
+          role: 'superadmin' | 'director' | 'admin_wo' | 'admin_sbu' | 'admin_finance' | 'viewer'
+          organization_id: string | null
+          sbu_access: string[]
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          full_name?: string | null
+          email?: string | null
+          role: 'superadmin' | 'director' | 'admin_wo' | 'admin_sbu' | 'admin_finance' | 'viewer'
+          organization_id?: string | null
+          sbu_access?: string[]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          full_name?: string | null
+          email?: string | null
+          role?: 'superadmin' | 'director' | 'admin_wo' | 'admin_sbu' | 'admin_finance' | 'viewer'
+          organization_id?: string | null
+          sbu_access?: string[]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          id: string
+          name: string | null
+          company_name: string | null
+          phone: string | null
+          address: string | null
+          city: string | null
+          province: string | null
+          zipcode: string | null
+          type: 'vendor' | 'customer'
+          tax_id_number: string | null
+          use_ppn: boolean
+          pph_rate: number
+          pic_name: string | null
+          pic_phone: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name?: string | null
+          company_name?: string | null
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          type?: 'vendor' | 'customer'
+          tax_id_number?: string | null
+          use_ppn?: boolean
+          pph_rate?: number
+          pic_name?: string | null
+          pic_phone?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string | null
+          company_name?: string | null
+          phone?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          type?: 'vendor' | 'customer'
+          tax_id_number?: string | null
+          use_ppn?: boolean
+          pph_rate?: number
+          pic_name?: string | null
+          pic_phone?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      locations: {
+        Row: {
+          id: string
+          name: string
+          address: string | null
+          district: string | null
+          city: string | null
+          province: string | null
+          zipcode: string | null
+          notes: string | null
+          latitude: number | null
+          longitude: number | null
+          organization_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          address?: string | null
+          district?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          notes?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          organization_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          address?: string | null
+          district?: string | null
+          city?: string | null
+          province?: string | null
+          zipcode?: string | null
+          notes?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          organization_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sbus: {
+        Row: {
+          id: string
+          name: string
+          type: 'trucking' | 'warehouse' | 'forwarding' | 'clearance'
+          organization_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          type: 'trucking' | 'warehouse' | 'forwarding' | 'clearance'
+          organization_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          type?: 'trucking' | 'warehouse' | 'forwarding' | 'clearance'
+          organization_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      work_order_items: {
+        Row: {
+          id: string
+          work_order_id: string | null
+          truck_type: string | null
+          origin_location_id: string | null
+          destination_location_id: string | null
+          quantity: number | null
+          deal_price: number | null
+          sbu_type: string | null
+          sbu_metadata: Database["public"]["CompositeTypes"]["sbu_metadata"] | null
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          work_order_id?: string | null
+          truck_type?: string | null
+          origin_location_id?: string | null
+          destination_location_id?: string | null
+          quantity?: number | null
+          deal_price?: number | null
+          sbu_type?: string | null
+          sbu_metadata?: Database["public"]["CompositeTypes"]["sbu_metadata"] | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          work_order_id?: string | null
+          truck_type?: string | null
+          origin_location_id?: string | null
+          destination_location_id?: string | null
+          quantity?: number | null
+          deal_price?: number | null
+          sbu_type?: string | null
+          sbu_metadata?: Database["public"]["CompositeTypes"]["sbu_metadata"] | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+
+            documents: {
         Row: {
           created_at: string | null
           doc_type: string | null
@@ -438,5 +720,11 @@ export type Fleet = Database['public']['Tables']['fleets']['Row'];
 export type WorkOrder = Database['public']['Tables']['work_orders']['Row'];
 export type JobOrder = Database['public']['Tables']['job_orders']['Row'];
 export type TrackingUpdate = Database['public']['Tables']['tracking_updates']['Row'];
+export type Organization = Database['public']['Tables']['organizations']['Row'];
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type Company = Database['public']['Tables']['companies']['Row'];
+export type Location = Database['public']['Tables']['locations']['Row'];
+export type Sbu = Database['public']['Tables']['sbus']['Row'];
+export type WorkOrderItem = Database['public']['Tables']['work_order_items']['Row'];
 export type Document = Database['public']['Tables']['documents']['Row'];
 export type Invoice = Database['public']['Tables']['invoices']['Row'];

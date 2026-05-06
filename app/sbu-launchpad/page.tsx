@@ -90,31 +90,7 @@ const SBULaunchpad = () => {
       <Toaster position="top-right" />
       
       {/* 🚀 PREMIUM TOP GLASS NAVIGATION */}
-      <nav className="sticky top-0 z-[100] bg-white/80 backdrop-blur-xl border-b border-slate-200 px-8 py-5 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-4">
-           <div className="w-12 h-12 bg-[#1E293B] rounded-2xl flex items-center justify-center shadow-xl shadow-slate-900/20">
-              <ShieldCheck className="text-white w-7 h-7" />
-           </div>
-           <div>
-              <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none">Sentralogis<span className="text-emerald-500">.</span></h1>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-                 <Globe2 className="w-3.5 h-3.5 text-emerald-500" strokeWidth={3} /> Unified Operational Matrix
-              </p>
-           </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-           <div className="hidden md:flex flex-col items-end mr-2 text-right">
-              <span className="text-[10px] font-black uppercase text-slate-400">Authorized Subsidiary</span>
-              <span className="text-[12px] font-black italic uppercase text-[#1E293B] truncate max-w-[200px]">{companyInfo.name}</span>
-           </div>
-           <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-              <User className="w-5 h-5 text-slate-300" />
-           </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-8 py-14 lg:py-20">
+      <main className="w-full py-14 lg:py-20">
         <div className="mb-20">
            <h2 className="text-5xl font-black italic tracking-tighter uppercase text-[#1E293B] mb-2 leading-tight">Welcome Back, <br /> Operational Matrix</h2>
            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Select your SBU Command Node to continue</p>

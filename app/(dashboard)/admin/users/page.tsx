@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase as supabaseRaw } from "@/lib/supabase/client";
-const supabase = supabaseRaw as any;
+import { supabase } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import Link from "next/link";
 import {
@@ -27,7 +26,7 @@ type Profile = {
   created_at: string;
 };
 
-const ROLE_CONFIG: any = {
+const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: any; desc: string }> = {
   superadmin: {
     label: 'System Superadmin',
     color: 'text-rose-400',
@@ -152,7 +151,7 @@ export default function UserManagementPage() {
       const { data: oData } = await orgsQuery;
       setOrganizations(oData || []);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Gagal sinkronisasi data kredensial.");
     } finally {
       setLoading(false);
@@ -194,7 +193,7 @@ export default function UserManagementPage() {
       }
       setShowModal(false);
       fetchInitialData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message);
     } finally {
       setUpdating(false);
@@ -244,7 +243,7 @@ export default function UserManagementPage() {
       
       toast.success("Personel berhasil dihapus.");
       fetchInitialData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message);
     } finally {
       setUpdating(false);
@@ -533,4 +532,4 @@ export default function UserManagementPage() {
 }
 
 // Utility Loader
-const Loader2 = (props: any) => <RefreshCw {...props} />;
+const Loader2 = (props: { className?: string }) => <RefreshCw {...props} />;

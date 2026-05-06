@@ -1,35 +1,40 @@
-import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google"; // Switch to Atlas Standard Font
-import { Toaster } from "react-hot-toast";
-import { GoogleMapsProvider } from "@/lib/google-maps-context";
-import "./globals.css";
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AuthProvider } from '@/lib/providers/AuthProvider';
+import { Toaster } from 'react-hot-toast';
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"], // High weights for Atlas style
-});
+const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: "Sentralogis. - Operational Dashboard",
-  description: "Advanced Multi-Tenant Logistics Platform",
+export const metadata = {
+  title: 'SENTRALOGIS | Unified Operational Matrix',
+  description: 'The next generation of enterprise logistics orchestration.',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="id"
-      className={`${plusJakartaSans.variable} h-full antialiased font-sans`}
-    >
-      <body className="min-h-full flex flex-col font-sans">
-        <GoogleMapsProvider>
+    <html lang="id">
+      <head>
+        <script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+          async
+          defer
+        />
+      </head>
+      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased`}>
+        <AuthProvider>
+          <Toaster 
+            position="top-right" 
+            toastOptions={{
+              success: {
+                duration: 1000,
+              },
+              error: {
+                duration: 4000,
+              },
+            }}
+          />
           {children}
-        </GoogleMapsProvider>
-        <Toaster position="top-right" />
+        </AuthProvider>
       </body>
     </html>
   );

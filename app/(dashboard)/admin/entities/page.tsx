@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase as supabaseRaw } from "@/lib/supabase/client";
-const supabase = supabaseRaw as any;
+import { supabase } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
   Building2, Users, Search, Plus, X, Edit2, Trash2, 
@@ -46,7 +45,7 @@ export default function EntityHubPage() {
       const { data: cData, error: cError } = await supabase.from('customers').select('*').order('name');
       if (cError) throw cError;
       setCustomers(cData || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Gagal sinkron data direktori");
     } finally {
       setLoading(false);
@@ -93,7 +92,7 @@ export default function EntityHubPage() {
       }
       resetForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
        toast.error("Gagal menyimpan: " + error.message);
     }
   };

@@ -1,51 +1,44 @@
-# Rencana Implementasi Modul Finance & Billing - Sentralogis
+# Rencana Implementasi Modul Finance & Billing - Sentralogis (Sistem Bagi Hasil & Integrasi ERP)
 
-Tujuan: Melengkapi siklus operasional dari WO selesai hingga penagihan (Invoicing) dan pelunasan (Payment).
+Tujuan: Membangun modul keuangan yang solid, minim *data entry*, dan selaras dengan standar akuntansi Indonesia (PSAK) serta siap untuk diintegrasikan dengan aplikasi ERP eksternal (seperti Mekari Jurnal / jurnal.id).
 
-## 1. Alur Pengajuan Biaya Tambahan (Cost Management)
-
-Bila terjadi penambahan biaya di lapangan (Overtime, Uang Kawal, Bongkar-Muat, dll):
-*   **Input SBU**: Tim SBU melakukan input biaya tambahan pada Job Order (JO) tertentu.
-*   **State**: `Pending Cost Approval`.
-*   **Verifikasi Admin WO**:
-    *   Admin WO melihat pengajuan biaya.
-    *   SOP: Admin WO melakukan konfirmasi manual ke pelanggan.
-*   **Keputusan Admin WO**:
-    *   **APPROVE**: Biaya ditambahkan ke nilai tagihan pelanggan (Revenue). Total WO = `(Qty x Deal Price) + Approved Extra Costs`.
-    *   **REJECT**: Biaya tetap menjadi kewajiban perusahaan ke pihak ketiga (AP/Vendor/Supir), namun **TIDAK** ditagihkan ke pelanggan.
-
-## 2. Fitur Validasi Cepat (QR Code Integration)
-
-Untuk mengatasi masalah lambatnya pencarian data fisik saat dokumen kembali ke kantor:
-*   **QR Scanner on SJ**: Setiap Surat Jalan (Printout) akan dilengkapi QR Code unik yang merujuk pada `JO_ID`.
-*   **Quick Search Admin/Finance**: Di dashboard, akan ditambahkan kolom "Scan/Input JO ID" yang jika discan menggunakan kamera atau scanner, akan langsung **"Jump to Record"** (membuka detail WO/JO tersebut) tanpa perlu scroll/cari manual.
-
-## 3. Profil Penagihan Pelanggan (Billing Method)
-
-Akan ditambahkan flag pada Master Pelanggan untuk menentukan alur penagihan:
-1.  **Digital (E-POD)**: Begitu status `Done` dan biaya tambahan diaudit, Finance bisa langsung kirim invoice via email/whatsapp.
-2.  **Hardcopy Mandatory**: Finance harus menunggu verifikasi dokumen fisik sebelum tombol "Cetak Invoice" aktif.
-
-## 4. Dashboard Finance (Visibility & Control)
-
-Finance memiliki dashboard khusus untuk memantau WO yang sudah berstatus `Done`:
-*   **Document Checklist**: Finance memverifikasi apakah dokumen fisik (Surat Jalan/POD) sudah di-collect dari SBU.
-*   **Cost Audit**: Memastikan semua biaya tambahan sudah memiliki kejelasan status (Approve/Reject) sebelum invoice dibuat.
-
-## 5. Siklus Invoicing & Penagihan (Billing Cycle)
-
-Status WO setelah `Done` dalam pandangan Finance:
-1.  **Ready to Invoice**: Dokumen lengkap (fisik atau digital) dan biaya tambahan sudah diaudit.
-2.  **Invoiced**: Finance menerbitkan invoice.
-3.  **Receipt Confirmed**: Pelanggan telah menerima invoice (Tanda Terima).
-4.  **Paid**: Pembayaran telah diterima dan WO dinyatakan tutup (Closed/Settled).
-
-## 6. Perubahan Database (Proposed Schema)
-
-*   Tabel `extra_costs`: Menyimpan data biaya tambahan per JO (Type, Amount, Description, Status).
-*   Master `customers`: Tambahan kolom `billing_method` (`epod` / `hardcopy`).
-*   Tabel `invoices`: Menyimpan data penagihan.
-*   Update `work_orders`: Flag status penagihan (`ready_to_invoice`, `invoiced`, `paid`).
+Modul ini dirancang spesifik untuk mendukung model **Bagi Hasil (Revenue Sharing / Borongan)** yang lazim digunakan di perusahaan logistik/trucking Indonesia.
 
 ---
-**Mohon koreksi bagian mana pun yang tidak sesuai dengan SOP internal Anda sebelum kita masuk ke tahap coding.**
+
+## FASE 1: Fondasi Database & Skema Keuangan
+Fokus pada penyesuaian struktur database untuk mengakomodasi pencatatan otomatis.
+*   **Tabel `finance_coa` (Chart of Account):** Master data akun yang akan disamakan dengan standar `jurnal.id` (Aset, Kewajiban, Ekuitas, Pendapatan, HPP, Beban).
+*   **Update Tabel `job_orders` & `work_orders`:** Penambahan kolom untuk nominal deal pelanggan (*Base Price*) dan persentase komisi/bagi hasil driver (*Driver Share %*).
+*   **Revamp Tabel `extra_costs` (Additional Charges):** Menambahkan kolom `charge_type` yang terdiri dari:
+    *   `surcharge`: Penambahan tagihan yang dikenakan komisi/bagi hasil (Misal: *Overnight*, *Waiting Time*).
+    *   `reimbursement`: Tagihan *pass-through* (At-Cost) tanpa margin perusahaan (Misal: Kuli, Tiket khusus).
+*   **Tabel `finance_journals` & `finance_journal_entries`:** Untuk mencatat *double-entry bookkeeping* (Debit/Kredit) secara internal sebelum disinkronisasikan keluar.
+
+## FASE 2: SBU UI/UX - Additional Charges & Payout
+Fokus pada antarmuka untuk cabang/SBU yang bertugas di lapangan.
+*   **Master Data Tarif:** Penambahan pengaturan persentase *Bagi Hasil* standar (Misal: 60% Perusahaan, 40% Driver) di master data SBU / Supir.
+*   **Revamp Menu "Add Cost" -> "Trip Charges":**
+    *   SBU bisa menambahkan *Surcharge* atau *Reimbursement*.
+    *   Sistem secara langsung mensimulasikan perhitungan *P&L* sementara (Estimasi potong komisi).
+*   **Driver Payout Screen:** Layar khusus untuk melihat total bagi hasil + reimbursement yang berhak dicairkan kepada supir saat ia kembali.
+
+## FASE 3: Finance HQ Control & Verifikasi (Digitalisasi Dokumen)
+Fokus pada kontrol terpusat di kantor pusat (HQ) untuk melakukan audit sebelum menjadi tagihan.
+*   **Validasi Cepat via Scanner (QR Code):** Setiap Surat Jalan akan memiliki QR Code. Staf Finance cukup *scan* dokumen fisik untuk langsung membuka rincian Job Order di layar.
+*   **Cost & Payout Audit:** Finance HQ memverifikasi bahwa *Surcharge* dan *Reimbursement* yang diajukan SBU sah secara fisik dan siap diterbitkan ke pelanggan.
+*   **Hardcopy vs E-POD Policy:** Sistem akan mengecek *flag* pelanggan apakah mereka menerima *E-Invoice* (langsung tagih) atau mewajibkan *Hardcopy* (harus nunggu SJ asli balik).
+
+## FASE 4: Mesin Akuntansi Otomatis (Auto-Journaling)
+Pembuatan fungsi *backend* yang mengubah status operasional menjadi angka finansial.
+*   Saat JO berstatus `Completed`, sistem men-generate **Jurnal Pendapatan** (Debit: Piutang, Kredit: Jasa Trucking).
+*   Sistem men-generate **Jurnal HPP Bagi Hasil** (Debit: Beban Bagi Hasil, Kredit: Hutang Driver).
+*   Sistem men-generate **Jurnal Reimbursement** (Hanya mempengaruhi Piutang dan Hutang tanpa menyentuh Laba/Rugi).
+
+## FASE 5: Invoicing & Integrasi ERP Eksternal (Jurnal.id)
+Fokus pada penerbitan tagihan final dan sinkronisasi dengan aplikasi pajak/akuntansi standar.
+*   **Invoice Generator:** Membuat format tagihan (PDF) yang rapi, menggabungkan *Base Price*, *Surcharges*, dan *Reimbursement* dalam satu dokumen.
+*   **API Mapper & Webhook:** Pembuatan fungsi untuk melakukan HTTP *POST* ke API `jurnal.id`.
+    *   *Create Sales Invoice* (Faktur Penjualan) untuk pelanggan.
+    *   *Create Purchase Bill / Expense* (Tagihan/Beban) untuk mencatat hutang bagi hasil driver.
+*   **Payment Status Sync:** Fungsi tarik data (Pull/Webhook) jika invoice di-mark *Paid* di Jurnal.id, status WO di Sentralogis otomatis tertutup (Settled).

@@ -46,6 +46,7 @@ export default function MasterLocationsPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [userOrgId, setUserOrgId] = useState<string | null>(null);
     
     const { isLoaded } = useGoogleMaps();
 
@@ -70,11 +71,30 @@ export default function MasterLocationsPage() {
     const fetchLocations = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from("locations")
-                .select("*")
-                .order("name", { ascending: true });
 
+            // Fetch user profile for organization_id
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('organization_id')
+                    .eq('id', user.id)
+                    .single();
+                if (profile?.organization_id) {
+                    setUserOrgId(profile.organization_id);
+                }
+            }
+
+            let query = supabase.from("locations").select("*");
+            
+            // Apply organization filter if exists
+            const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user?.id).single();
+            const orgId = profile?.organization_id;
+            if (orgId) {
+                query = query.eq('organization_id', orgId);
+            }
+
+            const { data, error } = await query.order("name", { ascending: true });
             if (error) throw error;
             setLocations(data || []);
         } catch (error: any) {
@@ -177,7 +197,7 @@ export default function MasterLocationsPage() {
 
         setSaving(true);
         try {
-            const payload = {
+            const payload: any = {
                 name: formData.name,
                 address: formData.address,
                 district: formData.district,
@@ -187,6 +207,7 @@ export default function MasterLocationsPage() {
                 notes: formData.notes,
                 latitude: formData.latitude,
                 longitude: formData.longitude,
+                organization_id: userOrgId
             };
 
             if (editingId) {
