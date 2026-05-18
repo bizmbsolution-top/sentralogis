@@ -4,8 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
-import { X, CheckCircle2, XCircle, Loader2, Truck, User, Info, MapPin, ChevronRight } from 'lucide-react';
+import { 
+  X, CheckCircle2, XCircle, Loader2, Truck, User, Info, MapPin, 
+  ChevronRight, Calendar, Clock, Package, Layers, MessageSquare,
+  Building2, FileText, ArrowRight, AlertTriangle, Shield
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { sendNotification } from '@/lib/supabase/notifications';
 
 interface HandoverApprovalModalProps {
   wo: any;
@@ -18,37 +23,84 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [pendingJOs, setPendingJOs] = useState<any[]>([]);
+  const [allItemJOs, setAllItemJOs] = useState<any[]>([]);
   const [rejectionNote, setRejectionNote] = useState('');
 
-  useEffect(() => {
-    const fetchPendingJOs = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('job_orders')
-        .select(`
-          *,
-          md_fleets:fleet_id(plate_number, md_fleet_types(type_name)),
-          md_drivers:driver_id(name),
-          md_entities:transporter_id(name)
-        `)
-        .eq('status', 'pending_handover')
-        .in('wo_item_id', wo.wo_items.map((i: any) => i.id));
+  // [AI] Extract handover items - items with handover_pending status
+  const handoverItems = (wo.wo_items || []).filter((i: any) => i.status === 'handover_pending');
+  const allItems = wo.wo_items || [];
 
-      if (error) {
-        toast.error("Failed to fetch pending JOs");
-      } else {
-        setPendingJOs(data || []);
+  useEffect(() => {
+    const fetchHandoverData = async () => {
+      setLoading(true);
+      try {
+        // [AI] Fetch ALL job orders for this WO's items (not just handover_pending)
+        // so we can show both assigned and pending ones for context
+        const itemIds = allItems.map((i: any) => i.id);
+        
+        if (itemIds.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: jos, error } = await supabase
+          .from('job_orders')
+          .select(`
+            *,
+            md_fleets:fleet_id(plate_number, md_fleet_types(type_name)),
+            md_entities:transporter_id(name)
+          `)
+          .in('wo_item_id', itemIds);
+
+        if (error) {
+          console.error("[HandoverModal] Error fetching JOs:", { code: error.code, message: error.message, details: error.details, hint: error.hint });
+          toast.error("Failed to fetch job orders");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch driver names separately (due to RLS complexity)
+        if (jos && jos.length > 0) {
+          const driverIds = jos.map(j => j.driver_id).filter(Boolean);
+          if (driverIds.length > 0) {
+            const { data: driverData, error: dError } = await supabase
+              .from('md_drivers')
+              .select('id, name, phone')
+              .in('id', driverIds);
+            
+            if (dError) {
+              console.error("Error fetching drivers:", { code: dError.code, message: dError.message });
+            } else {
+              const driverMap = Object.fromEntries((driverData || []).map(d => [d.id, d]));
+              const enrichedJOs = jos.map(j => ({
+                ...j,
+                md_drivers: driverMap[j.driver_id]
+              }));
+              
+              setAllItemJOs(enrichedJOs);
+              setPendingJOs(enrichedJOs.filter(j => j.status === 'handover_pending'));
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        
+        setAllItemJOs(jos || []);
+        setPendingJOs((jos || []).filter(j => j.status === 'handover_pending'));
+      } catch (err: any) {
+        console.error("Handover Fetch Error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    fetchPendingJOs();
+    fetchHandoverData();
   }, [wo]);
 
   const handleAction = async (isApprove: boolean) => {
     setProcessing(true);
     const now = new Date().toISOString();
-    const actor = profile?.name || 'Unknown User';
+    const actor = profile?.full_name || 'Unknown User';
 
     try {
       if (isApprove) {
@@ -60,30 +112,41 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
         if (joError) throw joError;
 
         // 2. Update Fleet/Driver Status
-        const fleetIds = pendingJOs.map(jo => jo.fleet_id);
-        const driverIds = pendingJOs.map(jo => jo.driver_id);
+        const fleetIds = pendingJOs.map(jo => jo.fleet_id).filter(Boolean);
+        const driverIds = pendingJOs.map(jo => jo.driver_id).filter(Boolean);
         
-        const { error: fError } = await supabase.from('md_fleets').update({ status: 'on_road' }).in('id', fleetIds);
-        if (fError) throw fError;
-        const { error: dError } = await supabase.from('md_drivers').update({ status: 'on_duty' }).in('id', driverIds);
-        if (dError) throw dError;
+        if (fleetIds.length > 0) {
+          const { error: fError } = await supabase.from('md_fleets').update({ status: 'on_road' }).in('id', fleetIds);
+          if (fError) throw fError;
+        }
+        if (driverIds.length > 0) {
+          const { error: dError } = await supabase.from('md_drivers').update({ status: 'on_duty' }).in('id', driverIds);
+          if (dError) throw dError;
+        }
 
         // 3. Update WO Items status
         const woItemIds = Array.from(new Set(pendingJOs.map(jo => jo.wo_item_id)));
-        const { error: itemsError } = await supabase.from('wo_items').update({ 
-          status: 'assigned',
-          handover_requested: false,
-          handover_status: 'approved',
-          item_data: {
-            ...wo.wo_items[0]?.item_data,
-            milestones: {
-              ...(wo.wo_items[0]?.item_data?.milestones || {}),
-              approved: now,
-              approved_by: actor
+        for (const itemId of woItemIds) {
+          const item = allItems.find((i: any) => i.id === itemId);
+          const currentItemData = typeof item?.item_data === 'string' 
+            ? JSON.parse(item.item_data) 
+            : (item?.item_data || {});
+          
+          // [AI] Only update status and item_data - handover_requested/handover_status columns don't exist
+          const { error: itemError } = await supabase.from('wo_items').update({ 
+            status: 'assigned',
+            item_data: {
+              ...currentItemData,
+              handover_note: null,
+              milestones: {
+                ...(currentItemData.milestones || {}),
+                approved: now,
+                approved_by: actor
+              }
             }
-          }
-        }).in('id', woItemIds);
-        if (itemsError) throw itemsError;
+          }).eq('id', itemId);
+          if (itemError) throw itemError;
+        }
 
         // 4. Update Work Order header status
         const { error: woError } = await supabase.from('work_orders').update({ 
@@ -93,6 +156,14 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
         if (woError) throw woError;
 
         toast.success("Handover Approved! Job Orders are now active.");
+        
+        // Notify SBU Ops
+        await sendNotification(profile?.tenant_id || '', {
+          title: 'Handover Approved',
+          message: `HQ has approved handover for ${wo.wo_number}`,
+          link: `/sbu/trucking/assignments`,
+          role: 'SBU_OPS'
+        });
       } else {
         // REJECT
         if (!rejectionNote.trim()) {
@@ -101,35 +172,53 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
           return;
         }
 
-        // 1. Update Fleet/Driver back to available
-        const fleetIds = pendingJOs.map(jo => jo.fleet_id);
-        const driverIds = pendingJOs.map(jo => jo.driver_id);
-        
-        await supabase.from('md_fleets').update({ status: 'available' }).in('id', fleetIds);
-        await supabase.from('md_drivers').update({ status: 'available' }).in('id', driverIds);
+        // [AI] Collect ALL JOs belonging to the rejected WO items, not just handover_pending ones.
+        // JOs keep their original status (pending/assigned) when the wo_item goes to handover_pending,
+        // so filtering by jo.status === 'handover_pending' would return nothing.
+        const rejectedItemIds = handoverItems.map((i: any) => i.id);
+        const josToReject = allItemJOs.filter(jo => rejectedItemIds.includes(jo.wo_item_id) && jo.status !== 'cancelled');
 
-        // 2. Delete pending JOs
-        if (pendingJOs.length > 0) {
-          await supabase.from('job_orders').delete().in('id', pendingJOs.map(jo => jo.id));
+        // 1. Release Fleet/Driver back to available
+        const fleetIds = josToReject.map(jo => jo.fleet_id).filter(Boolean);
+        const driverIds = josToReject.map(jo => jo.driver_id).filter(Boolean);
+        
+        if (fleetIds.length > 0) {
+          await supabase.from('md_fleets').update({ status: 'available' }).in('id', fleetIds);
+        }
+        if (driverIds.length > 0) {
+          await supabase.from('md_drivers').update({ status: 'available' }).in('id', driverIds);
+        }
+ 
+        // 2. Flag JOs as rejected (NOT delete — preserve audit trail)
+        if (josToReject.length > 0) {
+          const { error: joRejectError } = await supabase
+            .from('job_orders')
+            .update({ status: 'rejected' })
+            .in('id', josToReject.map(jo => jo.id));
+          if (joRejectError) throw joRejectError;
         }
 
         // 3. Revert ALL pending WO items back to handover_rejected
-        const { error: itemsError } = await supabase.from('wo_items').update({ 
-          status: 'handover_rejected',
-          handover_requested: false,
-          handover_status: 'rejected',
-          item_data: {
-            ...wo.wo_items[0]?.item_data,
-            rejection_note: rejectionNote,
-            milestones: {
-              ...(wo.wo_items[0]?.item_data?.milestones || {}),
-              rejected: now,
-              rejected_by: actor
+        for (const item of handoverItems) {
+          const currentItemData = typeof item.item_data === 'string' 
+            ? JSON.parse(item.item_data) 
+            : (item.item_data || {});
+          
+          // [AI] Only update status and item_data - handover_requested/handover_status columns don't exist
+          const { error: itemError } = await supabase.from('wo_items').update({ 
+            status: 'handover_rejected',
+            item_data: {
+              ...currentItemData,
+              rejection_note: rejectionNote,
+              milestones: {
+                ...(currentItemData.milestones || {}),
+                rejected: now,
+                rejected_by: actor
+              }
             }
-          }
-        }).eq('wo_id', wo.id).eq('status', 'handover_pending');
-
-        if (itemsError) throw itemsError;
+          }).eq('id', item.id);
+          if (itemError) throw itemError;
+        }
 
         // 4. Update Work Order header to handover_rejected
         const { error: woUpdateError } = await supabase.from('work_orders').update({ 
@@ -140,6 +229,14 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
         if (woUpdateError) throw woUpdateError;
 
         toast.success("Handover Rejected. SBU notified.");
+
+        // Notify SBU Ops
+        await sendNotification(profile?.tenant_id || '', {
+          title: 'Handover Rejected',
+          message: `HQ rejected handover for ${wo.wo_number}: ${rejectionNote}`,
+          link: `/sbu/trucking/work-orders?status=handover_rejected`,
+          role: 'SBU_OPS'
+        });
       }
       onSuccess();
     } catch (err: any) {
@@ -149,90 +246,303 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <Card className="w-full max-w-3xl overflow-hidden shadow-2xl border-none !rounded-[2.5rem] p-0">
+  const formatRupiah = (val: number) => {
+    if (!val) return '-';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+  };  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+      <Card className="w-full max-w-4xl overflow-hidden shadow-2xl border border-slate-100 bg-white !rounded-[2.5rem] p-0">
+        
+        {/* Header */}
         <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-500 text-white rounded-[1.25rem] flex items-center justify-center shadow-lg shadow-orange-500/20 animate-pulse">
-              <Info size={24} />
+            <div className="w-14 h-14 bg-orange-50 text-orange-600 border border-orange-100 rounded-[1.5rem] flex items-center justify-center shadow-sm">
+              <Shield size={28} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 italic uppercase tracking-tight">Review Handover Request</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{wo.wo_number}</p>
+              <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tight">Review Handover</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{wo.wo_number}</span>
+                <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{handoverItems.length} Item(s) Pending</span>
+              </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-full transition-colors">
+          <button onClick={onClose} className="p-3 hover:bg-slate-50 hover:text-slate-700 rounded-2xl transition-colors">
             <X size={20} className="text-slate-400" />
           </button>
         </div>
 
-        <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto bg-slate-50/50">
-          <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2rem] space-y-2">
-            <h3 className="text-sm font-black text-amber-900 uppercase tracking-widest flex items-center gap-2">
-               <Info size={16} /> SBU Notification
-            </h3>
-            <p className="text-sm text-amber-800 font-medium leading-relaxed italic">
-              "SBU trucking can only fulfill {pendingJOs.length} units at this time. They are requesting handover for the remaining units back to CS."
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Assigned Units for Approval</h4>
-            {loading ? (
-              <div className="py-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></div>
-            ) : (
-              pendingJOs.map((jo, idx) => (
-                <div key={jo.id} className="bg-white border border-slate-100 p-6 rounded-[2rem] flex flex-col md:flex-row gap-6 items-center shadow-sm">
-                   <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400 text-xs">#{idx + 1}</div>
-                   <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-widest">{jo.md_entities?.name}</span>
-                        <span className="text-sm font-black text-slate-900">{jo.md_fleets?.plate_number}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                         <span className="flex items-center gap-1.5"><Truck size={14} /> {jo.md_fleets?.md_fleet_types?.type_name}</span>
-                         <span className="flex items-center gap-1.5"><User size={14} /> {jo.md_drivers?.name}</span>
-                      </div>
-                   </div>
-                   <div className="md:text-right">
-                      <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest block">Status</span>
-                      <span className="text-xs font-black italic">Waiting Approval</span>
-                   </div>
+        <div className="max-h-[65vh] overflow-y-auto bg-slate-50/30">
+          <div className="p-8 space-y-6">
+            
+            {/* ── Section 1: Work Order Summary ── */}
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-2 h-6 bg-blue-500 rounded-full"></div>
+                <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.3em]">Work Order Details</h3>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
+                  <p className="text-sm font-black text-slate-800 italic">{wo.wo_number}</p>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Customer</p>
+                  <div className="flex items-center gap-2">
+                     <Building2 size={12} className="text-blue-500" />
+                     <p className="text-sm font-black text-slate-800 italic truncate">{wo.md_entities?.name}</p>
+                  </div>
+                  {wo.md_entities?.legal_name && (
+                    <p className="text-[9px] text-slate-500 font-bold mt-0.5 italic">({wo.md_entities.legal_name})</p>
+                  )}
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Execution Date</p>
+                  <div className="flex items-center gap-2">
+                    <Calendar size={12} className="text-blue-500" />
+                    <p className="text-sm font-black text-slate-800 italic">
+                      {wo.execution_date 
+                        ? new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                        : '-'}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Items</p>
+                  <div className="flex items-center gap-2">
+                    <Layers size={12} className="text-blue-500" />
+                    <p className="text-sm font-black text-slate-800 italic">{allItems.length} Item(s)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        <div className="p-8 bg-white border-t border-slate-100 space-y-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Rejection Remarks (Mandatory for Reject)</label>
+            {/* ── Section 2: WO Items with Handover Status ── */}
+            {handoverItems.map((item: any, itemIdx: number) => {
+              const itemData = typeof item.item_data === 'string' ? JSON.parse(item.item_data) : (item.item_data || {});
+              const handoverNote = itemData.handover_note || '';
+              const handoverRequestedAt = itemData.handover_requested_at;
+              const handoverRequestedBy = itemData.handover_requested_by || 'SBU Ops';
+              const stops = itemData.stops || [];
+              const unitCount = Number(itemData.unit_count) || 1;
+              const dealPrice = Number(itemData.deal_price) || 0;
+              const vehicleType = itemData.vehicle_type_name || itemData.vehicle_type || '-';
+              
+              // JOs for this specific item
+              const itemJOs = allItemJOs.filter(jo => jo.wo_item_id === item.id && jo.status !== 'cancelled');
+              const assignedJOs = itemJOs.filter(jo => jo.driver_id && jo.fleet_id);
+              
+              return (
+                <div key={item.id} className="space-y-4">
+                  {/* Item Header */}
+                  <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-5">
+                      <div className="w-2 h-6 bg-orange-500 rounded-full"></div>
+                      <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.3em]">
+                        Item {itemIdx + 1}: {item.item_code}
+                      </h3>
+                      <span className="ml-auto px-3 py-1 bg-orange-50 text-orange-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-orange-100">
+                        Handover Pending
+                      </span>
+                    </div>
+
+                    {/* Item Details Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Vehicle Type</p>
+                        <p className="text-xs font-black text-blue-700 italic">{vehicleType}</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Units Required</p>
+                        <p className="text-xs font-black text-slate-800 italic">{unitCount} Fleet(s)</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Deal Price</p>
+                        <p className="text-xs font-black text-slate-800 italic">{formatRupiah(dealPrice)}</p>
+                      </div>
+                      <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                        <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">JO Assigned</p>
+                        <p className="text-xs font-black text-emerald-700 italic">{assignedJOs.length} / {unitCount}</p>
+                      </div>
+                    </div>
+
+                    {/* Route Info */}
+                    {stops.length > 0 && (
+                      <div className="bg-slate-50 p-4 rounded-2xl mb-5">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Route</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <MapPin size={14} className="text-rose-500" />
+                          {stops.map((stop: any, sIdx: number) => (
+                            <span key={sIdx} className="flex items-center text-xs font-black text-slate-700 italic">
+                              {stop.location_name || stop.name || '-'}
+                              {sIdx < stops.length - 1 && (
+                                <ArrowRight size={12} className="mx-2 text-slate-400" />
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SBU Remarks */}
+                    {handoverNote && (
+                      <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 border border-amber-200/50">
+                            <MessageSquare size={16} className="text-amber-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Remarks from SBU</h4>
+                              {handoverRequestedAt && (
+                                <span className="text-[9px] font-bold text-amber-500 italic">
+                                  {new Date(handoverRequestedAt).toLocaleString('id-ID', { 
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-700 font-bold leading-relaxed italic">
+                              &quot;{handoverNote}&quot;
+                            </p>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                              — {handoverRequestedBy}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!handoverNote && (
+                      <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle size={16} className="text-amber-600 animate-pulse" />
+                          <p className="text-sm text-amber-600 font-bold italic">
+                            SBU tidak memberikan catatan handover.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Assigned JOs for this item */}
+                  {itemJOs.length > 0 && (
+                    <div className="space-y-3 pl-4">
+                      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
+                        Job Orders ({itemJOs.length})
+                      </h4>
+                      {itemJOs.map((jo, joIdx) => {
+                        const joStatusUpper = (jo.status || '').toUpperCase();
+                        const isHandoverPending = joStatusUpper === 'HANDOVER_PENDING';
+                        const hasFleetDriver = jo.fleet_id && jo.driver_id;
+                        
+                        let statusColor = 'bg-slate-100 text-slate-600 border border-slate-200/50';
+                        let statusLabel = jo.status || 'Unknown';
+                        if (isHandoverPending) {
+                          statusColor = 'bg-orange-50 text-orange-600 border border-orange-100';
+                          statusLabel = 'Waiting Approval';
+                        } else if (['ASSIGNED', 'ACTIVE'].includes(joStatusUpper)) {
+                          statusColor = 'bg-blue-50 text-blue-600 border border-blue-100';
+                          statusLabel = 'Assigned';
+                        } else if (joStatusUpper === 'PENDING') {
+                          statusColor = 'bg-slate-50 text-slate-500 border border-slate-100';
+                          statusLabel = 'Draft';
+                        }
+
+                        return (
+                          <div 
+                            key={jo.id} 
+                            className={`bg-white border rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center shadow-sm transition-all ${
+                              isHandoverPending ? 'border-orange-200 bg-orange-50/10' : 'border-slate-100'
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] ${
+                              isHandoverPending ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {joIdx + 1}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                {jo.jo_number && (
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                    {jo.jo_number}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-4 text-xs">
+                                {/* Transporter */}
+                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                  <Building2 size={13} className="text-blue-500" />
+                                  {jo.md_entities?.name || '-'}
+                                </span>
+                                {/* Fleet */}
+                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                  <Truck size={13} className="text-emerald-500" />
+                                  {jo.md_fleets?.md_fleet_types?.type_name || '-'} — {jo.md_fleets?.plate_number || 'No Plate'}
+                                </span>
+                                {/* Driver */}
+                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                  <User size={13} className="text-violet-500" />
+                                  {jo.md_drivers?.name || '-'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {!hasFleetDriver && (
+                                <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100">
+                                  Unassigned
+                                </span>
+                              )}
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${statusColor}`}>
+                                {statusLabel}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Rejection Input */}
+          <div className="p-8 bg-white border-t border-slate-100 space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+              Rejection Remarks (Mandatory for Reject)
+            </label>
             <textarea 
               value={rejectionNote}
               onChange={(e) => setRejectionNote(e.target.value)}
               placeholder="Explain why this handover is being rejected..."
-              className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-bold focus:outline-none focus:ring-4 focus:ring-rose-500/5 transition-all min-h-[120px] resize-none"
+              className="w-full p-6 bg-slate-50 border border-slate-200 text-slate-800 rounded-[2rem] text-sm font-bold focus:outline-none focus:ring-4 focus:ring-rose-500/20 transition-all min-h-[100px] resize-none placeholder:text-slate-400"
             />
           </div>
         </div>
 
-        <div className="p-8 border-t border-slate-100 flex items-center justify-between bg-white">
+        {/* Action Buttons */}
+        <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-white">
           <button
             onClick={() => handleAction(false)}
             disabled={processing}
-            className="flex items-center gap-3 px-8 py-4 text-rose-600 hover:bg-rose-50 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 border border-rose-100"
+            className="flex items-center gap-3 px-8 py-4 text-rose-600 hover:bg-rose-50 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 border border-rose-200 disabled:opacity-50"
           >
             <XCircle size={18} /> Reject Handover
           </button>
 
           <button
             onClick={() => handleAction(true)}
-            disabled={processing}
-            className="flex items-center gap-3 px-10 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-xl shadow-emerald-500/20 font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 group"
+            disabled={processing || pendingJOs.length === 0}
+            className="flex items-center gap-3 px-10 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-xl shadow-emerald-500/20 font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 group disabled:opacity-50"
           >
             {processing ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} className="group-hover:scale-110 transition-transform" />}
-            Approve Handover
+            Approve Handover ({pendingJOs.length} JO)
           </button>
         </div>
       </Card>
