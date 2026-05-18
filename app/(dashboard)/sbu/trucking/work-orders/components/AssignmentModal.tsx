@@ -297,7 +297,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     setAssignments(updated);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (nextAction?: () => void) => {
     if (assigning) return;
     
     const tenantId = profile?.tenant_id;
@@ -465,7 +465,11 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
       toast.success('Assignment berhasil disimpan');
       console.log('[AssignmentModal] Save process completed successfully.');
       
-      onSuccess(); 
+      if (nextAction) {
+        nextAction();
+      } else {
+        onSuccess(); 
+      } 
     } catch (err: any) {
       console.error('[AssignmentModal] Critical Save Error:', err);
       // Detailed error logging for objects that don't serialize well
@@ -870,8 +874,9 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
              {onHandover && (
                 <button
                   type="button"
-                  onClick={onHandover}
-                  className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all border border-rose-200 flex items-center justify-center gap-2 active:scale-95"
+                  onClick={() => handleSave(onHandover)}
+                  disabled={assigning}
+                  className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all border border-rose-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                 >
                   <AlertTriangle size={16} /> Handover to HQ
                 </button>
@@ -884,7 +889,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                Cancel
              </button>
              <button
-               onClick={handleSave}
+               onClick={() => handleSave()}
                disabled={assigning}
                className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_4px_30px_rgba(79,70,229,0.4)] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
              >
