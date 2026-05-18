@@ -77,16 +77,21 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                 md_drivers: driverMap[j.driver_id]
               }));
               
+              const handoverItemIds = handoverItems.map((i: any) => i.id);
+              const pending = enrichedJOs.filter(j => handoverItemIds.includes(j.wo_item_id) && j.fleet_id && j.driver_id);
+              
               setAllItemJOs(enrichedJOs);
-              setPendingJOs(enrichedJOs.filter(j => j.status === 'handover_pending'));
+              setPendingJOs(pending);
               setLoading(false);
               return;
             }
           }
         }
         
+        const handoverItemIds = handoverItems.map((i: any) => i.id);
+        const pending = (jos || []).filter(j => handoverItemIds.includes(j.wo_item_id) && j.fleet_id && j.driver_id);
         setAllItemJOs(jos || []);
-        setPendingJOs((jos || []).filter(j => j.status === 'handover_pending'));
+        setPendingJOs(pending);
       } catch (err: any) {
         console.error("Handover Fetch Error:", err);
       } finally {
@@ -436,12 +441,12 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                       </h4>
                       {itemJOs.map((jo, joIdx) => {
                         const joStatusUpper = (jo.status || '').toUpperCase();
-                        const isHandoverPending = joStatusUpper === 'HANDOVER_PENDING';
+                        const isWaitingApproval = !!(jo.fleet_id && jo.driver_id);
                         const hasFleetDriver = jo.fleet_id && jo.driver_id;
                         
                         let statusColor = 'bg-slate-100 text-slate-600 border border-slate-200/50';
                         let statusLabel = jo.status || 'Unknown';
-                        if (isHandoverPending) {
+                        if (isWaitingApproval) {
                           statusColor = 'bg-orange-50 text-orange-600 border border-orange-100';
                           statusLabel = 'Waiting Approval';
                         } else if (['ASSIGNED', 'ACTIVE'].includes(joStatusUpper)) {
@@ -456,11 +461,11 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                           <div 
                             key={jo.id} 
                             className={`bg-white border rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center shadow-sm transition-all ${
-                              isHandoverPending ? 'border-orange-200 bg-orange-50/10' : 'border-slate-100'
+                              isWaitingApproval ? 'border-orange-200 bg-orange-50/10' : 'border-slate-100'
                             }`}
                           >
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] ${
-                              isHandoverPending ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' : 'bg-slate-100 text-slate-500'
+                              isWaitingApproval ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' : 'bg-slate-100 text-slate-500'
                             }`}>
                               {joIdx + 1}
                             </div>
