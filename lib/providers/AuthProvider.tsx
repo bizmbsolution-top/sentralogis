@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
@@ -37,6 +37,32 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
+const getDashboardRoute = (role: string) => {
+  // [AI] All director roles should land on the Executive Business Dashboard
+  if (role.startsWith('hq_director_')) {
+    return '/hq/business';
+  }
+
+  switch(role) {
+    case 'owner_sentralogis': return '/owner';
+    case 'tenant_superadmin': return '/tenant';
+    case 'hq_cs': return '/hq/work-orders';
+    case 'hq_ops': return '/hq/ops-dashboard';
+    case 'hq_finance': return '/hq/token';
+    case 'sbu_manager_tr': return '/sbu/trucking';
+    case 'sbu_ops_tr': return '/sbu/trucking/work-orders';
+    case 'sbu_fin_tr': return '/sbu/trucking/finances';
+    case 'sbu_fin_wh': return '/sbu/warehouse/finances';
+    case 'sbu_fin_fwd': return '/sbu/forwarding/finances';
+    case 'driver': return '/driver/jobs';
+    case 'tenant_admin': return '/tenant';
+    default:
+      if (role.startsWith('hq_')) return '/hq/sbu-activities';
+      if (role.startsWith('sbu_')) return '/sbu/trucking';
+      return '/tenant';
+  }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -44,27 +70,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const hasInitializedProfile = useRef(false);
 
-  const fetchFullProfile = async (userId: string) => {
+  const fetchFullProfile = async (userId: string, retryCount = 0): Promise<Profile | null> => {
     try {
-      console.log('[AuthProvider] Fetching full profile for:', userId);
+      console.log(`[AuthProvider] Fetching full profile (attempt ${retryCount + 1}) for:`, userId);
       
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, role, is_active, created_at, updated_at')
         .eq('id', userId)
         .maybeSingle();
 
       if (profileError) throw profileError;
 
-      let finalProfile: Profile = profileData || {
-        id: userId,
+      // If profile not found and it's a fresh login, wait a bit and retry once
+      // to give database triggers time to populate the profiles table
+      if (!profileData && retryCount < 1) {
+        console.log('[AuthProvider] Profile not found, retrying in 800ms...');
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return fetchFullProfile(userId, retryCount + 1);
+      }
+
+      if (!profileData) {
+        console.warn('[AuthProvider] Profile not found for user:', userId);
+        return {
+          id: userId,
+          email: '',
+          full_name: 'Unknown User',
+          role: '',
+          is_active: false,
+          created_at: '',
+          updated_at: ''
+        };
+      }
+
+      const finalProfile: Profile = {
+        id: profileData.id,
         email: '',
-        full_name: 'User',
-        role: 'user',
-        is_active: true,
-        created_at: '',
-        updated_at: ''
+        full_name: profileData.full_name || 'User',
+        role: profileData.role || '',
+        is_active: profileData.is_active ?? false,
+        created_at: profileData.created_at || '',
+        updated_at: profileData.updated_at || ''
       };
 
       const { data: tenantData, error: tenantError } = await supabase
@@ -97,158 +145,129 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
+    // [AI] Rely strictly on onAuthStateChange to handle session initialization.
+    // supabase.auth.onAuthStateChange immediately fires INITIAL_SESSION upon subscribing.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AuthProvider] Auth Event:', event, 'Profile loaded:', hasInitializedProfile.current);
       
       if (session?.user) {
         setUser(session.user);
-        const p = await fetchFullProfile(session.user.id);
-        setProfile(p);
-      }
-      setLoading(false);
-    };
-
-    initializeAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthProvider] Auth Event:', event);
-      if (session?.user) {
-        setUser(session.user);
-        const p = await fetchFullProfile(session.user.id);
-        setProfile(p);
         
-        // Auto-redirect from login if already authenticated
-        if (typeof window !== 'undefined' && window.location.pathname === '/login') {
-          const getDashboardRoute = (role: string) => {
-            switch(role) {
-              case 'owner_sentralogis': return '/owner';
-              case 'tenant_superadmin': return '/tenant';
-              case 'hq_cs': return '/hq/work-orders';
-              case 'hq_ops': return '/hq/ops-dashboard';
-              case 'hq_finance': return '/hq/token';
-              case 'hq_director_ops': return '/director/ops';
-              case 'hq_director_fin': return '/director/finance';
-              case 'hq_director_cs': return '/director/cs';
-              case 'sbu_manager_tr': return '/sbu/trucking';
-              case 'sbu_ops_tr': return '/sbu/trucking/work-orders';
-              case 'sbu_fin_tr': return '/sbu/trucking/finances';
-              case 'sbu_fin_wh': return '/sbu/warehouse/finances';
-              case 'sbu_fin_fwd': return '/sbu/forwarding/finances';
-              case 'driver': return '/driver/jobs';
-              case 'tenant_admin': return '/tenant';
-              default:
-                if (role.startsWith('hq_')) return '/hq/sbu-activities';
-                if (role.startsWith('sbu_')) return '/sbu/trucking';
-                return '/tenant';
+        // Fetch/Verify profile on SIGNED_IN, INITIAL_SESSION, TOKEN_REFRESHED, or if not loaded yet
+        if (!hasInitializedProfile.current || event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+          setLoading(true);
+          try {
+            const p = await fetchFullProfile(session.user.id);
+            
+            // Validate user role and status
+            if (!p?.role || p.role === '' || p.is_active === false) {
+              console.warn('[AuthProvider] User has no valid role assigned:', p);
+              toast.error('Akun Anda belum memiliki peran yang valid. Silakan hubungi administrator.');
+              await supabase.auth.signOut();
+              setUser(null);
+              setProfile(null);
+              hasInitializedProfile.current = false;
+              setLoading(false);
+              return;
             }
-          };
-          window.location.href = getDashboardRoute(p?.role || '');
+
+            setProfile(p);
+            hasInitializedProfile.current = true;
+
+            if (event === 'SIGNED_IN') {
+              toast.success('Login berhasil!');
+            }
+
+            // Auto-redirect from login if on the login page
+            if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+              const dashboardRoute = getDashboardRoute(p.role);
+              console.log('[AuthProvider] Redirecting to:', dashboardRoute);
+              router.push(dashboardRoute);
+            }
+          } catch (fetchErr) {
+            console.error('[AuthProvider] Error fetching/validating profile:', fetchErr);
+          } finally {
+            setLoading(false);
+          }
+        } else {
+          // [AI] Ensure loading is resolved to false if profile is already loaded to prevent UI spin lock
+          setLoading(false);
         }
       } else {
         setUser(null);
         setProfile(null);
+        hasInitializedProfile.current = false;
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   const login = async (email: string, password: string) => {
     try {
+      setLoading(true); // Set loading to true while authenticating
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
         toast.error(error.message);
+        setLoading(false);
         return { data: null, error };
       }
 
-      if (data.user) {
-        // Fetch profile immediately after login to get the role for redirection
-        const userProfile = await fetchFullProfile(data.user.id);
-        setProfile(userProfile);
-        
-        toast.success('Login berhasil!');
-        
-        // Helper function for role-based routing
-        const getDashboardRoute = (role: string) => {
-          switch(role) {
-            case 'owner_sentralogis': return '/owner';
-            case 'tenant_superadmin': return '/tenant';
-            case 'hq_cs': return '/hq/work-orders';
-            case 'hq_ops': return '/hq/ops-dashboard';
-            case 'hq_finance': return '/hq/token';
-            case 'hq_director_ops': return '/director/ops';
-            case 'hq_director_fin': return '/director/finance';
-            case 'hq_director_cs': return '/director/cs';
-            case 'sbu_manager_tr': return '/sbu/trucking';
-            case 'sbu_ops_tr': return '/sbu/trucking/work-orders';
-            case 'sbu_fin_tr': return '/sbu/trucking/finances';
-            case 'sbu_fin_wh': return '/sbu/warehouse/finances';
-            case 'sbu_fin_fwd': return '/sbu/forwarding/finances';
-            case 'driver': return '/driver/jobs';
-            case 'tenant_admin': return '/tenant';
-            default:
-              if (role.startsWith('hq_')) return '/hq/sbu-activities';
-              if (role.startsWith('sbu_')) return '/sbu/trucking';
-              return '/tenant';
-          }
-        };
-
-        if (typeof window !== 'undefined') {
-          window.location.href = getDashboardRoute(userProfile?.role || '');
-        }
-      }
-      
+      // [AI] The successful session change and redirection are completely handled 
+      // by the unified onAuthStateChange listener to eliminate race conditions.
       return { data, error: null };
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');
+      setLoading(false);
       return { data: null, error: err };
     }
   };
 
   const logout = async () => {
     try {
-      console.log('[AuthProvider] Starting logout process...');
-      setLoading(true);
+      console.log('[AuthProvider] Force logout initiated...');
       
-      // 1. Clear all React state first
+      // 1. Immediate UI state clearing
+      setLoading(true);
       setUser(null);
       setProfile(null);
+      hasInitializedProfile.current = false;
 
-      // 2. Clear all browser storage
+      // 2. Clear storage first to prevent any re-fetch loops
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
         
-        // Clear all cookies manually as a fallback
+        // Comprehensive cookie clearing
         const cookies = document.cookie.split(";");
         for (let i = 0; i < cookies.length; i++) {
           const cookie = cookies[i];
           const eqPos = cookie.indexOf("=");
-          const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-          document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+          // Also clear for subdomains just in case
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
         }
       }
 
-      // 3. Perform Supabase sign out
-      const { error } = await supabase.auth.signOut();
-      if (error) console.error('[AuthProvider] Supabase signOut error:', error);
+      // 3. Trigger Supabase Signout (non-blocking for speed)
+      supabase.auth.signOut().catch(e => console.error('Signout background error:', e));
       
       toast.success('Logout berhasil');
 
-      // 4. Force a clean reload to login page
+      // 4. Final hard redirect to ensure clean slate
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        setTimeout(() => {
+          window.location.replace('/login');
+        }, 100);
       }
     } catch (err) {
-      console.error('[AuthProvider] Logout failed:', err);
+      console.error('[AuthProvider] Logout critical error:', err);
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.replace('/login');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
