@@ -175,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             hasInitializedProfile.current = true;
 
             if (event === 'SIGNED_IN') {
+              toast.dismiss(); // [AI] Clear any stale or duplicate toasts
               toast.success('Login berhasil!');
             }
 
