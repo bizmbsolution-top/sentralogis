@@ -13,7 +13,8 @@ import {
 import { Card } from '@/components/ui/Card';
 import ContactFormModal from '@/components/master/ContactFormModal';
 import LocationAutocomplete from '@/components/hq/LocationAutocomplete';
-import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMaps } from '@/lib/google-maps-context';
+import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 
 interface RouteStop {
   id: string;
@@ -33,6 +34,7 @@ interface AddTruckingItemModalProps {
   onClose: () => void;
   onAdd: (item: any) => void;
   initialData?: any;
+  customerId?: string;
   defaultExecutionDate?: string;
   defaultExecutionTime?: string;
 }
@@ -47,7 +49,7 @@ const center = {
   lng: 106.8456,
 };
 
-export default function AddTruckingItemModal({ onClose, onAdd, initialData, defaultExecutionDate, defaultExecutionTime }: AddTruckingItemModalProps) {
+export default function AddTruckingItemModal({ onClose, onAdd, initialData, customerId, defaultExecutionDate, defaultExecutionTime }: AddTruckingItemModalProps) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [masterLocations, setMasterLocations] = useState<any[]>([]);
@@ -55,11 +57,7 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
   const [vehicleTypes, setVehicleTypes] = useState<any[]>([]);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '',
-    libraries: ['places'],
-  });
+  const { isLoaded } = useGoogleMaps();
 
   const [formData, setFormData] = useState({
     vehicle_type_id: '',
@@ -172,7 +170,14 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
     if (initialData?.item_data) {
       const { stops: initialStops, ...rest } = initialData.item_data;
       setFormData(rest);
-      if (initialStops) setStops(initialStops);
+      if (initialStops) {
+        const mapped = initialStops.map((s: any, idx: number) => ({
+          ...s,
+          id: s.id || Math.random().toString(36).substr(2, 9),
+          sequence: s.sequence || (idx + 1)
+        }));
+        setStops(mapped);
+      }
     }
   }, [initialData]);
 
@@ -181,35 +186,93 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
       if (!profile?.tenant_id) return;
       setLoading(true);
       try {
-        const [locRes, vehRes, entityRes] = await Promise.all([
-          supabase.from('md_locations').select('*').eq('tenant_id', profile.tenant_id).eq('is_active', true),
-          supabase.from('md_fleet_types').select('id, type_name, time_multiplier, fuel_consumption').or(`tenant_id.eq.${profile.tenant_id},tenant_id.is.null`),
-          supabase.from('md_entities')
-            .select('id, name, phone, md_entity_addresses(*)')
-            .eq('tenant_id', profile.tenant_id)
-        ]);
+        console.log('[AddTruckingItem] Fetching data... Customer ID:', customerId);
         
-        const allAddresses: any[] = [];
-        entityRes.data?.forEach(entity => {
-          entity.md_entity_addresses?.forEach((addr: any) => {
-            allAddresses.push({
-              ...addr,
-              md_entities: { name: entity.name, phone: entity.phone }
-            });
+        // 1. Fetch Master Locations & Vehicle Types
+        const [locRes, vehRes] = await Promise.all([
+          supabase.from('md_locations').select('*').eq('tenant_id', profile.tenant_id).eq('is_active', true),
+          supabase.from('md_fleet_types').select('id, type_name, time_multiplier, fuel_consumption').or(`tenant_id.eq.${profile.tenant_id},tenant_id.is.null`)
+        ]);
+
+        // 2. Fetch Operational Addresses (md_entity_addresses)
+        const addrQuery = supabase
+          .from('md_entity_addresses')
+          .select(`
+            *,
+            md_entities!inner(id, name, phone, tenant_id, is_customer, parent_id)
+          `)
+          .eq('md_entities.tenant_id', profile.tenant_id);
+
+        // 3. Fetch Entities (Parent + Children) for Billing Addresses
+        let entityQuery = supabase
+          .from('md_entities')
+          .select('id, name, phone, billing_address, billing_city, billing_province, billing_postal_code, billing_latitude, billing_longitude, parent_id')
+          .eq('tenant_id', profile.tenant_id);
+        
+        if (customerId) {
+          entityQuery = entityQuery.or(`id.eq.${customerId},parent_id.eq.${customerId}`);
+        }
+
+        const [addrRes, entityRes] = await Promise.all([addrQuery, entityQuery]);
+        
+        if (addrRes.error) console.error('[AddTruckingItem] Address Fetch Error:', addrRes.error);
+        if (entityRes.error) console.error('[AddTruckingItem] Entity Fetch Error:', entityRes.error);
+
+        // Process Operational Addresses
+        let finalAddresses = addrRes.data || [];
+        if (customerId) {
+          finalAddresses = finalAddresses.filter(addr => {
+            const ent = Array.isArray(addr.md_entities) ? addr.md_entities[0] : addr.md_entities;
+            return addr.entity_id === customerId || ent?.parent_id === customerId;
           });
+        }
+
+        const formattedAddresses = finalAddresses.map((addr: any) => {
+          const ent = Array.isArray(addr.md_entities) ? addr.md_entities[0] : addr.md_entities;
+          return {
+            ...addr,
+            md_entities: { 
+              name: ent?.name || 'Unknown Entity', 
+              phone: ent?.phone || '' 
+            }
+          };
+        });
+
+        // Convert Billing Addresses to virtual records
+        const billingVirtualAddresses = (entityRes.data || [])
+          .filter(ent => ent.billing_address)
+          .map(ent => ({
+            id: `billing-${ent.id}`,
+            entity_id: ent.id,
+            address_name: 'Kantor Pusat / Billing',
+            address: ent.billing_address,
+            city: ent.billing_city,
+            province: ent.billing_province,
+            postal_code: ent.billing_postal_code,
+            latitude: ent.billing_latitude,
+            longitude: ent.billing_longitude,
+            md_entities: { name: ent.name, phone: ent.phone }
+          }));
+
+        const allCombined = [...formattedAddresses, ...billingVirtualAddresses];
+
+        console.log('[AddTruckingItem] Locations found:', {
+          public: locRes.data?.length || 0,
+          operational: formattedAddresses.length,
+          billing: billingVirtualAddresses.length
         });
 
         setMasterLocations(locRes.data || []);
         setVehicleTypes(vehRes.data || []);
-        setContactAddresses(allAddresses);
+        setContactAddresses(allCombined);
       } catch (err) {
-        console.error('[AddTruckingItem] Fetch Error:', err);
+        console.error('[AddTruckingItem] Global Fetch Error:', err);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [profile?.tenant_id]);
+  }, [profile?.tenant_id, customerId]);
 
   const addStop = () => {
     const newStop: RouteStop = {
@@ -417,6 +480,7 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
                       {stop.source_type === 'MD_CONTACT_ADDRESS' && (
                         <select
                           value={stop.source_id}
+                          disabled={loading}
                           onChange={(e) => {
                             const addr = contactAddresses.find(a => a.id === e.target.value);
                             if (addr) {
@@ -431,21 +495,29 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
                               });
                             }
                           }}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none disabled:opacity-50"
                         >
-                          <option value="">Select Customer Location...</option>
-                          {contactAddresses.map(a => (
-                            <option key={a.id} value={a.id}>
-                              [{a.md_entities.name}] {a.address_name} - {a.city}
-                            </option>
-                          ))}
+                          {loading ? (
+                            <option>Syncing locations...</option>
+                          ) : contactAddresses.length === 0 ? (
+                            <option>No locations found. Add them in Contacts master.</option>
+                          ) : (
+                            <>
+                              <option value="">Select Customer Location...</option>
+                              {contactAddresses.map(a => (
+                                <option key={a.id} value={a.id}>
+                                  [{a.md_entities.name}] {a.address_name} - {a.city}
+                                </option>
+                              ))}
+                            </>
+                          )}
                         </select>
                       )}
 
                       {stop.source_type === 'GOOGLE_MAPS' && (
                         <LocationAutocomplete 
                           defaultValue={stop.address}
-                          onSelect={(place) => {
+                          onSelect={(place: { address: string; latitude: number; longitude: number; place_id: string }) => {
                             updateStop(stop.id, {
                               source_id: place.place_id,
                               location_name: place.address.split(',')[0],
@@ -500,13 +572,13 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, defa
                      center={stops.find(s => s.latitude !== null && s.latitude !== undefined)?.latitude ? { lat: Number(stops.find(s => s.latitude !== null)?.latitude), lng: Number(stops.find(s => s.latitude !== null)?.longitude) } : center}
                      zoom={11}
                    >
-                     {!directionsResponse && stops.map((stop) => (
+                     {!directionsResponse && stops.map((stop, index) => (
                        stop.latitude !== null && stop.latitude !== undefined && (
                          <Marker
-                           key={stop.id}
+                           key={stop.id || `marker-${index}`}
                            position={{ lat: Number(stop.latitude), lng: Number(stop.longitude) }}
                            label={{
-                             text: stop.sequence.toString(),
+                             text: String(stop.sequence || index + 1),
                              color: 'white',
                              fontWeight: 'black'
                            }}
