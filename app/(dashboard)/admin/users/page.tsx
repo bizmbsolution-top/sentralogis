@@ -533,6 +533,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-
-// Utility Loader
-const Loader2 = (props: { className?: string }) => <RefreshCw {...props} />;
