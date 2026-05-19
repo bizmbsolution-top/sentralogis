@@ -131,7 +131,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
            </div>
 
            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+               <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
               <Button 
                 type="submit" 
                 className="flex-[2] !py-6 !bg-slate-900" 

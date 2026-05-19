@@ -1,7 +1,7 @@
 "use client";
 
 import { GoogleMap, DirectionsRenderer } from "@react-google-maps/api";
-import { Navigation, Loader2, History, Clock, Activity } from "lucide-react";
+import { Navigation as NavIcon, Loader2, History, Clock, Activity } from "lucide-react";
 
 interface CockpitTelemetryFeedProps {
     jo: any;
@@ -19,7 +19,7 @@ export default function CockpitTelemetryFeed({
             <div className="aspect-square md:aspect-video lg:h-[600px] relative rounded-none overflow-hidden border-2 border-slate-50 shadow-xl bg-slate-50 group">
                 <div className="absolute top-8 left-8 z-10 bg-white shadow-xl px-6 py-3 rounded-none border border-slate-100">
                     <p className="text-[11px] font-black text-[#1E293B] uppercase tracking-widest flex items-center gap-3 italic">
-                        <Navigation className="w-4 h-4 text-emerald-600" /> Ground Telemetry Support
+                        <NavIcon className="w-4 h-4 text-emerald-600" /> Ground Telemetry Support
                     </p>
                 </div>
                 {!isLoaded ? (

@@ -1,32 +1,26 @@
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
 
-const env = fs.readFileSync('.env.local', 'utf8')
-const getEnv = (key) => {
-  const match = env.match(new RegExp(`${key}=(.*)`))
-  return match ? match[1].trim() : null
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient('https://nsvkewvmzivudkcczhnk.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdmtld3Zteml2dWRrY2N6aG5rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDc3Mjc2MywiZXhwIjoyMDkwMzQ4NzYzfQ.7ZDrwe28fRKFsbxZMzvpAqwDE39Iwk5ZZXWX_pLp8T8');
+
+async function testQuery() {
+    const { data, error } = await supabase.from("wo_items").select(`
+        *,
+        work_orders!inner (
+            id, wo_number, status, tenant_id
+        ),
+        job_orders (
+            id, wo_item_id, fleet_id, driver_id, jo_number, status, 
+            md_fleets:fleet_id (plate_number, entity_id, fleet_type_id),
+            md_drivers:md_drivers!fk_job_orders_md_driver (id, name, phone)
+        )
+    `).eq('work_orders.wo_number', 'WO/05/2026/006');
+
+    if (error) {
+        console.error("QUERY ERROR:", JSON.stringify(error, null, 2));
+    } else {
+        console.log("QUERY SUCCESS, DATA:", JSON.stringify(data, null, 2));
+    }
 }
 
-const supabase = createClient(
-  getEnv('NEXT_PUBLIC_SUPABASE_URL'),
-  getEnv('SUPABASE_SERVICE_ROLE_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-)
-
-async function debugWO() {
-  const { data, error } = await supabase
-    .from('wo_items')
-    .select('*, work_orders(*)')
-    .limit(1)
-
-  if (error) {
-    console.log("WO JOIN ERROR:", error.message)
-    // Try different relationship name
-    const { data: d2, error: e2 } = await supabase.from('wo_items').select('*, wo:wo_id(*)').limit(1)
-    if (e2) console.log("WO:WO_ID JOIN ERROR:", e2.message)
-    else console.log("WO:WO_ID JOIN SUCCESS")
-  } else {
-    console.log("WORK_ORDERS JOIN SUCCESS")
-  }
-}
-
-debugWO()
+testQuery();

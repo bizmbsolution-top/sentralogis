@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Package, Scan, Plus, ChevronRight, LayoutGrid, Info, ArrowUpRight, CheckCircle2, QrCode, Search, Building2, Wallet, RefreshCw, LogOut, ChevronDown, Coins, Clock, ArrowLeft } from 'lucide-react';
+import { Package, Scan, Plus, ChevronRight, LayoutGrid, Info, ArrowUpRight, CheckCircle2, QrCode, Search, Building2, Wallet, RefreshCw, LogOut, ChevronDown, Coins, Clock, ArrowLeft, PlusCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast, Toaster } from 'react-hot-toast';
 import Link from 'next/link';

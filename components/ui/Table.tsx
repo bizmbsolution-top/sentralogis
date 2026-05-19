@@ -11,8 +11,8 @@ export function Table({ children, className = '' }: { children: React.ReactNode;
   );
 }
 
-export function TableHeader({ children }: { children: React.ReactNode }) {
-  return <thead className="bg-slate-50/80 border-b border-slate-200">{children}</thead>;
+export function TableHeader({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <thead className={`bg-slate-50/80 border-b border-slate-200 ${className}`}>{children}</thead>;
 }
 
 export function TableRow({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -23,8 +23,8 @@ export function TableHead({ children, className = '' }: { children: React.ReactN
   return <th className={`px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest ${className}`}>{children}</th>;
 }
 
-export function TableCell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-6 py-4 text-sm text-slate-600 ${className}`}>{children}</td>;
+export function TableCell({ children, className = '', colSpan }: { children: React.ReactNode; className?: string; colSpan?: number }) {
+  return <td className={`px-6 py-4 text-sm text-slate-600 ${className}`} colSpan={colSpan}>{children}</td>;
 }
 
 export function TableBody({ children }: { children: React.ReactNode }) {

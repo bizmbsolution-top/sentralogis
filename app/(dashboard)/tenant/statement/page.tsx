@@ -111,7 +111,7 @@ export default function TokenStatementPage() {
           <p className="text-sm font-medium text-slate-500">Official audit trail for <span className="text-blue-600 font-bold">{tenant?.name}</span></p>
         </div>
         <div className="flex items-center gap-3 no-print">
-           <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+            <Button variant="secondary" className="gap-2" onClick={() => window.print()}>
               <Printer className="w-4 h-4" />
               Print Report
            </Button>

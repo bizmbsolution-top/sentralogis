@@ -63,3 +63,57 @@
     @apply block text-sm font-medium text-slate-700 mb-1;
   }
 }
+
+/* Custom scrollbar untuk milestone list */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animation for slide down */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover scale animation */
+.hover\:scale-\[1\.02\] {
+  transition: transform 0.2s ease-out;
+}
+
+.hover\:scale-\[1\.02\]:hover {
+  transform: scale(1.02);
+}
+
+.active\:scale-\[0\.98\]:active {
+  transform: scale(0.98);
+}
+
+/* Badge slide in from top */
+.group\/milestone .transform {
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1), opacity 0.2s ease;
+}

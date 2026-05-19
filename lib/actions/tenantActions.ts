@@ -1,15 +1,15 @@
 "use server";
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Note: admin client is now created inside each function via getAdminClient() helper
+type AdminClient = ReturnType<typeof createClient>;
 
-let cachedAdmin: any = null;
+let cachedAdmin: AdminClient | null = null;
 
-const getAdminClient = () => {
+const getAdminClient = (): AdminClient => {
   if (cachedAdmin) return cachedAdmin;
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Missing Supabase Admin configuration");
@@ -67,9 +67,10 @@ export async function getActiveTenants() {
       admin_name: profileMap.get(t.user_id)?.full_name || 'N/A',
       created_at: t.created_at || new Date().toISOString()
     }));
-  } catch (error: any) {
-    console.error('[GET_ACTIVE_TENANTS] Critical Exception:', error.message);
-    throw new Error(error.message || "Failed to sync executive console");
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[GET_ACTIVE_TENANTS] Critical Exception:', errMsg);
+    throw new Error(errMsg || "Failed to sync executive console");
   }
 }
 

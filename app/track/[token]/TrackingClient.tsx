@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
-import { Truck, Navigation, Clock, Phone, Loader2, MapPin, Activity, Image as ImageIcon, X, Expand } from "lucide-react";
+import { Truck, Navigation as NavIcon, Clock, Phone, Loader2, MapPin, Activity, Image as ImageIcon, X, Expand } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useGoogleMaps } from "@/lib/google-maps-context";
 import Image from "next/image";
@@ -114,7 +114,7 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                     {/* CENTER: ROUTE INFO */}
                     <div className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-3xl px-6 py-3 w-full md:w-auto overflow-hidden shadow-inner">
                          <div className="w-10 h-10 bg-orange-500 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-orange-500/20">
-                            <Navigation className="w-5 h-5" />
+                            <NavIcon className="w-5 h-5" />
                          </div>
                          <div className="min-w-0">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block leading-none mb-1.5 text-orange-400">Destination</span>

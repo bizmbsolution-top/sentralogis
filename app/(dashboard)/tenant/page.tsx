@@ -86,17 +86,17 @@ export default function TenantDashboard() {
       
       {/* Profile Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="flex items-center gap-6">
-           <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white text-3xl font-black italic shadow-2xl shadow-blue-500/20">
+        <div className="flex items-center gap-5">
+           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic shadow-xl shadow-blue-500/20">
              {editName?.substring(0,1).toUpperCase() || 'U'}
            </div>
            <div>
-              <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-1">{editName || 'Administrator'}</h1>
-              <p className="text-sm font-medium text-slate-500">Managing <span className="text-blue-600 font-bold">{tenant?.name}</span> ({tenant?.tenant_code})</p>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">{editName || 'Administrator'}</h1>
+              <p className="text-xs font-medium text-slate-500">Managing <span className="text-blue-600 font-bold">{tenant?.name}</span> ({tenant?.tenant_code})</p>
            </div>
         </div>
         <div className="flex items-center gap-3">
-           <Badge variant="info" className="!px-4 !py-2 !text-[10px]">
+           <Badge variant="info" className="!px-3 !py-1.5 !text-[10px] font-bold">
              {tenant?.subscription_tier?.toUpperCase()} CLUSTER
            </Badge>
         </div>
@@ -104,15 +104,15 @@ export default function TenantDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Profile/Identity Form */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader className="flex items-center gap-3">
-               <User className="w-5 h-5 text-slate-900" />
-               <h3 className="text-base font-bold text-slate-900">Administrator Identity</h3>
+            <CardHeader className="flex items-center gap-2 py-4">
+               <User className="w-4 h-4 text-slate-900" />
+               <h3 className="text-sm font-bold text-slate-900">Administrator Identity</h3>
             </CardHeader>
-            <CardContent>
-               <form onSubmit={handleUpdateProfile} className="space-y-8">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <CardContent className="pb-6">
+               <form onSubmit={handleUpdateProfile} className="space-y-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Input 
                       label="Full Name"
                       value={editName}
@@ -128,19 +128,19 @@ export default function TenantDashboard() {
                       icon={<Activity className="w-4 h-4" />}
                     />
                     <div className="space-y-1.5">
-                       <label className="text-sm font-semibold text-slate-700 ml-0.5">Primary Email</label>
-                       <div className="h-[46px] flex items-center px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-500 italic">
+                       <label className="text-xs font-semibold text-slate-700 ml-0.5">Primary Email</label>
+                       <div className="h-[40px] flex items-center px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-500 italic">
                          {profile?.email}
                        </div>
                     </div>
                     <div className="space-y-1.5">
-                       <label className="text-sm font-semibold text-slate-700 ml-0.5">Cluster Access Code</label>
-                       <div className="h-[46px] flex items-center px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-blue-600 italic uppercase">
+                       <label className="text-xs font-semibold text-slate-700 ml-0.5">Cluster Access Code</label>
+                       <div className="h-[40px] flex items-center px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-blue-600 italic uppercase">
                          {tenant?.tenant_code}
                        </div>
                     </div>
                  </div>
-                 <div className="flex justify-end pt-4">
+                  <div className="flex justify-end pt-2">
                     <Button type="submit" loading={updating} icon={<RefreshCcw className="w-4 h-4" />}>
                       Update Identity
                     </Button>
@@ -150,44 +150,44 @@ export default function TenantDashboard() {
           </Card>
 
           {/* Security Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <Card className="hover:border-blue-200 transition-all group">
-                <CardContent className="p-8 space-y-4">
-                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                      <Key className="w-6 h-6" />
+                <CardContent className="p-5 space-y-3">
+                   <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <Key className="w-5 h-5" />
                    </div>
-                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Access Key</h3>
-                   <p className="text-xs text-slate-500 leading-relaxed font-medium">Your current session is secured with RSA-256 encryption. Last login from Jakarta, ID.</p>
+                   <h3 className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">Access Key</h3>
+                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">Your current session is secured with RSA-256 encryption. Last login from Jakarta, ID.</p>
                 </CardContent>
              </Card>
              <Card className="hover:border-emerald-200 transition-all group">
-                <CardContent className="p-8 space-y-4">
-                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                      <Shield className="w-6 h-6" />
+                <CardContent className="p-5 space-y-3">
+                   <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                      <Shield className="w-5 h-5" />
                    </div>
-                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Node Security</h3>
-                   <p className="text-xs text-slate-500 leading-relaxed font-medium">Cluster node <strong>{tenant?.tenant_code}</strong> is currently active and healthy within the network.</p>
+                   <h3 className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">Node Security</h3>
+                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">Cluster node <strong>{tenant?.tenant_code}</strong> is currently active and healthy within the network.</p>
                 </CardContent>
              </Card>
           </div>
         </div>
 
         {/* Energy Sidecard */}
-        <div className="space-y-8">
-           <Card className="bg-blue-50 border border-blue-100 shadow-2xl shadow-blue-500/10 overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                 <Coins className="w-32 h-32 rotate-12 text-blue-900" />
+        <div className="space-y-6">
+           <Card className="bg-blue-50 border border-blue-100 shadow-xl shadow-blue-500/10 overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-6 opacity-5">
+                 <Coins className="w-24 h-24 rotate-12 text-blue-900" />
               </div>
-              <CardContent className="p-10 relative z-10">
-                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] italic mb-8">Available Energy Reserve</p>
-                 <div className="flex items-baseline gap-4 mb-10">
-                    <h2 className="text-7xl font-black text-blue-900 tracking-tighter italic">
+              <CardContent className="p-6 relative z-10">
+                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest italic mb-6">Available Energy Reserve</p>
+                 <div className="flex items-baseline gap-3 mb-8">
+                     <h2 className="text-2xl md:text-3xl font-semibold text-blue-900 tracking-tight italic">
                        {(tenant?.token_balance || 0).toLocaleString('id-ID')}
                     </h2>
-                    <span className="text-xs font-bold text-blue-400 uppercase">TKN</span>
+                    <span className="text-[10px] font-bold text-blue-400 uppercase">TKN</span>
                  </div>
                  <a href="/tenant/topup">
-                    <Button variant="primary" className="w-full !py-6 !rounded-xl !bg-blue-600 hover:!bg-blue-700 border-none group" icon={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}>
+                    <Button variant="primary" className="w-full !py-4 !rounded-xl !bg-blue-600 hover:!bg-blue-700 border-none group text-sm" icon={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}>
                       Manage Liquidity
                     </Button>
                  </a>
@@ -195,27 +195,27 @@ export default function TenantDashboard() {
            </Card>
 
            <Card>
-              <CardHeader className="flex items-center gap-3">
-                 <Activity className="w-5 h-5 text-blue-600" />
-                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Cluster Vitals</h3>
+              <CardHeader className="flex items-center gap-2 py-4">
+                 <Activity className="w-4 h-4 text-blue-600" />
+                 <h3 className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">Cluster Vitals</h3>
               </CardHeader>
-              <CardContent className="space-y-6">
-                 <div className="space-y-3">
-                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <CardContent className="space-y-5 pb-5">
+                 <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                        <span>Node Latency</span>
                        <span className="text-emerald-500">2ms</span>
                     </div>
-                    <ProgressBar progress={98} />
+                    <ProgressBar value={98} max={100} />
                  </div>
-                 <div className="space-y-3">
-                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                 <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                        <span>Energy Consumption</span>
                        <span className="text-blue-500">Low</span>
                     </div>
-                    <ProgressBar progress={12} />
+                    <ProgressBar value={12} max={100} />
                  </div>
-                 <div className="pt-4 border-t border-slate-100 flex items-center gap-3 text-[10px] font-bold text-slate-500 uppercase italic">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                 <div className="pt-4 border-t border-slate-100 flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase italic">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
                     Protocol v5.0 Active
                  </div>
               </CardContent>
@@ -224,10 +224,10 @@ export default function TenantDashboard() {
       </div>
 
       {/* Token Milestones Section for Tenant */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 ml-2">
-          <History className="w-5 h-5 text-slate-400" />
-          <h3 className="text-base font-bold text-slate-900 uppercase tracking-widest italic">Token Milestones & Audit Trail</h3>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 ml-1">
+          <History className="w-4 h-4 text-slate-400" />
+          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest italic">Token Milestones & Audit Trail</h3>
         </div>
         
         <div className="grid grid-cols-1 gap-6">
@@ -264,23 +264,23 @@ function TenantHistorySection({ tenantCode }: { tenantCode: string }) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {transactions.length > 0 ? transactions.map((tx) => (
         <Card key={tx.id} className="border-slate-100 hover:border-slate-200 transition-all">
-          <CardContent className="p-5 flex items-start gap-4">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+          <CardContent className="p-4 flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
               tx.transaction_type === 'TOPUP' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
             }`}>
-              {tx.transaction_type === 'TOPUP' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+              {tx.transaction_type === 'TOPUP' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="text-sm font-black text-slate-900 tracking-tight">
+                <p className="text-xs font-bold text-slate-900 tracking-tight">
                   {tx.transaction_type === 'TOPUP' ? '+' : '-'}{tx.amount.toLocaleString()} TKN
                 </p>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                   <Clock size={10} />
                   {new Date(tx.created_at).toLocaleDateString('id-ID')}
                 </div>
               </div>
-              <p className="text-xs font-medium text-slate-500 leading-relaxed italic truncate">
+              <p className="text-[11px] font-medium text-slate-500 leading-relaxed italic truncate">
                 {tx.description}
               </p>
             </div>

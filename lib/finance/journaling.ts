@@ -1,13 +1,13 @@
 import { supabase } from '@/lib/supabaseClient';
 
-export type JournalSource = 'surcharge' | 'reimbursement' | 'job_order_revenue';
+export type JournalSource = 'surcharge' | 'reimbursement' | 'job_order_revenue' | 'cogs_adjustment';
 
 interface JournalParams {
   jobOrderId: string;
   amount: number;
   description: string;
   sourceType: JournalSource;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export async function createJournalEntry({
@@ -40,10 +40,8 @@ export async function createJournalEntry({
       .from('finance_journals')
       .insert({
         job_order_id: jobOrderId,
-        transaction_date: new Date().toISOString().split('T')[0],
+        journal_date: new Date().toISOString().split('T')[0],
         description: description,
-        total_amount: amount,
-        source_type: sourceType,
         status: 'draft'
       })
       .select()
@@ -132,6 +130,21 @@ export async function createJournalEntry({
         debit: 0,
         credit: driverAmount
       });
+    } else if (sourceType === 'cogs_adjustment') {
+      // (D) Beban / HPP (Adjustment)
+      entries.push({
+        journal_id: journal.id,
+        account_id: accBebanBagiHasil?.id || accPendapatan.id,
+        debit: amount,
+        credit: 0
+      });
+      // (K) Hutang Driver / Kas
+      entries.push({
+        journal_id: journal.id,
+        account_id: accHutangDriver.id,
+        debit: 0,
+        credit: amount
+      });
     }
 
     if (entries.length > 0) {
@@ -140,8 +153,8 @@ export async function createJournalEntry({
     }
 
     return { success: true, journalId: journal.id };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Journaling Error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

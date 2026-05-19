@@ -194,7 +194,7 @@ export default function UserManagementPage() {
       setShowModal(false);
       fetchInitialData();
     } catch (error: unknown) {
-      toast.error(error.message);
+      toast.error((error as Error).message);
     } finally {
       setUpdating(false);
     }
@@ -244,7 +244,7 @@ export default function UserManagementPage() {
       toast.success("Personel berhasil dihapus.");
       fetchInitialData();
     } catch (error: unknown) {
-      toast.error(error.message);
+      toast.error((error as Error).message);
     } finally {
       setUpdating(false);
     }
@@ -257,76 +257,78 @@ export default function UserManagementPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#05080F] text-white p-6 lg:p-12 font-sans selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
       <Toaster position="top-right" />
 
-      {/* 🏛️ HEADER / NAVIGATION */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
-        <div className="space-y-3">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex items-center gap-4">
-             <div className="w-14 h-14 bg-emerald-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/20">
-                <ShieldCheck className="w-7 h-7 text-white" />
+             <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+                <ShieldCheck className="w-5 h-5 text-white" />
              </div>
              <div>
-                <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Manajemen Otoritas</h1>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mt-2">Identity & Access Management (IAM)</p>
+                <h1 className="text-xl md:text-2xl font-semibold text-slate-900 italic tracking-tight uppercase leading-none">User Management</h1>
+                <p className="text-xs text-slate-400 mt-1">Identity & Access Management</p>
              </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {(userProfile?.role === 'superadmin' || userProfile?.role === 'director') && (
+              <button 
+                onClick={openAdd}
+                className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white px-5 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" /> Add User
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {(userProfile?.role === 'superadmin' || userProfile?.role === 'director') && (
-            <button 
-              onClick={openAdd}
-              className="h-14 bg-emerald-600 hover:bg-emerald-500 text-white px-8 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/10 active:scale-95 flex items-center gap-3"
-            >
-              <UserPlus className="w-4 h-4" /> Tambah Personel
-            </button>
-          )}
+        {/* Controls */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-6">
+           <div className="flex items-center gap-3 w-full md:w-auto">
+              <Link href="/admin" className="h-10 px-4 bg-white border border-slate-200 rounded-lg flex items-center gap-2 text-sm text-slate-600 hover:bg-slate-50 transition-all">
+                 <ChevronLeft className="w-4 h-4" /> Back
+              </Link>
+           </div>
+           <div className="relative group w-full md:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Search user, email, or org..."
+                className="w-full h-10 bg-white border border-slate-200 rounded-lg pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+           </div>
         </div>
       </div>
 
-      {/* 🔍 CONTROLS */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
-         <div className="flex items-center gap-3 w-full md:w-auto">
-            <Link href="/admin" className="h-14 px-6 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all">
-               <ChevronLeft className="w-4 h-4" /> Beranda Utama
-            </Link>
-         </div>
-         <div className="relative group w-full md:w-[400px]">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Cari user, email, atau organisasi..."
-              className="w-full h-14 bg-white/5 border border-white/5 rounded-2xl pl-16 pr-6 text-[11px] font-black uppercase tracking-widest outline-none focus:border-emerald-500/50 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-      </div>
-
-      {/* 📊 USER DIRECTORY */}
-      <div className="bg-slate-900/30 backdrop-blur-3xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
-         {loading ? (
-           <div className="py-40 flex flex-col items-center justify-center gap-6 opacity-30">
-              <RefreshCw className="w-12 h-12 animate-spin" />
-              <p className="text-[10px] font-black uppercase tracking-widest italic">Sinkronisasi Data...</p>
-           </div>
-         ) : (
-           <table className="w-full text-left border-collapse">
-              <thead>
-                 <tr className="bg-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    <th className="px-10 py-6">Profil Pengguna</th>
-                    <th className="px-10 py-6">Organisasi</th>
-                    <th className="px-10 py-6">Level Otoritas</th>
-                    <th className="px-10 py-6 text-right">Tindakan</th>
-                 </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                 {filteredProfiles.map((p) => {
-                    const r = ROLE_CONFIG[p.role] || ROLE_CONFIG.viewer;
-                    return (
-                      <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
+      {/* User Table */}
+      <div className="max-w-7xl mx-auto">
+         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-4">
+                 <RefreshCw className="w-8 h-8 text-slate-300 animate-spin" />
+                 <p className="text-xs text-slate-400">Loading users...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+               <table className="w-full text-left border-collapse">
+                  <thead>
+                     <tr className="bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide border-b border-slate-200">
+                        <th className="px-4 py-3">Profile</th>
+                        <th className="px-4 py-3">Organization</th>
+                        <th className="px-4 py-3">Role</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                     {filteredProfiles.map((p) => {
+                        const r = ROLE_CONFIG[p.role] || ROLE_CONFIG.viewer;
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                          <td className="px-10 py-8">
                             <div className="flex items-center gap-5">
                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-lg font-black italic shadow-inner">

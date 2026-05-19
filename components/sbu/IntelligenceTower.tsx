@@ -1,414 +1,688 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { 
   Truck, 
-  MapPin, 
-  Clock, 
-  Phone, 
-  ChevronRight,
   Search, 
-  Navigation,
   Loader2,
   CheckCircle2,
-  AlertCircle,
-  History,
-  Image as ImageIcon,
-  Activity,
-  Zap,
   RefreshCcw,
-  ExternalLink,
   User,
-  MoreHorizontal
+  Target,
+  MessageSquare,
+  Box,
+  MapPin,
+  Clock,
+  Navigation,
+  History,
+  Package,
+  Menu,
+  X,
+  ChevronLeft
 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
-import { format, formatDistanceToNow } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { createClient } from '@/lib/supabase/client';
+import dynamic from 'next/dynamic';
+import { format } from 'date-fns';
+import { toast } from 'react-hot-toast';
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'completed': return 'bg-emerald-500 text-white';
-    case 'in_progress': return 'bg-blue-600 text-white';
-    case 'accepted': return 'bg-amber-500 text-white';
-    default: return 'bg-slate-400 text-white';
-  }
-};
+const IntelligenceMap = dynamic(() => import('./IntelligenceMap'), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-slate-100 flex flex-col items-center justify-center rounded-xl">
+      <Loader2 className="w-6 h-6 text-blue-600 animate-spin mb-2" />
+      <p className="text-slate-400 text-xs">Loading map...</p>
+    </div>
+  )
+});
 
-const getStatusLabel = (jo: any) => {
-  if (jo.status === 'accepted') return 'MENUNGGU BERANGKAT';
-  if (jo.status === 'in_progress') {
-    const activeStop = jo.routes?.find((r: any) => r.status === 'arrived');
-    if (activeStop) return `TIBA DI ${activeStop.location_name?.toUpperCase()}`;
-
-    const nextStop = jo.routes?.find((r: any) => r.status === 'pending');
-    if (nextStop) return `MENUJU ${nextStop.location_name?.toUpperCase()}`;
-
-    return 'MENUNGGU SELESAI';
-  }
-  if (jo.status === 'completed') return 'PEKERJAAN SELESAI';
-  return jo.status.toUpperCase().replace(/_/g, ' ');
-};
+const MissionTimeline = dynamic(() => import('./MissionTimeline'), { ssr: false });
 
 export default function IntelligenceTower() {
+  const supabase = createClient();
   const { profile } = useAuth();
-  const searchParams = useSearchParams();
-  const initialQuery = searchParams.get('jo') || '';
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [workOrder, setWorkOrder] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [jobOrders, setJobOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [selectedJoId, setSelectedJoId] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
+  const [focusedLocation, setFocusedLocation] = useState<{ lat: number, lng: number, title: string } | null>(null);
+  
+  // Mobile UI state
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [activeTab, setActiveTab] = useState<'map' | 'details' | 'log'>('map');
 
-  useEffect(() => {
-    if (profile) fetchData(initialQuery, false);
-  }, [initialQuery, profile]);
-
-  useEffect(() => {
-    if (!profile) return;
-    const q = searchQuery || initialQuery;
-    const interval = setInterval(() => fetchData(q, true), 10000);
-    return () => clearInterval(interval);
-  }, [searchQuery, initialQuery, profile]);
-
-  const fetchData = async (query: string, silent = false) => {
-    if (!profile) return;
+  const fetchData = useCallback(async (silent = false) => {
+    if (!profile?.tenant_id) return;
     if (!silent) setLoading(true);
     
     try {
-      let targetWoId = null;
-      let targetJoId = null;
-      let woData = null;
-
-      // Determine if we should filter by tenant_id (SBU roles)
-      const isHq = profile.role.startsWith('hq_') || profile.role === 'admin';
-      const userTenantId = profile.tenant_id;
-
-      if (query) {
-        // 1. Specific Search Logic
-        let { data: wo } = await supabase
-          .from('work_orders')
-          .select('*, customer:md_entities(name)')
-          .eq('wo_number', query)
-          .maybeSingle();
-
-        if (wo) {
-          targetWoId = wo.id;
-          woData = wo;
-        } else {
-          const { data: jo } = await supabase
-            .from('job_orders')
-            .select('*, wo_item:wo_item_id(wo_id)')
-            .or(`jo_number.eq.${query},tracking_token.eq.${query}`)
-            .maybeSingle();
-          
-          if (jo) {
-            targetJoId = jo.id;
-            targetWoId = jo.wo_item?.wo_id;
-            if (targetWoId) {
-              const { data: parentWo } = await supabase
-                .from('work_orders')
-                .select('*, customer:md_entities!customer_id(name)')
-                .eq('id', targetWoId)
-                .maybeSingle();
-              woData = parentWo;
-            }
-          }
-        }
-      }
-
-      // 2. Fetch JOs
-      let queryBuilder = supabase.from('job_orders').select(`
-        id, jo_number, status, accepted_at, started_at, completed_at, updated_at, wo_item_id, tracking_token
-      `);
-
-      if (targetJoId) {
-        // If specific JO search, filter to only that JO
-        queryBuilder = queryBuilder.eq('id', targetJoId);
-      } else if (targetWoId) {
-        // If specific WO search, filter to all JOs in the WO
-        const { data: items } = await supabase.from('wo_items').select('id').eq('wo_id', targetWoId);
-        const itemIds = items?.map(i => i.id) || [];
-        if (itemIds.length > 0) {
-          queryBuilder = queryBuilder.in('wo_item_id', itemIds);
-        } else {
-          // If no items, this WO has no jobs
-          setJobOrders([]);
-          setWorkOrder(woData);
-          setLoading(false);
-          return;
-        }
-      } else if (query && !targetWoId && !targetJoId) {
-        // If query doesn't match anything
-        setJobOrders([]);
-        setWorkOrder(null);
-        setLoading(false);
-        return;
-      } else {
-        // If NO search, show all ACTIVE (not completed)
-        queryBuilder = queryBuilder.in('status', ['accepted', 'in_progress']);
-        
-        // SBU roles only see their own tenant
-        if (!isHq && userTenantId) {
-          queryBuilder = queryBuilder.eq('tenant_id', userTenantId);
-        }
-        
-        queryBuilder = queryBuilder.order('updated_at', { ascending: false });
-      }
+      const queryBuilder = supabase.from('job_orders').select(`
+        id, jo_number, status, accepted_at, started_at, loaded_at, unloaded_at, completed_at, updated_at, tracking_token, driver_link_token,
+        driver_id, fleet_id, driver_response,
+        wo_item:wo_items!wo_item_id (
+            id, item_data,
+            wo:work_orders!wo_id (
+                id, wo_number,
+                customer:md_entities!customer_id (id, name, phone)
+            )
+        )
+      `)
+      .eq('tenant_id', profile.tenant_id)
+      .not('driver_id', 'is', null)
+      .not('fleet_id', 'is', null)
+      .order('created_at', { ascending: false });
 
       const { data: jos, error: joError } = await queryBuilder;
 
-      if (joError) {
-        console.error("JO Fetch Error Details:", joError.message, joError.details, joError.hint);
-        setJobOrders([]);
-        setWorkOrder(null);
-        return;
-      }
+      if (joError) throw joError;
 
-      if (jos) {
-        // If we don't have woData (view all mode), we need to fetch WO info for each JO
-        const processedJos = await Promise.all(jos.map(async (jo) => {
-          let parentWo = (jo as any).wo_item?.work_orders;
+      const DONE_STATUSES = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE', 'INVOICED', 'PAID'];
+      const REJECTED_STATUSES = ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'];
+      const activeJos = (jos || []).filter(jo => {
+        const s = jo.status?.toUpperCase() || '';
+        return !DONE_STATUSES.includes(s) && !REJECTED_STATUSES.includes(s);
+      });
+
+      if (activeJos.length > 0) {
+        const joIds = activeJos.map(j => j.id);
+        const driverIds = [...new Set(activeJos.map(j => j.driver_id).filter(Boolean))];
+        const fleetIds = [...new Set(activeJos.map(j => j.fleet_id).filter(Boolean))];
+
+        const [driversRes, fleetsRes, routesRes, trackingRes, docsRes] = await Promise.all([
+          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] },
+          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name, icon_url)').in('id', fleetIds) : { data: [] },
+          supabase.from('job_routes').select('*').in('job_order_id', joIds).order('sequence', { ascending: true }),
+          supabase.from('job_tracking').select('*').in('job_order_id', joIds).order('created_at', { ascending: false }),
+          supabase.from('documents').select('*').in('job_order_id', joIds)
+        ]);
+
+        const processedJos = activeJos.map(jo => {
+          const joDriver = driversRes.data?.find(d => d.id === jo.driver_id);
+          const joFleet = fleetsRes.data?.find(f => f.id === jo.fleet_id);
+          const joRoutes = (routesRes.data || []).filter(r => r.job_order_id === jo.id);
+          const joTracking = trackingRes.data?.filter(t => t.job_order_id === jo.id) || [];
+          const attachments = (docsRes?.data || []).filter((d: any) => d.job_order_id === jo.id);
           
-          if (!parentWo && woData) {
-            parentWo = woData;
-          }
+          const isStarted = jo.started_at !== null;
+          const isCompleted = jo.completed_at !== null;
+          const isAccepted = jo.driver_response === 'accepted';
 
-          const stops = (jo.routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
-          const latestLog = (jo.tracking || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-          
-          const milestones = [
-            { label: 'TERIMA', status: jo.accepted_at ? 'completed' : 'pending' },
-            { label: 'MULAI', status: jo.started_at ? 'completed' : (jo.accepted_at ? 'current' : 'pending') },
-            ...stops.map((s: any) => ({
-              label: s.location_name?.toUpperCase() || `LOC ${s.sequence}`,
-              status: s.status === 'completed' ? 'completed' : (s.status === 'arrived' ? 'current' : 'pending')
-            })),
-            { label: 'FINISH', status: jo.completed_at ? 'completed' : 'pending' }
-          ];
+          let category = 'assigned';
+          if (isCompleted || DONE_STATUSES.includes(jo.status?.toUpperCase() || '')) category = 'completed';
+          else if (isStarted || jo.status === 'in_progress' || jo.status === 'DALAM PERJALANAN' || jo.status.startsWith('MENUJU') || jo.status.startsWith('TIBA')) category = 'active';
+          else if (isAccepted) category = 'active';
 
-          const totalDots = milestones.length;
-          const gap = 100 / (totalDots - 1);
-          const latestReachedIndex = [...milestones].reverse().findIndex(m => m.status !== 'pending');
-          const i = latestReachedIndex === -1 ? 0 : (milestones.length - 1 - latestReachedIndex);
-          let progress = i * gap;
-          if (milestones[i].status === 'completed' && i < milestones.length - 1) {
-             progress += gap * 0.5;
+          let iconUrl = (joFleet as any)?.fleet_type?.icon_url || null;
+          if (iconUrl && !iconUrl.startsWith('http')) {
+            const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nsvkewvmzivudkcczhnk.supabase.co';
+            iconUrl = `${baseUrl}/storage/v1/object/public/logos/${iconUrl}`;
           }
-          if (jo.status === 'completed') progress = 100;
 
           return {
             ...jo,
-            milestones,
-            progress_pipeline: progress,
-            latest_log: latestLog,
-            parent_wo: parentWo
+            drivers: joDriver,
+            fleets: joFleet,
+            fleet_type_name: (joFleet as any)?.fleet_type?.type_name || 'Truck',
+            icon_url: iconUrl,
+            wo_id: jo.wo_item?.wo?.id || null,
+            wo_number: jo.wo_item?.wo?.wo_number || 'NO WO',
+            customer_name: jo.wo_item?.wo?.customer?.name || 'PRIVATE CLIENT',
+            customer_phone: jo.wo_item?.wo?.customer?.phone || null,
+            plate_number: (joFleet as any)?.plate_number || 'NO PLATE',
+            driver_name: joDriver?.name || 'NO DRIVER',
+            driver_phone: joDriver?.phone || null,
+            routes: joRoutes,
+            tracking_history: joTracking,
+            attachments: attachments,
+            latest_log: joTracking[0],
+            category
           };
-        }));
+        });
 
         setJobOrders(processedJos);
-        setWorkOrder(woData || (processedJos.length > 0 ? { wo_number: 'ALL ACTIVE JOURNEYS' } : null));
+        // [AI] Don't auto-select first job - let user click marker to see details
         setLastRefreshed(new Date());
       } else {
         setJobOrders([]);
-        setWorkOrder(null);
       }
     } catch (err) {
-      console.error("Tower Sync Error:", err);
+      console.error("Mission Radar Fetch Error:", err);
     } finally {
       setLoading(false);
     }
+  }, [supabase, profile, selectedJoId]);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => fetchData(true), 15000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const filteredJos = useMemo(() => {
+      if (!searchQuery) return jobOrders;
+      const q = searchQuery.toLowerCase();
+      return jobOrders.filter(j => 
+        j.jo_number?.toLowerCase().includes(q) || 
+        j.plate_number?.toLowerCase().includes(q) ||
+        j.customer_name?.toLowerCase().includes(q) ||
+        j.wo_number?.toLowerCase().includes(q)
+      );
+  }, [jobOrders, searchQuery]);
+
+  const selectedJo = useMemo(() => jobOrders.find(j => j.id === selectedJoId) || null, [jobOrders, selectedJoId]);
+
+  const groupedByWO = useMemo(() => {
+    const groups: { [key: string]: any[] } = {};
+    filteredJos.forEach(jo => {
+      if (!groups[jo.wo_number]) groups[jo.wo_number] = [];
+      groups[jo.wo_number].push(jo);
+    });
+    return groups;
+  }, [filteredJos]);
+
+  const activeCount = jobOrders.filter(j => j.category === 'active').length;
+  const assignedCount = jobOrders.filter(j => j.category === 'assigned').length;
+
+  const handleSelectJob = (joId: string) => {
+    setSelectedJoId(joId);
+    setShowLog(false);
+    setShowSidebar(false);
+    setActiveTab('map');
   };
 
-  return (
-    <div className="bg-[#F8FAFC] -mx-8 -mt-8 min-h-screen">
-      {/* Header Bar */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-8 py-4 shadow-sm">
-         <div className="max-w-[1800px] mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-6">
-               <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl rotate-3">
-                  <Navigation size={24} />
-               </div>
-               <div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none">Intelligence Tower</h1>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                       {lastRefreshed ? `Live Sync: ${format(lastRefreshed, 'HH:mm:ss')}` : 'Connecting...'}
-                    </p>
-                  </div>
-               </div>
-            </div>
+  const handleShareToCustomer = () => {
+    if (!selectedJo?.wo_id) {
+      toast.error('Work Order ID tidak ditemukan');
+      return;
+    }
+    const link = `${window.location.origin}/track/wo/${selectedJo.wo_id}`;
+    const message = `Halo ${selectedJo.customer_name || 'Pelanggan'},\n\nBerikut link pelacakan pengiriman Anda:\n${selectedJo.wo_number}\n\nPantau semua armada secara real-time:\n${link}`;
+    
+    let phone = selectedJo.customer_phone || '';
+    if (!phone) {
+      toast.error('Nomor telepon customer tidak ditemukan');
+      return;
+    }
+    phone = phone.replace(/\D/g, '');
+    if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+    if (phone.startsWith('8')) phone = '62' + phone;
 
-            <div className="flex items-center gap-8">
-               {workOrder && (
-                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-2.5 rounded-2xl border border-slate-100">
-                    <div className="text-right">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">Customer</p>
-                       <p className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[150px]">{workOrder.customer?.name}</p>
-                    </div>
-                    <div className="w-px h-8 bg-slate-200"></div>
-                    <div className="text-center">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">Active Work Order</p>
-                       <h2 className="text-lg font-black text-blue-600 uppercase tracking-tighter">{workOrder.wo_number}</h2>
-                    </div>
-                 </div>
-               )}
+    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+    toast.success('WhatsApp Web dibuka!');
+  };
 
-               <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <Input 
-                      placeholder="SCAN WO / JO NUMBER..." 
-                      className="w-80 h-12 pl-12 bg-slate-50 border-transparent rounded-2xl font-black text-xs tracking-widest uppercase focus:bg-white focus:ring-4 focus:ring-slate-900/5 transition-all outline-none"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === 'Enter' && fetchData(searchQuery)}
-                    />
-                  </div>
-                  <Button 
-                    className="bg-slate-900 hover:bg-black text-white h-12 rounded-2xl px-8 font-black uppercase text-xs tracking-widest shadow-xl shadow-slate-900/20 flex gap-3 transition-all active:scale-95"
-                    onClick={() => fetchData(searchQuery)}
-                  >
-                    {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />} 
-                    Monitor
-                  </Button>
-               </div>
+  // Reusable sidebar content
+  const SidebarContent = () => (
+    <>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {Object.keys(groupedByWO).length === 0 ? (
+          <div className="py-12 text-center">
+            <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Package className="w-6 h-6 text-slate-200" />
             </div>
-         </div>
+            <p className="text-xs text-slate-500 font-medium">No active shipments</p>
+            <p className="text-[10px] text-slate-400 mt-1">Assigned jobs will appear here</p>
+          </div>
+        ) : (
+          Object.entries(groupedByWO).map(([woNum, jos]) => (
+            <div key={woNum}>
+              <div className="flex items-center gap-2 px-2 mb-1.5">
+                <Box className="w-3 h-3 text-slate-400" />
+                <span className="text-xs font-medium text-slate-600">{woNum}</span>
+                <span className="text-[10px] text-slate-400 ml-auto truncate">{jos[0].customer_name}</span>
+              </div>
+              <div className="space-y-1">
+                {jos.map(jo => {
+                  const isSelected = selectedJoId === jo.id;
+                  return (
+                    <button
+                      key={jo.id}
+                      onClick={() => handleSelectJob(jo.id)}
+                      className={`w-full text-left p-2.5 rounded-lg border transition-all ${
+                        isSelected 
+                          ? 'bg-blue-50 border-blue-200 shadow-sm' 
+                          : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-blue-100' : 'bg-slate-100'
+                        }`}>
+                          {jo.icon_url ? (
+                            <img src={jo.icon_url} alt="" className="w-4 h-4 object-contain" crossOrigin="anonymous" />
+                          ) : (
+                            <Truck className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-slate-500'}`} />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-xs font-medium text-slate-900 truncate">{jo.plate_number}</span>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ml-1 ${
+                              jo.category === 'active' 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {jo.category === 'active' ? 'Active' : 'Assigned'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 truncate">{jo.jo_number}</p>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className="text-[10px] text-slate-400 truncate">{jo.driver_name}</span>
+                            {jo.latest_log && (
+                              <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                                <Clock size={10} />
+                                {format(new Date(jo.latest_log.created_at), 'HH:mm')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
-      <div className="max-w-[1800px] mx-auto p-8">
-         {!loading && jobOrders.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-48 border-4 border-dashed border-slate-100 rounded-[50px] bg-white shadow-inner">
-               <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-8">
-                  <Activity size={48} className="text-slate-200" />
-               </div>
-               <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tighter opacity-50">No Active Journeys</h3>
-               <p className="text-slate-400 font-bold mt-3 text-lg">Semua armada sedang dalam posisi parkir atau belum memulai penugasan.</p>
-            </div>
-         )}
+      {/* Sidebar Footer */}
+      <div className="p-3 border-t border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-between text-[10px] text-slate-400">
+          <span>Last sync</span>
+          <span className="font-mono">{lastRefreshed ? format(lastRefreshed, 'HH:mm:ss') : '--:--:--'}</span>
+        </div>
+      </div>
+    </>
+  );
 
-         {jobOrders.length > 0 && (
-            <div className="space-y-6">
-               <div className="flex items-center justify-between px-4">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.4em]">Fleet Journey Pipelines — {jobOrders.length} Units Active</h3>
-                  <div className="flex gap-4">
-                    <Badge className="bg-blue-600/10 text-blue-600 border-blue-100 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">
-                       {jobOrders.filter(j => j.status === 'in_progress').length} Moving
-                    </Badge>
-                    <Badge className="bg-emerald-600/10 text-emerald-600 border-emerald-100 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">
-                       {jobOrders.filter(j => j.status === 'completed').length} Delivered
-                    </Badge>
+  if (loading && jobOrders.length === 0) {
+    return (
+      <div className="h-[calc(100vh-4rem)] w-full bg-white flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
+        <p className="text-slate-500 text-sm font-medium">Loading fleet data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-[calc(100vh-4rem)] bg-slate-50 flex flex-col">
+      {/* Top Header Bar */}
+      <div className="bg-white border-b border-slate-200 px-3 md:px-4 py-2.5 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Mobile: sidebar toggle */}
+          <button 
+            onClick={() => setShowSidebar(true)}
+            className="w-8 h-8 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 lg:hidden"
+          >
+            <Menu size={16} className="text-slate-600" />
+          </button>
+          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+            <Target className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="hidden sm:block">
+            <h1 className="text-sm font-semibold text-slate-900">Fleet Tracking</h1>
+            <p className="text-[10px] text-slate-400">Real-time monitoring</p>
+          </div>
+        </div>
+
+        {/* Stats - hidden on very small screens */}
+        <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-lg">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-[10px] font-medium text-emerald-700">{activeCount} On Journey</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-lg">
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+            <span className="text-[10px] font-medium text-blue-700">{assignedCount} Assigned</span>
+          </div>
+        </div>
+
+        {/* Search - hidden on mobile, shown in sidebar */}
+        <div className="hidden lg:block relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+          <input 
+            placeholder="Search JO, plate, customer..." 
+            className="w-56 h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none transition-all"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* Refresh */}
+        <button 
+          onClick={() => { fetchData(); toast.success('Data refreshed'); }}
+          className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"
+        >
+          <RefreshCcw className="w-3 h-3" />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
+      </div>
+
+      {/* Mobile: stats bar */}
+      <div className="md:hidden flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100 shrink-0">
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded">
+          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          <span className="text-[10px] font-medium text-emerald-700">{activeCount} Active</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded">
+          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+          <span className="text-[10px] font-medium text-blue-700">{assignedCount} Assigned</span>
+        </div>
+        {selectedJo && (
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-slate-500 truncate">{selectedJo.plate_number}</span>
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+              selectedJo.category === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              {selectedJo.category === 'active' ? 'Active' : 'Assigned'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile: tab bar */}
+      {selectedJo && (
+        <div className="lg:hidden flex items-center border-b border-slate-200 bg-white shrink-0">
+          {[
+            { key: 'map' as const, label: 'Map', icon: MapPin },
+            { key: 'details' as const, label: 'Details', icon: Truck },
+            { key: 'log' as const, label: 'Log', icon: History },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-all border-b-2 ${
+                activeTab === tab.key
+                  ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <tab.icon size={14} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Mobile: Floating Share Button */}
+      {selectedJo && (
+        <button
+          onClick={handleShareToCustomer}
+          className="lg:hidden fixed bottom-20 right-4 z-30 h-12 w-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-all active:scale-95"
+          title="Share to Customer"
+        >
+          <MessageSquare size={20} />
+        </button>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Desktop Left Sidebar */}
+        <div className="hidden lg:flex w-72 bg-white border-r border-slate-200 flex-col shrink-0">
+          {/* Search in sidebar */}
+          <div className="p-3 border-b border-slate-100">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+              <input 
+                placeholder="Search..." 
+                className="w-full h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-blue-500 outline-none transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          <SidebarContent />
+        </div>
+
+        {/* Mobile sidebar overlay */}
+        {showSidebar && (
+          <>
+            <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={() => setShowSidebar(false)} />
+            <div className="fixed inset-y-0 left-0 w-72 bg-white z-50 flex flex-col shadow-xl lg:hidden">
+              <div className="flex items-center justify-between p-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-slate-900">Shipments</span>
+                </div>
+                <button onClick={() => setShowSidebar(false)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+                  <X size={16} className="text-slate-500" />
+                </button>
+              </div>
+              <div className="p-3 border-b border-slate-100">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+                  <input 
+                    placeholder="Search..." 
+                    className="w-full h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:border-blue-500 outline-none transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              <SidebarContent />
+            </div>
+          </>
+        )}
+
+        {/* Center Content */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {!selectedJo ? (
+            <div className="flex-1 flex flex-col items-center justify-center bg-white">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                <Navigation className="w-8 h-8 text-slate-200" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-500 mb-1">Select a shipment</h3>
+              <p className="text-xs text-slate-400">Choose from the sidebar to view details</p>
+            </div>
+          ) : (
+            <>
+              {/* Map - shown on desktop always, on mobile when tab='map' */}
+              <div className={`flex-1 p-3 min-h-0 ${activeTab !== 'map' ? 'hidden lg:block' : ''}`}>
+                <div className="h-full bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <IntelligenceMap 
+                    missions={jobOrders} 
+                    selectedMissionId={selectedJoId}
+                    onSelectMission={(m) => setSelectedJoId(m ? m.id : null)}
+                    focusedLocation={focusedLocation}
+                  />
+                </div>
+              </div>
+
+              {/* Details Panel - shown on desktop always, on mobile when tab='details' */}
+              <div className={`${activeTab !== 'details' ? 'hidden lg:block' : ''} bg-white border-t border-slate-200 lg:border-t-0 shrink-0`}>
+                {/* Mobile: collapsible header */}
+                <div className="lg:hidden flex items-center justify-between px-3 py-2 border-b border-slate-100">
+                  <span className="text-xs font-medium text-slate-700">Job Details</span>
+                  <button onClick={() => setActiveTab('map')} className="text-[10px] text-blue-600 flex items-center gap-1">
+                    <ChevronLeft size={12} /> Back to map
+                  </button>
+                </div>
+
+                <div className="p-3 md:p-4">
+                  {/* Job Info - responsive grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Job Order</p>
+                      <p className="text-xs font-semibold text-slate-900 truncate">{selectedJo.jo_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Customer</p>
+                      <p className="text-xs font-semibold text-slate-900 truncate">{selectedJo.customer_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Driver</p>
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-slate-400" />
+                        <p className="text-xs font-semibold text-slate-900 truncate">{selectedJo.driver_name}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Vehicle</p>
+                      <p className="text-xs font-semibold text-slate-900 truncate">{selectedJo.plate_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 mb-0.5">Status</p>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        selectedJo.category === 'active' 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {selectedJo.category === 'active' ? (
+                          <><div className="w-1 h-1 bg-emerald-500 rounded-full mr-1 animate-pulse" /> On Journey</>
+                        ) : (
+                          <><div className="w-1 h-1 bg-blue-500 rounded-full mr-1" /> Assigned</>
+                        )}
+                      </span>
+                    </div>
+                    {/* Actions - only visible on larger screens in this grid */}
+                    <div className="hidden lg:flex items-center gap-2">
+                      <button 
+                        onClick={() => { setShowLog(!showLog); setActiveTab('map'); }}
+                        className={`h-7 px-2 rounded-lg text-[10px] font-medium flex items-center gap-1 border transition-all ${
+                          showLog 
+                            ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <History className="w-3 h-3" />
+                        Log
+                      </button>
+                      <button 
+                        onClick={handleShareToCustomer}
+                        className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-all"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        Share
+                      </button>
+                    </div>
                   </div>
-               </div>
 
-               <div className="space-y-4">
-                  {jobOrders.map(jo => (
-                    <Card key={jo.id} className="p-0 rounded-[2.5rem] border-slate-100 shadow-sm hover:shadow-xl hover:scale-[1.005] transition-all duration-500 overflow-hidden bg-white group">
-                       <div className="flex items-center min-h-[140px]">
-                          {/* LEFT: IDENTITY */}
-                          <div className="w-1/4 p-8 border-r border-slate-50 flex items-center gap-6">
-                             <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-2xl shrink-0 group-hover:rotate-6 transition-transform">
-                                <Truck size={32} />
-                             </div>
-                             <div className="min-w-0">
-                                {jo.parent_wo && (
-                                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 truncate">
-                                     {jo.parent_wo.customer?.name} / {jo.parent_wo.wo_number}
-                                  </p>
-                                )}
-                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1 truncate">{jo.jo_number}</p>
-                                <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight">{jo.fleets?.plate_number}</h4>
-                                <div className="flex items-center gap-2 mt-1.5">
-                                   <User size={12} className="text-slate-400" />
-                                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-tight truncate">{jo.drivers?.name || 'No Driver'}</p>
-                                </div>
-                             </div>
+                  {/* Mobile action button - Log shortcut (Share is FAB) */}
+                  <div className="lg:hidden mb-3">
+                    <button 
+                      onClick={() => setActiveTab('log')}
+                      className="w-full h-9 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      View Mission Log
+                    </button>
+                  </div>
+
+                  {/* Route Stops */}
+                  {selectedJo.routes && selectedJo.routes.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {selectedJo.routes.map((route: any, idx: number) => (
+                        <div 
+                          key={route.id} 
+                          className={`min-w-[180px] p-2.5 rounded-lg border transition-all cursor-pointer ${
+                            ['completed', 'arrived', 'departed'].includes(route.status) 
+                              ? 'bg-emerald-50 border-emerald-100' 
+                              : 'bg-white border-slate-100 hover:border-slate-200'
+                          }`}
+                          onClick={() => {
+                            if (route.latitude && route.longitude) {
+                              setFocusedLocation({ lat: route.latitude, lng: route.longitude, title: route.location_name });
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold shrink-0 ${
+                              ['completed', 'arrived', 'departed'].includes(route.status) 
+                                ? 'bg-emerald-500 text-white' 
+                                : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {idx + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className={`text-[10px] font-medium ${
+                                ['completed', 'arrived', 'departed'].includes(route.status) ? 'text-emerald-600' : 'text-slate-500'
+                              }`}>
+                                {route.stop_type}
+                              </span>
+                              <p className="text-xs font-medium text-slate-900 truncate">{route.location_name}</p>
+                            </div>
                           </div>
-
-                          {/* MIDDLE: JOURNEY PIPELINE */}
-                          <div className="flex-1 px-12 py-8">
-                             <div className="relative h-20 flex flex-col justify-center">
-                                {/* The Pipe Line */}
-                                <div className="absolute left-0 right-0 h-1 bg-slate-100 rounded-full">
-                                   <div 
-                                      className="h-full bg-blue-600 transition-all duration-1000 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-                                      style={{ width: `${jo.progress_pipeline}%` }}
-                                   />
-                                </div>
-
-                                {/* Dots / Milestones */}
-                                <div className="absolute left-0 right-0 flex justify-between items-center px-1">
-                                   {jo.milestones.map((m: any, idx: number) => (
-                                      <div key={idx} className="flex flex-col items-center group/dot">
-                                         <div className={`w-6 h-6 rounded-full border-4 transition-all duration-500 flex items-center justify-center z-10 ${
-                                            m.status === 'completed' ? 'bg-emerald-500 border-emerald-100 scale-110' : 
-                                            m.status === 'current' ? 'bg-blue-600 border-blue-100 animate-pulse scale-125' : 
-                                            'bg-white border-slate-100 group-hover/dot:border-slate-300'
-                                         }`}>
-                                            {m.status === 'completed' && <CheckCircle2 size={10} className="text-white" />}
-                                            {m.status === 'current' && <Activity size={10} className="text-white" />}
-                                         </div>
-                                         <span className={`absolute mt-12 text-[8px] font-black uppercase tracking-tighter text-center whitespace-nowrap transition-colors duration-500 ${
-                                            m.status === 'completed' ? 'text-emerald-600' : 
-                                            m.status === 'current' ? 'text-blue-600' : 'text-slate-300'
-                                         }`}>
-                                            {m.label}
-                                         </span>
-                                      </div>
-                                   ))}
-                                </div>
-                             </div>
+                          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full transition-all duration-500 ${
+                              ['completed', 'arrived', 'departed'].includes(route.status) ? 'w-full bg-emerald-500' : 'w-0'
+                            }`} />
                           </div>
+                          {route.pod_photo_url && (
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                              <CheckCircle2 className="w-3 h-3" /> Photo attached
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
-                          {/* RIGHT: LAST UPDATE & STATUS */}
-                          <div className="w-1/4 p-8 border-l border-slate-50 bg-slate-50/30 flex flex-col justify-center">
-                             <div className="mb-4">
-                                <div className={`inline-flex px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${getStatusColor(jo.status)}`}>
-                                   {getStatusLabel(jo)}
-                                </div>
-                             </div>
-                             
-                             <div className="space-y-1">
-                                <div className="flex items-center gap-2 text-slate-400">
-                                   <History size={12} />
-                                   <p className="text-[9px] font-black uppercase tracking-widest">Last Activity</p>
-                                </div>
-                                {jo.latest_log ? (
-                                   <div>
-                                      <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight line-clamp-1">
-                                         {jo.latest_log.status_update.replace(/_/g, ' ')}
-                                      </p>
-                                      <p className="text-[9px] font-bold text-slate-400 italic">
-                                         {formatDistanceToNow(new Date(jo.latest_log.created_at), { addSuffix: true, locale: id })}
-                                      </p>
-                                   </div>
-                                ) : (
-                                   <p className="text-[10px] font-bold text-slate-300 italic">Belum ada aktivitas</p>
-                                )}
-                             </div>
-                             
-                             <div className="mt-4 flex items-center gap-4">
-                                <button className="text-[9px] font-black text-blue-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-                                   <ExternalLink size={10} /> Live Map
-                                </button>
-                                <button className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 flex items-center gap-1">
-                                   <ImageIcon size={10} /> Proofs
-                                </button>
-                             </div>
-                          </div>
-                       </div>
-                    </Card>
-                  ))}
-               </div>
+        {/* Desktop Right Drawer - Mission Log */}
+        {selectedJo && showLog && (
+          <div className="hidden lg:flex w-80 bg-white border-l border-slate-200 flex-col shrink-0">
+            <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-900">Mission Log</h3>
+                <p className="text-[10px] text-slate-400">{selectedJo.jo_number}</p>
+              </div>
+              <button 
+                onClick={() => setShowLog(false)}
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all"
+              >
+                <X size={14} />
+              </button>
             </div>
-         )}
+            <div className="flex-1 overflow-y-auto p-3">
+              <MissionTimeline 
+                tracking={selectedJo.tracking_history || []} 
+                routes={selectedJo.routes || []} 
+                attachments={selectedJo.attachments || []}
+                joId={selectedJo.id}
+                joNumber={selectedJo.jo_number}
+                jo_status={selectedJo.status}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Mobile: Log as full view when tab='log' */}
+        {selectedJo && activeTab === 'log' && (
+          <div className="lg:hidden flex flex-col bg-white shrink-0 overflow-y-auto">
+            <div className="p-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-900">Mission Log</h3>
+                  <p className="text-[10px] text-slate-400">{selectedJo.jo_number}</p>
+                </div>
+                <button 
+                  onClick={() => setActiveTab('map')}
+                  className="text-[10px] text-blue-600 flex items-center gap-1"
+                >
+                  <ChevronLeft size={12} /> Back
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 p-3">
+              <MissionTimeline 
+                tracking={selectedJo.tracking_history || []} 
+                routes={selectedJo.routes || []} 
+                attachments={selectedJo.attachments || []}
+                joId={selectedJo.id}
+                joNumber={selectedJo.jo_number}
+                jo_status={selectedJo.status}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

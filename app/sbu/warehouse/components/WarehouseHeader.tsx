@@ -25,7 +25,7 @@ export default function WarehouseHeader({
                 <div className="flex items-center gap-4 flex-shrink-0">
                     <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10 overflow-hidden">
                         {tenantInfo.logo ? (
-                            <Image src="" alt="Logo" fill className="w-full h-full object-cover"
+                            <Image src="" alt="Logo" fill className="w-full h-full object-cover" />
                         ) : (
                             <Building2 className="w-5 h-5 text-orange-500" />
                         )}

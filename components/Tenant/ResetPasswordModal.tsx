@@ -68,7 +68,7 @@ export default function ResetPasswordModal({ isOpen, staff, onClose }: any) {
                    >
                      Confirm & Reset Password
                    </Button>
-                   <Button variant="outline" onClick={onClose}>Cancel</Button>
+                   <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 </div>
              </>
            ) : (

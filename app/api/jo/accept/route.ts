@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { STATUS_MAP } from '@/lib/statusMapping';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // =====================================================
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
                 .insert({
                     role: 'sbu_fin_tr',
                     title: 'New Disbursement Ready',
-                    message: `Job ${jobOrder.jo_number} accepted by driver. Ready for payout.`,
+                    message: `Job ${jobOrder.jo_number} ${STATUS_MAP['accepted'].label} oleh supir. Siap dibayar.`,
                     link: '/sbu/trucking/cost-management',
                     is_read: false
                 });

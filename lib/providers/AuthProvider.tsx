@@ -69,70 +69,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLoginToast, setShowLoginToast] = useState(false);
   const router = useRouter();
   const hasInitializedProfile = useRef(false);
+  const isFetchingProfile = useRef(false);
 
-  const fetchFullProfile = async (userId: string, retryCount = 0): Promise<Profile | null> => {
+  const fetchFullProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      console.log(`[AuthProvider] Fetching full profile (attempt ${retryCount + 1}) for:`, userId);
-      
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, is_active, created_at, updated_at')
-        .eq('id', userId)
-        .maybeSingle();
+      // Run queries in parallel for faster loading
+      const [profileResult, tenantResult] = await Promise.all([
+        Promise.race([
+          supabase
+            .from('profiles')
+            .select('id, full_name, role, is_active, created_at, updated_at')
+            .eq('id', userId)
+            .maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+        ]),
+        Promise.race([
+          supabase
+            .from('tenant_users')
+            .select('tenant_id, role_code, full_name')
+            .eq('user_id', userId)
+            .maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+        ])
+      ]);
 
-      if (profileError) throw profileError;
+      const profileData = (profileResult as any)?.data;
+      const profileError = (profileResult as any)?.error;
+      const tenantData = (tenantResult as any)?.data;
+      const tenantError = (tenantResult as any)?.error;
 
-      // If profile not found and it's a fresh login, wait a bit and retry once
-      // to give database triggers time to populate the profiles table
-      if (!profileData && retryCount < 1) {
-        console.log('[AuthProvider] Profile not found, retrying in 800ms...');
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return fetchFullProfile(userId, retryCount + 1);
+      console.log('[Auth] Profile query:', { data: !!profileData, error: profileError?.message });
+      console.log('[Auth] Tenant query:', { data: !!tenantData, error: tenantError?.message });
+      console.log('[Auth] Profile role:', profileData?.role);
+      console.log('[Auth] Tenant role_code:', tenantData?.role_code);
+
+      if (profileError || !profileData) {
+        console.error('[Auth] Profile fetch failed:', profileError);
+        return null;
       }
 
-      if (!profileData) {
-        console.warn('[AuthProvider] Profile not found for user:', userId);
-        return {
-          id: userId,
-          email: '',
-          full_name: 'Unknown User',
-          role: '',
-          is_active: false,
-          created_at: '',
-          updated_at: ''
-        };
-      }
+      // Accept role from EITHER profiles.role OR tenant_users.role_code
+      const roleFromProfiles = profileData.role || '';
+      const roleFromTenant = tenantData?.role_code || '';
+      const finalRole = roleFromTenant || roleFromProfiles;
+
+      console.log('[Auth] Final role:', finalRole);
 
       const finalProfile: Profile = {
         id: profileData.id,
         email: '',
         full_name: profileData.full_name || 'User',
-        role: profileData.role || '',
+        role: finalRole,
         is_active: profileData.is_active ?? false,
         created_at: profileData.created_at || '',
         updated_at: profileData.updated_at || ''
       };
 
-      const { data: tenantData, error: tenantError } = await supabase
-        .from('tenant_users')
-        .select('tenant_id, role_code, full_name, tenants(tenant_code, name)')
-        .eq('user_id', userId)
-        .maybeSingle();
-
       if (!tenantError && tenantData) {
-        console.log('[AuthProvider] Tenant info found:', tenantData);
         finalProfile.tenant_id = tenantData.tenant_id;
-        finalProfile.tenants = tenantData.tenants as any;
-        finalProfile.tenant_code = (tenantData.tenants as any)?.tenant_code;
+        finalProfile.tenant_code = tenantData.tenant_id;
         if (tenantData.full_name) finalProfile.full_name = tenantData.full_name;
-        if (tenantData.role_code) finalProfile.role = tenantData.role_code;
+      }
+
+      // Fetch tenant name in background (non-blocking)
+      if (finalProfile.tenant_id) {
+        Promise.race([
+          supabase
+            .from('tenants')
+            .select('tenant_code, name')
+            .eq('id', finalProfile.tenant_id)
+            .maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+        ]).then((result: any) => {
+          if (result?.data) {
+            finalProfile.tenant_code = result.data.tenant_code;
+            finalProfile.tenants = { tenant_code: result.data.tenant_code, name: result.data.name };
+          }
+        }).catch(() => {});
       }
 
       return finalProfile;
     } catch (err) {
-      console.error('[AuthProvider] Error:', err);
+      console.error('[Auth] fetchFullProfile crashed:', err);
       return null;
     }
   };
@@ -145,59 +166,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // [AI] Rely strictly on onAuthStateChange to handle session initialization.
-    // supabase.auth.onAuthStateChange immediately fires INITIAL_SESSION upon subscribing.
+    if (showLoginToast) {
+      toast.success('Login berhasil!', { duration: 2000 });
+      setShowLoginToast(false);
+    }
+  }, [showLoginToast]);
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthProvider] Auth Event:', event, 'Profile loaded:', hasInitializedProfile.current);
-      
       if (session?.user) {
         setUser(session.user);
         
-        // Fetch/Verify profile on SIGNED_IN, INITIAL_SESSION, TOKEN_REFRESHED, or if not loaded yet
-        if (!hasInitializedProfile.current || event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          setLoading(true);
-          try {
-            const p = await fetchFullProfile(session.user.id);
-            
-            // Validate user role and status
-            if (!p?.role || p.role === '' || p.is_active === false) {
-              console.warn('[AuthProvider] User has no valid role assigned:', p);
-              toast.error('Akun Anda belum memiliki peran yang valid. Silakan hubungi administrator.');
-              await supabase.auth.signOut();
-              setUser(null);
-              setProfile(null);
-              hasInitializedProfile.current = false;
-              setLoading(false);
-              return;
-            }
+        if (hasInitializedProfile.current || isFetchingProfile.current) {
+          setLoading(false);
+          return;
+        }
 
-            setProfile(p);
-            hasInitializedProfile.current = true;
-
-            if (event === 'SIGNED_IN') {
-              toast.dismiss(); // [AI] Clear any stale or duplicate toasts
-              toast.success('Login berhasil!');
-            }
-
-            // Auto-redirect from login if on the login page
-            if (typeof window !== 'undefined' && window.location.pathname === '/login') {
-              const dashboardRoute = getDashboardRoute(p.role);
-              console.log('[AuthProvider] Redirecting to:', dashboardRoute);
-              router.push(dashboardRoute);
-            }
-          } catch (fetchErr) {
-            console.error('[AuthProvider] Error fetching/validating profile:', fetchErr);
-          } finally {
+        isFetchingProfile.current = true;
+        setLoading(true);
+        
+        const timeoutId = setTimeout(() => {
+          if (isFetchingProfile.current) {
+            isFetchingProfile.current = false;
             setLoading(false);
           }
-        } else {
-          // [AI] Ensure loading is resolved to false if profile is already loaded to prevent UI spin lock
+        }, 15000);
+        
+        try {
+          const p = await fetchFullProfile(session.user.id);
+          clearTimeout(timeoutId);
+          
+          if (!p?.role || p.role === '' || p.is_active === false) {
+            console.error('[Auth] Role validation failed:', { role: p?.role, isActive: p?.is_active });
+            if (!p?.role || p.role === '') {
+              toast.error('Akun tidak memiliki role. Cek tabel profiles.role dan tenant_users.role_code di Supabase.');
+            } else if (p.is_active === false) {
+              toast.error('Akun Anda dinonaktifkan. Hubungi administrator.');
+            } else {
+              toast.error('Akun Anda belum memiliki peran yang valid. Silakan hubungi administrator.');
+            }
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            hasInitializedProfile.current = false;
+            isFetchingProfile.current = false;
+            setLoading(false);
+            return;
+          }
+
+          setProfile(p);
+          hasInitializedProfile.current = true;
+          isFetchingProfile.current = false;
+          setLoading(false);
+
+          if (event === 'SIGNED_IN') {
+            setShowLoginToast(true);
+          }
+
+          if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+            const dashboardRoute = getDashboardRoute(p.role);
+            router.push(dashboardRoute);
+          }
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          isFetchingProfile.current = false;
           setLoading(false);
         }
       } else {
         setUser(null);
         setProfile(null);
         hasInitializedProfile.current = false;
+        isFetchingProfile.current = false;
         setLoading(false);
       }
     });
@@ -207,7 +246,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      setLoading(true); // Set loading to true while authenticating
+      // Reset flags before login to allow re-login after failure
+      hasInitializedProfile.current = false;
+      isFetchingProfile.current = false;
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
@@ -216,8 +258,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { data: null, error };
       }
 
-      // [AI] The successful session change and redirection are completely handled 
-      // by the unified onAuthStateChange listener to eliminate race conditions.
       return { data, error: null };
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');
@@ -228,44 +268,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('[AuthProvider] Force logout initiated...');
-      
-      // 1. Immediate UI state clearing
       setLoading(true);
       setUser(null);
       setProfile(null);
       hasInitializedProfile.current = false;
 
-      // 2. Clear storage first to prevent any re-fetch loops
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
         
-        // Comprehensive cookie clearing
         const cookies = document.cookie.split(";");
         for (let i = 0; i < cookies.length; i++) {
           const cookie = cookies[i];
           const eqPos = cookie.indexOf("=");
           const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
-          // Also clear for subdomains just in case
           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
         }
       }
 
-      // 3. Trigger Supabase Signout (non-blocking for speed)
-      supabase.auth.signOut().catch(e => console.error('Signout background error:', e));
+      supabase.auth.signOut().catch(() => {});
       
       toast.success('Logout berhasil');
 
-      // 4. Final hard redirect to ensure clean slate
       if (typeof window !== 'undefined') {
         setTimeout(() => {
           window.location.replace('/login');
         }, 100);
       }
     } catch (err) {
-      console.error('[AuthProvider] Logout critical error:', err);
       if (typeof window !== 'undefined') {
         window.location.replace('/login');
       }

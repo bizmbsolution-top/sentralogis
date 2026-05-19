@@ -151,7 +151,7 @@ export default function SBUManager({ sbus, onUpdate }: any) {
                      <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mt-1">Cluster Code: {s.sbu_code}</p>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                     <Badge variant="outline" className="!text-[9px] uppercase font-black tracking-widest italic">{typeInfo.label}</Badge>
+                      <Badge variant="default" className="!text-[9px] uppercase font-black tracking-widest italic">{typeInfo.label}</Badge>
                      <span className={`text-[9px] font-black uppercase tracking-widest ${s.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}`}>
                         {s.status}
                      </span>

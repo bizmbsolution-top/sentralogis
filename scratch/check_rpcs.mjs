@@ -1,23 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
 
-const envContent = fs.readFileSync('.env.local', 'utf8')
-const getEnv = (key) => {
-  const match = envContent.match(new RegExp(`^${key}=(.*)$`, 'm'))
-  return match ? match[1].trim() : null
-}
+const env = fs.readFileSync('.env.local', 'utf8');
+const vars = {};
+env.split('\n').forEach(l => {
+  const [k, ...v] = l.split('=');
+  if (k && v.length > 0) vars[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
+});
 
-const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL')
-const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY')
+const supabase = createClient(vars.NEXT_PUBLIC_SUPABASE_URL, vars.SUPABASE_SERVICE_ROLE_KEY);
 
-const supabase = createClient(supabaseUrl, serviceRoleKey)
-
-async function checkRPCs() {
+async function check() {
   const { data, error } = await supabase.rpc('exec_sql_manual', {
-    sql_query: "SELECT routine_name FROM information_schema.routines WHERE routine_schema = 'public'"
-  })
-  if (error) console.error(error)
-  else console.log('RPCs:', data.map(r => r.routine_name))
+    sql_query: "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'md_entities'"
+  });
+  console.log('RPCs:', data);
+  console.log('Error:', error);
 }
 
-checkRPCs()
+check();

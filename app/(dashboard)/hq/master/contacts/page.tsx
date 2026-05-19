@@ -10,6 +10,8 @@ import {
   ChevronDown, Map as MapIcon, Info
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import GoogleMapsInput from '@/components/master/GoogleMapsInput';
 import ContactFormModal from '@/components/master/ContactFormModal';
 
@@ -32,6 +34,7 @@ interface Entity {
   id: string;
   entity_code: string;
   name: string;
+  company_name?: string;
   legal_name: string;
   tax_id: string;
   email: string;
@@ -55,6 +58,8 @@ interface Entity {
   is_active: boolean;
   tenant_id: string;
   created_at: string;
+  parent_id?: string;
+  parent?: { name: string; entity_code: string };
 }
 
 export default function HQContactsPage() {
@@ -98,6 +103,7 @@ export default function HQContactsPage() {
     billing_method: 'hardcopy',
     notes: '',
     is_active: true,
+    parent_id: '',
   });
 
   // Sync tenant info
@@ -111,14 +117,18 @@ export default function HQContactsPage() {
     if (!tenantId) return;
     setLoading(true);
     
-    let query = supabase.from('md_entities').select('*').eq('tenant_id', tenantId);
+    // Join with self to get parent name
+    let query = supabase
+      .from('md_entities')
+      .select('*, parent:md_entities!parent_id(name, entity_code)')
+      .eq('tenant_id', tenantId);
     
     if (activeTab === 'customer') query = query.eq('is_customer', true);
     else if (activeTab === 'supplier') query = query.eq('is_supplier', true);
     else if (activeTab === 'vendor') query = query.eq('is_vendor', true);
     else if (activeTab === 'broker') query = query.eq('is_broker', true);
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query.order('name', { ascending: true });
 
     if (error) {
       toast.error('Gagal mengambil data kontak');
@@ -146,7 +156,7 @@ export default function HQContactsPage() {
     else if (formData.is_broker) prefix = 'BRO';
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('md_entities')
         .select('entity_code')
         .eq('tenant_id', tenantId)
@@ -154,16 +164,23 @@ export default function HQContactsPage() {
         .order('created_at', { ascending: false })
         .limit(1);
       
+      if (error) throw error;
+      
       if (!data || data.length === 0) return `${prefix}/001`;
       
       const lastCode = data[0].entity_code;
-      const lastNumber = parseInt(lastCode.split('/')[1]);
+      const parts = lastCode.split('/');
+      if (parts.length < 2) return `${prefix}/001`;
+      
+      const lastNumber = parseInt(parts[1]);
       if (isNaN(lastNumber)) return `${prefix}/001`;
       
       const newNumber = (lastNumber + 1).toString().padStart(3, '0');
       return `${prefix}/${newNumber}`;
     } catch (err) {
-      return `${prefix}/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+      console.error('[HQContacts] generateEntityCode Error:', err);
+      // Fail-safe random code to prevent hanging
+      return `${prefix}/RND-${Math.floor(Math.random() * 10000)}`;
     }
   };
 
@@ -173,97 +190,86 @@ export default function HQContactsPage() {
       return;
     }
     
+    const toastId = toast.loading('Sedang menyimpan kontak...');
     setSubmitting(true);
 
+    // Safety timeout to prevent infinite hang
+    const timeoutId = setTimeout(() => {
+      if (submitting) {
+        setSubmitting(false);
+        toast.error('Proses terlalu lama. Periksa koneksi internet atau coba refresh halaman.', { id: toastId });
+      }
+    }, 20000); // 20 seconds safety net
+
+    console.log('[HQContacts] Starting submission...', { tenantId, name: formData.name });
+
     try {
-      console.log('Starting save process...', { tenantId, formData });
       let entityId = selectedEntity?.id;
+
+      const entityData = {
+        name: formData.name,
+        legal_name: formData.legal_name,
+        tax_id: formData.tax_id,
+        email: formData.email,
+        phone: formData.phone,
+        mobile: formData.mobile,
+        whatsapp: formData.whatsapp,
+        is_customer: formData.is_customer,
+        is_supplier: formData.is_supplier,
+        is_vendor: formData.is_vendor,
+        is_broker: formData.is_broker,
+        vendor_type: formData.vendor_type,
+        billing_address: formData.billing_address,
+        billing_city: formData.billing_city,
+        billing_province: formData.billing_province,
+        billing_postal_code: formData.billing_postal_code,
+        billing_latitude: Number(formData.billing_latitude) || 0,
+        billing_longitude: Number(formData.billing_longitude) || 0,
+        billing_directions: formData.billing_directions,
+        billing_method: formData.billing_method,
+        notes: formData.notes,
+        is_active: formData.is_active,
+        parent_id: formData.parent_id || null,
+        updated_at: new Date().toISOString()
+      };
 
       if (selectedEntity) {
         const { error } = await supabase
           .from('md_entities')
-          .update({
-            name: formData.name,
-            legal_name: formData.legal_name,
-            tax_id: formData.tax_id,
-            email: formData.email,
-            phone: formData.phone,
-            mobile: formData.mobile,
-            whatsapp: formData.whatsapp,
-            is_customer: formData.is_customer,
-            is_supplier: formData.is_supplier,
-            is_vendor: formData.is_vendor,
-            is_broker: formData.is_broker,
-            vendor_type: formData.vendor_type,
-            billing_address: formData.billing_address,
-            billing_city: formData.billing_city,
-            billing_province: formData.billing_province,
-            billing_postal_code: formData.billing_postal_code,
-            billing_latitude: formData.billing_latitude,
-            billing_longitude: formData.billing_longitude,
-            billing_directions: formData.billing_directions,
-            billing_method: formData.billing_method,
-            notes: formData.notes,
-            is_active: formData.is_active,
-            updated_at: new Date().toISOString()
-          })
+          .update(entityData)
           .eq('id', selectedEntity.id);
 
-        if (error) {
-          console.error('Update Error:', error);
-          throw error;
-        }
+        if (error) throw error;
       } else {
         const code = await generateEntityCode();
-        console.log('Generated code:', code);
         
         const { data, error } = await supabase
           .from('md_entities')
           .insert({
+            ...entityData,
             tenant_id: tenantId,
             entity_code: code,
-            name: formData.name,
-            legal_name: formData.legal_name,
-            tax_id: formData.tax_id,
-            email: formData.email,
-            phone: formData.phone,
-            mobile: formData.mobile,
-            whatsapp: formData.whatsapp,
-            is_customer: formData.is_customer,
-            is_supplier: formData.is_supplier,
-            is_vendor: formData.is_vendor,
-            is_broker: formData.is_broker,
-            vendor_type: formData.vendor_type,
-            billing_address: formData.billing_address,
-            billing_city: formData.billing_city,
-            billing_province: formData.billing_province,
-            billing_postal_code: formData.billing_postal_code,
-            billing_latitude: formData.billing_latitude,
-            billing_longitude: formData.billing_longitude,
-            billing_directions: formData.billing_directions,
-            billing_method: formData.billing_method,
-            notes: formData.notes,
-            is_active: formData.is_active,
+            created_at: new Date().toISOString(),
+            created_by: profile?.id || null
           })
-          .select()
-          .single();
+          .select('id');
 
-        if (error) {
-          console.error('Insert Error:', error);
-          throw error;
-        }
-        entityId = data.id;
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Gagal mendapatkan ID entitas baru');
+        
+        entityId = data[0].id;
       }
 
       if (entityId) {
-        console.log('Handling other addresses for entity:', entityId);
-        // Delete old addresses if editing
+        // 1. Delete old addresses
         if (selectedEntity) {
           await supabase.from('md_entity_addresses').delete().eq('entity_id', entityId);
         }
         
-        if (otherAddresses.length > 0) {
-          const addressesToInsert = otherAddresses.map(addr => ({
+        // 2. Insert new addresses
+        const validAddresses = otherAddresses.filter(a => a.address_name && a.address);
+        if (validAddresses.length > 0) {
+          const addressesToInsert = validAddresses.map(addr => ({
             entity_id: entityId,
             address_name: addr.address_name,
             address_type: addr.address_type,
@@ -271,8 +277,8 @@ export default function HQContactsPage() {
             city: addr.city,
             province: addr.province,
             postal_code: addr.postal_code,
-            latitude: addr.latitude,
-            longitude: addr.longitude,
+            latitude: Number(addr.latitude) || 0,
+            longitude: Number(addr.longitude) || 0,
             contact_person: addr.contact_person,
             contact_phone: addr.contact_phone,
             address_directions: addr.address_directions
@@ -280,19 +286,21 @@ export default function HQContactsPage() {
           
           const { error: addrError } = await supabase.from('md_entity_addresses').insert(addressesToInsert);
           if (addrError) {
-            console.warn('Address Insert Warning:', addrError);
-            // Don't fail the whole process if only secondary addresses fail
-            toast.error('Kontak tersimpan, tapi gagal menyimpan beberapa alamat tambahan.');
+             console.error('[HQContacts] Address Insert Error:', addrError);
           }
         }
       }
 
-      toast.success('Data kontak berhasil disimpan');
+      clearTimeout(timeoutId);
+      toast.success('Data kontak berhasil disimpan', { id: toastId });
       setIsModalOpen(false);
       fetchEntities();
     } catch (error: any) {
-      console.error('Final Catch Error:', error);
-      toast.error(error.message || 'Terjadi kesalahan saat menyimpan data. Cek Console (F12) untuk detail.');
+      clearTimeout(timeoutId);
+      setSubmitting(false);
+      console.error('[HQContacts] Fatal Submission Error:', error);
+      // Ensure the user sees the error message
+      toast.error(`Gagal menyimpan: ${error.message || 'Kesalahan Sistem'}`, { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -334,7 +342,7 @@ export default function HQContactsPage() {
     setOtherAddresses(normalizedData);
   };
 
-  const handleOpenModal = (entity: Entity | null = null) => {
+  const handleOpenModal = (entity?: Entity) => {
     if (entity) {
       setSelectedEntity(entity);
       setFormData({
@@ -360,8 +368,12 @@ export default function HQContactsPage() {
         billing_method: entity.billing_method || 'hardcopy',
         notes: entity.notes || '',
         is_active: entity.is_active,
+        parent_id: entity.parent_id || '',
       });
-      fetchOtherAddresses(entity.id);
+      // Fetch addresses
+      supabase.from('md_entity_addresses').select('*').eq('entity_id', entity.id).then(({ data }) => {
+        setOtherAddresses(data || []);
+      });
     } else {
       setSelectedEntity(null);
       setFormData({
@@ -387,6 +399,7 @@ export default function HQContactsPage() {
         billing_method: 'hardcopy',
         notes: '',
         is_active: true,
+        parent_id: '',
       });
       setOtherAddresses([]);
     }
@@ -399,129 +412,158 @@ export default function HQContactsPage() {
   );
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="text-slate-900" size={24} />
-            Master Contacts
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Kelola data Customer, Supplier, Vendor, dan Broker (Staf HQ).</p>
-        </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-medium text-sm shadow-sm active:scale-95"
-        >
-          <Plus size={18} />
-          Add New Contact
-        </button>
+      <div className="max-w-7xl mx-auto mb-8">
+         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+            <div className="flex items-center gap-4">
+               <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-sm">
+                  <Users size={22} />
+               </div>
+               <div>
+                  <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Contact Management</p>
+                  <h1 className="text-xl md:text-2xl font-semibold text-slate-900 leading-tight">Contacts</h1>
+               </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+               <div className="relative group w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={16} />
+                  <input 
+                     type="text" 
+                     placeholder="Search contact..." 
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     className="w-full h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
+                  />
+               </div>
+
+               <Button 
+                  onClick={() => handleOpenModal()}
+                  className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm shadow-sm flex items-center gap-2 transition-all w-full sm:w-auto justify-center"
+               >
+                  <Plus size={16} /> Add Contact
+               </Button>
+            </div>
+         </div>
+
+         {/* Filter Tabs */}
+         <div className="mt-4 flex flex-wrap items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+            {(['all', 'customer', 'supplier', 'vendor', 'broker'] as const).map(tab => (
+               <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 rounded-md text-xs font-medium uppercase tracking-wide transition-all ${
+                     activeTab === tab 
+                     ? 'bg-slate-900 text-white shadow-sm' 
+                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                  }`}
+               >
+                  {tab}
+               </button>
+            ))}
+         </div>
       </div>
 
-      {/* Tabs & Search */}
-      <Card className="p-4 border-slate-200 shadow-none overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar">
-            {(['all', 'customer', 'supplier', 'vendor', 'broker'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                  activeTab === tab 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search contacts..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-            />
-          </div>
-        </div>
-      </Card>
-
       {/* Table */}
-      <Card className="overflow-hidden border-slate-200 shadow-none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-4 font-semibold text-slate-700">Code</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Name</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Types</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Phone</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Email</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
-                <th className="px-4 py-4 font-semibold text-slate-700 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin mx-auto mb-2" />
-                    <p className="text-slate-500">Memuat data...</p>
-                  </td>
-                </tr>
-              ) : filteredEntities.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    Tidak ada data kontak ditemukan.
-                  </td>
-                </tr>
-              ) : (
-                filteredEntities.map((ent, idx) => (
-                  <tr key={ent.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50 transition-colors' : 'bg-slate-50/30 hover:bg-slate-50 transition-colors'}>
-                    <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{ent.entity_code}</td>
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-slate-900">{ent.name}</div>
-                      <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {ent.is_customer && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase">CUS</span>}
-                        {ent.is_supplier && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-bold rounded uppercase">SPP</span>}
-                        {ent.is_vendor && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-bold rounded uppercase">VND</span>}
-                        {ent.is_broker && <span className="px-1.5 py-0.5 bg-slate-50 text-slate-600 text-[9px] font-bold rounded uppercase">BRO</span>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{ent.phone || ent.mobile || '-'}</td>
-                    <td className="px-4 py-4 text-slate-600">{ent.email || '-'}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${ent.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {ent.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => handleOpenModal(ent)}
-                        className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => { setSelectedEntity(ent); setIsDeleteModalOpen(true); }}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="max-w-7xl mx-auto">
+         <Card className="overflow-hidden border border-slate-200 shadow-sm rounded-xl bg-white">
+            <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                  <thead>
+                     <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Code</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Name</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Roles</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Contact</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Actions</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                     {loading ? (
+                        <tr>
+                           <td colSpan={6} className="px-4 py-16 text-center">
+                              <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
+                              <p className="text-xs text-slate-400">Loading contacts...</p>
+                           </td>
+                        </tr>
+                     ) : filteredEntities.length === 0 ? (
+                        <tr>
+                           <td colSpan={6} className="px-4 py-16 text-center">
+                              <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                 <Users size={24} className="text-slate-300" />
+                              </div>
+                              <p className="text-xs text-slate-400">No contacts found</p>
+                           </td>
+                        </tr>
+                     ) : (
+                        filteredEntities.map((ent) => (
+                           <tr key={ent.id} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className="px-4 py-3">
+                                 <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-mono rounded">
+                                    {ent.entity_code}
+                                 </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="text-sm font-medium text-slate-900">{ent.name}</div>
+                                 {ent.parent && (
+                                   <div className="text-xs text-blue-500 mt-0.5">Child of {ent.parent.name}</div>
+                                 )}
+                                 <div className="text-xs text-slate-400 mt-0.5">{ent.legal_name || '-'}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="flex flex-wrap gap-1">
+                                    {ent.is_customer && <Badge className="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-medium px-2 py-0.5 rounded">Customer</Badge>}
+                                    {ent.is_supplier && <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-medium px-2 py-0.5 rounded">Supplier</Badge>}
+                                    {ent.is_vendor && <Badge className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-medium px-2 py-0.5 rounded">Vendor</Badge>}
+                                    {ent.is_broker && <Badge className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium px-2 py-0.5 rounded">Broker</Badge>}
+                                 </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                       <Phone size={12} className="text-slate-400" />
+                                       <span className="text-sm">{ent.phone || ent.mobile || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                       <Mail size={12} />
+                                       <span className="text-xs truncate max-w-[180px]">{ent.email || '-'}</span>
+                                    </div>
+                                 </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                                    ent.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                                 }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${ent.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                                    {ent.is_active ? 'Active' : 'Inactive'}
+                                 </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                 <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                       onClick={() => handleOpenModal(ent)}
+                                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                    >
+                                       <Edit2 size={14} />
+                                    </button>
+                                    <button 
+                                       onClick={() => { setSelectedEntity(ent); setIsDeleteModalOpen(true); }}
+                                       className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                    >
+                                       <Trash2 size={14} />
+                                    </button>
+                                 </div>
+                              </td>
+                           </tr>
+                        ))
+                     )}
+                  </tbody>
+               </table>
+            </div>
+         </Card>
+      </div>
 
       {/* Main Modal */}
       {isModalOpen && (
@@ -581,6 +623,20 @@ export default function HQContactsPage() {
                       </select>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Parent Entity (Optional)</label>
+                    <select 
+                      value={formData.parent_id || ''}
+                      onChange={(e) => setFormData({...formData, parent_id: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 bg-blue-50/20"
+                    >
+                      <option value="">No Parent (Main Entity)</option>
+                      {entities.filter(e => e.is_customer && e.id !== selectedEntity?.id).map(p => (
+                        <option key={p.id} value={p.id}>[{p.entity_code}] {p.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Display Name *</label>

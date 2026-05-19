@@ -115,7 +115,7 @@ export default function LedgerPage() {
                       <h4 className="text-sm font-black text-slate-900 uppercase italic leading-tight">{journal.description}</h4>
                       <div className="mt-1 flex items-center gap-2">
                          <span className="text-[10px] font-bold text-slate-500">JO: {journal.job_orders?.jo_number || 'N/A'}</span>
-                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-tighter h-4">{journal.source_type}</Badge>
+                          <Badge variant="default" className="text-[8px] font-black uppercase tracking-tighter h-4">{journal.source_type}</Badge>
                       </div>
                     </div>
                   </div>

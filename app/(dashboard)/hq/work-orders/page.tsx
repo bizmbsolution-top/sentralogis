@@ -142,20 +142,24 @@ export default function HQWorkOrdersPage() {
         const allItems = wo.wo_items || [];
         const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
         
+        // [AI] Check handover status FIRST — WO with handover_pending/rejected items should NOT leak into other tabs
+        const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => i.status === 'handover_pending');
+        const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => i.status === 'handover_rejected');
+        
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => 
           ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
         );
         const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
 
-        const anyMoving = !isCompleted && allJobs.some(j => 
+        const anyMoving = !isCompleted && !hasHandoverPending && !hasHandoverRejected && allJobs.some(j => 
           j.status?.toUpperCase().startsWith('MENUJU') || 
           j.status?.toUpperCase().startsWith('TIBA') || 
           ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
         );
 
-        const anyAssigned = !isCompleted && !anyMoving && allJobs.some(j => j.fleet_id && j.driver_id);
-        const isDraft = s === 'DRAFT';
-        const isPending = (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !anyAssigned && !anyMoving && !isCompleted;
+        const anyAssigned = !isCompleted && !hasHandoverPending && !hasHandoverRejected && !anyMoving && allJobs.some(j => j.fleet_id && j.driver_id);
+        const isDraft = s === 'DRAFT' && !hasHandoverPending && !hasHandoverRejected;
+        const isPending = (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !hasHandoverPending && !hasHandoverRejected && !anyAssigned && !anyMoving && !isCompleted;
 
         if (statusFilter === 'draft') return matchesSearch && isDraft;
         if (statusFilter === 'pending') return matchesSearch && isPending;
@@ -166,10 +170,9 @@ export default function HQWorkOrdersPage() {
         if (statusFilter === 'need_audit') {
           matchesStatus = wo.hasPendingCosts === true;
         } else if (statusFilter === 'handover_pending') {
-          // [AI] Check both WO-level and item-level handover_pending status
-          matchesStatus = s === 'HANDOVER_PENDING' || wo.wo_items?.some((i: any) => i.status === 'handover_pending');
+          matchesStatus = hasHandoverPending;
         } else if (statusFilter === 'handover_rejected') {
-          matchesStatus = s === 'HANDOVER_REJECTED' || wo.wo_items?.some((i: any) => i.status === 'handover_rejected');
+          matchesStatus = hasHandoverRejected;
         } else {
           matchesStatus = s === statusFilter.toUpperCase();
         }
@@ -183,6 +186,13 @@ export default function HQWorkOrdersPage() {
     const s = wo.status?.toUpperCase() || '';
     const allItems = wo.wo_items || [];
     const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
+    
+    // [AI] Check handover status FIRST — prevent fallback to "NEED ASSIGN UNITS"
+    const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => i.status === 'handover_pending');
+    const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => i.status === 'handover_rejected');
+    
+    if (hasHandoverRejected) return <Badge className="!bg-rose-100 !text-rose-700 !border-rose-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">HANDOVER REJECTED</Badge>;
+    if (hasHandoverPending) return <Badge className="!bg-orange-100 !text-orange-700 !border-orange-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">HANDOVER PENDING</Badge>;
     
     // Check for high-fidelity completion
     const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => 
@@ -321,21 +331,35 @@ export default function HQWorkOrdersPage() {
             { id: 'draft', label: 'Draft', count: stats.draft },
             { id: 'pending', label: 'New Request', count: workOrders.filter(wo => {
                 const s = wo.status?.toUpperCase() || '';
-                const allJobs = (wo.wo_items || []).flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
+                const allItems = wo.wo_items || [];
+                // [AI] Exclude WO with handover items
+                const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+                if (hasHandover) return false;
+                const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
                 const anyAssigned = allJobs.some(j => j.fleet_id && j.driver_id);
                 const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
                 const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
                 return (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !anyAssigned && !anyMoving && !allJobsCompleted;
             }).length },
             { id: 'assigned_units', label: 'Assigned', count: workOrders.filter(wo => {
-                const allJobs = (wo.wo_items || []).flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
+                const s = wo.status?.toUpperCase() || '';
+                const allItems = wo.wo_items || [];
+                // [AI] Exclude WO with handover items
+                const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+                if (hasHandover) return false;
+                const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
                 const anyAssigned = allJobs.some(j => j.fleet_id && j.driver_id);
                 const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
                 const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
                 return anyAssigned && !anyMoving && !allJobsCompleted;
             }).length },
             { id: 'on_road', label: 'On Road', count: workOrders.filter(wo => {
-                const allJobs = (wo.wo_items || []).flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
+                const s = wo.status?.toUpperCase() || '';
+                const allItems = wo.wo_items || [];
+                // [AI] Exclude WO with handover items
+                const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+                if (hasHandover) return false;
+                const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
                 const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
                 const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
                 return anyMoving && !allJobsCompleted;

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
     Plus, X, Trash2, Edit2, Save, MapPin, Search,
-    Navigation, AlertCircle, CheckCircle, Map as MapIcon,
+    Navigation as NavIcon, AlertCircle, CheckCircle, Map as MapIcon,
     RefreshCw, LayoutGrid, Truck, Wallet, History, ChevronRight
 } from "lucide-react";
 import { GoogleMap, Marker, Autocomplete } from "@react-google-maps/api";
@@ -529,7 +529,7 @@ export default function MasterLocationsPage() {
                                         type="button"
                                         className="absolute top-4 right-4 z-10 bg-blue-600 p-3 rounded-2xl shadow-xl text-white hover:bg-blue-500 transition-all active:scale-90"
                                     >
-                                        <Navigation className="w-5 h-5" />
+                                        <NavIcon className="w-5 h-5" />
                                     </button>
 
                                     {isLoaded ? (

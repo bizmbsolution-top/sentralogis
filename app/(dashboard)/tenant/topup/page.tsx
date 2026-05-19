@@ -78,7 +78,7 @@ export default function TenantTopupPage() {
       });
       if (reqError) throw reqError;
 
-      const message = `Halo Admin Sentralogis,\n\nSaya ${profile.full_name} dari cluster ${tenant.tenant_code} ingin top-up token.\n\nRequest: ${amount} token\nTotal Transfer: Rp ${totalPay.toLocaleString()}\n\nBukti transfer terlampir di sistem.\n\nTerima kasih.`;
+      const message = `Halo Admin Sentralogis,\n\nSaya ${profile?.full_name || 'User'} dari cluster ${tenant.tenant_code} ingin top-up token.\n\nRequest: ${amount} token\nTotal Transfer: Rp ${totalPay.toLocaleString()}\n\nBukti transfer terlampir di sistem.\n\nTerima kasih.`;
       const encoded = encodeURIComponent(message);
       window.open(`https://wa.me/6285218129978?text=${encoded}`, '_blank');
       

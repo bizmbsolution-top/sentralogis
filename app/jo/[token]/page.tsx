@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Truck, MapPin, Navigation, Phone, 
+  Truck, MapPin, Navigation as NavIcon, Phone, 
   CheckCircle2, Clock, ChevronRight, AlertCircle, 
   Loader2, Play, Check, X, Camera, Calendar, Activity
 } from 'lucide-react';
@@ -27,20 +27,24 @@ interface JobOrder {
   id: string;
   jo_number: string;
   status: string;
-  driver_phone: string;
-  accepted_at: string;
-  started_at: string;
-  completed_at: string;
-  customer: {
+  customer?: {
     name: string;
     address: string;
   };
-  tenant_name: string;
-  wo_details: {
+  tenant_name?: string;
+  wo_details?: {
     wo_number: string;
     execution_date: string;
     execution_time?: string;
   };
+  driver?: { id: string; name: string; phone: string };
+  fleet?: { id: string; plate_number: string; type_name: string };
+  driver_response?: string;
+  accepted_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  advance_amount?: number;
+  advance_status?: string;
   routes: RouteStop[];
 }
 
@@ -104,6 +108,43 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   };
 
   const updateStatus = async (newStatus: string) => {
+    if (newStatus === 'rejected') {
+      const confirmReject = window.confirm('Apakah Anda yakin ingin MENOLAK tugas ini?');
+      if (!confirmReject) return;
+      
+      const note = window.prompt('Alasan penolakan (opsional):');
+      setUpdating(newStatus);
+      try {
+        const location = await getLocation();
+        const response = await fetch(`/api/jo/${token}`, {
+          method: 'PATCH',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true' 
+          },
+          body: JSON.stringify({ 
+            status: newStatus,
+            rejection_note: note,
+            lat: location?.lat,
+            lng: location?.lng
+          })
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Gagal memperbarui status');
+        }
+        
+        toast.success('Tugas telah ditolak');
+        await fetchJobOrder();
+        return;
+      } catch (err: any) {
+        toast.error('Error: ' + err.message);
+        setUpdating(null);
+        return;
+      }
+    }
+
     setUpdating(newStatus);
     try {
       const location = await getLocation();
@@ -180,25 +221,35 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
 
     setPhotoLoading(routeId);
     try {
-      // Simulation of upload for now, but integrated with API
-      // In real scenario, we would upload to Supabase Storage first
-      const fakeUrl = `https://dummyimage.com/600x400/000/fff&text=POD+Photo+${routeId}`;
-      
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // Upload via API
       const response = await fetch(`/api/jo/${token}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           route_id: routeId, 
-          pod_photo_url: fakeUrl 
+          pod_photo_base64: base64,
+          pod_photo_name: file.name
         })
       });
 
-      if (!response.ok) throw new Error('Gagal simpan foto');
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Gagal simpan foto ke database');
+      }
       
       toast.success('Foto berhasil diunggah');
       await fetchJobOrder();
     } catch (err: any) {
-      toast.error(err.message);
+      console.error('Upload error:', err);
+      toast.error('Gagal upload: ' + err.message);
     } finally {
       setPhotoLoading(null);
     }
@@ -220,19 +271,33 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Hitung progress
+  // Hitung progress & Milestones
+  const milestones = jobOrder ? [
+    { id: 'start', label: 'TERIMA', status: jobOrder.accepted_at ? 'completed' : 'pending' },
+    { id: 'depart', label: 'BERANGKAT', status: (jobOrder.started_at || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU')) ? 'completed' : (jobOrder.accepted_at || jobOrder.status === 'MENUNGGU MULAI / START' || jobOrder.status === 'ORDER DITERIMA' ? 'current' : 'pending') },
+    ...jobOrder.routes.map((s) => ({
+      id: s.id,
+      label: s.location_name,
+      status: s.status === 'completed' ? 'completed' : (s.status === 'arrived' || jobOrder.status.includes(s.location_name.toUpperCase()) ? 'current' : 'pending')
+    })),
+    { id: 'finish', label: 'SELESAI', status: (jobOrder.completed_at || jobOrder.status === 'PEKERJAAN SELESAI' || jobOrder.status === 'COMPLETED') ? 'completed' : 'pending' }
+  ] : [];
+
+  const progress = (() => {
+    if (!milestones.length) return 0;
+    const total = milestones.length;
+    const reached = milestones.filter(m => m.status === 'completed').length;
+    const current = milestones.findIndex(m => m.status === 'current');
+    
+    let base = (reached / total) * 100;
+    if (current !== -1) {
+      base = (current / total) * 100 + (1 / total * 50); // halfway to current
+    }
+    return Math.min(base, 100);
+  })();
+
   const totalStops = jobOrder?.routes?.length || 0;
   const completedStops = jobOrder?.routes?.filter((r: any) => r.status === 'completed').length || 0;
-  const progress = (() => {
-    const stops = jobOrder?.routes || [];
-    const totalPoints = stops.length * 2;
-    let currentPoints = 0;
-    stops.forEach((s: any) => {
-      if (s.status === 'completed') currentPoints += 2;
-      else if (s.status === 'arrived') currentPoints += 1;
-    });
-    return totalPoints > 0 ? (currentPoints / totalPoints) * 100 : 0;
-  })();
 
   if (loading) {
     return (
@@ -263,11 +328,37 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
       {/* Header */}
       <div className="bg-white border-b border-slate-100 px-6 pt-8 pb-6 shadow-sm">
         <div className="max-w-xl mx-auto">
-          <p className="text-sm font-black text-blue-900 uppercase tracking-tight mb-2">JO: {jobOrder.jo_number}</p>
+          {/* Advance Payment Notification */}
+          {jobOrder.advance_status === 'paid' && (
+            <div className="mb-6 bg-emerald-600 text-white p-5 rounded-[2rem] shadow-xl shadow-emerald-600/20 flex items-center gap-5 animate-in slide-in-from-top-4 duration-700">
+               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                  <Check size={24} className="text-white" />
+               </div>
+               <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">DANA OPERASIONAL CAIR</p>
+                  <h3 className="text-lg font-black tracking-tight leading-none">
+                     Uang jalan Rp. {new Intl.NumberFormat('id-ID').format(jobOrder.advance_amount || 0)} telah ditransfer.
+                  </h3>
+                  <p className="text-[9px] font-bold text-emerald-100/60 uppercase mt-1">Silakan memulai perjalanan Anda.</p>
+               </div>
+            </div>
+          )}
+          <div className="flex justify-between items-start mb-2">
+            <p className="text-sm font-black text-blue-900 uppercase tracking-tight">JO: {jobOrder.jo_number}</p>
+            <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] italic">
+               {(() => {
+                 const s = jobOrder.status?.toUpperCase() || '';
+                 if (s === 'ACCEPTED') return 'ORDER DITERIMA';
+                 if (s === 'IN_PROGRESS') return 'DALAM PERJALANAN';
+                 if (s === 'COMPLETED') return 'PEKERJAAN SELESAI';
+                 return s.replace('_', ' ');
+               })()}
+            </div>
+          </div>
           
-          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100/50 shadow-inner">
+          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100/50 shadow-inner mb-4">
             <h1 className="text-2xl font-black text-slate-800 leading-tight mb-2 tracking-tighter">
-              {jobOrder.tenant_name || jobOrder.customer?.name || 'SENTRALOGIS'}
+               {jobOrder.tenant_name || jobOrder.customer?.name || 'SENTRALOGIS'}
             </h1>
             <div className="flex items-center gap-2">
               <Calendar size={16} className="text-rose-600" />
@@ -285,11 +376,59 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               )}
             </div>
           </div>
+
+          {/* New Driver & Fleet Info */}
+          <div className="grid grid-cols-2 gap-3">
+             <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
+                   <Phone size={18} />
+                </div>
+                <div className="min-w-0">
+                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Driver</p>
+                   <p className="text-xs font-black text-slate-800 truncate uppercase italic">{jobOrder.driver?.name || '-'}</p>
+                </div>
+             </div>
+             <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
+                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+                   <Truck size={18} />
+                </div>
+                <div className="min-w-0">
+                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{jobOrder.fleet?.type_name || 'Fleet'}</p>
+                   <p className="text-xs font-black text-slate-800 truncate uppercase italic">{jobOrder.fleet?.plate_number || '-'}</p>
+                </div>
+             </div>
+          </div>
         </div>
       </div>
 
       <main className="max-w-xl mx-auto px-6 pt-6 space-y-6">
         
+        {/* Job Completed Success Screen */}
+        {(jobOrder.status === 'completed' || jobOrder.status === 'PEKERJAAN SELESAI' || jobOrder.status === 'ready_for_billing' || jobOrder.status === 'verified') && (
+          <div className="bg-white rounded-[2.5rem] p-10 text-center shadow-xl border-4 border-emerald-500/20 animate-in zoom-in duration-500">
+             <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-500/40">
+                <CheckCircle2 size={48} />
+             </div>
+             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">PEKERJAAN SELESAI</h2>
+             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-8">Terima kasih atas dedikasi Anda di lapangan!</p>
+             
+             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span>
+                   <span className="text-sm font-black text-slate-900">{jobOrder.completed_at ? formatTime(jobOrder.completed_at) : '-'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tanggal</span>
+                   <span className="text-sm font-black text-slate-900">{jobOrder.completed_at ? formatDate(jobOrder.completed_at) : '-'}</span>
+                </div>
+             </div>
+
+             <div className="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-[11px] font-black text-emerald-700 uppercase tracking-tight">Status: Menunggu Verifikasi Dokumen oleh HQ</p>
+             </div>
+          </div>
+        )}
+
         {/* Debug Section if Error */}
         {lastError && (
           <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 animate-bounce">
@@ -302,11 +441,11 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
           </div>
         )}
         
-        {/* Journey Pipeline - SELALU TAMPIL JIKA ADA RUTE */}
-        {totalStops > 0 && (
+        {/* Journey Pipeline - HANYA TAMPIL JIKA BELUM SELESAI */}
+        {totalStops > 0 && !['completed', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified'].includes(jobOrder.status) && (
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-               <Navigation size={12} /> JOURNEY PIPELINE
+               <NavIcon size={12} /> JOURNEY PIPELINE
             </h2>
             <div className="relative px-2">
               {/* Line background */}
@@ -318,17 +457,17 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               />
               
               <div className="relative flex justify-between">
-                {jobOrder.routes.map((stop, idx) => (
-                  <div key={stop.id} className="flex flex-col items-center">
+                {milestones.map((m, idx) => (
+                  <div key={m.id} className="flex flex-col items-center">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black z-10 transition-all duration-500 shadow-sm ${
-                      stop.status === 'completed' ? 'bg-emerald-500 text-white' : 
-                      stop.status === 'arrived' ? 'bg-blue-600 text-white animate-pulse' : 
+                      m.status === 'completed' ? 'bg-emerald-500 text-white' : 
+                      m.status === 'current' ? 'bg-blue-600 text-white animate-pulse' : 
                       'bg-white border-2 border-slate-100 text-slate-300'
                     }`}>
-                      {stop.sequence}
+                      {idx + 1}
                     </div>
                     <p className="text-[9px] font-bold text-slate-500 mt-2 text-center max-w-[60px] truncate uppercase tracking-tighter">
-                      {stop.location_name}
+                      {m.label}
                     </p>
                   </div>
                 ))}
@@ -337,10 +476,11 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
           </div>
         )}
 
-        {/* Action Section */}
-        <div className="space-y-4">
-          {/* Phase 1: Pending (Accept/Reject) */}
-          {(jobOrder.status === 'pending' || jobOrder.status === 'assigned') && (
+        {/* Action Section - HANYA TAMPIL JIKA BELUM SELESAI */}
+        {!['completed', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified'].includes(jobOrder.status) && (
+          <div className="space-y-4">
+            {/* Phase 1: Confirmation (Accept/Reject) */}
+            {jobOrder.driver_response !== 'accepted' && (
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => updateStatus('accepted')}
@@ -352,21 +492,37 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               <button
                 onClick={() => updateStatus('rejected')}
                 disabled={updating !== null}
-                className="h-16 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20 active:scale-95 transition-all"
+                className={`h-16 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
+                  jobOrder.driver_response === 'rejected' 
+                    ? 'bg-rose-50 text-rose-600 border-2 border-rose-200' 
+                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
+                }`}
               >
-                {updating === 'rejected' ? <Loader2 className="animate-spin" /> : <><X size={20} /> TOLAK</>}
+                {updating === 'rejected' ? <Loader2 className="animate-spin" /> : (
+                  <>
+                    <X size={20} /> 
+                    {jobOrder.driver_response === 'rejected' ? 'TUGAS DITOLAK' : 'TOLAK'}
+                  </>
+                )}
               </button>
             </div>
           )}
 
           {/* Phase 2: Accepted (Start Journey) */}
-          {jobOrder.status === 'accepted' && (
+          {jobOrder.driver_response === 'accepted' && (jobOrder.status === 'accepted' || jobOrder.status === 'assigned' || jobOrder.status === 'MENUNGGU BERANGKAT' || jobOrder.status === 'MENUNGGU MULAI / START' || jobOrder.status === 'ORDER DITERIMA') && (
             <button
               onClick={() => updateStatus('in_progress')}
-              disabled={updating}
+              disabled={updating !== null}
               className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20 active:scale-95 transition-all uppercase tracking-widest"
             >
-              {updating === 'in_progress' ? <Loader2 className="animate-spin" /> : <><Truck size={22} /> BERANGKAT SEKARANG</>}
+              {updating === 'in_progress' ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <>
+                  <Truck size={22} /> 
+                  BERANGKAT MENUJU {jobOrder.routes[0]?.location_name?.toUpperCase() || 'LOKASI'}
+                </>
+              )}
             </button>
           )}
 
@@ -411,7 +567,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                         className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border border-blue-100"
                         title="Buka Navigasi"
                       >
-                        <Navigation size={18} fill="currentColor" className="opacity-80" />
+                        <NavIcon size={18} fill="currentColor" className="opacity-80" />
                       </button>
 
                       <div className="relative">
@@ -455,8 +611,8 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                     </div>
                   )}
 
-                  {/* Contextual Buttons - HANYA TAMPIL JIKA STATUS IN_PROGRESS */}
-                  {jobOrder.status === 'in_progress' && (
+                  {/* Contextual Buttons - TAMPILKAN JIKA MISSION SEDANG BERJALAN */}
+                  {(jobOrder.status === 'in_progress' || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU') || jobOrder.status.startsWith('TIBA')) && (
                     <div className="mt-5">
                       {stop.status === 'pending' && (
                         <button
@@ -464,7 +620,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                           disabled={updating !== null}
                           className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
                         >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI LOKASI</>}
+                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
                         </button>
                       )}
 
@@ -474,7 +630,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                           disabled={updating !== null}
                           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
                         >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN MUAT</>}
+                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN MUAT ({stop.location_name?.toUpperCase()})</>}
                         </button>
                       )}
 
@@ -484,7 +640,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                           disabled={updating !== null}
                           className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
                         >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN BONGKAR</>}
+                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN BONGKAR ({stop.location_name?.toUpperCase()})</>}
                         </button>
                       )}
                     </div>
@@ -493,18 +649,54 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               ))}
             </div>
           )}
-        </div>
+          </div>
+        )}
 
-        {/* Final Job Completion */}
-        {jobOrder.status === 'in_progress' && completedStops === totalStops && totalStops > 0 && (
-          <div className="pt-6">
-            <button
-              onClick={() => updateStatus('completed')}
-              disabled={updating}
-              className="w-full h-16 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all"
-            >
-              {updating === 'completed' ? <Loader2 className="animate-spin" /> : 'PEKERJAAN SELESAI'}
-            </button>
+        {/* Final Job Completion Actions */}
+        {(jobOrder.status === 'in_progress' || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU') || jobOrder.status.startsWith('TIBA') || jobOrder.status === 'MENUNGGU SELESAI') && (
+          <div className="pt-6 pb-12 border-t border-slate-200 mt-8">
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl shadow-slate-900/30 relative overflow-hidden">
+               <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-4">
+                     <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                        <CheckCircle2 size={20} className="text-emerald-400" />
+                     </div>
+                     <div>
+                        <h4 className="text-white font-black text-sm uppercase tracking-widest">Konfirmasi Selesai</h4>
+                        <p className="text-white/40 text-[10px] font-bold uppercase tracking-tight">Pastikan semua dokumen & foto POD sudah diunggah</p>
+                     </div>
+                  </div>
+
+                  {completedStops < totalStops && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 flex items-center gap-3">
+                       <AlertCircle size={18} className="text-amber-400 shrink-0" />
+                       <p className="text-[10px] font-bold text-amber-200 uppercase leading-tight">
+                          Masih ada {totalStops - completedStops} lokasi yang belum ditandai selesai. Lanjutkan?
+                       </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      const confirmMsg = completedStops < totalStops 
+                        ? 'Masih ada rute yang belum selesai. Apakah Anda yakin ingin mengakhiri tugas ini sekarang?'
+                        : 'Apakah Anda yakin ingin menyelesaikan seluruh tugas ini?';
+                      if (window.confirm(confirmMsg)) {
+                        updateStatus('completed');
+                      }
+                    }}
+                    disabled={updating !== null}
+                    className="w-full h-16 bg-white text-slate-900 hover:bg-slate-50 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                  >
+                    {updating === 'completed' ? (
+                       <Loader2 className="animate-spin" />
+                    ) : (
+                       <>PEKERJAAN SELESAI <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                    )}
+                  </button>
+               </div>
+               <Activity className="absolute -bottom-6 -right-6 w-32 h-32 text-white/5 rotate-12" />
+            </div>
           </div>
         )}
 

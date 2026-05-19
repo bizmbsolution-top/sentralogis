@@ -12,8 +12,8 @@ import {
   TrendingDown,
   Receipt
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 
 interface AddCostTableProps {
   data: any[];
@@ -41,7 +41,7 @@ const getStatusBadge = (status: string) => {
     case 'rejected': 
       return <Badge className="bg-rose-100 text-rose-700 border-none px-3 py-1 font-black text-[10px] uppercase tracking-widest"><XCircle size={10} className="mr-1" /> Rejected</Badge>;
     default: 
-      return <Badge variant="outline">{status}</Badge>;
+      return <Badge variant="default">{status}</Badge>;
   }
 };
 
@@ -96,7 +96,7 @@ export default function AddCostTable({ data, onEdit, onDelete, onSubmit }: AddCo
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col items-start gap-1">
-                        <Badge variant="outline" className={`text-[9px] font-black uppercase border-transparent ${item.charge_type === 'surcharge' ? 'text-blue-600 bg-blue-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        <Badge variant="default" className={`text-[9px] font-black uppercase border-transparent ${item.charge_type === 'surcharge' ? 'text-blue-600 bg-blue-50' : 'text-emerald-600 bg-emerald-50'}`}>
                           {item.charge_type || 'reimbursement'}
                         </Badge>
                       </div>
@@ -105,7 +105,7 @@ export default function AddCostTable({ data, onEdit, onDelete, onSubmit }: AddCo
                       <p className="font-black text-slate-900 italic">{formatRupiah(item.amount)}</p>
                     </td>
                     <td className="px-6 py-5">
-                      <Badge variant="outline" className="text-[9px] font-black uppercase border-slate-200 text-slate-500 bg-white mb-1">
+                      <Badge variant="default" className="text-[9px] font-black uppercase border-slate-200 text-slate-500 bg-white mb-1">
                         {item.cost_type.replace(/_/g, ' ')}
                       </Badge>
                       <p className="text-[10px] font-bold text-slate-500 truncate max-w-[150px]">{item.description || '-'}</p>

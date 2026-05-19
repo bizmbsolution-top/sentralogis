@@ -6,9 +6,12 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
   Plus, Search, Edit2, Trash2, X, Loader2, Truck, Filter, 
-  Calendar, AlertCircle, CheckCircle2, MoreVertical
+  Calendar, AlertCircle, CheckCircle2, MoreVertical, RefreshCw
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Box } from 'lucide-react';
+import { useStatusSync } from '@/lib/hooks/useStatusSync';
 
 interface Fleet {
   id: string;
@@ -26,11 +29,12 @@ interface Fleet {
   entity_id: string;
   fleet_type_id: string;
   md_entities: { name: string };
-  md_fleet_types: { type_name: string };
+  md_fleet_types: { type_name: string; icon_url?: string };
 }
 
 export default function HQFleetsPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const { syncStatus, loading: syncLoading, lastSync, lastResult } = useStatusSync({ autoSync: false });
   
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [vendors, setVendors] = useState<{id: string, name: string}[]>([]);
@@ -74,7 +78,7 @@ export default function HQFleetsPage() {
     try {
       const { data: fleetData, error: fleetError } = await supabase
         .from('md_fleets')
-        .select('*, md_entities(name, is_vendor), md_fleet_types(type_name)')
+        .select('*, md_entities(name, is_vendor), md_fleet_types(type_name, icon_url)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
@@ -100,13 +104,13 @@ export default function HQFleetsPage() {
         .select('id, name')
         .eq('tenant_id', tenantId)
         .eq('is_vendor', false)
-        .eq('name', profile?.tenants?.company_name || 'INTERNAL HQ')
+        .eq('name', (profile?.tenants as any)?.company_name || 'INTERNAL HQ')
         .limit(1)
         .single();
 
       const ownEntity = internalEntity 
         ? [{ id: internalEntity.id, name: `(OWN) ${internalEntity.name}` }] 
-        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${profile?.tenants?.company_name || 'INTERNAL HQ'}` }];
+        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${(profile?.tenants as any)?.company_name || 'INTERNAL HQ'}` }];
 
       setVendors([...ownEntity, ...(vendorData || [])]);
       setFleets(fleetData || []);
@@ -167,13 +171,13 @@ export default function HQFleetsPage() {
       // Handle OWN selection
       if (formData.entity_id === 'NEW_INTERNAL') {
           // Create a dedicated internal entity
-          const entityCode = `INT-${(profile?.tenants?.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+          const entityCode = `INT-${((profile?.tenants as any)?.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
           const { data: newEntity, error: createError } = await supabase
             .from('md_entities')
             .insert({
               tenant_id: tenantId,
               entity_code: entityCode,
-              name: profile?.tenants?.company_name || 'INTERNAL HQ',
+              name: (profile?.tenants as any)?.company_name || 'INTERNAL HQ',
               is_vendor: false,
               is_active: true
             })
@@ -325,7 +329,7 @@ export default function HQFleetsPage() {
     let matchesVendor = true;
     if (filterVendor !== 'all') {
       if (filterVendor === 'OWN') {
-        matchesVendor = f.md_entities?.is_vendor === false;
+        matchesVendor = (f.md_entities as any)?.is_vendor === false;
       } else {
         matchesVendor = f.entity_id === filterVendor;
       }
@@ -334,95 +338,198 @@ export default function HQFleetsPage() {
     return matchesSearch && matchesVendor;
   });
 
+  const handleSync = async () => {
+    const result = await syncStatus(false);
+    if (result.success && result.summary) {
+      const total = result.summary.total_resets;
+      if (total > 0) {
+        toast.success(`Synced: ${result.summary.drivers_reset} drivers, ${result.summary.fleets_reset} fleets reset to available`);
+        fetchData(); // Refresh the fleet list
+      } else {
+        toast.success('All statuses are in sync');
+      }
+    } else if (result.error) {
+      toast.error(`Sync failed: ${result.error}`);
+    }
+  };
+
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Truck className="text-slate-900" size={24} />
-            Master Transporters
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Kelola armada kendaraan transporter (Staf HQ).</p>
-        </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-medium text-sm shadow-sm active:scale-95"
-        >
-          <Plus size={18} />
-          Add Fleet
-        </button>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto mb-8">
+         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+            <div className="flex items-center gap-4">
+               <div className="w-12 h-12 bg-sky-600 text-white rounded-xl flex items-center justify-center shadow-sm">
+                  <Truck size={22} />
+               </div>
+               <div>
+                  <p className="text-xs font-medium text-sky-600 uppercase tracking-wide">Fleet Management</p>
+                  <h1 className="text-xl md:text-2xl font-semibold text-slate-900 leading-tight">Fleets</h1>
+               </div>
+            </div>
+
+             <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                <button
+                  onClick={handleSync}
+                  disabled={syncLoading}
+                  className="h-10 px-4 bg-white border border-slate-200 hover:border-sky-500 hover:text-sky-600 text-slate-600 rounded-lg text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50"
+                  title="Sync driver/fleet statuses"
+                >
+                  <RefreshCw size={16} className={syncLoading ? 'animate-spin' : ''} />
+                  <span className="hidden sm:inline">Sync Status</span>
+                </button>
+
+                <div className="relative group w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-sky-600 transition-colors" size={16} />
+                  <input 
+                     type="text" 
+                     placeholder="Search fleet..." 
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     className="w-full h-10 pl-10 pr-4 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 transition-all outline-none"
+                  />
+               </div>
+
+               <Button 
+                  onClick={() => handleOpenModal()}
+                  className="h-10 px-5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium text-sm shadow-sm flex items-center gap-2 transition-all w-full sm:w-auto justify-center"
+               >
+                  <Plus size={16} /> Add Fleet
+               </Button>
+            </div>
+         </div>
+
+          {/* Filters */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+             <div className="flex items-center gap-2 px-3 border-r border-slate-200">
+                <Filter size={14} className="text-slate-400" />
+                <span className="text-xs font-medium text-slate-500">Entity:</span>
+             </div>
+             <select 
+               value={filterVendor}
+               onChange={(e) => setFilterVendor(e.target.value)}
+               className="bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
+             >
+               <option value="all">All Transporters</option>
+               {vendors.map(v => (
+                 <option key={v.id} value={v.id}>{v.name}</option>
+               ))}
+             </select>
+
+             {/* Status Summary */}
+             <div className="ml-auto flex items-center gap-4 text-xs">
+               <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+                 Available: {fleets.filter(f => f.status === 'available').length}
+               </span>
+               <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">
+                 On Road: {fleets.filter(f => f.status === 'on_road').length}
+               </span>
+               <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded-full font-medium">
+                 Maintenance: {fleets.filter(f => f.status === 'maintenance').length}
+               </span>
+             </div>
+          </div>
+
+          {/* Last Sync Info */}
+          {lastSync && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+              <RefreshCw size={12} />
+              <span>Last synced: {lastSync.toLocaleTimeString()}</span>
+              {lastResult?.summary && lastResult.summary.total_resets > 0 && (
+                <span className="text-emerald-600 font-medium">
+                  ({lastResult.summary.drivers_reset} drivers, {lastResult.summary.fleets_reset} fleets reset)
+                </span>
+              )}
+            </div>
+          )}
       </div>
 
-      <Card className="p-4 border-slate-200 shadow-none">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by plate or code..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-slate-400" />
-            <select 
-              value={filterVendor}
-              onChange={(e) => setFilterVendor(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm min-w-[200px]"
-            >
-              <option value="all">All Transporters</option>
-              {vendors.map(v => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="overflow-hidden border-slate-200 shadow-none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-4 font-semibold text-slate-700">Code</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Plate Number</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Type</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Transporter</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
-                <th className="px-4 py-4 font-semibold text-slate-700 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center">
-                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin mx-auto mb-2" />
-                    <p className="text-slate-500">Memuat data armada...</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredFleets.map((f, idx) => (
-                  <tr key={f.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50 transition-colors' : 'bg-slate-50/30 hover:bg-slate-50 transition-colors'}>
-                    <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{f.fleet_code}</td>
-                    <td className="px-4 py-4">
-                      <div className="font-bold text-slate-900">{f.plate_number}</div>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{f.md_fleet_types?.type_name || '-'}</td>
-                    <td className="px-4 py-4 text-slate-700">{f.md_entities?.name || '-'}</td>
-                    <td className="px-4 py-4">{getStatusBadge(f)}</td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button onClick={() => handleOpenModal(f)} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100"><Edit2 size={16} /></button>
-                      <button onClick={() => { setSelectedFleet(f); setIsDeleteModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50"><Trash2 size={16} /></button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Table */}
+      <div className="max-w-7xl mx-auto">
+         <Card className="overflow-hidden border border-slate-200 shadow-sm rounded-xl bg-white">
+            <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                  <thead>
+                     <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Code</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Plate & Specs</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Type</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Actions</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                     {loading ? (
+                        <tr>
+                           <td colSpan={6} className="px-4 py-16 text-center">
+                              <Loader2 className="w-8 h-8 text-sky-600 animate-spin mx-auto mb-3" />
+                              <p className="text-xs text-slate-400">Loading fleets...</p>
+                           </td>
+                        </tr>
+                     ) : filteredFleets.length === 0 ? (
+                        <tr>
+                           <td colSpan={6} className="px-4 py-16 text-center">
+                              <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                 <Truck size={24} className="text-slate-300" />
+                              </div>
+                              <p className="text-xs text-slate-400">No fleets found</p>
+                           </td>
+                        </tr>
+                     ) : (
+                        filteredFleets.map((f) => (
+                           <tr key={f.id} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className="px-4 py-3">
+                                 <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-mono rounded">
+                                    {f.fleet_code}
+                                 </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="text-sm font-medium text-slate-900">{f.plate_number}</div>
+                                 <div className="text-xs text-slate-400 mt-0.5">{f.brand} {f.model} · {f.year}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center overflow-hidden border border-slate-100">
+                                       {f.md_fleet_types?.icon_url ? (
+                                         <img src={f.md_fleet_types.icon_url} alt={f.md_fleet_types.type_name} className="w-full h-full object-cover" />
+                                       ) : (
+                                         <Box size={14} className="text-slate-300" />
+                                       )}
+                                    </div>
+                                    <span className="text-sm text-slate-700">{f.md_fleet_types?.type_name || '-'}</span>
+                                 </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 <div className="text-sm text-slate-700">{f.md_entities?.name || 'Private HQ'}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                 {getStatusBadge(f)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                 <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                       onClick={() => handleOpenModal(f)}
+                                       className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
+                                    >
+                                       <Edit2 size={14} />
+                                    </button>
+                                    <button 
+                                       onClick={() => { setSelectedFleet(f); setIsDeleteModalOpen(true); }}
+                                       className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                    >
+                                       <Trash2 size={14} />
+                                    </button>
+                                 </div>
+                              </td>
+                           </tr>
+                        ))
+                     )}
+                  </tbody>
+               </table>
+            </div>
+         </Card>
+      </div>
 
       {/* Modal & Delete Logic Same as Tenant Version */}
       {/* ... keeping it robust ... */}
@@ -451,15 +558,31 @@ export default function HQFleetsPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Plate Number *</label>
-                  <input type="text" required value={formData.plate_number || ''} onChange={(e) => setFormData({...formData, plate_number: e.target.value.toUpperCase()})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold tracking-widest" />
+                  <input type="text" required value={formData.plate_number || ''} onChange={(e) => setFormData({...formData, plate_number: e.target.value.toUpperCase()})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black tracking-widest focus:border-sky-500 transition-all outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Brand</label>
+                  <input type="text" placeholder="e.g. HINO, ISUZU" value={formData.brand || ''} onChange={(e) => setFormData({...formData, brand: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Model</label>
+                  <input type="text" placeholder="e.g. RANGER, GIGA" value={formData.model || ''} onChange={(e) => setFormData({...formData, model: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Manufacturing Year</label>
+                  <input type="number" value={formData.year || ''} onChange={(e) => setFormData({...formData, year: parseInt(e.target.value)})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">STNK Number</label>
+                  <input type="text" value={formData.stnk_number || ''} onChange={(e) => setFormData({...formData, stnk_number: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">STNK Expiry *</label>
-                  <input type="date" required value={formData.stnk_expiry || ''} onChange={(e) => setFormData({...formData, stnk_expiry: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                  <input type="date" required value={formData.stnk_expiry || ''} onChange={(e) => setFormData({...formData, stnk_expiry: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">KIR Expiry *</label>
-                  <input type="date" required value={formData.kir_expiry || ''} onChange={(e) => setFormData({...formData, kir_expiry: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                  <input type="date" required value={formData.kir_expiry || ''} onChange={(e) => setFormData({...formData, kir_expiry: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-sky-500 transition-all outline-none" />
                 </div>
               </div>
               <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">

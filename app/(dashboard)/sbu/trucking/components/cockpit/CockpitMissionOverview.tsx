@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, Navigation, User, Phone, Send, Info, MessageCircle } from "lucide-react";
+import { MapPin, Navigation as NavIcon, User, Phone, Send, Info, MessageCircle } from "lucide-react";
 
 interface CockpitMissionOverviewProps {
     jo: any;
@@ -55,7 +55,7 @@ export default function CockpitMissionOverview({
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="w-10 h-10 rounded-none bg-blue-100 flex items-center justify-center">
-                                   <Navigation className="w-5 h-5 text-blue-600" />
+                                   <NavIcon className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Target Destination</p>

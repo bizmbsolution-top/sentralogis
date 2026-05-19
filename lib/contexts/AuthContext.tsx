@@ -6,10 +6,22 @@ import { User, Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string | null;
+  tenant_id: string | null;
+  tenant_code: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  [key: string]: unknown;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: any | null;
+  profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -19,7 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -89,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       
       router.replace('/login');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setLoading(false);

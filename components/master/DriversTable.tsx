@@ -60,7 +60,7 @@ export default function DriversTable({ refreshTrigger, onEdit }: DriversTablePro
     switch (status) {
       case 'available': return 'badge-available';
       case 'on_duty': return 'badge-on-road';
-      case 'off_duty': return 'badge-maintenance';
+      case 'unavailable': return 'badge-maintenance';
       case 'suspended': return 'badge-suspended';
       default: return 'badge-suspended';
     }

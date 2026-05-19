@@ -195,7 +195,7 @@ export default function ReportingPage() {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Atlas Report");
       XLSX.writeFile(workbook, `Atlas_Export_${reportMode}_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast.success("Excel Ready", { id: tid });
-    } catch (err: unknown) { toast.error(`Excel Error: ${err.message}`, { id: tid }); }
+    } catch (err: unknown) { toast.error(`Excel Error: ${(err as Error).message}`, { id: tid }); }
   };
 
   const handleExportPDF = async () => {
@@ -210,10 +210,10 @@ export default function ReportingPage() {
       const body = data.map(item => activeCols.map(colId => String(item[colId] || '-')));
       doc.setFontSize(22); doc.text("SENTRALOGIS INTELLIGENCE", 40, 50);
       doc.setFontSize(10); doc.text(`Matrix Type: ${reportMode.toUpperCase()} | Generated: ${new Date().toLocaleString()}`, 40, 70);
-      autoTable(doc, { headStyle: { fillColor: [15, 23, 42] }, head: head, body: body, startY: 90, theme: 'grid', styles: { fontSize: 8 } });
+      autoTable(doc, { headStyles: { fillColor: [15, 23, 42] }, head: head, body: body, startY: 90, theme: 'grid', styles: { fontSize: 8 } });
       doc.save(`Sentralogis_Matrix_${new Date().getTime()}.pdf`);
       toast.success("PDF Downloaded", { id: tid });
-    } catch (err: unknown) { toast.error(`PDF Error: ${err.message}`, { id: tid }); }
+    } catch (err: unknown) { toast.error(`PDF Error: ${(err as Error).message}`, { id: tid }); }
   };
 
   useEffect(() => { fetchMasterData(); fetchReportData(); }, [fetchReportData, reportMode]);

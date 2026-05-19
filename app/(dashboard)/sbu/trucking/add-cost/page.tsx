@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import AddCostTable from '@/components/sbu/AddCostTable';
 import AddCostModal from '@/components/sbu/AddCostModal';
 import EditAddCostModal from '@/components/sbu/EditAddCostModal';
@@ -34,14 +34,14 @@ export default function SBUAddCostPage() {
     try {
       setLoading(true);
       const { data: costs, error } = await supabase
-        .from('add_costs')
+        .from('extra_costs')
         .select(`
           *,
-          job_orders!inner (
+          job_orders!jo_id (
             jo_number,
             purchase_price,
             vendor_invoice_amount,
-            transporter:md_entities!transporter_id (name),
+            transporter:transporter_id (name),
             wo_items:wo_item_id (item_data)
           )
         `)
@@ -64,7 +64,7 @@ export default function SBUAddCostPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) return;
     try {
-      const { error } = await supabase.from('add_costs').delete().eq('id', id);
+      const { error } = await supabase.from('extra_costs').delete().eq('id', id);
       if (error) throw error;
       toast.success('Data berhasil dihapus');
       fetchData();
@@ -76,7 +76,7 @@ export default function SBUAddCostPage() {
   const handleSubmitToCS = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('add_costs')
+        .from('extra_costs')
         .update({ status: 'need_approval' })
         .eq('id', id);
       if (error) throw error;

@@ -33,6 +33,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const [transporters, setTransporters] = useState<any[]>([]);
   const [transporterFleets, setTransporterFleets] = useState<any[]>([]);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
+  const [driverReadiness, setDriverReadiness] = useState<Record<string, { ready: boolean; reason: string; hasAttendance: boolean; hasInspection: boolean; inspectionStatus: string }>>({});
 
   const [assignments, setAssignments] = useState<any[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
@@ -40,6 +41,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const itemData = typeof item?.item_data === 'string' ? JSON.parse(item.item_data) : (item?.item_data || {});
   const dealPrice = Number(itemData.deal_price) || 0;
   const unitCount = Number(itemData.unit_count) || 1;
+  const isHandoverApproved = itemData.handover_approved === true;
+  const maxJOCount = isHandoverApproved ? (Number(itemData.max_jo_count) || 0) : unitCount;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -179,6 +182,43 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         setFleets(availableFleets);
         setDrivers(availableDrivers);
         
+        // [AI] Check readiness for internal drivers (attendance + inspection today)
+        const today = new Date().toISOString().split('T')[0];
+        const readinessMap: Record<string, { ready: boolean; reason: string; hasAttendance: boolean; hasInspection: boolean; inspectionStatus: string }> = {};
+        
+        for (const d of availableDrivers) {
+          const transporter = trans.find(t => t.id === d.entity_id);
+          const isInternal = transporter?.is_own || !transporter?.is_vendor;
+          
+          if (isInternal && d.id) {
+            const [attRes, inspRes] = await Promise.all([
+              supabase.from('driver_attendance').select('id').eq('driver_id', d.id).eq('status', 'CHECK_IN').gte('check_in', `${today}T00:00:00`).limit(1),
+              supabase.from('fleet_inspections').select('status').eq('driver_id', d.id).gte('created_at', `${today}T00:00:00`).order('created_at', { ascending: false }).limit(1)
+            ]);
+            
+            const hasAttendance = attRes.data && attRes.data.length > 0;
+            const hasInspection = inspRes.data && inspRes.data.length > 0;
+            const inspectionStatus = inspRes.data?.[0]?.status || 'N/A';
+            
+            if (d.status === 'unavailable') {
+              readinessMap[d.id] = { ready: false, reason: 'Sakit/Cuti', hasAttendance: false, hasInspection: false, inspectionStatus: 'N/A' };
+            } else if (!hasAttendance) {
+              readinessMap[d.id] = { ready: false, reason: 'Belum absen', hasAttendance: false, hasInspection: false, inspectionStatus: 'N/A' };
+            } else if (!hasInspection) {
+              readinessMap[d.id] = { ready: false, reason: 'Belum inspeksi', hasAttendance: true, hasInspection: false, inspectionStatus: 'N/A' };
+            } else if (inspectionStatus === 'GROUNDED') {
+              readinessMap[d.id] = { ready: false, reason: 'Fleet GROUNDED', hasAttendance: true, hasInspection: true, inspectionStatus: 'GROUNDED' };
+            } else {
+              readinessMap[d.id] = { ready: true, reason: 'Ready', hasAttendance: true, hasInspection: true, inspectionStatus: inspectionStatus };
+            }
+          } else {
+            // Vendor drivers don't need attendance/inspection check
+            readinessMap[d.id] = { ready: true, reason: 'Vendor', hasAttendance: true, hasInspection: true, inspectionStatus: 'N/A' };
+          }
+        }
+        
+        setDriverReadiness(readinessMap);
+        
         console.log('[AssignmentModal] Assets Fetched:', {
           fleetsCount: availableFleets.length,
           driversCount: availableDrivers.length,
@@ -213,8 +253,10 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
         setTransporters(trans);
 
-        // 3. Initialize assignments: Show ALL existing JOs first, then add empty slots if count < unitCount
+        // 3. Initialize assignments: Show ALL existing JOs first, then add empty slots if count < maxJOCount
         const unitCount = Number(itemData.unit_count) || 1;
+        const isHandoverApproved = itemData.handover_approved === true;
+        const maxJOCount = isHandoverApproved ? (Number(itemData.max_jo_count) || 0) : unitCount;
         const internalHqId = trans.find(t => t.is_own)?.id || '';
         
         const existingAssignments = (jos || []).map(existing => {
@@ -240,7 +282,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           };
         });
 
-        const emptySlotsNeeded = Math.max(0, unitCount - existingAssignments.length);
+        const emptySlotsNeeded = isHandoverApproved ? 0 : Math.max(0, maxJOCount - existingAssignments.length);
         const emptySlots = Array.from({ length: emptySlotsNeeded }).map(() => ({
           transporter_id: internalHqId || null,
           fleet_id: null,
@@ -297,6 +339,97 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     setAssignments(updated);
   };
 
+  const handleSaveDraft = async () => {
+    if (assigning) return;
+    
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      toast.error('Tenant ID tidak ditemukan. Harap refresh halaman.');
+      return;
+    }
+
+    setAssigning(true);
+    console.log('[AssignmentModal] Saving draft for item:', item.id);
+
+    try {
+      // [AI] Save ALL assignments including partial ones (without fleet/driver)
+      // This allows user to continue editing later
+      const generateToken = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      };
+      
+      for (let i = 0; i < assignments.length; i++) {
+        const assign = assignments[i];
+        
+        // Skip if no data at all (completely empty slot)
+        if (!assign.id && !assign.transporter_id && !assign.fleet_id && !assign.driver_id) {
+          continue;
+        }
+        
+        const selectedTransporter = transporters.find(t => t.id === assign.transporter_id);
+        const woNumber = item.work_orders?.wo_number || item.item_code;
+        const joNumber = assign.jo_number || `${woNumber}-${String(i + 1).padStart(2, '0')}`;
+        
+        const payload = {
+          wo_item_id: item.id,
+          tenant_id: tenantId,
+          jo_number: joNumber,
+          transporter_id: assign.transporter_id || null,
+          vendor_id: assign.transporter_id || null,
+          fleet_id: assign.fleet_id || null,
+          driver_id: assign.driver_id || null,
+          driver_phone: assign.driver_phone || null,
+          purchase_price: Number(assign.purchase_price) || 0,
+          base_price: Number(assign.base_price) || dealPrice,
+          driver_share_percentage: Number(assign.driver_share_percentage) || 0,
+          advance_amount: Number(assign.advance_amount) || 0,
+          estimated_margin: (Number(assign.base_price) || dealPrice) - (Number(assign.purchase_price) || 0),
+          wa_token: assign.wa_token || generateToken(),
+          tracking_token: assign.tracking_token || generateToken(),
+          total_stops: itemData.stops?.length || 0,
+          updated_at: new Date().toISOString(),
+          status: 'pending' // [AI] Always pending for drafts
+        };
+
+        if (assign.id) {
+          const { error: updErr } = await supabase.from('job_orders').update({
+            ...payload,
+            driver_link_token: assign.driver_link_token || Math.random().toString(36).substring(2, 15),
+          }).eq('id', assign.id);
+          if (updErr) throw updErr;
+          console.log(`[AssignmentModal] Updated draft JO: ${joNumber}`);
+        } else {
+          const { data: newJo, error: insErr } = await supabase.from('job_orders').insert({
+            ...payload,
+            driver_link_token: Math.random().toString(36).substring(2, 15),
+          }).select('id').single();
+          
+          if (insErr) throw insErr;
+          console.log(`[AssignmentModal] Inserted draft JO: ${joNumber}`);
+        }
+      }
+
+      // Keep WO item status as pending so user can continue editing
+      const { error: woUpdateError } = await supabase
+        .from('wo_items')
+        .update({ status: 'pending' })
+        .eq('id', item.id);
+      
+      if (woUpdateError) throw woUpdateError;
+      
+      toast.success('Draft saved — bisa lanjut edit nanti');
+      console.log('[AssignmentModal] Draft saved successfully.');
+      onSuccess();
+    } catch (err: any) {
+      console.error('[AssignmentModal] Draft Save Error:', err);
+      const errorMessage = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      toast.error(`Gagal save draft: ${errorMessage}`);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   const handleSave = async (nextAction?: () => void) => {
     if (assigning) return;
     
@@ -310,13 +443,21 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     console.log('[AssignmentModal] Starting save process for item:', item.id);
 
     try {
-      // 1. Clean up stale/pending job orders
+      // [AI] Only process assignments that have BOTH fleet_id AND driver_id
+      // Skip empty slots — they should NOT create ghost JO records
+      const filledAssignments = assignments.filter(a => a.fleet_id && a.driver_id);
+      const emptyAssignments = assignments.filter(a => !a.fleet_id || !a.driver_id);
+      
+      console.log(`[AssignmentModal] Filled: ${filledAssignments.length}, Empty: ${emptyAssignments.length}`);
+
+      // 1. Clean up stale/pending job orders (only truly empty ones with no fleet/driver)
       const { error: delErr } = await supabase
         .from('job_orders')
         .delete()
         .eq('wo_item_id', item.id)
         .eq('status', 'pending')
-        .is('driver_id', null);
+        .is('driver_id', null)
+        .is('fleet_id', null);
       
       if (delErr) {
         console.warn('[AssignmentModal] Cleanup warning (non-fatal):', delErr);
@@ -327,31 +468,76 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       };
       
-      for (let i = 0; i < assignments.length; i++) {
-        const assign = assignments[i];
-        console.log(`[AssignmentModal] Processing assignment ${i + 1}/${assignments.length}`);
+      // 2. Only save filled assignments
+      for (let i = 0; i < filledAssignments.length; i++) {
+        const assign = filledAssignments[i];
+        const originalIndex = assignments.indexOf(assign);
+        console.log(`[AssignmentModal] Processing filled assignment ${i + 1}/${filledAssignments.length} (original slot ${originalIndex + 1})`);
         
         const selectedTransporter = transporters.find(t => t.id === assign.transporter_id);
         const isVendor = selectedTransporter?.is_vendor;
-        const executorInitial = selectedTransporter?.name?.split(' ')[0] || 'ITR'; 
         
         if (isVendor && (!assign.purchase_price || assign.purchase_price <= 0)) {
-          toast.error(`Harga beli untuk unit ${i+1} harus diisi untuk vendor`);
+          toast.error(`Harga beli untuk unit ${originalIndex + 1} harus diisi untuk vendor`);
           setAssigning(false);
           return;
         }
 
-        const currentItemCode = item.item_code;
-        const joNumber = `${currentItemCode}/${executorInitial.replace(/\W/g, '')}-${String(i + 1).padStart(3, '0')}`;
+        // [AI] For internal/own drivers, validate attendance & inspection before assignment
+        if (!isVendor && assign.driver_id) {
+          const today = new Date().toISOString().split('T')[0];
+          
+          // Check attendance today
+          const { data: todayAttendance } = await supabase
+            .from('driver_attendance')
+            .select('id')
+            .eq('driver_id', assign.driver_id)
+            .eq('status', 'CHECK_IN')
+            .gte('check_in', `${today}T00:00:00`)
+            .limit(1);
+          
+          if (!todayAttendance || todayAttendance.length === 0) {
+            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
+            toast.error(`${driverName} belum absen hari ini. Driver harus absen sebelum di-assign.`);
+            setAssigning(false);
+            return;
+          }
+
+          // Check inspection today
+          const { data: todayInspection } = await supabase
+            .from('fleet_inspections')
+            .select('status')
+            .eq('driver_id', assign.driver_id)
+            .gte('created_at', `${today}T00:00:00`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          if (!todayInspection || todayInspection.length === 0) {
+            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
+            toast.error(`${driverName} belum inspeksi fleet hari ini. Driver harus inspeksi sebelum di-assign.`);
+            setAssigning(false);
+            return;
+          }
+
+          if (todayInspection[0].status === 'GROUNDED') {
+            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
+            toast.error(`${driverName} - fleet tidak layak jalan (GROUNDED). Tidak bisa di-assign.`);
+            setAssigning(false);
+            return;
+          }
+        }
+
+        const woNumber = item.work_orders?.wo_number || item.item_code;
+        const joNumber = `${woNumber}-${String(originalIndex + 1).padStart(2, '0')}`;
         
         const payload = {
           wo_item_id: item.id,
           tenant_id: tenantId,
           jo_number: joNumber,
           transporter_id: assign.transporter_id || null,
-          vendor_id: assign.transporter_id || null, // Map vendor_id for potential RLS/Trigger requirements
-          fleet_id: assign.fleet_id || null,
-          driver_id: assign.driver_id || null,
+          vendor_id: assign.transporter_id || null,
+          fleet_id: assign.fleet_id,
+          driver_id: assign.driver_id,
           driver_phone: assign.driver_phone || null,
           purchase_price: Number(assign.purchase_price) || 0,
           base_price: Number(assign.base_price) || dealPrice,
@@ -425,29 +611,42 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         }
       }
 
-      // 3. Finalize WO Item status - Only set to 'assigned' if ALL required units are fulfilled
+      // 3. Finalize WO Item status
       console.log('[AssignmentModal] Finalizing WO Item status...');
       
-      // Count how many assignments were made (with driver_id)
-      const successfulAssignments = assignments.filter(a => a.driver_id && a.fleet_id).length;
-      const requiredUnits = unitCount || 1;
-      const allUnitsAssigned = successfulAssignments >= requiredUnits;
+      // [AI] If handover was approved, use max_jo_count as the limit
+      const effectiveUnitCount = isHandoverApproved ? maxJOCount : (unitCount || 1);
       
-      console.log(`[AssignmentModal] Assignments: ${successfulAssignments}/${requiredUnits} - All assigned: ${allUnitsAssigned}`);
+      // Count saved assignments (only filled ones)
+      const successfulAssignments = filledAssignments.length;
+      const allUnitsAssigned = successfulAssignments >= effectiveUnitCount;
       
-      // Only set to 'assigned' if ALL required units are fulfilled, otherwise keep as 'pending'
-      const newStatus = allUnitsAssigned ? 'assigned' : 'pending';
+      console.log(`[AssignmentModal] Saved: ${successfulAssignments}/${effectiveUnitCount} - All assigned: ${allUnitsAssigned}`);
+      
+      // [AI] If nextAction is handover, don't change status — handover modal will set it to handover_pending
+      const isHandoverFlow = !!nextAction;
+      const newStatus = isHandoverFlow ? item.status : (allUnitsAssigned ? 'assigned' : 'pending');
+      
+      // [AI] If all units assigned, set confirmed_approved flag in item_data
+      const currentItemData = typeof item?.item_data === 'string' ? JSON.parse(item.item_data) : (item?.item_data || {});
+      const updatePayload: any = { status: newStatus };
+      if (allUnitsAssigned && !isHandoverFlow) {
+        updatePayload.item_data = {
+          ...currentItemData,
+          confirmed_assigned: true,
+          confirmed_assigned_at: new Date().toISOString()
+        };
+      }
       
       const { error: woUpdateError } = await supabase
         .from('wo_items')
-        .update({ status: newStatus })
+        .update(updatePayload)
         .eq('id', item.id);
       
       if (woUpdateError) throw woUpdateError;
       console.log(`[AssignmentModal] WO Item status set to: ${newStatus}`);
 
       // 4. Update parent Work Order status if needed
-      // Check if all other items are also assigned
       const { data: siblingItems } = await supabase
         .from('wo_items')
         .select('status')
@@ -462,7 +661,12 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           .eq('id', item.wo_id);
       }
       
-      toast.success('Assignment berhasil disimpan');
+      // [AI] Different toast for handover flow vs normal save
+      if (isHandoverFlow) {
+        toast.success(`${successfulAssignments} JO(s) saved — proceeding to handover...`);
+      } else {
+        toast.success('Assignment berhasil disimpan');
+      }
       console.log('[AssignmentModal] Save process completed successfully.');
       
       if (nextAction) {
@@ -505,7 +709,9 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 <div className="flex items-center gap-2 mt-1">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.work_orders.wo_number}</p>
                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{itemData.unit_count} Fleet Required</p>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                      {isHandoverApproved ? `${maxJOCount}/${unitCount} Units (Locked)` : `${unitCount} Fleet Required`}
+                    </p>
                 </div>
              </div>
           </div>
@@ -518,11 +724,16 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           {/* WO Summary Card - ENHANCED HEADER */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <div className="md:col-span-3 bg-white border border-slate-100 rounded-[2rem] p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center space-y-6">
-                <div className="flex items-center gap-4">
-                   <div className="px-4 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] italic">
-                      {itemData.vehicle_type_name || itemData.vehicle_type || '-'}
-                   </div>
-                   <div className="flex flex-wrap items-center gap-2 text-slate-600 bg-slate-50 px-4 py-1.5 rounded-xl border border-slate-100">
+                 <div className="flex items-center gap-4">
+                    <div className="px-4 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] italic">
+                       {itemData.vehicle_type_name || itemData.vehicle_type || '-'}
+                    </div>
+                    {isHandoverApproved && (
+                      <div className="px-4 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] italic flex items-center gap-1.5">
+                        <ShieldCheck size={12} /> HANDOVER APPROVED — {maxJOCount} JO(s) LOCKED
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 text-slate-600 bg-slate-50 px-4 py-1.5 rounded-xl border border-slate-100">
                       <MapPin size={14} className="text-rose-500" />
                       <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
                         {(itemData.stops || []).map((stop: any, sIdx: number) => (
@@ -568,15 +779,17 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           </div>
 
           <div className="space-y-6">
-             <div className="flex items-center justify-between px-2">
-                <h3 className="text-xs font-black text-indigo-950 uppercase tracking-[0.3em] italic">Deploy Units</h3>
-                <div className="flex items-center gap-4">
-                   <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Syncing</span>
-                   </div>
-                </div>
-             </div>
+              <div className="flex items-center justify-between px-2">
+                 <h3 className="text-xs font-black text-indigo-950 uppercase tracking-[0.3em] italic">
+                   {isHandoverApproved ? `Locked Units (${maxJOCount} of ${unitCount} Original)` : 'Deploy Units'}
+                 </h3>
+                 <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                       <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Syncing</span>
+                    </div>
+                 </div>
+              </div>
 
              {loading ? (
                 <div className="py-20 flex flex-col items-center justify-center space-y-4">
@@ -723,9 +936,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                   return filteredDrivers;
                                 })().map(d => {
                                     const isBusy = d.status === 'on_road' && assign.driver_id !== d.id;
+                                    const readiness = driverReadiness[d.id];
+                                    const notReady = readiness && !readiness.ready && !isBusy;
+                                    const readinessLabel = notReady ? ` [${readiness.reason.toUpperCase()}]` : '';
+                                    
                                     return (
-                                      <option key={d.id} value={d.id} disabled={isBusy} className={`not-italic bg-white ${isBusy ? 'text-rose-500' : 'text-slate-800'}`}>
-                                        {d.name} {isBusy ? ' [BUSY / ON ROAD]' : ` (${d.status?.toUpperCase() || 'AVAILABLE'})`}
+                                      <option key={d.id} value={d.id} disabled={isBusy || notReady} className={`not-italic bg-white ${(isBusy || notReady) ? 'text-rose-500' : 'text-slate-800'}`}>
+                                        {d.name} {isBusy ? ' [BUSY / ON ROAD]' : readinessLabel || ` (${d.status?.toUpperCase() || 'AVAILABLE'})`}
                                       </option>
                                     );
                                    })}
@@ -870,8 +1087,15 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
               </div>
            </div>
 
-           <div className="flex flex-wrap gap-4 w-full md:w-auto">
-             {onHandover && (
+            <div className="flex flex-wrap gap-4 w-full md:w-auto">
+              <button
+                onClick={handleSaveDraft}
+                disabled={assigning}
+                className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all border border-amber-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+              >
+                <Save size={16} /> Save Draft
+              </button>
+              {onHandover && (
                 <button
                   type="button"
                   onClick={() => handleSave(onHandover)}

@@ -1,16 +1,14 @@
-import { supabase } from '../lib/supabaseClient.ts';
+import { createClient } from '@supabase/supabase-js'
 
-async function test() {
-  const { data, error } = await supabase
-    .from('job_tracking')
-    .select('*, job_orders!job_order_id(jo_number, md_fleets(plate_number))')
-    .limit(5);
-  
-  if (error) {
-    console.error("ERROR:", error);
-  } else {
-    console.log("DATA:", JSON.stringify(data, null, 2));
-  }
+const supabase = createClient(
+  'https://nsvkewvmzivudkcczhnk.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdmtld3Zteml2dWRrY2N6aG5rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDc3Mjc2MywiZXhwIjoyMDkwMzQ4NzYzfQ.7ZDrwe28fRKFsbxZMzvpAqwDE39Iwk5ZZXWX_pLp8T8'
+)
+
+async function testJoin() {
+  const { data, error } = await supabase.from('md_fleets').select('id, plate_number, md_entities(name, is_vendor)').limit(1)
+  if (error) console.error(error)
+  else console.log(JSON.stringify(data, null, 2))
 }
 
-test();
+testJoin()

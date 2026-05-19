@@ -4,11 +4,12 @@ import {
     XCircle, Truck, Activity, Loader2, MapPin, 
     Clock, ImageIcon, ExternalLink, Banknote, 
     CheckCircle2, FileText, Send, Save, PlusCircle, X, ArrowRight, Receipt,
-    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation, History
+    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation as NavIcon, History, AlertCircle
 } from "lucide-react";
 import { GoogleMap, MarkerF, DirectionsRenderer, Polyline } from "@react-google-maps/api";
 import { formatThousand, getOperationalStatus } from "../utils";
 import { useState, useEffect } from "react";
+import { supabase } from '@/lib/supabase/client';
 
 interface JODetailDrawerProps {
     show: boolean;
@@ -35,9 +36,26 @@ interface JODetailDrawerProps {
 export default function JODetailDrawer({
     show, onClose, jo, isLoaded, mapOptions, 
     getJOStatusBadge, onAddCost, onAddAdvance, onCollectDocs,
-    onSubmitVendorInvoice, onSendLink, onEdit, onApprove, onReject
+    onSubmitVendorInvoice, onVerifyPhysicalDoc, onSendLink, onEdit, onApprove, onReject
 }: JODetailDrawerProps) {
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+    const [transporterName, setTransporterName] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (show && jo) {
+            if (jo.transporter_id && !jo.transporter?.name) {
+                // Fallback to fetch from md_transporters if foreign key failed
+                supabase.from('md_transporters').select('transporter_name').eq('id', jo.transporter_id).single()
+                .then(({ data }) => {
+                    if (data) setTransporterName(data.transporter_name);
+                });
+            } else if (jo.transporter?.name) {
+                setTransporterName(jo.transporter.name);
+            } else {
+                setTransporterName(null);
+            }
+        }
+    }, [show, jo]);
 
     useEffect(() => {
         if (show && jo && isLoaded) {
@@ -166,7 +184,7 @@ export default function JODetailDrawer({
                                         {jo.fleets?.plate_number} <span className="text-emerald-400">/</span> {jo.drivers?.name || 'No Pilot'}
                                     </h4>
                                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                        {!jo.fleets?.company_id && !jo.transporter_id ? 'SBU Internal Fleet' : `Transporter: ${jo.transporter?.name || jo.fleets?.companies?.name || 'Vendor'}`}
+                                        {!jo.fleets?.company_id && !jo.transporter_id ? 'SBU Internal Fleet' : `Transporter: ${transporterName || jo.transporter?.name || jo.fleets?.companies?.name || 'Vendor'}`}
                                     </p>
                                 </div>
                                 <div className="text-right">
@@ -185,7 +203,7 @@ export default function JODetailDrawer({
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <Navigation className="w-4 h-4 text-blue-400" />
+                                        <NavIcon className="w-4 h-4 text-blue-400" />
                                         <div className="min-w-0">
                                             <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Destination</p>
                                             <p className="text-sm font-black uppercase italic tracking-tight truncate">{jo.parentWO?.destination_location?.name || 'Site'}</p>
@@ -267,7 +285,7 @@ export default function JODetailDrawer({
                         <div className="aspect-square md:aspect-video lg:h-[600px] relative rounded-[3.5rem] overflow-hidden border-2 border-slate-50 shadow-xl bg-slate-50 group">
                             <div className="absolute top-8 left-8 z-10 bg-white shadow-xl px-6 py-3 rounded-2xl border border-slate-100">
                                 <p className="text-[11px] font-black text-[#1E293B] uppercase tracking-widest flex items-center gap-3 italic">
-                                    <Navigation className="w-4 h-4 text-emerald-600" /> Ground Telemetry Support
+                                    <NavIcon className="w-4 h-4 text-emerald-600" /> Ground Telemetry Support
                                 </p>
                             </div>
                             {!isLoaded ? (

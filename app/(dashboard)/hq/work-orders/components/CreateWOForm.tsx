@@ -203,14 +203,9 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       let woNumber = '';
       let woId = editId;
 
-      // Fetch Tenant Initial
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('initial')
-        .eq('id', profile.tenant_id)
-        .single();
-      
-      const tenantInitial = tenantData?.initial || 'HQ';
+      // Generate WO Number: HALU-TPS-0526-001
+      // Tenant name from profile.tenants.name, customer initial from md_entities.name
+      const tenantInitial = (profile?.tenants as any)?.name || profile?.tenant_code || 'HQ';
 
       if (editId) {
         const { data: existingWO } = await supabase.from('work_orders').select('wo_number').eq('id', editId).single();
@@ -275,7 +270,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         if (item.sbu_type === 'TRUCKING' && item.item_data.stops) {
           const unitCount = item.item_data.unit_count || 1;
           for (let i = 1; i <= unitCount; i++) {
-            const joNumber = `${itemCode}/ITR-${i.toString().padStart(3, '0')}`; // Default to ITR for now, will be updated during actual assignment
+            // Simple JO format: WO-Seq (e.g. HALU-TAM-0526-001-01)
+            const joNumber = `${woNumber}-${i.toString().padStart(2, '0')}`;
             
             const { data: jobOrder, error: joError } = await supabase
               .from('job_orders')

@@ -10,291 +10,420 @@ import {
   Truck,
   CheckCircle,
   TrendingDown,
-  Info
+  Info,
+  ChevronRight,
+  ArrowRight,
+  Upload
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
+
+interface CostEntry {
+  id: string;
+  cost_type: string;
+  amount: string;
+  description: string;
+  charge_type: 'reimbursement' | 'surcharge';
+  paid_by_entity: 'internal' | 'vendor';
+  proof_url?: string;
+}
 
 interface AddCostModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  initialJoId?: string | null;
 }
 
-const formatRupiah = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0
-  }).format(amount);
-};
+const COST_TYPES = [
+  { id: 'unloading', label: 'Unloading / Kuli' },
+  { id: 'port_ticket', label: 'Tiket Pelabuhan' },
+  { id: 'overnight', label: 'Overnight / Nginap' },
+  { id: 'waiting', label: 'Waiting Time' },
+  { id: 'parking', label: 'Parkir & Tol' },
+  { id: 'other', label: 'Lain-lain' },
+];
 
-export default function AddCostModal({ onClose, onSuccess }: AddCostModalProps) {
+export default function AddCostModal({ onClose, onSuccess, initialJoId }: AddCostModalProps) {
   const [loading, setLoading] = useState(false);
   const [jos, setJos] = useState<any[]>([]);
   const [fetchingJos, setFetchingJos] = useState(true);
-
-  // Form State
-  const [selectedJoId, setSelectedJoId] = useState('');
-  const [costType, setCostType] = useState('unloading');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [chargeType, setChargeType] = useState<'reimbursement' | 'surcharge'>('reimbursement');
+  const [selectedJoId, setSelectedJoId] = useState(initialJoId || '');
 
   useEffect(() => {
-    fetchCompletedJos();
-  }, []);
+    if (initialJoId) {
+      setSelectedJoId(initialJoId);
+    }
+  }, [initialJoId]);
+
+  // Multi-cost State
+  const [costs, setCosts] = useState<CostEntry[]>([
+    { id: Math.random().toString(), cost_type: 'unloading', amount: '', description: '', charge_type: 'reimbursement', paid_by_entity: 'internal' }
+  ]);
 
   const fetchCompletedJos = async () => {
     try {
       setFetchingJos(true);
       const { data, error } = await supabase
         .from('job_orders')
-        .select('id, jo_number, purchase_price, base_price, driver_share_percentage')
+        .select('id, jo_number')
         .eq('status', 'completed')
-        .order('created_at', { ascending: false });
-
+        .order('completed_at', { ascending: false });
+      
       if (error) throw error;
       setJos(data || []);
     } catch (err) {
-      console.error('Error fetching JOs:', err);
-      toast.error('Gagal memuat daftar Job Order');
+      console.error('Fetch Jobs Error:', err);
     } finally {
       setFetchingJos(false);
     }
   };
 
-  const selectedJO = jos.find(j => j.id === selectedJoId);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedJoId) return toast.error('Pilih Job Order terlebih dahulu');
-    if (!amount || isNaN(Number(amount))) return toast.error('Jumlah biaya tidak valid');
-
+  const fetchDraftCosts = async (joId: string) => {
     try {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from('add_costs')
-        .insert({
-          job_order_id: selectedJoId,
-          cost_type: costType,
-          charge_type: chargeType,
-          amount: Number(amount),
-          description: description,
-          is_billable: true, // Always true for surcharge/reimbursement
-          status: 'need_approval', // Trip charges to customer always need CS/Finance approval
-          created_by: user?.id
-        });
-
+      const { data, error } = await supabase
+        .from('extra_costs')
+        .select('*')
+        .eq('jo_id', joId)
+        .eq('status', 'draft');
+      
       if (error) throw error;
-
-      toast.success('Add Cost berhasil ditambahkan');
-      onSuccess();
-    } catch (err: any) {
-      console.error('Submit Error:', err);
-      toast.error(err.message || 'Gagal menambahkan Add Cost');
-    } finally {
-      setLoading(false);
+      
+      if (data && data.length > 0) {
+        const loadedCosts = data.map(d => ({
+          id: d.id,
+          cost_type: d.cost_type,
+          amount: d.amount.toString(),
+          description: d.description,
+          charge_type: d.charge_type || 'reimbursement',
+          paid_by_entity: d.paid_by_entity || 'internal',
+          proof_url: d.description?.startsWith('http') ? d.description : undefined
+        }));
+        setCosts(loadedCosts);
+        toast.success(`Loaded ${data.length} draft cost(s)`);
+      } else {
+        // Reset to initial state if no drafts
+        if (costs.length > 1 || (costs.length === 1 && costs[0].amount !== '')) {
+           setCosts([{ id: Math.random().toString(), cost_type: 'unloading', amount: '', description: '', charge_type: 'reimbursement', paid_by_entity: 'internal' }]);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch Drafts Error:', err);
     }
   };
 
+  useEffect(() => {
+    fetchCompletedJos();
+  }, []);
+
+  useEffect(() => {
+    if (selectedJoId) {
+      fetchDraftCosts(selectedJoId);
+    }
+  }, [selectedJoId]);
+
+  const addCostRow = () => {
+    setCosts([...costs, { 
+      id: Math.random().toString(), 
+      cost_type: 'unloading', 
+      amount: '', 
+      description: '', 
+      charge_type: 'reimbursement',
+      paid_by_entity: 'internal'
+    }]);
+  };
+
+  const removeCostRow = (id: string) => {
+    if (costs.length === 1) return;
+    setCosts(costs.filter(c => c.id !== id));
+  };
+
+  const updateCost = (id: string, field: keyof CostEntry, value: string) => {
+    setCosts(costs.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const [uploadingMap, setUploadingMap] = useState<Record<string, boolean>>({});
+
+  const handleFileUpload = async (id: string, file: File) => {
+    try {
+      setUploadingMap(prev => ({ ...prev, [id]: true }));
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${selectedJoId || 'temp'}_${id}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `billing_proofs/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+
+      updateCost(id, 'proof_url', publicUrl);
+      toast.success('Billing uploaded successfully');
+    } catch (err: any) {
+      toast.error('Upload failed: ' + err.message);
+    } finally {
+      setUploadingMap(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent, status: 'draft' | 'need_approval' = 'need_approval') => {
+    if (e) e.preventDefault();
+    if (!selectedJoId) return toast.error('Pilih Job Order terlebih dahulu');
+    
+    const invalidCost = costs.find(c => !c.amount || isNaN(Number(c.amount)));
+    if (invalidCost) return toast.error('Pastikan semua jumlah biaya valid');
+
+    const missingProof = costs.find(c => !c.proof_url && status === 'awaiting_approval');
+    if (missingProof) return toast.error('Harap upload bukti billing untuk semua biaya');
+
+    try {
+      if (status === 'draft') setSavingDraft(true);
+      else setSubmitting(true);
+
+      const payloads = costs.map(c => ({
+        jo_id: selectedJoId,
+        cost_type: c.cost_type,
+        charge_type: c.charge_type,
+        amount: Number(c.amount),
+        // FALLBACK: Since proof_url column is missing, we use description to store the URL
+        description: c.proof_url || c.cost_type.toUpperCase(),
+        is_billable: true,
+        paid_by_entity: c.paid_by_entity,
+        status: status,
+      }));
+
+      // Delete existing drafts or pending submissions for this JO before saving/submitting
+      // This prevents duplicates if the user submits multiple times.
+      await supabase
+        .from('extra_costs')
+        .delete()
+        .eq('jo_id', selectedJoId)
+        .in('status', ['draft', 'need_approval']);
+
+      const { error } = await supabase.from('extra_costs').insert(payloads);
+      if (error) throw error;
+
+      // Update JO flag if submitted (not draft)
+      if (status === 'need_approval') {
+        await supabase
+          .from('job_orders')
+          .update({ is_cost_finished: true })
+          .eq('id', selectedJoId);
+      }
+
+      toast.success(status === 'draft' ? 'Data biaya disimpan sebagai draft' : `${costs.length} Biaya Tambahan diajukan ke CS`);
+      onSuccess();
+    } catch (err: any) {
+      console.error('Submit Error:', err);
+      toast.error(err.message || 'Gagal memproses biaya');
+    } finally {
+      setSavingDraft(false);
+      setSubmitting(false);
+    }
+  };
+
+  const totalAmount = costs.reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
+
+  const formatThousand = (val: string) => {
+    if (!val) return '';
+    const num = val.replace(/\D/g, '');
+    return num.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const parseThousand = (val: string) => {
+    return val.replace(/\./g, '');
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white rounded-[3rem] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
-        <div className="bg-slate-900 px-8 py-6 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-600/20">
-              <Plus size={20} />
+        <div className="bg-slate-900 px-10 py-8 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-xl shadow-blue-600/20">
+              <DollarSign size={24} />
             </div>
             <div>
-              <h3 className="text-white font-black text-lg italic uppercase tracking-tight">Create Trip Charges</h3>
-              <p className="text-blue-400 text-[9px] font-black uppercase tracking-[0.2em] mt-0.5 italic">Finance Entry Console</p>
+              <h3 className="text-white font-black text-2xl italic uppercase tracking-tighter">SBU COST AUDIT</h3>
+              <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mt-1 italic">Submit additional charges to CS for verification</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="bg-white/10 p-2 rounded-full text-slate-400 hover:text-white transition-all">
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
-          {/* Job Order Selection */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-              <Truck size={12} className="text-blue-600" /> Select Completed Job Order
-            </label>
-            <select 
-              className="w-full h-12 bg-slate-50 border-transparent rounded-2xl px-4 text-sm font-black text-slate-900 focus:bg-white transition-all outline-none appearance-none cursor-pointer"
-              value={selectedJoId}
-              onChange={(e) => setSelectedJoId(e.target.value)}
-              required
-              disabled={fetchingJos}
-            >
-              <option value="">-- PILIH JO --</option>
-              {jos.map(jo => (
-                <option key={jo.id} value={jo.id}>{jo.jo_number}</option>
-              ))}
-            </select>
-            {fetchingJos && <p className="text-[8px] font-black text-blue-500 uppercase italic animate-pulse px-1">Loading fleet records...</p>}
-          </div>
-
-          {/* REFERENCE: PURCHASE PRICE */}
-          {selectedJO?.purchase_price > 0 && (
-            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 flex items-start gap-4">
-              <div className="bg-white p-2 rounded-xl text-blue-600 shadow-sm">
-                <TrendingDown size={18} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">💰 Harga Beli (Vendor Agreement)</p>
-                <p className="text-lg font-black text-slate-900 tracking-tight italic">{formatRupiah(selectedJO.purchase_price)}</p>
-                <p className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1 uppercase italic">
-                  <Info size={10} /> Gunakan sebagai referensi saat input biaya tambahan
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-                <FileText size={12} className="text-blue-600" /> Cost Type
+        <form onSubmit={(e) => handleSubmit(e, 'need_approval')} className="flex-1 flex flex-col min-h-0">
+          <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+            {/* Job Order Selection */}
+            <div className="space-y-3">
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Truck size={14} className="text-blue-600" /> Reference Job Order
               </label>
               <select 
-                className="w-full h-12 bg-slate-50 border-transparent rounded-2xl px-4 text-sm font-black text-slate-900 focus:bg-white transition-all outline-none"
-                value={costType}
-                onChange={(e) => setCostType(e.target.value)}
+                className="w-full h-14 bg-slate-50 border-2 border-transparent rounded-2xl px-6 text-sm font-black text-slate-900 focus:bg-white focus:border-blue-600/20 transition-all outline-none appearance-none cursor-pointer"
+                value={selectedJoId}
+                onChange={(e) => setSelectedJoId(e.target.value)}
+                required
+                disabled={fetchingJos || !!initialJoId}
               >
-                <option value="unloading">Unloading / Kuli</option>
-                <option value="port_ticket">Tiket Pelabuhan</option>
-                <option value="overnight">Overnight / Nginap</option>
-                <option value="waiting">Waiting Time</option>
-                <option value="other">Other</option>
+                <option value="">-- SELECT COMPLETED JO --</option>
+                {jos.map(jo => (
+                  <option key={jo.id} value={jo.id}>{jo.jo_number} (AUDIT READY)</option>
+                ))}
               </select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-                <DollarSign size={12} className="text-blue-600" /> Amount (Rp)
-              </label>
-              <Input 
-                type="number"
-                placeholder="0"
-                className="h-12 bg-slate-50 border-transparent rounded-2xl px-4 font-black text-sm"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+            {/* Dynamic Costs Table */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <FileText size={14} className="text-blue-600" /> Additional Costs List
+                 </h4>
+                 <p className="text-[10px] font-black text-slate-400 uppercase italic">Row Count: {costs.length}</p>
+              </div>
+
+              <div className="space-y-4">
+                {costs.map((cost, index) => (
+                  <div key={cost.id} className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative group animate-in slide-in-from-right-4 duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                      <div className="md:col-span-3 space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Cost Type</label>
+                        <select 
+                          className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-black text-slate-900 outline-none"
+                          value={cost.cost_type}
+                          onChange={(e) => updateCost(cost.id, 'cost_type', e.target.value)}
+                        >
+                          {COST_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Payor</label>
+                        <select 
+                          className={`w-full h-12 border rounded-xl px-4 text-[10px] font-black uppercase outline-none transition-all ${
+                            cost.paid_by_entity === 'internal' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-orange-50 border-orange-200 text-orange-600'
+                          }`}
+                          value={cost.paid_by_entity}
+                          onChange={(e) => updateCost(cost.id, 'paid_by_entity', e.target.value)}
+                        >
+                           <option value="internal">SBU / INTERNAL</option>
+                           <option value="vendor">VENDOR</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Amount (IDR)</label>
+                        <Input 
+                          type="text"
+                          placeholder="0"
+                          className="h-12 bg-white border-slate-200 rounded-xl px-4 font-black text-sm"
+                          value={formatThousand(cost.amount)}
+                          onChange={(e) => updateCost(cost.id, 'amount', parseThousand(e.target.value))}
+                          required
+                        />
+                      </div>
+
+                      <div className="md:col-span-3 space-y-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Evidence / Proof</label>
+                        <div className="flex items-center gap-2">
+                           {cost.proof_url ? (
+                             <div className="flex-1 h-12 bg-emerald-50 border border-emerald-100 rounded-xl px-4 flex items-center justify-between overflow-hidden">
+                                <span className="text-[9px] font-black text-emerald-600 truncate">FILE ATTACHED</span>
+                                <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                             </div>
+                           ) : (
+                             <div className="flex-1 relative">
+                               <input 
+                                 type="file" 
+                                 id={`file-${cost.id}`}
+                                 className="hidden" 
+                                 accept="image/*,application/pdf"
+                                 onChange={(e) => {
+                                   const file = e.target.files?.[0];
+                                   if (file) handleFileUpload(cost.id, file);
+                                 }}
+                               />
+                               <label 
+                                 htmlFor={`file-${cost.id}`}
+                                 className="h-12 bg-white border-2 border-dashed border-slate-200 rounded-xl px-4 flex items-center justify-center gap-2 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all text-slate-400 text-[9px] font-black uppercase tracking-widest"
+                               >
+                                 {uploadingMap[cost.id] ? <Loader2 className="animate-spin" size={14} /> : <><Upload size={14} /> Select File</>}
+                               </label>
+                             </div>
+                           )}
+                           {cost.proof_url && (
+                             <button 
+                               type="button"
+                               onClick={() => updateCost(cost.id, 'proof_url', '')}
+                               className="p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-rose-500 transition-colors"
+                             >
+                               <X size={14} />
+                             </button>
+                           )}
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2 flex items-end h-full">
+                        <button 
+                          type="button"
+                          onClick={() => removeCostRow(cost.id)}
+                          className="w-full h-12 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button 
+                type="button"
+                onClick={addCostRow}
+                className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-400 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all font-black text-[11px] uppercase tracking-widest"
+              >
+                <Plus size={16} /> Add Another Cost Row
+              </button>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Description / Notes</label>
-            <textarea 
-              className="w-full p-4 bg-slate-50 border-transparent rounded-2xl text-sm font-bold text-slate-600 focus:bg-white transition-all outline-none min-h-[80px]"
-              placeholder="Detail biaya..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          {/* Charge Type Selection */}
-          <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tipe Tagihan ke Customer</label>
-            <div className="grid grid-cols-2 gap-4">
-              <label className={`cursor-pointer p-4 rounded-2xl border-2 transition-all ${chargeType === 'reimbursement' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <input 
-                    type="radio" 
-                    name="chargeType"
-                    value="reimbursement"
-                    checked={chargeType === 'reimbursement'}
-                    onChange={() => setChargeType('reimbursement')}
-                    className="hidden"
-                  />
-                  <span className={`text-[11px] font-black uppercase tracking-tight ${chargeType === 'reimbursement' ? 'text-emerald-700' : 'text-slate-600'}`}>
-                    Reimbursement
-                  </span>
-                  {chargeType === 'reimbursement' && <CheckCircle size={16} className="text-emerald-500" />}
-                </div>
-                <p className="text-[9px] font-bold text-slate-400 leading-relaxed uppercase">
-                  At-Cost. Diganti full ke driver. Tidak dipotong komisi perusahaan.
-                </p>
-              </label>
-
-              <label className={`cursor-pointer p-4 rounded-2xl border-2 transition-all ${chargeType === 'surcharge' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <input 
-                    type="radio" 
-                    name="chargeType"
-                    value="surcharge"
-                    checked={chargeType === 'surcharge'}
-                    onChange={() => setChargeType('surcharge')}
-                    className="hidden"
-                  />
-                  <span className={`text-[11px] font-black uppercase tracking-tight ${chargeType === 'surcharge' ? 'text-blue-700' : 'text-slate-600'}`}>
-                    Surcharge
-                  </span>
-                  {chargeType === 'surcharge' && <CheckCircle size={16} className="text-blue-500" />}
-                </div>
-                <p className="text-[9px] font-bold text-slate-400 leading-relaxed uppercase">
-                  Extra Revenue. Tunduk pada persentase bagi hasil driver.
-                </p>
-              </label>
+          {/* Footer Summary */}
+          <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Additional Charges</p>
+               <p className="text-3xl font-black text-slate-900 tracking-tighter italic">
+                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(totalAmount)}
+               </p>
             </div>
-          </div>
-
-          {/* Simulasi Bagi Hasil */}
-          {chargeType === 'surcharge' && selectedJO && Number(amount) > 0 && (
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 animate-in fade-in slide-in-from-bottom-2">
-              <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em] mb-3">Estimasi Bagi Hasil Surcharge</p>
-              <div className="flex justify-between items-center pb-2 mb-2 border-b border-slate-800">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Payout ({selectedJO.driver_share_percentage}%)</span>
-                <span className="text-sm font-black text-emerald-400 italic">
-                  {formatRupiah(Number(amount) * (Number(selectedJO.driver_share_percentage) / 100))}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Margin ({100 - Number(selectedJO.driver_share_percentage)}%)</span>
-                <span className="text-sm font-black text-blue-400 italic">
-                  {formatRupiah(Number(amount) * ((100 - Number(selectedJO.driver_share_percentage)) / 100))}
-                </span>
-              </div>
+            <div className="flex gap-4">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={(e) => handleSubmit(e, 'draft')}
+                disabled={submitting || savingDraft}
+                className="h-16 px-8 rounded-2xl font-black uppercase text-xs tracking-widest text-slate-400 hover:text-slate-900"
+              >
+                {savingDraft ? <Loader2 className="animate-spin" /> : 'Save as Draft'}
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={submitting || savingDraft || !selectedJoId}
+                className="h-16 px-12 bg-slate-900 hover:bg-black text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-slate-900/20 active:scale-95 transition-all flex items-center gap-3"
+              >
+                {submitting ? <Loader2 className="animate-spin" size={18} /> : (
+                  <>SUBMIT TO CS <ChevronRight size={18} /></>
+                )}
+              </Button>
             </div>
-          )}
-
-          {chargeType === 'reimbursement' && Number(amount) > 0 && (
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 animate-in fade-in slide-in-from-bottom-2">
-              <p className="text-[9px] text-emerald-400 font-black uppercase tracking-[0.2em] mb-2">Estimasi Reimbursement</p>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Payout (Full 100%)</span>
-                <span className="text-sm font-black text-emerald-400 italic">
-                  {formatRupiah(Number(amount))}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            <Button 
-              type="button" 
-              variant="ghost" 
-              onClick={onClose}
-              className="flex-1 h-14 rounded-2xl font-black uppercase text-[10px] tracking-widest text-slate-400"
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={loading}
-              className="flex-1 h-14 bg-slate-900 hover:bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-slate-900/20 active:scale-95 transition-all"
-            >
-              {loading ? <Loader2 className="animate-spin" size={18} /> : (
-                <span className="flex items-center gap-2"><CheckCircle size={14} /> Submit Cost</span>
-              )}
-            </Button>
           </div>
         </form>
       </div>

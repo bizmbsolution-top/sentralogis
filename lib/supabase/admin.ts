@@ -30,8 +30,8 @@ export function createAdminClient() {
  * instantiation until its first use. This fixes Vercel build-time validation.
  */
 export const supabaseAdmin = new Proxy({} as ReturnType<typeof createAdminClient>, {
-  get(target, prop) {
+  get(_target, prop) {
     const client = createAdminClient();
-    return (client as any)[prop];
+    return (client as unknown as Record<string, unknown>)[prop as string];
   }
 });

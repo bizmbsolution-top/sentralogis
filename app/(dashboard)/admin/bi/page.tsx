@@ -232,7 +232,7 @@ export default function TenantSuperAdminBIDashboard() {
          <div className="space-y-12 mb-20">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
                 <div>
-                   <h2 className="text-5xl font-bold tracking-tighter text-white/90 italic uppercase">Executive Cabinet</h2>
+                   <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-white/90 italic uppercase">Executive Cabinet</h2>
                    <div className="flex items-center gap-3 mt-4">
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
                       <p className="text-[11px] font-black uppercase tracking-[0.4em] text-white/20">Operational Oversight Node: {tenantInfo?.name}</p>

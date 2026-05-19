@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { registerTenantAdmin } from '@/app/(dashboard)/owner/actions';
 import toast from 'react-hot-toast';
 import { Building2, Mail, User, ShieldCheck, X, RefreshCw, Key, Phone } from 'lucide-react';
 
@@ -29,31 +29,24 @@ export default function RegisterTenantModal({ isOpen, onClose, onSuccess }: Regi
     e.preventDefault();
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('register_tenant_test', {
-        p_tenant_name: formData.tenant_name,
-        p_tenant_code: formData.tenant_code.toUpperCase(),
-        p_admin_email: formData.admin_email,
-        p_admin_full_name: formData.admin_full_name,
-        p_subscription_tier: formData.subscription_tier
+      // [AI] Using server action with service role key - anon key cannot execute this RPC
+      const res = await registerTenantAdmin({
+        tenant_name: formData.tenant_name,
+        tenant_code: formData.tenant_code,
+        admin_email: formData.admin_email,
+        admin_full_name: formData.admin_full_name,
+        subscription_tier: formData.subscription_tier,
+        whatsapp: formData.whatsapp
       });
 
-      if (error) throw error;
-
-      if (data?.success) {
-        // Update WhatsApp in profile if provided
-        if (formData.whatsapp && data.user_id) {
-          await supabase
-            .from('profiles')
-            .update({ whatsapp: formData.whatsapp })
-            .eq('id', data.user_id);
-        }
-        
-        toast.success('Tenant registered successfully!');
-        setRegistrationResult(data);
-        onSuccess();
-      } else {
-        toast.error(data?.message || 'Gagal register tenant');
+      if (!res.success) {
+        toast.error(res.message || 'Gagal register tenant');
+        return;
       }
+
+      toast.success('Tenant registered successfully!');
+      setRegistrationResult(res.data);
+      onSuccess();
     } catch (err: any) {
       console.error('Registration error:', err);
       toast.error('Terjadi kesalahan: ' + err.message);

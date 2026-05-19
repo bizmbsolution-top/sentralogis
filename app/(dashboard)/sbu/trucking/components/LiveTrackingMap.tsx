@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GoogleMap, Marker, InfoWindow, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
-import { X, Truck, Navigation, User, Phone, Package, Activity, Clock, Map as MapIcon, ChevronRight, ImageIcon, ExternalLink, Loader2, MapPin, Expand, Maximize } from "lucide-react";
+import { X, Truck, Navigation as NavIcon, User, Phone, Package, Activity, Clock, Map as MapIcon, ChevronRight, ImageIcon, ExternalLink, Loader2, MapPin, Expand, Maximize } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 
@@ -22,11 +22,11 @@ const defaultCenter = {
     lng: 106.8272,
 };
 
-const mapOptions = {
+const mapOptions: google.maps.MapOptions = {
     disableDefaultUI: false,
     zoomControl: true,
     styles: [
-        { featureType: "all", elementType: "labels.text.fill", color: "#6b7280" }
+        { featureType: "all", elementType: "labels.text.fill", stylers: [{ color: "#6b7280" }] }
     ]
 };
 
@@ -249,7 +249,7 @@ export default function LiveTrackingMap({ show, onClose, activeAssignments }: Li
 
                                     <div className="space-y-4">
                                         <div className="flex items-start gap-3">
-                                            <Navigation className="w-4 h-4 text-orange-500 mt-1" />
+                                            <NavIcon className="w-4 h-4 text-orange-500 mt-1" />
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Destination</div>
                                                 <div className="text-xs font-bold text-slate-800 leading-tight">{selectedFleet.destination || 'Strategic Target'}</div>

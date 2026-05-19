@@ -1,17 +1,15 @@
-import fs from 'fs';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-client'
+import dotenv from 'dotenv'
+dotenv.config()
 
-const env = fs.readFileSync('.env.local', 'utf8');
-const url = env.match(/NEXT_PUBLIC_SUPABASE_URL=(.*)/)[1].trim();
-const key = env.match(/SUPABASE_SERVICE_ROLE_KEY=(.*)/)[1].trim();
-const s = createClient(url, key);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
-async function check() {
-  const { data, error } = await s.rpc('exec_sql_manual', { 
-    sql_query: "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" 
-  });
-  console.log('Tables:', data);
-  console.log('Error:', error);
+async function checkTables() {
+  const { data, error } = await supabase.from('extra_costs').select('*').limit(1)
+  console.log('extra_costs:', { data, error })
+  
+  const { data: data2, error: error2 } = await supabase.from('add_costs').select('*').limit(1)
+  console.log('add_costs:', { data: data2, error: error2 })
 }
 
-check();
+checkTables()

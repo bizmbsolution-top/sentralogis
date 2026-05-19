@@ -93,7 +93,7 @@ export default function WarehouseDashboard() {
                             <cat.icon className="w-8 h-8" />
                         </div>
                         <div className="text-right">
-                            <p className="text-5xl font-black italic tracking-tighter text-slate-900 leading-none mb-1">{cat.count}</p>
+                            <p className="text-2xl md:text-3xl font-semibold italic tracking-tight text-slate-900 leading-none mb-1">{cat.count}</p>
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Units</p>
                         </div>
                     </div>
@@ -115,7 +115,7 @@ export default function WarehouseDashboard() {
                         <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400">Tactical Inbound Gate</p>
                     </div>
-                    <h3 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase leading-none mb-6">Cargo Intake<br/>Synchronization</h3>
+                    <h3 className="text-xl md:text-2xl font-semibold italic tracking-tight uppercase leading-none mb-6">Cargo Intake<br/>Synchronization</h3>
                     <p className="text-sm text-white/40 leading-relaxed max-w-[400px]">Execute multi-agent unloading, precise measurement verification, and real-time stock allocation protocols.</p>
                 </div>
                 <div className="relative z-10 flex justify-between items-center text-white/20 group-hover:text-orange-500 transition-colors">
@@ -132,7 +132,7 @@ export default function WarehouseDashboard() {
                         <PieChart className="w-5 h-5 text-indigo-500" />
                     </div>
                     <div>
-                        <p className="text-6xl font-black italic tracking-tighter text-slate-900 leading-none mb-2">94.2<span className="text-2xl mt-4">%</span></p>
+                        <p className="text-3xl md:text-4xl font-semibold italic tracking-tight text-slate-900 leading-none mb-2">94.2<span className="text-lg mt-2">%</span></p>
                         <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Capacity Utilization</p>
                     </div>
                     <div className="space-y-4 pt-8 border-t border-slate-100">

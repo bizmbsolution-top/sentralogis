@@ -18,7 +18,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     if (!loading) {
       if (!profile) {
         router.push('/login');
-      } else if (allowedRoles && !allowedRoles.includes(profile.role)) {
+      } else if (allowedRoles && profile.role && !allowedRoles.includes(profile.role)) {
         router.push('/');
       }
     }
@@ -32,7 +32,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
-  if (!profile || (allowedRoles && !allowedRoles.includes(profile.role))) {
+  if (!profile || (allowedRoles && profile.role && !allowedRoles.includes(profile.role))) {
     return null;
   }
 

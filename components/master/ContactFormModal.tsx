@@ -33,6 +33,7 @@ interface ContactFormModalProps {
 export default function ContactFormModal({ onClose, onSuccess, tenantId }: ContactFormModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
+  const [parents, setParents] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     legal_name: '',
@@ -53,9 +54,24 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId }: Conta
     billing_latitude: 0,
     billing_longitude: 0,
     billing_directions: '',
+    billing_method: 'manual',
     notes: '',
     is_active: true,
+    parent_id: '', // New field for Parent-Child relationship
   });
+
+  useEffect(() => {
+    const fetchParents = async () => {
+      const { data } = await supabase
+        .from('md_entities')
+        .select('id, name, entity_code')
+        .eq('tenant_id', tenantId)
+        .eq('is_customer', true)
+        .order('name');
+      setParents(data || []);
+    };
+    fetchParents();
+  }, [tenantId]);
 
   const generateEntityCode = async () => {
     let prefix = 'ENT';
@@ -74,7 +90,8 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId }: Conta
     
     if (!data || data.length === 0) return `${prefix}/001`;
     const lastCode = data[0].entity_code;
-    const lastNumber = parseInt(lastCode.split('/')[1]);
+    const parts = lastCode.split('/');
+    const lastNumber = parts.length > 1 ? parseInt(parts[1]) : 0;
     const newNumber = (isNaN(lastNumber) ? 1 : lastNumber + 1).toString().padStart(3, '0');
     return `${prefix}/${newNumber}`;
   };
@@ -88,13 +105,18 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId }: Conta
 
     try {
       const code = await generateEntityCode();
+      const payload = {
+        tenant_id: tenantId,
+        entity_code: code,
+        ...formData,
+        parent_id: formData.parent_id || null, // Ensure empty string becomes null
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
       const { data: entity, error } = await supabase
         .from('md_entities')
-        .insert({
-          tenant_id: tenantId,
-          entity_code: code,
-          ...formData
-        })
+        .insert(payload)
         .select()
         .single();
 
@@ -148,12 +170,27 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId }: Conta
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Display Name *</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parent Entity (Optional)</label>
+                <select 
+                  value={formData.parent_id} 
+                  onChange={(e) => setFormData({...formData, parent_id: e.target.value})} 
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-slate-900 transition-all"
+                >
+                  <option value="">No Parent (Main Entity)</option>
+                  {parents.map(p => (
+                    <option key={p.id} value={p.id}>[{p.entity_code}] {p.name}</option>
+                  ))}
+                </select>
+                <p className="text-[8px] font-medium text-slate-400 px-1 italic">Use this for "Consignee" or "Child Company"</p>
               </div>
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Name</label>
-                <input type="text" value={formData.legal_name} onChange={(e) => setFormData({...formData, legal_name: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" />
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Initial / Alias *</label>
+                <input type="text" placeholder="e.g. TAM" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" />
+              </div>
+              <div className="md:col-span-1 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Legal Name (PT/CV)</label>
+                <input type="text" placeholder="e.g. PT Toyota Astra Motor" value={formData.legal_name} onChange={(e) => setFormData({...formData, legal_name: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tax ID / NPWP</label>

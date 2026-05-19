@@ -10,8 +10,8 @@ import {
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 
@@ -38,7 +38,7 @@ export default function EditAddCostModal({ item, onClose, onSuccess }: EditAddCo
       setLoading(true);
 
       const { error } = await supabase
-        .from('add_costs')
+        .from('extra_costs')
         .update({
           cost_type: costType,
           charge_type: chargeType,

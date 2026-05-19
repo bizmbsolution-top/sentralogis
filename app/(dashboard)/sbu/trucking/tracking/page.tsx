@@ -2,17 +2,17 @@
 
 import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
-import IntelligenceTower from '@/components/sbu/IntelligenceTower';
+import FleetTrackingConsole from '@/components/sbu/FleetTrackingConsole';
 
 export default function SBUTrackingPage() {
   return (
     <Suspense fallback={
-      <div className="flex flex-col items-center justify-center py-24 min-h-screen bg-white">
-        <Loader2 className="w-12 h-12 text-slate-900 animate-spin mb-4" />
-        <p className="text-slate-900 font-black tracking-widest text-[10px] uppercase">Initializing Satellite Link...</p>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] bg-white">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-3" />
+        <p className="text-sm text-slate-400">Loading tracking...</p>
       </div>
     }>
-      <IntelligenceTower />
+      <FleetTrackingConsole />
     </Suspense>
   );
 }

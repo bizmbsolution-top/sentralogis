@@ -111,7 +111,7 @@ export default function OwnerTenantStatementPage() {
            </div>
         </div>
         <div className="flex items-center gap-3 no-print">
-           <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+            <Button variant="secondary" className="gap-2" onClick={() => window.print()}>
               <Printer className="w-4 h-4" />
               Print
            </Button>

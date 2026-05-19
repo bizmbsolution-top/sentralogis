@@ -37,14 +37,14 @@ export default function FleetHubPage() {
       if (!autocompleteCompanyRef.current) return;
       const place = autocompleteCompanyRef.current.getPlace();
       if (!place || !place.formatted_address) return;
-      setFormData((prev) => ({ ...prev, address: place.formatted_address || '' }));
+      setFormData((prev: any) => ({ ...prev, address: place.formatted_address || '' }));
   };
 
   const handleDriverPlaceChanged = () => {
       if (!autocompleteDriverRef.current) return;
       const place = autocompleteDriverRef.current.getPlace();
       if (!place || !place.formatted_address) return;
-      setFormData((prev) => ({ ...prev, address: place.formatted_address || '' }));
+      setFormData((prev: any) => ({ ...prev, address: place.formatted_address || '' }));
   };
   
   // Data States
@@ -77,7 +77,7 @@ export default function FleetHubPage() {
       }
 
       setUserOrgId(tenantId);
-      setFormData(prev => ({ ...prev, tenant_id: tenantId }));
+      setFormData((prev: any) => ({ ...prev, tenant_id: tenantId }));
 
       const fleetQuery = supabase.from('md_fleets').select('*, md_entities:entity_id(name), md_fleet_types(type_name)').order('plate_number');
       const driverQuery = supabase.from('md_drivers').select('*, md_entities:entity_id(name)').order('name');

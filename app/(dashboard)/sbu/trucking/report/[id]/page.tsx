@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { 
     Loader2, Printer, MapPin, Truck, User, 
-    Calendar, Hash, FileText, Navigation, 
+    Calendar, Hash, FileText, Navigation as NavIcon, 
     Banknote, CheckCircle2, ShieldCheck, TrendingUp
 } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
@@ -148,7 +148,7 @@ export default function WorkOrderReportPage() {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">Route & Asset</p>
                         <div className="text-xs space-y-1">
                             <p className="font-bold text-slate-900 flex items-center gap-1.5"><MapPin className="w-3 h-3 text-emerald-500" /> {wo.origin_location?.name}</p>
-                            <p className="font-bold text-slate-900 flex items-center gap-1.5"><Navigation className="w-3 h-3 text-blue-500" /> {wo.destination_location?.name}</p>
+                            <p className="font-bold text-slate-900 flex items-center gap-1.5"><NavIcon className="w-3 h-3 text-blue-500" /> {wo.destination_location?.name}</p>
                             <p className="bg-slate-100 px-2 py-1 rounded mt-2 inline-block font-black text-[10px] uppercase text-slate-600">Unit: {wo.truck_type}</p>
                         </div>
                     </div>

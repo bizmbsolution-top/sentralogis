@@ -8,7 +8,7 @@ import {
     Search, RefreshCw, LayoutGrid, CheckCircle2, 
     AlertCircle, FilePlus2, ArrowRight, Save, 
     ChevronDown, ChevronUp, MapPin, Building2,
-    CheckCircle, XCircle, Loader2, Filter, LogOut
+    CheckCircle, XCircle, Loader2, Filter, LogOut, Inbox
 } from "lucide-react";
 
 // =====================================================

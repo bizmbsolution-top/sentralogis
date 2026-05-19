@@ -8,7 +8,7 @@ import {
   Phone, MapPin, Globe, CreditCard, ShieldCheck, 
   ChevronRight, Filter, Briefcase, Truck, FileText,
   UserPlus, Factory, HardHat, Package, CheckCircle2,
-  AlertCircle, RefreshCw, LayoutGrid, Wallet, History, Activity, ExternalLink
+  AlertCircle, RefreshCw, LayoutGrid, Wallet, History, Activity, ExternalLink, Save
 } from "lucide-react";
 
 /**
@@ -93,7 +93,7 @@ export default function EntityHubPage() {
       resetForm();
       fetchData();
     } catch (error: unknown) {
-       toast.error("Gagal menyimpan: " + error.message);
+       toast.error("Gagal menyimpan: " + (error as Error).message);
     }
   };
 

@@ -54,8 +54,8 @@ export async function sendWhatsAppTemplate(
         });
 
         return { success: true, sid: message.sid };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error sending template:', error);
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }

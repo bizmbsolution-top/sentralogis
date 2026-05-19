@@ -22,8 +22,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast, Toaster } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 
 export default function SBUCostManagementPage() {
   const { profile } = useAuth();
@@ -37,20 +37,41 @@ export default function SBUCostManagementPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch Job Orders with status accepted/in_progress that need payment
+      // 1. Ambil Job Orders (Tanpa Embed sesuai Rule 1)
       const { data: jos, error } = await supabase
         .from('job_orders')
-        .select(`
-          *,
-          drivers:driver_id (*),
-          transporter:md_entities!transporter_id (name),
-          wo_items:wo_item_id (*)
-        `)
+        .select('*')
         .in('status', ['accepted', 'in_progress', 'completed'])
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setData(jos || []);
+      if (error) {
+        console.error("Error fetching job orders:", { code: error.code, message: error.message, hint: error.hint });
+        throw error;
+      }
+
+      if (jos && jos.length > 0) {
+        const driverIds = Array.from(new Set(jos.map(j => j.driver_id).filter(Boolean)));
+        const transporterIds = Array.from(new Set(jos.map(j => j.transporter_id).filter(Boolean)));
+        const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
+
+        // 2. Ambil Driver & Entity secara terpisah (Rule 1)
+        const [driverRes, entityRes, itemRes] = await Promise.all([
+          driverIds.length > 0 ? supabase.from('md_drivers').select('*').in('id', driverIds) : { data: [] },
+          transporterIds.length > 0 ? supabase.from('md_entities').select('id, name, vendor_type').in('id', transporterIds) : { data: [] },
+          woItemIds.length > 0 ? supabase.from('wo_items').select('id, item_code, sbu_type').in('id', woItemIds) : { data: [] }
+        ]);
+
+        const combined = jos.map(jo => ({
+          ...jo,
+          drivers: driverRes.data?.find(d => d.id === jo.driver_id),
+          transporter: entityRes.data?.find(e => e.id === jo.transporter_id),
+          wo_items: itemRes.data?.find(i => i.id === jo.wo_item_id)
+        }));
+
+        setData(combined);
+      } else {
+        setData([]);
+      }
     } catch (err: any) {
       toast.error('Gagal memuat data pembayaran');
     } finally {
@@ -73,11 +94,16 @@ export default function SBUCostManagementPage() {
   const handleMarkAsPaid = async (item: any) => {
     try {
       setUploading(true);
+      const payoutAmount = activeTab === 'driver' 
+        ? (item.base_price * (item.driver_share_percentage / 100))
+        : item.purchase_price;
+
       const { error } = await supabase
         .from('job_orders')
         .update({ 
-          billing_status: 'paid',
-          // In a real app, we would also update a separate payments table
+          driver_payment_status: 'completed',
+          driver_payment_amount: payoutAmount,
+          driver_paid_at: new Date().toISOString()
         })
         .eq('id', item.id);
 
@@ -199,7 +225,7 @@ export default function SBUCostManagementPage() {
                           </div>
                           <div className="space-y-1">
                              <div className="flex items-center gap-3">
-                                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-slate-200 italic">
+                                <Badge variant="default" className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-slate-200 italic">
                                    {item.jo_number}
                                 </Badge>
                                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">{new Date(item.created_at).toLocaleDateString()}</span>
@@ -208,7 +234,7 @@ export default function SBUCostManagementPage() {
                              {activeTab === 'driver' ? item.drivers?.name : item.transporter?.name}
                              </h3>
                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <Clock size={12} className="text-amber-500" /> Status: {item.status.replace(/_/g, ' ')}
+                                <Clock size={12} className="text-amber-500" /> Payment: {item.driver_payment_status?.toUpperCase() || 'PENDING'}
                              </p>
                           </div>
                        </div>
@@ -309,7 +335,7 @@ export default function SBUCostManagementPage() {
                              A/N {selectedItem.drivers?.bank_account_name}
                           </p>
                        </div>
-                       <Button variant="ghost" className="text-blue-600 hover:bg-blue-100 rounded-xl font-black text-[10px] uppercase">
+                       <Button variant="ghost" className="text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl font-black text-[10px] uppercase shadow-sm">
                           Copy
                        </Button>
                     </div>

@@ -1,19 +1,13 @@
-import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
-const env = fs.readFileSync('.env.local', 'utf8');
-const url = env.match(/NEXT_PUBLIC_SUPABASE_URL=(.*)/)[1].trim();
-const key = env.match(/SUPABASE_SERVICE_ROLE_KEY=(.*)/)[1].trim();
-const s = createClient(url, key);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-async function run() {
-  const { data, error } = await s.rpc('exec_sql_manual', { 
-    sql_query: "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'job_orders'" 
-  });
-  if (error) {
-    console.error(error);
-  } else {
-    console.log(JSON.stringify(data, null, 2));
-  }
+async function checkColumns() {
+  const { data, error } = await supabase.from('job_orders').select('*').limit(1);
+  if (error) console.error(error);
+  else console.log(Object.keys(data[0]));
 }
-run();
+
+checkColumns();

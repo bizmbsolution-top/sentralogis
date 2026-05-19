@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { 
   X, CheckCircle2, XCircle, Loader2, Truck, User, Info, MapPin, 
   ChevronRight, Calendar, Clock, Package, Layers, MessageSquare,
-  Building2, FileText, ArrowRight, AlertTriangle, Shield
+  Building2, FileText, ArrowRight, AlertTriangle, Shield, Lock
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { sendNotification } from '@/lib/supabase/notifications';
@@ -137,12 +137,19 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
             ? JSON.parse(item.item_data) 
             : (item?.item_data || {});
           
-          // [AI] Only update status and item_data - handover_requested/handover_status columns don't exist
+          const itemJOsForThisItem = allItemJOs.filter(jo => jo.wo_item_id === itemId);
+          const assignedCountForItem = itemJOsForThisItem.filter(jo => jo.fleet_id && jo.driver_id).length;
+          
+          // [AI] Set max_jo_count to lock the number of JOs — prevents SBU from creating more
           const { error: itemError } = await supabase.from('wo_items').update({ 
             status: 'assigned',
             item_data: {
               ...currentItemData,
               handover_note: null,
+              handover_approved: true,
+              handover_approved_at: now,
+              handover_approved_by: actor,
+              max_jo_count: assignedCountForItem,
               milestones: {
                 ...(currentItemData.milestones || {}),
                 approved: now,
@@ -373,6 +380,46 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                       </div>
                     </div>
 
+                    {/* Unit Capacity Summary */}
+                    <div className="bg-slate-50 p-4 rounded-2xl mb-5 border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">Unit Capacity Overview</p>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                          <span className="text-xs font-black text-slate-700">{assignedJOs.length} Assigned</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                          <span className="text-xs font-black text-slate-700">{itemJOs.length - assignedJOs.length} Created (Unassigned)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-rose-400"></div>
+                          <span className="text-xs font-black text-slate-700">{unitCount - itemJOs.length} Empty Slots</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex gap-1">
+                        {Array.from({ length: unitCount }).map((_, slotIdx) => {
+                          const joForSlot = itemJOs[slotIdx];
+                          const isAssigned = joForSlot?.fleet_id && joForSlot?.driver_id;
+                          const isCreated = !!joForSlot;
+                          return (
+                            <div
+                              key={slotIdx}
+                              className={`flex-1 h-2 rounded-full transition-all ${
+                                isAssigned ? 'bg-emerald-500' : isCreated ? 'bg-amber-400' : 'bg-rose-200'
+                              }`}
+                              title={isAssigned ? `Slot ${slotIdx + 1}: Assigned` : isCreated ? `Slot ${slotIdx + 1}: Created but unassigned` : `Slot ${slotIdx + 1}: Empty (will be blocked)`}
+                            />
+                          );
+                        })}
+                      </div>
+                      {unitCount - itemJOs.length > 0 && (
+                        <p className="text-[9px] font-bold text-rose-500 mt-2 italic">
+                          ⚠ {unitCount - itemJOs.length} slot(s) kosong akan di-block setelah approval — SBU tidak bisa buat JO baru untuk item ini
+                        </p>
+                      )}
+                    </div>
+
                     {/* Route Info */}
                     {stops.length > 0 && (
                       <div className="bg-slate-50 p-4 rounded-2xl mb-5">
@@ -434,84 +481,104 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                   </div>
 
                   {/* Assigned JOs for this item */}
-                  {itemJOs.length > 0 && (
-                    <div className="space-y-3 pl-4">
-                      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
-                        Job Orders ({itemJOs.length})
-                      </h4>
-                      {itemJOs.map((jo, joIdx) => {
-                        const joStatusUpper = (jo.status || '').toUpperCase();
-                        const isWaitingApproval = !!(jo.fleet_id && jo.driver_id);
-                        const hasFleetDriver = jo.fleet_id && jo.driver_id;
-                        
-                        let statusColor = 'bg-slate-100 text-slate-600 border border-slate-200/50';
-                        let statusLabel = jo.status || 'Unknown';
-                        if (isWaitingApproval) {
-                          statusColor = 'bg-orange-50 text-orange-600 border border-orange-100';
-                          statusLabel = 'Waiting Approval';
-                        } else if (['ASSIGNED', 'ACTIVE'].includes(joStatusUpper)) {
-                          statusColor = 'bg-blue-50 text-blue-600 border border-blue-100';
-                          statusLabel = 'Assigned';
-                        } else if (joStatusUpper === 'PENDING') {
-                          statusColor = 'bg-slate-50 text-slate-500 border border-slate-100';
-                          statusLabel = 'Draft';
-                        }
+                  <div className="space-y-3 pl-4">
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
+                      Job Orders ({itemJOs.length} created / {unitCount} required)
+                    </h4>
+                    {itemJOs.map((jo, joIdx) => {
+                      const joStatusUpper = (jo.status || '').toUpperCase();
+                      const isWaitingApproval = !!(jo.fleet_id && jo.driver_id);
+                      const hasFleetDriver = jo.fleet_id && jo.driver_id;
+                      
+                      let statusColor = 'bg-slate-100 text-slate-600 border border-slate-200/50';
+                      let statusLabel = jo.status || 'Unknown';
+                      if (isWaitingApproval) {
+                        statusColor = 'bg-orange-50 text-orange-600 border border-orange-100';
+                        statusLabel = 'Waiting Approval';
+                      } else if (['ASSIGNED', 'ACTIVE'].includes(joStatusUpper)) {
+                        statusColor = 'bg-blue-50 text-blue-600 border border-blue-100';
+                        statusLabel = 'Assigned';
+                      } else if (joStatusUpper === 'PENDING') {
+                        statusColor = 'bg-slate-50 text-slate-500 border border-slate-100';
+                        statusLabel = 'Draft';
+                      }
 
-                        return (
-                          <div 
-                            key={jo.id} 
-                            className={`bg-white border rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center shadow-sm transition-all ${
-                              isWaitingApproval ? 'border-orange-200 bg-orange-50/10' : 'border-slate-100'
-                            }`}
-                          >
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] ${
-                              isWaitingApproval ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' : 'bg-slate-100 text-slate-500'
-                            }`}>
-                              {joIdx + 1}
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                {jo.jo_number && (
-                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                    {jo.jo_number}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-4 text-xs">
-                                {/* Transporter */}
-                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                                  <Building2 size={13} className="text-blue-500" />
-                                  {jo.md_entities?.name || '-'}
-                                </span>
-                                {/* Fleet */}
-                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                                  <Truck size={13} className="text-emerald-500" />
-                                  {jo.md_fleets?.md_fleet_types?.type_name || '-'} — {jo.md_fleets?.plate_number || 'No Plate'}
-                                </span>
-                                {/* Driver */}
-                                <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                                  <User size={13} className="text-violet-500" />
-                                  {jo.md_drivers?.name || '-'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {!hasFleetDriver && (
-                                <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100">
-                                  Unassigned
+                      return (
+                        <div 
+                          key={jo.id} 
+                          className={`bg-white border rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center shadow-sm transition-all ${
+                            isWaitingApproval ? 'border-orange-200 bg-orange-50/10' : 'border-slate-100'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] ${
+                            isWaitingApproval ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {joIdx + 1}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {jo.jo_number && (
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  {jo.jo_number}
                                 </span>
                               )}
-                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${statusColor}`}>
-                                {statusLabel}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-xs">
+                              {/* Transporter */}
+                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                <Building2 size={13} className="text-blue-500" />
+                                {jo.md_entities?.name || '-'}
+                              </span>
+                              {/* Fleet */}
+                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                <Truck size={13} className="text-emerald-500" />
+                                {jo.md_fleets?.md_fleet_types?.type_name || '-'} — {jo.md_fleets?.plate_number || 'No Plate'}
+                              </span>
+                              {/* Driver */}
+                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                <User size={13} className="text-violet-500" />
+                                {jo.md_drivers?.name || '-'}
                               </span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {!hasFleetDriver && (
+                              <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100">
+                                Unassigned
+                              </span>
+                            )}
+                            <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${statusColor}`}>
+                              {statusLabel}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Empty slots that will be blocked after approval */}
+                    {Array.from({ length: unitCount - itemJOs.length }).map((_, emptyIdx) => {
+                      const slotNum = itemJOs.length + emptyIdx + 1;
+                      return (
+                        <div
+                          key={`empty-${emptyIdx}`}
+                          className="bg-rose-50/50 border border-rose-100 rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-start md:items-center"
+                        >
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] bg-rose-100 text-rose-500">
+                            <Lock size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-rose-600 italic">Slot {slotNum} — Empty (No JO Created)</p>
+                            <p className="text-[9px] text-rose-400 font-bold mt-0.5">Will be permanently blocked after approval</p>
+                          </div>
+                          <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-100 text-rose-600 border border-rose-200">
+                            BLOCKED
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}

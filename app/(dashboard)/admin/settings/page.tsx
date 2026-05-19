@@ -184,7 +184,7 @@ export default function CompanySettingsPage() {
                             <div className="aspect-square bg-black/40 rounded-[2.5rem] border border-dashed border-white/10 flex flex-col items-center justify-center relative overflow-hidden group/logo shadow-inner">
                                 {formData.logo_url ? (
                                     <>
-                                        <Image src="" alt="Logo" fill className="w-3/4 h-3/4 object-contain transition-transform duration-700 group-hover/logo:scale-110"
+                                        <Image src="" alt="Logo" fill className="w-3/4 h-3/4 object-contain transition-transform duration-700 group-hover/logo:scale-110" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/logo:opacity-100 transition-all flex items-center justify-center gap-4">
                                             <button 
                                                 onClick={() => setFormData(prev => ({ ...prev, logo_url: "" }))}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
-import { Loader2, Printer, MapPin, Truck, User, Calendar, Hash, FileText, Navigation } from "lucide-react";
+import { Loader2, Printer, MapPin, Truck, User, Calendar, Hash, FileText, Navigation as NavIcon } from "lucide-react";
 
 export default function DeliveryNotePage() {
     const supabase = createClient();
@@ -142,7 +142,7 @@ export default function DeliveryNotePage() {
                                 </div>
                                 <div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic flex items-center gap-1.5">
-                                        <Navigation className="w-2.5 h-2.5" /> Lokasi Bongkar (Destination)
+                                        <NavIcon className="w-2.5 h-2.5" /> Lokasi Bongkar (Destination)
                                     </p>
                                     <div className="p-1">
                                         <p className="text-[11px] font-black text-slate-900 uppercase italic leading-tight mb-1">{jo.work_order_items?.destination_location?.name}</p>

@@ -1,13 +1,10 @@
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from './types'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import type { Database } from './types'
 
-let clientInstance: ReturnType<typeof createBrowserClient<Database>> | null = null;
+let clientInstance: ReturnType<typeof createSupabaseClient<Database>> | null = null;
 
-/**
- * Creates a Singleton Supabase client for browser/client-side use.
- */
 export function createClient() {
-  if (typeof window === 'undefined') return createBrowserClient<Database>(
+  if (typeof window === 'undefined') return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL || '',
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   );
@@ -21,12 +18,41 @@ export function createClient() {
     console.warn("Supabase keys are missing in the browser environment.");
   }
 
-  clientInstance = createBrowserClient<Database>(url, key);
+  clientInstance = createSupabaseClient<Database>(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'sentralogis-auth',
+      flowType: 'hash',
+      storage: {
+        getItem: (key) => {
+          try {
+            return localStorage.getItem(key)
+          } catch {
+            return null
+          }
+        },
+        setItem: (key, value) => {
+          try {
+            localStorage.setItem(key, value)
+          } catch {}
+        },
+        removeItem: (key) => {
+          try {
+            localStorage.removeItem(key)
+          } catch {}
+        }
+      }
+    },
+    global: {
+      headers: {
+        'x-application-name': 'sentralogis'
+      }
+    }
+  });
   
   return clientInstance;
 }
 
-/**
- * Global singleton instance for easy import
- */
 export const supabase = createClient();

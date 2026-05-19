@@ -12,10 +12,10 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import AddStaffModal from '@/components/tenant/AddStaffModal';
-import EditStaffModal from '@/components/tenant/EditStaffModal';
-import ResetPasswordModal from '@/components/tenant/ResetPasswordModal';
-import SBUManager from '@/components/tenant/SBUManager';
+import AddStaffModal from '@/components/Tenant/AddStaffModal';
+import EditStaffModal from '@/components/Tenant/EditStaffModal';
+import ResetPasswordModal from '@/components/Tenant/ResetPasswordModal';
+import SBUManager from '@/components/Tenant/SBUManager';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function TenantOrganizationPage() {
@@ -221,7 +221,7 @@ export default function TenantOrganizationPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
+                       <Badge variant="default" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
                         {s.tenant_roles?.role_name || s.role_code}
                       </Badge>
                     </TableCell>
@@ -245,18 +245,18 @@ export default function TenantOrganizationPage() {
                     </TableCell>
                     <TableCell className="text-right">
                        <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="outline" 
-                            className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-slate-900"
-                            onClick={() => { setSelectedStaff(s); setIsEditModalOpen(true); }}
-                          >
-                            <MoreVertical size={14}/>
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-rose-600"
-                            onClick={() => { setSelectedStaff(s); setIsResetModalOpen(true); }}
-                          >
+                           <Button 
+                             variant="secondary" 
+                             className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-slate-900"
+                             onClick={() => { setSelectedStaff(s); setIsEditModalOpen(true); }}
+                           >
+                             <MoreVertical size={14}/>
+                           </Button>
+                           <Button 
+                             variant="secondary" 
+                             className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-rose-600"
+                             onClick={() => { setSelectedStaff(s); setIsResetModalOpen(true); }}
+                           >
                             <Shield size={14}/>
                           </Button>
                        </div>

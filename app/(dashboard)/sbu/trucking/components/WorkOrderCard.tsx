@@ -4,10 +4,29 @@ import {
     Truck, MapPin, Navigation, Calendar, 
     ChevronRight, CheckCircle2, XCircle, Activity, 
     Globe, Printer, Banknote, ShieldCheck, Clock, Inbox,
-    PlusCircle, Send, MoreVertical, Map, FolderOpen, AlertTriangle
+    PlusCircle, Send, MoreVertical, Map, FolderOpen, AlertTriangle, ExternalLink
 } from "lucide-react";
-import { WorkOrderItem } from "../page";
+import { useRouter } from "next/navigation";
 import { getStatusConfig, getOperationalStatus } from "../utils";
+
+interface Assignment {
+    id: string;
+    status?: string;
+    is_link_sent?: boolean;
+    billing_status?: string;
+    rejection_note?: string;
+    fleet_number?: string;
+    physical_doc_received?: boolean;
+    finance_status?: string;
+    cash_advances?: Array<{ status?: string }>;
+}
+
+interface WorkOrderItem {
+    id?: string;
+    quantity?: number;
+    work_orders?: { wo_number?: string; status?: string };
+    assignments?: Assignment[];
+}
 
 interface WorkOrderCardProps {
     item: WorkOrderItem;
@@ -37,6 +56,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
         onAddAdvance,
         formatThousand
     } = props;
+    const router = useRouter();
     const statusKey = getOperationalStatus(item);
     const sc = getStatusConfig(statusKey);
     const woStatus = item.work_orders?.status;
@@ -278,7 +298,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                     {(woStatus === 'draft' || woStatus === 'pending_sbu') ? (
                         <div className="grid grid-cols-2 gap-3">
                             <button 
-                                onClick={() => onManageAssignments(item)}
+                                onClick={() => router.push(`/sbu/trucking/assignments?q=${item.work_orders?.wo_number}`)}
                                 className="w-full bg-[#1E293B] hover:bg-emerald-600 text-white flex-1 py-4 rounded-[1.5rem] font-black text-[10px] md:text-[11px] uppercase tracking-[0.1em] transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 group"
                             >
                                 <PlusCircle className="w-4 h-4 group-hover:rotate-90 transition-transform" /> Assign
@@ -299,10 +319,10 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                                 <Map className="w-3.5 h-3.5 text-blue-500" /> Live Map
                             </button>
                             <button 
-                                onClick={() => onManageAssignments(item)}
-                                className="bg-[#1E293B] hover:bg-emerald-600 text-white py-3.5 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all shadow-md active:scale-95"
+                                onClick={() => router.push(`/sbu/trucking/assignments?q=${item.work_orders?.wo_number}`)}
+                                className="bg-[#1E293B] hover:bg-emerald-600 text-white py-3.5 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
                             >
-                                Manage Units
+                                <ExternalLink className="w-3 h-3" /> View
                             </button>
                         </div>
                     ) : isDone ? (
@@ -350,7 +370,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                                 <Map className="w-3.5 h-3.5" /> Live
                              </button>
                              <button 
-                                onClick={() => woStatus !== 'handover_pending' && onManageAssignments(item)}
+                                onClick={() => { if (woStatus !== "handover_pending") router.push(`/sbu/trucking/assignments?q=${item.work_orders?.wo_number}`); }}
                                 disabled={woStatus === 'handover_pending'}
                                 className={`py-3.5 rounded-[1.2rem] font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 ${
                                     woStatus === 'handover_pending'
@@ -358,7 +378,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                                     : 'bg-[#1E293B] hover:bg-emerald-600 text-white shadow-lg shadow-slate-900/10'
                                 }`}
                              >
-                                {woStatus === 'handover_pending' ? 'Locked (Pending)' : 'Assign & Manage'}
+                                {woStatus === 'handover_pending' ? 'Locked (Pending)' : 'View'}
                              </button>
                         </div>
                     )}

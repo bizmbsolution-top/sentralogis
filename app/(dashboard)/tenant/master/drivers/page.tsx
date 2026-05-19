@@ -20,7 +20,7 @@ interface Driver {
   sim_number: string;
   sim_class: string;
   sim_expiry: string;
-  status: 'available' | 'on_duty' | 'off_duty';
+  status: 'available' | 'on_duty' | 'unavailable';
   is_active: boolean;
   tenant_id: string;
   entity_id: string;
@@ -256,7 +256,7 @@ export default function DriversPage() {
     switch (driver.status) {
       case 'available': return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Available</span>;
       case 'on_duty': return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full uppercase tracking-wider">On Duty</span>;
-      case 'off_duty': return <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Off Duty</span>;
+      case 'unavailable': return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Unavailable</span>;
       default: return <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-full uppercase tracking-wider">{driver.status}</span>;
     }
   };
@@ -521,7 +521,7 @@ export default function DriversPage() {
                 <div className="col-span-full">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Operational Status</label>
                   <div className="flex gap-4">
-                    {(['available', 'on_duty', 'off_duty'] as const).map(s => (
+                    {(['available', 'on_duty', 'unavailable'] as const).map(s => (
                       <label key={s} className="flex items-center gap-2 cursor-pointer">
                         <input 
                           type="radio" 

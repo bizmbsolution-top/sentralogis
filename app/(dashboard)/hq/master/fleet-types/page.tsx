@@ -16,6 +16,7 @@ interface FleetType {
   is_active: boolean;
   time_multiplier: number;
   fuel_consumption: number;
+  icon_url?: string;
   tenant_id: string;
   created_at: string;
 }
@@ -32,6 +33,7 @@ export default function HQFleetTypesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [selectedType, setSelectedType] = useState<FleetType | null>(null);
   
   const [formData, setFormData] = useState({
@@ -41,6 +43,7 @@ export default function HQFleetTypesPage() {
     is_active: true,
     time_multiplier: 1.0,
     fuel_consumption: 1.0,
+    icon_url: '',
   });
 
   // Sync tenant info
@@ -97,6 +100,41 @@ export default function HQFleetTypesPage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tenantId) return;
+
+    // Limit size 1MB
+    if (file.size > 1024 * 1024) {
+      toast.error('File terlalu besar. Maksimal 1MB.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${tenantId}/${Math.random()}.${fileExt}`;
+      const filePath = `fleet-icons/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('logos')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, icon_url: publicUrl });
+      toast.success('Ikon berhasil diunggah');
+    } catch (error: any) {
+      toast.error('Gagal mengunggah ikon: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!tenantId) {
       toast.error('Identitas Tenant belum dimuat.');
@@ -106,17 +144,20 @@ export default function HQFleetTypesPage() {
     setSubmitting(true);
 
     try {
+      const payload = {
+        type_name: formData.type_name,
+        capacity_ton: formData.capacity_ton,
+        capacity_cbm: formData.capacity_cbm,
+        time_multiplier: formData.time_multiplier,
+        fuel_consumption: formData.fuel_consumption,
+        is_active: formData.is_active,
+        icon_url: formData.icon_url,
+      };
+
       if (selectedType) {
         const { error } = await supabase
           .from('md_fleet_types')
-          .update({
-            type_name: formData.type_name,
-            capacity_ton: formData.capacity_ton,
-            capacity_cbm: formData.capacity_cbm,
-            time_multiplier: formData.time_multiplier,
-            fuel_consumption: formData.fuel_consumption,
-            is_active: formData.is_active,
-          })
+          .update(payload)
           .eq('id', selectedType.id);
 
         if (error) throw error;
@@ -126,14 +167,9 @@ export default function HQFleetTypesPage() {
         const { error } = await supabase
           .from('md_fleet_types')
           .insert({
+            ...payload,
             tenant_id: tenantId,
             type_code: code,
-            type_name: formData.type_name,
-            capacity_ton: formData.capacity_ton,
-            capacity_cbm: formData.capacity_cbm,
-            time_multiplier: formData.time_multiplier,
-            fuel_consumption: formData.fuel_consumption,
-            is_active: formData.is_active,
           });
 
         if (error) throw error;
@@ -180,6 +216,7 @@ export default function HQFleetTypesPage() {
         time_multiplier: type.time_multiplier || 1.0,
         fuel_consumption: type.fuel_consumption || 1.0,
         is_active: type.is_active,
+        icon_url: type.icon_url || '',
       });
     } else {
       setSelectedType(null);
@@ -190,6 +227,7 @@ export default function HQFleetTypesPage() {
         time_multiplier: 1.0,
         fuel_consumption: 1.0,
         is_active: true,
+        icon_url: '',
       });
     }
     setIsModalOpen(true);
@@ -237,6 +275,7 @@ export default function HQFleetTypesPage() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-4 py-4 font-semibold text-slate-700 w-16 text-center">Icon</th>
                 <th className="px-4 py-4 font-semibold text-slate-700">Code</th>
                 <th className="px-4 py-4 font-semibold text-slate-700">Type Name</th>
                 <th className="px-4 py-4 font-semibold text-slate-700">Cap. Ton</th>
@@ -263,6 +302,15 @@ export default function HQFleetTypesPage() {
               ) : (
                 filteredTypes.map((ft, idx) => (
                   <tr key={ft.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50 transition-colors' : 'bg-slate-50/30 hover:bg-slate-50 transition-colors'}>
+                    <td className="px-4 py-4 text-center">
+                      {ft.icon_url ? (
+                        <img src={ft.icon_url} alt={ft.type_name} className="w-8 h-8 object-contain mx-auto rounded-lg bg-slate-50 p-1" />
+                      ) : (
+                        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center mx-auto">
+                          <Truck size={14} className="text-slate-400" />
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{ft.type_code}</td>
                     <td className="px-4 py-4 font-medium text-slate-900">{ft.type_name}</td>
                     <td className="px-4 py-4 text-slate-600">{ft.capacity_ton} Ton</td>
@@ -313,7 +361,38 @@ export default function HQFleetTypesPage() {
                   value={formData.type_name || ''}
                   onChange={(e) => setFormData({...formData, type_name: e.target.value})}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                  placeholder="e.g. CDD Long"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Fleet Icon</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden">
+                    {formData.icon_url ? (
+                      <img src={formData.icon_url} alt="Preview" className="w-full h-full object-contain p-2" />
+                    ) : (
+                      <Truck size={24} className="text-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden" 
+                      id="icon-upload"
+                    />
+                    <label 
+                      htmlFor="icon-upload"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer transition-all"
+                    >
+                      {uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                      {uploading ? 'Uploading...' : 'Upload Icon'}
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-2 italic">Format PNG/SVG, Maksimal 1MB.</p>
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

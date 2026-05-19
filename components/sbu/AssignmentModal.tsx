@@ -14,6 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 
 interface AssignmentModalProps {
@@ -33,6 +34,7 @@ export default function AssignmentModal({
   onClose,
   onSuccess
 }: AssignmentModalProps) {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   
@@ -109,16 +111,36 @@ export default function AssignmentModal({
         if (countError) throw countError;
         setAssignedCount(count || 0);
 
-        // 3. Fetch Vendors
-        const { data: vendorData } = await supabase
+        // 3. Fetch Transporters (Vendors + Own)
+        const { data: entityData, error: entityError } = await supabase
           .from('md_entities')
-          .select('id, name')
-          .eq('is_vendor', true)
-          .eq('category', 'TRANSPORTER')
+          .select('id, name, is_vendor, category')
           .eq('tenant_id', profile?.tenant_id)
           .eq('is_active', true);
         
-        setVendors(vendorData || []);
+        if (entityError) {
+          console.error("Error fetching entities:", { code: entityError.code, message: entityError.message, details: entityError.details, hint: entityError.hint });
+        }
+
+        const tenantName = (profile?.tenants?.name || '').toUpperCase();
+        const tenantCode = (profile?.tenant_code || '').toUpperCase();
+
+        const trans = (entityData || [])
+          .filter(t => t.is_vendor || t.category === 'TRANSPORTER')
+          .map(t => {
+            const isActuallyOwn = !t.is_vendor || 
+                                 t.name.toUpperCase().includes(tenantName) || 
+                                 t.name.toUpperCase().includes(tenantCode) ||
+                                 t.name.toUpperCase().includes('INTERNAL') ||
+                                 t.name.toUpperCase().includes('(OWN)');
+            
+            return {
+              ...t,
+              is_own: isActuallyOwn
+            };
+          });
+        
+        setVendors(trans);
 
       } catch (err: any) {
         toast.error('Gagal memuat data: ' + err.message);
@@ -158,11 +180,18 @@ export default function AssignmentModal({
       .eq('is_active', true);
 
       if (isOwn) {
-        fleetQuery = fleetQuery.is('entity_id', null);
+        // For internal, we want those with entity_id null OR the specific ID of the internal entity
+        const internalId = vendors.find(v => v.is_own)?.id;
+        if (internalId) {
+          fleetQuery = fleetQuery.or(`entity_id.is.null,entity_id.eq.${internalId}`);
+        } else {
+          fleetQuery = fleetQuery.is('entity_id', null);
+        }
       } else {
         fleetQuery = fleetQuery.eq('entity_id', val);
       }
-      const { data: fleetData } = await fleetQuery;
+      const { data: fleetData, error: fError } = await fleetQuery;
+      if (fError) console.error("Error fetching fleets:", { code: fError.code, message: fError.message, details: fError.details, hint: fError.hint });
       setFleets(fleetData || []);
 
       // Fetch Drivers
@@ -171,14 +200,21 @@ export default function AssignmentModal({
         .eq('is_active', true);
 
       if (isOwn) {
-        driverQuery = driverQuery.is('entity_id', null);
+        const internalId = vendors.find(v => v.is_own)?.id;
+        if (internalId) {
+          driverQuery = driverQuery.or(`entity_id.is.null,entity_id.eq.${internalId}`);
+        } else {
+          driverQuery = driverQuery.is('entity_id', null);
+        }
       } else {
         driverQuery = driverQuery.eq('entity_id', val);
       }
-      const { data: driverData } = await driverQuery;
+      const { data: driverData, error: dError } = await driverQuery;
+      if (dError) console.error("Error fetching drivers:", { code: dError.code, message: dError.message, details: dError.details, hint: dError.hint });
       setDrivers(driverData || []);
 
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Assignment Fetch Error:", err);
       toast.error('Gagal mengambil data armada/driver');
     }
   };
@@ -208,7 +244,7 @@ export default function AssignmentModal({
         .from('job_orders')
         .insert({
           wo_item_id: woItemId,
-          jo_number: `${woNumber}-${String(assignedCount + 1).padStart(3, '0')}`,
+          jo_number: `${woNumber}-${String(assignedCount + 1).padStart(2, '0')}`,
           transporter_id: selectedTransporterId === 'own' ? null : selectedTransporterId,
           fleet_id: selectedFleetId,
           driver_id: selectedDriverId,
@@ -345,7 +381,7 @@ export default function AssignmentModal({
               >
                 <option value="" className="not-italic">Pilih Transporter</option>
                 <option value="own" className="not-italic font-bold text-blue-600">(OWN) INTERNAL HQ</option>
-                {vendors.map(v => (
+                {vendors.filter(v => v.is_vendor).map(v => (
                   <option key={v.id} value={v.id} className="not-italic">PT {v.name}</option>
                 ))}
               </select>

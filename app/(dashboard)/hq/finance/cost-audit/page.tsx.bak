@@ -1,0 +1,706 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  ShieldCheck, 
+  Search, 
+  TrendingUp, 
+  CheckCircle2, 
+  AlertCircle,
+  FileText,
+  ArrowRight,
+  Loader2,
+  Truck,
+  User,
+  MapPin,
+  Clock,
+  ArrowLeft,
+  ChevronRight,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Phone,
+  Calendar,
+  X,
+  FileCheck,
+  Ban,
+  MessageSquare,
+  Zap,
+  Filter,
+  MoreVertical,
+  Download,
+  CreditCard,
+  CheckSquare
+} from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { toast } from 'react-hot-toast';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { createJournalEntry } from '@/lib/finance/journaling';
+
+const CostAuditPage = () => {
+  const { profile } = useAuth();
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('new_request');
+  const [selectedJoId, setSelectedJoId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (profile?.tenant_id) {
+      fetchData();
+    }
+  }, [profile?.tenant_id]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const { data: tenantJos, error: joIdError } = await supabase
+        .from('job_orders')
+        .select('id')
+        .eq('tenant_id', profile?.tenant_id);
+
+      if (joIdError) throw joIdError;
+      const tenantJoIds = tenantJos.map(j => j.id);
+
+      if (tenantJoIds.length === 0) {
+        setData([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: costs, error: costsError } = await supabase
+        .from('extra_costs')
+        .select('*')
+        .neq('status', 'draft')
+        .in('jo_id', tenantJoIds)
+        .order('created_at', { ascending: false });
+
+      if (costsError) throw costsError;
+
+      const joIds = Array.from(new Set(costs.map(c => c.jo_id)));
+      // [AI] Added driver_share_percentage, driver_id, fleet_id for internal profit-sharing model
+      const { data: jos, error: josError } = await supabase
+        .from('job_orders')
+        .select(`
+          id, jo_number, base_price, purchase_price, driver_phone, pod_status, status, created_at,
+          driver_share_percentage, driver_id, fleet_id,
+          md_drivers!fk_job_orders_md_driver(id, name, phone),
+          md_fleets:fleet_id(id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)),
+          wo_item:wo_items(
+            id, item_data,
+            wo:work_orders(
+              id, wo_number,
+              customer:md_entities!customer_id(name, billing_method, phone)
+            )
+          )
+        `)
+        .in('id', joIds);
+
+      if (josError) throw josError;
+
+      const normalizedJos = (jos || []).map(jo => {
+        const woItem = Array.isArray(jo.wo_item) ? jo.wo_item[0] : jo.wo_item;
+        const wo = woItem ? (Array.isArray(woItem.wo) ? woItem.wo[0] : woItem.wo) : null;
+        return { ...jo, wo_item: woItem ? { ...woItem, wo } : null };
+      });
+
+      const seen = new Set();
+      const hydrated = costs
+        .filter(c => Number(c.amount) > 0 && c.cost_type)
+        .filter(c => {
+          const key = `${c.jo_id}-${c.cost_type}-${c.amount}-${c.created_at}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map(cost => ({
+          ...cost,
+          billing_proof_url: cost.description?.startsWith('http') ? cost.description : null,
+          job_orders: normalizedJos.find(j => j.id === cost.jo_id) || null
+        }));
+
+      setData(hydrated);
+    } catch (err: any) {
+      toast.error('Gagal mengambil data: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAction = async (itemId: string, newStatus: 'approved' | 'rejected') => {
+    try {
+      const item = data.find(d => d.id === itemId);
+      if (!item) return;
+
+      let finalStatus: any = newStatus;
+      let isBillable = newStatus === 'approved';
+      let paidBySbu = false;
+
+      if (newStatus === 'rejected') {
+        const confirmPaid = window.confirm('Apakah biaya ini SUDAH DIBAYAR?\n\nOK = Sudah Bayar (Masuk COGS)\nCancel = Belum Bayar (Reject Murni)');
+        if (confirmPaid) {
+          finalStatus = 'rejected_as_cogs';
+          paidBySbu = true;
+          isBillable = false;
+        }
+      }
+      
+      const { error } = await supabase
+        .from('extra_costs')
+        .update({ 
+          status: finalStatus,
+          is_billable: isBillable,
+          paid_by_sbu: paidBySbu,
+          decided_at: new Date().toISOString()
+        })
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      if (isBillable || paidBySbu) {
+        await createJournalEntry({
+          jobOrderId: item.jo_id,
+          amount: item.amount,
+          description: `${isBillable ? 'Approved' : 'Rejected (COGS)'} Add Cost ${item.cost_type}: ${item.job_orders?.jo_number}`,
+          sourceType: (isBillable ? (item.charge_type === 'surcharge' ? 'surcharge' : 'reimbursement') : 'cogs_adjustment') as any,
+          metadata: { jo_id: item.jo_id, customer: item.job_orders?.wo_item?.wo?.customer?.name }
+        });
+      }
+
+      toast.success(`Biaya diproses sebagai ${finalStatus.toUpperCase()}`);
+      fetchData();
+    } catch (err) {
+      toast.error('Gagal memproses data audit');
+    }
+  };
+
+  const formatRupiah = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency', currency: 'IDR', maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const groupedData = useMemo(() => {
+    const groups: Record<string, any> = {};
+    data.forEach(item => {
+      const joId = item.jo_id;
+      if (!groups[joId]) groups[joId] = { jo: item.job_orders, costs: [], jo_id: joId };
+      groups[joId].costs.push(item);
+    });
+
+    return Object.values(groups)
+      .map((group: any) => {
+        const basePrice = Number(group.jo?.base_price || 0);
+        const dealPrice = Number(group.jo?.wo_item?.item_data?.deal_price || 0);
+        const effectiveRevenue = basePrice > 0 ? basePrice : dealPrice;
+        const approvedSurcharges = group.costs.reduce((sum: number, c: any) => 
+          sum + (c.status === 'approved' && c.charge_type === 'surcharge' ? Number(c.amount) : 0), 0
+        );
+        const totalRevenue = effectiveRevenue + approvedSurcharges;
+
+        // [AI] Internal model: COGS = driver share (base_price × %) + extra costs
+        const driverSharePct = Number(group.jo?.driver_share_percentage || 40);
+        const driverShareAmount = effectiveRevenue * (driverSharePct / 100);
+        const approvedExtraCosts = group.costs.reduce((sum: number, c: any) => 
+          sum + ((c.status === 'approved' || c.status === 'rejected_as_cogs') && (c.paid_by_sbu || c.charge_type === 'reimbursement') ? Number(c.amount) : 0), 0
+        );
+        const totalCogs = driverShareAmount + approvedExtraCosts;
+
+        const grossMargin = totalRevenue - totalCogs;
+        const marginPercent = totalRevenue > 0 ? (grossMargin / totalRevenue) * 100 : 0;
+
+        return {
+          ...group,
+          margin: { 
+            revenue: totalRevenue, cogs: totalCogs, absolute: grossMargin, percent: marginPercent,
+            driverSharePct, driverShareAmount, approvedExtraCosts, effectiveRevenue
+          }
+        };
+      })
+      .filter((group: any) => {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = !term || group.jo?.jo_number?.toLowerCase().includes(term) || group.jo?.wo_item?.wo?.customer?.name?.toLowerCase().includes(term);
+        
+        let matchesStatus = false;
+        if (statusFilter === 'all') matchesStatus = true;
+        else if (statusFilter === 'new_request') matchesStatus = group.costs.some((c: any) => c.status === 'need_approval');
+        else if (statusFilter === 'audit_done') matchesStatus = group.costs.every((c: any) => c.status !== 'need_approval');
+
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a: any, b: any) => {
+        const aNeeds = a.costs.some((c: any) => c.status === 'need_approval');
+        const bNeeds = b.costs.some((c: any) => c.status === 'need_approval');
+        if (aNeeds && !bNeeds) return -1;
+        if (!aNeeds && bNeeds) return 1;
+        return new Date(b.jo?.created_at).getTime() - new Date(a.jo?.created_at).getTime();
+      });
+  }, [data, searchTerm, statusFilter]);
+
+  const stats = useMemo(() => {
+    const pending = groupedData.filter(g => g.costs.some((c: any) => c.status === 'need_approval')).length;
+    const totalApproved = data.filter(d => d.status === 'approved').reduce((sum, d) => sum + Number(d.amount), 0);
+    const podReady = groupedData.filter(g => g.jo?.pod_status === 'received_hq').length;
+    return { pending, totalApproved, podReady, total: groupedData.length };
+  }, [groupedData, data]);
+
+  const selectedJo = selectedJoId ? groupedData.find(g => g.jo_id === selectedJoId) : null;
+
+  if (selectedJoId && selectedJo) {
+    return (
+      <div className="min-h-screen bg-indigo-50/50 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Detail Header */}
+        <div className="bg-white border-b border-indigo-100 px-8 py-6 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => setSelectedJoId(null)}
+              className="w-12 h-12 rounded-2xl bg-indigo-50/80 flex items-center justify-center text-indigo-500 hover:bg-slate-200 hover:text-indigo-950 transition-all"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black text-indigo-950 tracking-tighter italic uppercase">{selectedJo.jo?.jo_number}</h1>
+                <Badge className="bg-indigo-50 text-indigo-600 border-none px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                  Audit Hub
+                </Badge>
+              </div>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">Reviewing Additional Charges for Customer Billing</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+             <Button variant="ghost" className="text-indigo-400 hover:text-indigo-950 font-black text-[10px] uppercase tracking-widest">
+                <Download size={16} className="mr-2" /> Export PDF
+             </Button>
+          </div>
+        </div>
+
+        <div className="flex-1 p-8 lg:p-12 overflow-y-auto">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10">
+            {/* Left Col: Customer & JO Info */}
+            <div className="lg:col-span-2 space-y-8">
+               <Card className="rounded-[2.5rem] border-none shadow-xl shadow-slate-200/50 p-10 bg-white overflow-hidden relative">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-50/50 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+                  
+                  <div className="relative">
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 mb-8 italic">
+                      <User size={14} /> Customer Profile
+                    </p>
+                    
+                    <div className="flex items-center justify-between mb-10">
+                       <div>
+                          <h2 className="text-4xl font-black text-indigo-950 italic uppercase tracking-tighter mb-2 leading-none">
+                            {selectedJo.jo?.wo_item?.wo?.customer?.name || '---'}
+                          </h2>
+                          <div className="flex items-center gap-4">
+                            <span className="flex items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                               <MapPin size={12} className="text-indigo-500" /> {selectedJo.jo?.wo_item?.item_data?.origin_name} → {selectedJo.jo?.wo_item?.item_data?.destination_name}
+                            </span>
+                          </div>
+                       </div>
+                       <div className="flex gap-2">
+                          <a 
+                            href={`https://wa.me/${selectedJo.jo?.wo_item?.wo?.customer?.phone?.replace(/\D/g, '')}`}
+                            target="_blank"
+                            className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-all shadow-sm"
+                          >
+                             <MessageSquare size={24} />
+                          </a>
+                          <a 
+                            href={`tel:${selectedJo.jo?.wo_item?.wo?.customer?.phone}`}
+                            className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-all shadow-sm"
+                          >
+                             <Phone size={24} />
+                          </a>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-8 border-t border-indigo-50/30">
+                       <div className="bg-indigo-50/50 rounded-3xl p-6">
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 italic">Driver</p>
+                          <p className="font-black text-indigo-800 uppercase italic truncate">{selectedJo.jo?.md_drivers?.name || '---'}</p>
+                          <p className="text-[10px] font-bold text-indigo-400 mt-1 flex items-center gap-1">
+                            <Phone size={10} className="text-indigo-500" />
+                            {selectedJo.jo?.driver_phone || selectedJo.jo?.md_drivers?.phone || 'No Contact'}
+                          </p>
+                       </div>
+                       <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-100">
+                          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2 italic">Bagi Hasil Driver</p>
+                          <p className="text-2xl font-black text-emerald-700 italic tracking-tighter">{selectedJo.margin.driverSharePct}%</p>
+                          <p className="text-[10px] font-black text-emerald-500 mt-1">{formatRupiah(selectedJo.margin.driverShareAmount)}</p>
+                       </div>
+                       <div className="bg-indigo-50/50 rounded-3xl p-6">
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 italic">Billing Method</p>
+                          <Badge className="bg-indigo-100 text-indigo-700 border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest">
+                            {selectedJo.jo?.wo_item?.wo?.customer?.billing_method || 'CREDIT TERM'}
+                          </Badge>
+                          <p className="text-[10px] font-bold text-indigo-400 mt-2 flex items-center gap-1">
+                            <Truck size={10} className="text-indigo-500" />
+                            {selectedJo.jo?.md_fleets?.plate_number || 'N/A'} — {selectedJo.jo?.md_fleets?.fleet_type?.type_name || 'N/A'}
+                          </p>
+                       </div>
+                    </div>
+                  </div>
+               </Card>
+
+               <div className="space-y-6">
+                  <div className="flex items-center justify-between px-4">
+                    <h3 className="text-sm font-black text-indigo-950 uppercase tracking-tighter italic">Reviewable Items</h3>
+                    <Badge className="bg-indigo-50/80 text-indigo-400 border-none font-black text-[10px]">{selectedJo.costs.length} Items</Badge>
+                  </div>
+
+                  {selectedJo.costs.map((item: any) => (
+                    <Card key={item.id} className="rounded-[2rem] border-none shadow-lg shadow-slate-200/40 p-8 group hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300">
+                       <div className="flex flex-col lg:flex-row items-center gap-8">
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
+                             <div>
+                                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-2 italic">Category / Description</p>
+                                <div className="flex items-center gap-4">
+                                   <div className="w-12 h-12 bg-indigo-50/50 rounded-xl flex items-center justify-center text-indigo-400">
+                                      <Zap size={20} />
+                                   </div>
+                                   <div>
+                                      <p className="font-black text-indigo-900 uppercase italic leading-none">{item.cost_type.replace(/_/g, ' ')}</p>
+                                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-2">{item.name || 'No Description Provided'}</p>
+                                   </div>
+                                </div>
+                             </div>
+                             <div>
+                                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-2 italic">Value (IDR)</p>
+                                <p className="text-2xl font-black text-indigo-950 tracking-tighter italic">{formatRupiah(item.amount)}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Badge className={`border-none font-black text-[8px] uppercase ${item.charge_type === 'surcharge' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {item.charge_type || 'REIMBURSEMENT'}
+                                  </Badge>
+                                </div>
+                             </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 min-w-[320px]">
+                             {item.billing_proof_url ? (
+                               <a href={item.billing_proof_url} target="_blank" className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all">
+                                  <Eye size={22} />
+                               </a>
+                             ) : (
+                               <div className="w-14 h-14 bg-indigo-50/50 text-indigo-200 rounded-2xl flex items-center justify-center">
+                                  <Ban size={22} />
+                               </div>
+                             )}
+
+                             {item.status === 'need_approval' ? (
+                               <>
+                                 <Button 
+                                   onClick={() => handleAction(item.id, 'approved')}
+                                   className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20"
+                                 >
+                                   Approve
+                                 </Button>
+                                 <Button 
+                                   onClick={() => handleAction(item.id, 'rejected')}
+                                   className="w-14 h-14 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-2xl flex items-center justify-center transition-all"
+                                 >
+                                   <X size={24} />
+                                 </Button>
+                               </>
+                             ) : (
+                               <div className={`flex-1 h-14 rounded-2xl flex items-center justify-center gap-3 font-black text-[10px] uppercase tracking-widest ${
+                                 item.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50/80 text-indigo-500'
+                               }`}>
+                                 {item.status === 'approved' ? <CheckCircle size={18} /> : <XCircle size={18} />}
+                                 {item.status.replace(/_/g, ' ')}
+                               </div>
+                             )}
+                          </div>
+                       </div>
+                    </Card>
+                  ))}
+               </div>
+            </div>
+
+            {/* Right Col: Margin & Audit Results */}
+            <div className="space-y-8">
+               <Card className="bg-indigo-950 rounded-[2.5rem] p-10 text-white overflow-hidden relative shadow-2xl">
+                  <div className="absolute bottom-0 right-0 w-40 h-40 bg-blue-500/20 rounded-full -mb-20 -mr-20 blur-3xl"></div>
+                  
+                  <div className="relative space-y-10">
+                     <div>
+                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-8 italic">Profitability Outlook</p>
+                        <div className="flex justify-between items-end mb-4">
+                           <div>
+                              <p className="text-[4rem] font-black italic tracking-tighter leading-none text-white">
+                                 {selectedJo.margin.percent.toFixed(0)}<span className="text-2xl text-blue-400">%</span>
+                              </p>
+                              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-2 italic">Est. Gross Margin</p>
+                           </div>
+                           <Badge className={`border-none font-black text-[9px] px-3 py-1 rounded-full ${
+                              selectedJo.margin.percent >= 20 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                           }`}>
+                              {selectedJo.margin.percent >= 20 ? 'OPTIMAL' : 'LOW MARGIN'}
+                           </Badge>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                           <div 
+                              className={`h-full ${selectedJo.margin.percent >= 20 ? 'bg-emerald-500' : 'bg-rose-500'} transition-all duration-1000`} 
+                              style={{ width: `${Math.min(100, selectedJo.margin.percent)}%` }}
+                           />
+                        </div>
+                     </div>
+
+                     <div className="space-y-5 pt-10 border-t border-white/5">
+                        <div className="flex justify-between items-center">
+                           <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Base Revenue</p>
+                           <p className="font-black italic text-white">{formatRupiah(selectedJo.margin.revenue)}</p>
+                        </div>
+                        <div className="flex justify-between items-center">
+                           <p className="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest">Driver Share ({selectedJo.margin.driverSharePct}%)</p>
+                           <p className="font-black italic text-emerald-400">{formatRupiah(selectedJo.margin.driverShareAmount)}</p>
+                        </div>
+                        {selectedJo.margin.approvedExtraCosts > 0 && (
+                        <div className="flex justify-between items-center">
+                           <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Extra Costs</p>
+                           <p className="font-black italic text-amber-400">{formatRupiah(selectedJo.margin.approvedExtraCosts)}</p>
+                        </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                           <p className="text-[9px] font-black text-rose-400/80 uppercase tracking-widest">Total COGS</p>
+                           <p className="font-black italic text-rose-400">{formatRupiah(selectedJo.margin.cogs)}</p>
+                        </div>
+                        <div className="flex justify-between items-center pt-4 border-t border-white/10">
+                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest italic">Net Margin</p>
+                           <p className="text-2xl font-black italic text-emerald-400 tracking-tighter">{formatRupiah(selectedJo.margin.absolute)}</p>
+                        </div>
+                     </div>
+                  </div>
+               </Card>
+
+               <Card className="rounded-[2.5rem] border-none shadow-xl shadow-slate-200/50 p-10 bg-white space-y-8">
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6 italic">Audit Checklist</p>
+                    <div className="space-y-4">
+                       <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedJo.jo?.pod_status === 'received_hq' ? 'bg-emerald-50 text-emerald-500' : 'bg-indigo-50/50 text-indigo-200'}`}>
+                             <FileCheck size={18} />
+                          </div>
+                          <div>
+                             <p className="text-[10px] font-black text-indigo-950 uppercase">POD Verification</p>
+                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
+                               {selectedJo.jo?.pod_status === 'received_hq' ? 'Complete' : 'Pending Physical Document'}
+                             </p>
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedJo.costs.every((c: any) => c.status !== 'need_approval') ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500 animate-pulse'}`}>
+                             <ShieldCheck size={18} />
+                          </div>
+                          <div>
+                             <p className="text-[10px] font-black text-indigo-950 uppercase">Financial Clearance</p>
+                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
+                               {selectedJo.costs.every((c: any) => c.status !== 'need_approval') ? 'All Costs Processed' : 'Action Required'}
+                             </p>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+
+                  <Button 
+                    disabled={selectedJo.costs.some((c: any) => c.status === 'need_approval')}
+                    onClick={async () => {
+                       try {
+                          const { error } = await supabase.from('job_orders').update({ status: 'ready_for_billing' }).eq('id', selectedJoId);
+                          if (error) throw error;
+                          toast.success('Audit Selesai. Job Order siap untuk Invoicing.');
+                          setSelectedJoId(null); fetchData();
+                       } catch (err) { toast.error('Gagal memperbarui status'); }
+                    }}
+                    className="w-full h-20 bg-indigo-950 text-white hover:bg-indigo-900 rounded-3xl font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-900/20 disabled:opacity-20 transition-all flex items-center justify-center gap-4"
+                  >
+                    FINALIZE AUDIT <ArrowRight size={20} />
+                  </Button>
+               </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-indigo-50/50 p-6 lg:p-12">
+      <div className="max-w-7xl mx-auto space-y-12">
+        {/* Stats Section */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+           <Card className="rounded-[2rem] border-none shadow-lg shadow-slate-200/40 p-8 bg-white group hover:scale-[1.02] transition-all">
+              <div className="flex items-center justify-between mb-6">
+                 <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform">
+                    <Clock size={24} />
+                 </div>
+                 <Badge className="bg-amber-50 text-amber-600 border-none">Active</Badge>
+              </div>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic mb-1">Pending Audit</p>
+              <h3 className="text-4xl font-black text-indigo-950 italic tracking-tighter">{stats.pending}</h3>
+           </Card>
+           <Card className="rounded-[2rem] border-none shadow-lg shadow-slate-200/40 p-8 bg-white group hover:scale-[1.02] transition-all">
+              <div className="flex items-center justify-between mb-6">
+                 <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform">
+                    <TrendingUp size={24} />
+                 </div>
+                 <Badge className="bg-indigo-50 text-indigo-600 border-none">Total</Badge>
+              </div>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic mb-1">Approved Extra</p>
+              <h3 className="text-3xl font-black text-indigo-950 italic tracking-tighter truncate">{formatRupiah(stats.totalApproved)}</h3>
+           </Card>
+           <Card className="rounded-[2rem] border-none shadow-lg shadow-slate-200/40 p-8 bg-white group hover:scale-[1.02] transition-all">
+              <div className="flex items-center justify-between mb-6">
+                 <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform">
+                    <FileCheck size={24} />
+                 </div>
+                 <Badge className="bg-emerald-50 text-emerald-600 border-none">Doc Health</Badge>
+              </div>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic mb-1">POD Received HQ</p>
+              <h3 className="text-4xl font-black text-indigo-950 italic tracking-tighter">{stats.podReady} <span className="text-sm text-indigo-300">/ {stats.total}</span></h3>
+           </Card>
+           <Card className="rounded-[2rem] border-none shadow-lg shadow-indigo-200/30 p-8 bg-indigo-950 text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 blur-2xl rounded-full -mr-12 -mt-12 group-hover:bg-blue-500/40 transition-all"></div>
+              <div className="relative">
+                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 italic">
+                    <ShieldCheck size={14} /> Audit Command
+                 </p>
+                 <p className="text-[11px] font-black text-indigo-400 uppercase leading-relaxed mb-6">Verify all mission charges to clear for penagihan.</p>
+                 <Button className="w-full bg-white text-indigo-950 hover:bg-indigo-50/50 font-black text-[10px] uppercase tracking-widest h-12 rounded-xl">View Summary</Button>
+              </div>
+           </Card>
+        </div>
+
+        {/* Header & Filter */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-10">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-indigo-950 rounded-2xl flex items-center justify-center shadow-2xl -rotate-3">
+              <CreditCard size={32} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-black text-indigo-950 italic uppercase tracking-tighter leading-none mb-2">FINANCE AUDIT</h1>
+              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.4em] flex items-center gap-2 italic">
+                <Filter size={14} /> Verification & Clearance Hub
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center gap-4">
+             <div className="relative group min-w-[300px]">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-indigo-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search by JO# or Customer..."
+                  className="h-16 w-full bg-white rounded-3xl pl-16 pr-8 text-[11px] font-black uppercase tracking-widest shadow-lg shadow-slate-200/50 border-none focus:ring-4 focus:ring-indigo-500/5 transition-all outline-none"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+             <div className="flex items-center gap-2 bg-white p-2 rounded-[2rem] shadow-lg shadow-slate-200/50 border border-indigo-50/30">
+                {['new_request', 'audit_done', 'all'].map(tab => (
+                  <button 
+                    key={tab}
+                    onClick={() => setStatusFilter(tab)}
+                    className={`px-8 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      statusFilter === tab ? 'bg-indigo-950 text-white shadow-lg' : 'text-indigo-400 hover:text-indigo-700'
+                    }`}
+                  >
+                    {tab.replace(/_/g, ' ')}
+                  </button>
+                ))}
+             </div>
+          </div>
+        </div>
+
+        {/* List Section */}
+        <div className="space-y-8">
+           {loading ? (
+             <div className="h-[400px] flex flex-col items-center justify-center gap-4">
+                <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic animate-pulse">Fetching Mission Data...</p>
+             </div>
+           ) : groupedData.length === 0 ? (
+             <Card className="h-[400px] rounded-[3rem] border-2 border-dashed border-indigo-100 bg-white flex flex-col items-center justify-center group overflow-hidden relative">
+                <div className="absolute inset-0 bg-indigo-50/50/50 group-hover:scale-105 transition-transform duration-1000"></div>
+                <ShieldCheck size={64} className="text-indigo-200 mb-6 relative" />
+                <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest relative">Clearance Status: 100% Clean</p>
+             </Card>
+           ) : (
+             <div className="grid grid-cols-1 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                {groupedData.map((group: any) => (
+                  <Card 
+                    key={group.jo_id} 
+                    onClick={() => setSelectedJoId(group.jo_id)}
+                    className="rounded-[2.5rem] border-none shadow-xl shadow-slate-200/60 bg-white hover:scale-[1.01] hover:shadow-indigo-500/10 transition-all cursor-pointer group overflow-hidden"
+                  >
+                    <div className="flex flex-col lg:flex-row min-h-[220px]">
+                       <div className="flex-1 p-10 flex items-center gap-10">
+                          <div className={`w-20 h-20 rounded-[1.5rem] flex items-center justify-center group-hover:rotate-6 transition-transform ${
+                             group.costs.some((c: any) => c.status === 'need_approval') ? 'bg-amber-50 text-amber-500' : 'bg-emerald-50 text-emerald-500'
+                          }`}>
+                             {group.costs.some((c: any) => c.status === 'need_approval') ? <Clock size={40} /> : <CheckCircle2 size={40} />}
+                          </div>
+                          
+                          <div className="flex-1">
+                             <div className="flex items-center gap-4 mb-4">
+                                <h2 className="text-3xl font-black text-indigo-950 italic tracking-tighter uppercase leading-none">{group.jo?.jo_number}</h2>
+                                {group.costs.some((c: any) => c.status === 'need_approval') ? (
+                                   <Badge className="bg-amber-100 text-amber-600 border-none font-black text-[9px] px-3 py-1 animate-pulse">PENDING REVIEW ({group.costs.filter((c: any) => c.status === 'need_approval').length})</Badge>
+                                ) : (
+                                   <Badge className="bg-emerald-100 text-emerald-600 border-none font-black text-[9px] px-3 py-1">CLEARED</Badge>
+                                )}
+                             </div>
+                             
+                             <div className="flex flex-wrap items-center gap-8">
+                                <div>
+                                   <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest italic mb-2">Customer / Client</p>
+                                   <p className="text-lg font-black text-indigo-800 italic uppercase leading-none">{group.jo?.wo_item?.wo?.customer?.name || '---'}</p>
+                                </div>
+                                <div className="h-10 w-[1px] bg-indigo-50/80 hidden md:block"></div>
+                                <div>
+                                   <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest italic mb-2">Operational Route</p>
+                                   <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic flex items-center gap-2">
+                                      {group.jo?.wo_item?.item_data?.origin_name} <ArrowRight size={10} /> {group.jo?.wo_item?.item_data?.destination_name}
+                                   </p>
+                                </div>
+                                <div className="h-10 w-[1px] bg-indigo-50/80 hidden md:block"></div>
+                                <div>
+                                   <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest italic mb-2">Est. Margin</p>
+                                   <p className={`text-xl font-black italic ${group.margin.percent >= 20 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {group.margin.percent.toFixed(1)}%
+                                   </p>
+                                </div>
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="w-full lg:w-96 bg-indigo-50/50/50 p-10 flex flex-col justify-center gap-6 group-hover:bg-indigo-50/30 transition-colors border-l border-indigo-50/30">
+                          <div className="flex items-center justify-between px-2">
+                             <div>
+                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest italic mb-1">Parent Work Order</p>
+                                <p className="text-sm font-black text-indigo-950 italic uppercase">{group.jo?.wo_item?.wo?.wo_number || '---'}</p>
+                             </div>
+                             <div className="text-right">
+                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest italic mb-1">Execution Date</p>
+                                <p className="text-sm font-black text-indigo-950 italic">{group.jo?.created_at ? new Date(group.jo.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '---'}</p>
+                             </div>
+                          </div>
+                          <Button className="h-16 w-full bg-indigo-950 text-white hover:bg-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 transition-all">
+                             Audit Mission <ChevronRight size={18} />
+                          </Button>
+                       </div>
+                    </div>
+                  </Card>
+                ))}
+             </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CostAuditPage;

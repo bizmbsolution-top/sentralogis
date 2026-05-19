@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Search, MapPin, Loader2, Map as MapIcon, Filter, Eye } from 'lucide-react';
+import { Search, MapPin, Loader2, Map as MapIcon, Filter, Eye, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
 interface Location {

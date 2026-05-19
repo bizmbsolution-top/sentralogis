@@ -1,5 +1,7 @@
 export const formatThousand = (val: string | number) => {
-    if (!val) return "";
+    if (val === undefined || val === null || val === "") return "";
+    const numStr = val.toString();
+    if (numStr === "0") return "0";
     const num = val.toString().replace(/\D/g, "");
     return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };

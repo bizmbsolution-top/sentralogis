@@ -369,7 +369,7 @@ export default function MasterCOAPage() {
                </div>
 
                <div className="flex gap-4 pt-4">
-                  <Button type="button" variant="outline" className="flex-1 !py-7 !rounded-3xl" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="secondary" className="flex-1 !py-7 !rounded-3xl" onClick={() => setIsModalOpen(false)}>Cancel</Button>
                   <Button 
                     type="submit" 
                     className="flex-[2] !py-7 !bg-slate-900 !rounded-3xl shadow-2xl shadow-slate-900/20" 

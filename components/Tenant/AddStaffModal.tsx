@@ -252,7 +252,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus }: any)
            </div>
 
            <div className="flex justify-end gap-3 pt-6">
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+               <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
               <Button 
                 type="submit" 
                 className="!bg-slate-900 !px-10" 

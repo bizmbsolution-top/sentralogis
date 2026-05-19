@@ -183,7 +183,7 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
               >
                 <option value="available">Available</option>
                 <option value="on_duty">On Duty</option>
-                <option value="off_duty">Off Duty</option>
+                <option value="unavailable">Unavailable (Sakit/Cuti)</option>
                 <option value="suspended">Suspended</option>
               </select>
             </div>

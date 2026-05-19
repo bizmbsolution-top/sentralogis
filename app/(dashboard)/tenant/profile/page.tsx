@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   User, Mail, Phone, Lock, 
   Shield, Key, Save, RefreshCw,
-  Building
+  Building, Image, UploadCloud
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -20,6 +20,52 @@ export default function TenantProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [passLoading, setPassLoading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState('');
+  const [tenantName, setTenantName] = useState('Assigned Cluster');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  useEffect(() => {
+    if (profile?.tenant_id) {
+      supabase.from('tenants').select('logo_url, name').eq('id', profile.tenant_id).single()
+        .then(({data}) => {
+          if (data?.logo_url) setLogoUrl(data.logo_url);
+          if (data?.name) setTenantName(data.name);
+        });
+    }
+  }, [profile?.tenant_id]);
+
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const file = e.target.files?.[0];
+      if (!file || !profile?.tenant_id) return;
+      setUploadingLogo(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('tenantId', profile.tenant_id);
+
+      const response = await fetch('/api/tenant/upload-logo', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload logo');
+      }
+
+      setLogoUrl(data.url);
+      toast.success('Tenant Logo updated successfully!');
+      
+      // Force reload page to update the sidebar instantly
+      window.location.reload();
+    } catch (err: any) {
+      toast.error('Upload failed: ' + err.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleUpdateProfile = async () => {
     setLoading(true);
@@ -72,11 +118,22 @@ export default function TenantProfilePage() {
         <div className="md:col-span-2">
           <Card>
             <CardContent className="space-y-6">
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-4">
-                 <Building className="w-5 h-5 text-blue-600" />
-                 <div>
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Current Active Node</p>
-                    <p className="text-sm font-bold text-slate-900">{profile?.company_name || 'Assigned Cluster'}</p>
+              <div className="p-6 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center justify-between gap-6">
+                 <div className="flex items-center gap-4">
+                   <div className="w-16 h-16 rounded-2xl bg-white border border-blue-100 flex items-center justify-center overflow-hidden shadow-sm">
+                     {logoUrl ? <img src={logoUrl} alt="Tenant Logo" className="w-full h-full object-cover" /> : <Building className="w-8 h-8 text-blue-300" />}
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Current Active Node</p>
+                      <p className="text-xl font-black text-slate-900 tracking-tighter italic uppercase">{tenantName}</p>
+                   </div>
+                 </div>
+                 
+                 <div className="relative">
+                   <input type="file" accept="image/*" onChange={handleUploadLogo} disabled={uploadingLogo} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
+                   <Button variant="primary" loading={uploadingLogo} icon={<UploadCloud className="w-4 h-4" />}>
+                     {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                   </Button>
                  </div>
               </div>
               <Input 

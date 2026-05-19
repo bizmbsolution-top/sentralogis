@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { Menu, LogOut, User as UserIcon, ChevronDown, Bell, Clock, ArrowRight, XCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '@/lib/supabase/client'
 
 interface TopNavbarProps {
   onMenuClick: () => void
@@ -64,7 +64,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         .from('wo_items')
         .select('id, item_code, status, item_data, work_orders!inner(wo_number)')
         .eq('tenant_id', profile.tenant_id)
-        .in('status', ['handover_rejected', 'pending'])
+        .in('status', ['handover_rejected', 'pending', 'need_assignment'])
         .order('created_at', { ascending: false });
 
       if (!error && data) {
@@ -80,7 +80,47 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
       }
     }
 
-    setNotifications([...(systemNotifs || []), ...legacyNotifs]);
+    // 3. Fetch Completed Job Order Notifications
+    let completedJoNotifs: any[] = [];
+    
+    // Fetch acks for this user to hide them
+    const { data: acks } = await supabase
+      .from('notifications')
+      .select('metadata')
+      .eq('user_id', profile.id)
+      .eq('title', 'MISSION_ACK');
+    
+    const ackedJoIds = (acks || []).map(a => a.metadata?.jo_id).filter(Boolean);
+
+    let query = supabase
+      .from('job_orders')
+      .select('id, jo_number, status, created_at')
+      .eq('tenant_id', profile.tenant_id)
+      .eq('status', 'completed');
+    
+    if (ackedJoIds.length > 0) {
+      query = query.not('id', 'in', `(${ackedJoIds.join(',')})`);
+    }
+
+    const { data: completedJos, error: joError } = await query
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!joError && completedJos) {
+      completedJoNotifs = completedJos
+        .map(jo => ({
+          id: jo.id,
+          title: 'Mission Completed',
+          message: `${jo.jo_number} is ready for docs & audit`,
+          link: roleUpper.includes('HQ') 
+            ? `/hq/job-orders?q=${jo.jo_number}` 
+            : `/sbu/trucking/completed?jo=${jo.jo_number}`,
+          is_jo_completed: true,
+          created_at: jo.created_at
+        }));
+    }
+
+    setNotifications([...(systemNotifs || []), ...legacyNotifs, ...completedJoNotifs]);
     setLoading(false)
   }, [profile?.tenant_id, profile?.role])
 
@@ -118,6 +158,64 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
     }
   }, [profile?.tenant_id, fetchNotifications])
 
+  const handleMarkAllAsRead = async () => {
+    if (!profile?.id) return;
+    
+    // 1. Optimistic Update
+    setNotifications([]);
+    
+    try {
+      // 2. Mark standard notifications as read
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', profile.id)
+        .eq('is_read', false);
+
+      // 3. Handle Legacy WO Notifications (marking as read for this user)
+      const { data: legacyItems } = await supabase
+        .from('wo_items')
+        .select('id, item_data')
+        .eq('tenant_id', profile.tenant_id);
+      
+      if (legacyItems) {
+        for (const item of legacyItems) {
+          const readBy = item.item_data?.read_by || [];
+          if (!readBy.includes(profile.id)) {
+             await supabase.from('wo_items').update({
+               item_data: {
+                 ...item.item_data,
+                 read_by: [...readBy, profile.id]
+               }
+             }).eq('id', item.id);
+          }
+        }
+      }
+
+      // 4. Handle Completed JO Notifications (inserting ACKs)
+      // Note: This could be slow if there are many, but we usually limit fetch to 10
+      for (const n of notifications) {
+        if (n.is_jo_completed) {
+          await supabase.from('notifications').insert({
+            tenant_id: profile.tenant_id,
+            user_id: profile.id,
+            title: 'MISSION_ACK',
+            message: `ACK for JO ${n.id}`,
+            metadata: { jo_id: n.id },
+            is_read: true,
+            role: profile.role
+          });
+        }
+      }
+
+      toast.success('All notifications marked as read');
+    } catch (err) {
+      console.error('[TopNavbar] Failed to mark all as read:', err);
+      toast.error('Failed to clear notifications');
+      fetchNotifications(); // Rollback
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await logout()
@@ -136,7 +234,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
     : 'U'
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-200">
+    <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
       <div className="flex items-center justify-between px-4 md:px-6 py-3">
         <div className="flex items-center gap-4">
           <button
@@ -146,11 +244,14 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
             <Menu size={20} />
           </button>
           
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs font-medium">
-              System Online
-            </span>
+          <div className="hidden sm:flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest">
+                System Online
+              </span>
+            </div>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Powered by Sentralogis</span>
           </div>
         </div>
 
@@ -163,10 +264,10 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
               <Bell size={20} className="group-hover:rotate-12 transition-transform" />
               {notifications.length > 0 && (
                 <>
-                  <span className="absolute top-1.5 right-1.5 h-4 min-w-[1rem] bg-rose-500 border-2 border-white rounded-full text-[8px] font-black text-white flex items-center justify-center px-0.5">
+                  <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-rose-600 border-2 border-white rounded-full text-[9px] font-black text-white flex items-center justify-center px-1 shadow-sm">
                     {notifications.length}
                   </span>
-                  <span className="absolute top-1.5 right-1.5 h-4 min-w-[1rem] bg-rose-500 rounded-full animate-ping opacity-20" />
+                  <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-rose-600 rounded-full animate-ping opacity-20" />
                 </>
               )}
             </button>
@@ -177,12 +278,25 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                   className="fixed inset-0 z-10" 
                   onClick={() => setShowNotifications(false)}
                 />
-                <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-20 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-full max-w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-20 overflow-hidden">
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                    <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
-                      {profile?.role?.toUpperCase().includes('HQ') ? 'Incoming Handovers' : 'Operational Alerts'}
-                    </h3>
-                    <span className="text-[9px] font-black bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">{notifications.length} NEW</span>
+                    <div>
+                      <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">
+                        {profile?.role?.toUpperCase().includes('HQ') ? 'Incoming Handovers' : 'Operational Alerts'}
+                      </h3>
+                      <span className="text-[9px] font-black text-rose-600 mt-1 block uppercase tracking-tighter">{notifications.length} NEW NOTIFICATIONS</span>
+                    </div>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAllAsRead();
+                        }}
+                        className="text-[9px] font-black bg-slate-900 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-all shadow-sm flex items-center gap-2"
+                      >
+                        <XCircle size={12} /> MARK ALL AS READ
+                      </button>
+                    )}
                   </div>
                   
                   <div className="max-h-[400px] overflow-y-auto">
@@ -203,39 +317,59 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                           <div 
                             key={n.id} 
                             onClick={async () => {
+                              const notifId = n.id;
+                              const targetLink = n.link || n.metadata?.link;
+
+                              // 1. Optimistic UI Update
+                              setNotifications(prev => prev.filter(item => item.id !== notifId));
                               setShowNotifications(false);
                               
-                              if (n.is_legacy) {
-                                // Legacy logic for wo_items
-                                const { data: currentItem } = await supabase.from('wo_items').select('item_data').eq('id', n.id).single();
-                                const currentReadBy = currentItem?.item_data?.read_by || [];
-                                if (!currentReadBy.includes(profile?.id)) {
-                                  await supabase.from('wo_items').update({
-                                    item_data: {
-                                      ...currentItem?.item_data,
-                                      read_by: [...currentReadBy, profile?.id]
-                                    }
-                                  }).eq('id', n.id);
+                              try {
+                                // 2. Handle different notification types for marking as read
+                                if (n.is_legacy) {
+                                  const { data: currentItem } = await supabase.from('wo_items').select('item_data').eq('id', notifId).single();
+                                  const currentReadBy = currentItem?.item_data?.read_by || [];
+                                  if (!currentReadBy.includes(profile?.id)) {
+                                    await supabase.from('wo_items').update({
+                                      item_data: {
+                                        ...currentItem?.item_data,
+                                        read_by: [...currentReadBy, profile?.id]
+                                      }
+                                    }).eq('id', notifId);
+                                  }
+                                } else if (n.is_jo_completed) {
+                                  // For JO completed, we insert an 'ACK' notification so it doesn't show up again
+                                  await supabase.from('notifications').insert({
+                                    tenant_id: profile?.tenant_id,
+                                    user_id: profile?.id,
+                                    title: 'MISSION_ACK',
+                                    message: `ACK for JO ${notifId}`,
+                                    metadata: { jo_id: notifId },
+                                    is_read: true,
+                                    role: profile?.role
+                                  });
+                                } else {
+                                  // Standard notification table update
+                                  await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
                                 }
-                              } else {
-                                // New system notifications
-                                await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
+                              } catch (err) {
+                                console.error('[TopNavbar] Failed to mark as read:', err);
                               }
 
-                              if (n.link) {
-                                router.push(n.link);
+                              // 3. Navigation
+                              if (targetLink) {
+                                router.push(targetLink);
                               }
-                              fetchNotifications();
                             }}
-                            className="p-4 hover:bg-slate-50 transition-colors group/item cursor-pointer"
+                            className="p-4 hover:bg-slate-50 transition-colors group/item cursor-pointer border-l-4 border-transparent hover:border-slate-900"
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{n.title}</span>
-                                  {!n.is_legacy && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                                 </div>
-                                <p className="text-[11px] font-bold text-slate-600 line-clamp-2">
+                                <p className="text-[11px] font-bold text-slate-600 line-clamp-2 italic">
                                   {n.message}
                                 </p>
                                 <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-tight pt-1 text-slate-400">
@@ -305,7 +439,12 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                 <button
                   onClick={() => {
                     setDropdownOpen(false)
-                    router.push('/profile')
+                    const role = profile?.role || ''
+                    let profileRoute = '/tenant/profile'
+                    if (role === 'owner_sentralogis') profileRoute = '/owner/profile'
+                    else if (role.startsWith('hq_')) profileRoute = '/tenant/profile'
+                    else if (role.startsWith('sbu_')) profileRoute = '/tenant/profile'
+                    router.push(profileRoute)
                   }}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
                 >

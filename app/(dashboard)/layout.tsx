@@ -16,11 +16,19 @@ export default function DashboardLayout({
   const { user, loading, isAuthenticated } = useAuth()
   const router = useRouter()
 
-  // [AI] Removed the redundant router.refresh() on mount/auth confirmation to prevent full-screen loading spinner flashes.
-  // The client-side useAuth context manages state and triggers component re-renders seamlessly.
+  // [AI] Auth guard with timeout fallback - show content after 5s even if profile still loading
+  const [showTimeout, setShowTimeout] = useState(false);
+  
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => setShowTimeout(true), 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowTimeout(false);
+    }
+  }, [loading]);
 
-  // [AI] Auth guard: redirect to /login if not authenticated after loading completes
-  if (loading) {
+  if (loading && !showTimeout) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
@@ -31,19 +39,12 @@ export default function DashboardLayout({
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !loading) {
     // [AI] Use window.location.replace for a clean redirect to avoid stale state
     if (typeof window !== 'undefined') {
       window.location.replace('/login')
     }
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
-          Redirecting to Login...
-        </p>
-      </div>
-    )
+    return null
   }
 
   return (

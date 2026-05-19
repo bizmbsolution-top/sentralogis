@@ -132,7 +132,7 @@ export default function ClientControlCenter() {
       });
       fetchClients();
     } catch (error: unknown) {
-      toast.error(error.message);
+      toast.error((error as Error).message);
     } finally {
       setUpdating(false);
     }
@@ -146,7 +146,7 @@ export default function ClientControlCenter() {
       toast.success("Client berhasil dihapus.");
       fetchClients();
     } catch (error: unknown) {
-      toast.error("Gagal hapus: " + error.message);
+      toast.error("Gagal hapus: " + (error as Error).message);
     }
   };
 
@@ -169,7 +169,7 @@ export default function ClientControlCenter() {
       setTopUpAmount(0);
       fetchClients();
     } catch (error: unknown) {
-      toast.error("Gagal top-up: " + error.message);
+      toast.error("Gagal top-up: " + (error as Error).message);
     } finally {
       setUpdating(false);
     }

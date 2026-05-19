@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { supabase } from '@/lib/supabaseClient';
+import { Building } from 'lucide-react';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 
 interface MenuItem {
@@ -37,22 +39,46 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       submenu: [
         { label: 'Contacts', icon: '📇', href: '/tenant/master/contacts' },
         { label: 'Locations', icon: '📍', href: '/tenant/master/locations' },
+      ]
+    },
+    {
+      label: 'SBU Trucking', icon: '🚛', href: '#',
+      submenu: [
+        { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
         { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
         { label: 'Fleets', icon: '🚚', href: '/tenant/master/fleets' },
         { label: 'Drivers', icon: '👤', href: '/tenant/master/drivers' },
       ]
     },
-    { label: 'Trucking', icon: '🚛', href: '/tenant/trucking' },
     { label: 'Token Balance', icon: '💰', href: '/tenant/token' },
-    { label: 'Business Intelligence', icon: '📊', href: '/tenant/bi' },
-    { label: 'Master COA', icon: '📖', href: '/hq/finance/coa' },
+    { label: 'Business Intelligence', icon: '📊', href: '/hq/business' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+        { label: 'Master COA', icon: '📖', href: '/hq/finance/coa' },
+      ]
+    },
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 
-  // Customer Service HQ
+  // HQ Staff (CS - Ops - Finances)
   hq_cs: [
-    { label: 'Work Orders', icon: '📝', href: '/hq/work-orders' },
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
+    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
     {
       label: 'Master Data', icon: '🗂️', href: '#',
       submenu: [
@@ -64,11 +90,20 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
   ],
-
-  // Operations HQ
   hq_ops: [
-    { label: 'Ops Dashboard', icon: '📊', href: '/hq/ops-dashboard' },
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
+    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
     {
       label: 'Master Data', icon: '🗂️', href: '#',
       submenu: [
@@ -80,14 +115,20 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
   ],
-
-  // Finance HQ
   hq_finance: [
-    { label: 'Token Management', icon: '💰', href: '/hq/token' },
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
+    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Cost Audit & Billing', icon: '🧾', href: '/hq/finance/cost-audit' },
-    { label: 'Internal Ledger', icon: '📖', href: '/hq/finance/ledger' },
-    { label: 'Master COA', icon: '⚙️', href: '/hq/finance/coa' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
     {
       label: 'Master Data', icon: '🗂️', href: '#',
       submenu: [
@@ -100,58 +141,125 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
   ],
 
-  // Direktur Operasional
+  // ============================================
+  // EXECUTIVE COMMAND SUITE (Shared by all Directors)
+  // ============================================
   hq_director_ops: [
-    { label: 'Ops Dashboard', icon: '📊', href: '/director/ops' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'SBU Performance', icon: '📈', href: '/director/sbu-performance' },
-    { label: 'Alerts', icon: '⚠️', href: '/director/alerts' },
+    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
-
-  // Direktur Keuangan
   hq_director_fin: [
-    { label: 'Finance Dashboard', icon: '💰', href: '/director/finance' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Cost Audit & Billing', icon: '🧾', href: '/hq/finance/cost-audit' },
-    { label: 'Internal Ledger', icon: '📖', href: '/hq/finance/ledger' },
-    { label: 'Master COA', icon: '⚙️', href: '/hq/finance/coa' },
-    { label: 'P&L Report', icon: '📊', href: '/director/pl' },
-    { label: 'Token Analytics', icon: '💳', href: '/director/token-analytics' },
+    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
-
-  // Direktur CS
   hq_director_cs: [
-    { label: 'CS Dashboard', icon: '📞', href: '/director/cs' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Customer Satisfaction', icon: '👥', href: '/director/cs-satisfaction' },
-    { label: 'CS Performance', icon: '📈', href: '/director/cs-performance' },
+    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
+  ],
+  hq_director_comm: [
+    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
+  ],
+  hq_director_bizdev: [
+    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+    {
+      label: 'Finance Matrix', icon: '💰', href: '#',
+      submenu: [
+        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
 
-  // SBU Manager Trucking
+  // SBU Roles (Manager, Ops, Admin, Finances)
   sbu_manager_tr: [
-    { label: 'Dashboard', icon: '🚛', href: '/sbu/trucking' },
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
-    { label: 'Team Management', icon: '👥', href: '/sbu/trucking/team' },
-    { label: 'Fleet Management', icon: '🚚', href: '/sbu/trucking/fleet' },
-    { label: 'SBU Report', icon: '📈', href: '/sbu/trucking/report' },
+    { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
   ],
-
-  // SBU Operations Trucking
   sbu_ops_tr: [
-    { label: 'Work Orders', icon: '📋', href: '/sbu/trucking/work-orders' },
-    { label: 'Assignments', icon: '🚚', href: '/sbu/trucking/assignments' },
-    { label: 'Tracking', icon: '📍', href: '/sbu/trucking/tracking' },
-    { label: 'Completed', icon: '✅', href: '/sbu/trucking/completed' },
-  ],
-
-  // SBU Finance Trucking
-  sbu_fin_tr: [
-    { label: 'Finance Dashboard', icon: '📊', href: '/sbu/trucking/finances' },
-    { label: 'Token Usage', icon: '💳', href: '/sbu/trucking/token' },
-    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/cost-management' },
-    { label: 'Trip Charges', icon: '🧾', href: '/sbu/trucking/add-cost' },
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
-    { label: 'Documents', icon: '📄', href: '/sbu/trucking/documents' },
+    { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+  ],
+  sbu_admin_tr: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
+    { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
+    { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+  ],
+  sbu_fin_tr: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
+    { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
+    { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+  ],
+  sbu_finance_tr: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
+    { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
+    { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
+    { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
   ],
 
   // SBU Finance Warehouse
@@ -178,15 +286,44 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   // Default (tenant_admin legacy)
   tenant_admin: [
     { label: 'Dashboard', icon: '🏠', href: '/tenant' },
-    { label: 'Token & Top-up', icon: '💰', href: '/tenant/topup' },
-    { label: 'Profile', icon: '👤', href: '/tenant/profile' },
+    { label: 'SBU Configuration', icon: '🏢', href: '/tenant/sbu' },
+    { label: 'Staff Management', icon: '👥', href: '/tenant/staff' },
+    {
+      label: 'Master Data', icon: '🗂️', href: '#',
+      submenu: [
+        { label: 'Contacts', icon: '📇', href: '/tenant/master/contacts' },
+        { label: 'Locations', icon: '📍', href: '/tenant/master/locations' },
+      ]
+    },
+    {
+      label: 'SBU Trucking', icon: '🚛', href: '#',
+      submenu: [
+        { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
+        { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
+        { label: 'Fleets', icon: '🚚', href: '/tenant/master/fleets' },
+        { label: 'Drivers', icon: '👤', href: '/tenant/master/drivers' },
+      ]
+    },
+    { label: 'Token Balance', icon: '💰', href: '/tenant/token' },
+    { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 };
 
-export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: boolean; onClose: () => void; onLinkClick?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, loading } = useAuth();
   const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Master Data']);
+  const [tenantLogo, setTenantLogo] = useState('');
+
+  useEffect(() => {
+    if (profile?.tenant_id) {
+      supabase.from('tenants').select('logo_url').eq('id', profile.tenant_id).single()
+        .then(({data, error}) => {
+           if (!error && data?.logo_url) setTenantLogo(data.logo_url);
+        });
+    }
+  }, [profile?.tenant_id]);
 
   const role = profile?.role || 'tenant_admin';
   const menuItems = MENU_CONFIG[role] || MENU_CONFIG.tenant_admin;
@@ -225,9 +362,19 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
         lg:translate-x-0 lg:static lg:inset-0 flex flex-col
       `}>
         <div className="flex items-center justify-between p-6 border-b border-slate-50">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            SENTRALOGIS
-          </h1>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm shrink-0">
+              {tenantLogo ? <img src={tenantLogo} alt="Logo" className="w-full h-full object-cover" /> : <Building className="w-5 h-5 text-slate-400" />}
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-sm font-black tracking-tighter text-slate-900 uppercase line-clamp-1 leading-tight">
+                {profile?.full_name || 'Admin'}
+              </h1>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                {profile?.tenants?.name || 'Tenant'}
+              </p>
+            </div>
+          </div>
           <button 
             onClick={onClose}
             className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg lg:hidden"
@@ -261,7 +408,11 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
                 ) : (
                   <Link
                     href={item.href}
-                    onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                      // [AI] Removed router.refresh() to allow smooth Next.js client-side transition
+                      if (onLinkClick) onLinkClick();
+                    }}
                     className={`
                       flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all
                       ${isActive 
@@ -283,7 +434,11 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
                         <Link
                           key={sub.label}
                           href={sub.href}
-                          onClick={() => { if (window.innerWidth < 1024) onClose(); }}
+                          onClick={() => {
+                            if (window.innerWidth < 1024) onClose();
+                            // [AI] Removed router.refresh() to allow smooth Next.js client-side transition
+                            if (onLinkClick) onLinkClick();
+                          }}
                           className={`
                             flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all
                             ${isSubActive 
