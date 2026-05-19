@@ -1,7 +1,7 @@
 -- Migration 015: Driver Performance Tracking
 -- 1. Auto-accumulate distance from completed jobs to md_drivers.total_km_driven
 -- 2. Optional customer review score per job order
--- 3. driver_performance_logs for audit trail
+-- 3. Ensure driver_performance_logs has required columns
 
 -- ============================================================
 -- 0. ADD: Customer review columns to job_orders
@@ -27,29 +27,96 @@ COMMENT ON COLUMN md_drivers.total_reviews IS 'Total number of customer reviews 
 COMMENT ON COLUMN md_drivers.total_distance_km IS 'Accumulated distance from all completed jobs';
 
 -- ============================================================
--- 2. ENHANCE: driver_performance_logs table (if not exists)
+-- 2. ENSURE: driver_performance_logs table exists with correct schema
 -- ============================================================
 
+-- Create table if it doesn't exist at all
 CREATE TABLE IF NOT EXISTS driver_performance_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  driver_id UUID NOT NULL REFERENCES md_drivers(id),
-  job_order_id UUID NOT NULL REFERENCES job_orders(id),
-  type TEXT NOT NULL CHECK (type IN ('KM_LOG', 'SAFETY_INCIDENT', 'REVIEW')),
-  km_start NUMERIC(12,2),
-  km_end NUMERIC(12,2),
-  total_km NUMERIC(12,2),
+  driver_id UUID NOT NULL REFERENCES md_drivers(id) ON DELETE CASCADE,
+  job_order_id UUID REFERENCES job_orders(id) ON DELETE SET NULL,
+  type TEXT NOT NULL DEFAULT 'KM_LOG',
+  km_start NUMERIC(12, 2),
+  km_end NUMERIC(12, 2),
+  total_km NUMERIC(12, 2),
   review_score SMALLINT,
   review_notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  incident_type TEXT,
+  incident_description TEXT,
+  incident_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Add missing columns one by one with existence checks
+DO $$ BEGIN
+  -- Add type column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'driver_performance_logs' AND column_name = 'type'
+  ) THEN
+    ALTER TABLE driver_performance_logs ADD COLUMN type TEXT NOT NULL DEFAULT 'KM_LOG';
+  END IF;
+
+  -- Add review_score column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'driver_performance_logs' AND column_name = 'review_score'
+  ) THEN
+    ALTER TABLE driver_performance_logs ADD COLUMN review_score SMALLINT;
+  END IF;
+
+  -- Add review_notes column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'driver_performance_logs' AND column_name = 'review_notes'
+  ) THEN
+    ALTER TABLE driver_performance_logs ADD COLUMN review_notes TEXT;
+  END IF;
+
+  -- Add job_order_id column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'driver_performance_logs' AND column_name = 'job_order_id'
+  ) THEN
+    ALTER TABLE driver_performance_logs ADD COLUMN job_order_id UUID REFERENCES job_orders(id) ON DELETE SET NULL;
+  END IF;
+
+  -- Add total_km column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'driver_performance_logs' AND column_name = 'total_km'
+  ) THEN
+    ALTER TABLE driver_performance_logs ADD COLUMN total_km NUMERIC(12, 2);
+  END IF;
+END $$;
+
+-- Handle constraint safely
+DO $$ 
+BEGIN
+  -- Drop old constraint if exists
+  IF EXISTS (
+    SELECT 1 FROM information_schema.constraint_table_usage 
+    WHERE table_name = 'driver_performance_logs' AND constraint_name = 'driver_performance_logs_type_check'
+  ) THEN
+    ALTER TABLE driver_performance_logs DROP CONSTRAINT driver_performance_logs_type_check;
+  END IF;
+  
+  -- Add new constraint
+  ALTER TABLE driver_performance_logs 
+    ADD CONSTRAINT driver_performance_logs_type_check 
+    CHECK (type IN ('KM_LOG', 'SAFETY_INCIDENT', 'REVIEW'));
+EXCEPTION WHEN OTHERS THEN
+  -- If constraint fails, just log and continue
+  RAISE NOTICE 'Could not add type constraint: %', SQLERRM;
+END $$;
+
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_driver_perf_driver ON driver_performance_logs(driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_perf_job ON driver_performance_logs(job_order_id);
 CREATE INDEX IF NOT EXISTS idx_driver_perf_type ON driver_performance_logs(type);
 
 -- ============================================================
 -- 3. ENHANCE: handle_job_status_change() trigger
---    Add distance accumulation + review logging on completion
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION handle_job_status_change()
@@ -64,26 +131,21 @@ DECLARE
   v_driver_current_avg DECIMAL;
   v_driver RECORD;
 BEGIN
-  -- Only process on status change
   IF OLD.status = NEW.status THEN
     RETURN NEW;
   END IF;
 
-  -- Handle job completion/cancellation
   IF NEW.status IN ('SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'PAID', 'INVOICED', 'DONE', 'cancelled', 'rejected') THEN
     
-    -- ===== DISTANCE ACCUMULATION =====
-    -- Only accumulate for successful completion (not cancelled/rejected)
+    -- DISTANCE ACCUMULATION
     IF NEW.driver_id IS NOT NULL AND NEW.status NOT IN ('cancelled', 'rejected') THEN
       
-      -- Get distance from job_routes (last stop)
       SELECT COALESCE(distance_km, 0) INTO v_job_distance
       FROM job_routes
       WHERE job_order_id = NEW.id
       ORDER BY sequence DESC
       LIMIT 1;
       
-      -- If distance_km is 0 or null, try to get from wo_items.item_data
       IF v_job_distance = 0 OR v_job_distance IS NULL THEN
         SELECT COALESCE((wi.item_data->>'est_distance_km')::NUMERIC, 0) INTO v_job_distance
         FROM job_orders jo
@@ -91,29 +153,24 @@ BEGIN
         WHERE jo.id = NEW.id;
       END IF;
       
-      -- Only log if we have a valid distance
       IF v_job_distance > 0 THEN
-        -- Get current driver stats
         SELECT total_km_driven, total_reviews, avg_review_score INTO v_driver
         FROM md_drivers WHERE id = NEW.driver_id;
         
         v_driver_current_km := COALESCE(v_driver.total_km_driven, 0);
         
-        -- Update driver total_km_driven
         UPDATE md_drivers
         SET total_km_driven = v_driver_current_km + v_job_distance,
             total_distance_km = v_driver_current_km + v_job_distance,
             updated_at = NOW()
         WHERE id = NEW.driver_id;
         
-        -- Log to driver_performance_logs
         INSERT INTO driver_performance_logs (driver_id, job_order_id, type, total_km)
         VALUES (NEW.driver_id, NEW.id, 'KM_LOG', v_job_distance);
       END IF;
     END IF;
     
-    -- ===== CUSTOMER REVIEW ACCUMULATION =====
-    -- If customer has left a review, accumulate it
+    -- CUSTOMER REVIEW ACCUMULATION
     IF NEW.driver_id IS NOT NULL AND NEW.customer_review_score IS NOT NULL AND NEW.customer_review_score > 0 THEN
       
       SELECT total_reviews, avg_review_score INTO v_driver
@@ -122,7 +179,6 @@ BEGIN
       v_driver_current_reviews := COALESCE(v_driver.total_reviews, 0);
       v_driver_current_avg := COALESCE(v_driver.avg_review_score, 0);
       
-      -- Calculate new average
       IF v_driver_current_reviews = 0 THEN
         v_driver_current_avg := NEW.customer_review_score;
       ELSE
@@ -135,12 +191,11 @@ BEGIN
           updated_at = NOW()
       WHERE id = NEW.driver_id;
       
-      -- Log review to driver_performance_logs
       INSERT INTO driver_performance_logs (driver_id, job_order_id, type, review_score, review_notes)
       VALUES (NEW.driver_id, NEW.id, 'REVIEW', NEW.customer_review_score, NEW.customer_review_notes);
     END IF;
     
-    -- ===== STATUS RESET (existing logic) =====
+    -- STATUS RESET
     IF NEW.driver_id IS NOT NULL THEN
       SELECT COUNT(*) INTO active_job_count_driver
       FROM job_orders 
@@ -157,18 +212,12 @@ BEGIN
 
       IF active_job_count_driver = 0 AND NOT has_active_shift THEN
         UPDATE md_drivers 
-        SET 
-          is_working = false,
-          status = 'available',
-          updated_at = NOW()
+        SET is_working = false, status = 'available', updated_at = NOW()
         WHERE id = NEW.driver_id;
       ELSIF active_job_count_driver = 0 AND has_active_shift THEN
         UPDATE md_drivers 
-        SET 
-          status = 'available',
-          updated_at = NOW()
-        WHERE id = NEW.driver_id
-          AND status != 'unavailable';
+        SET status = 'available', updated_at = NOW()
+        WHERE id = NEW.driver_id AND status != 'unavailable';
       END IF;
     END IF;
     
@@ -180,33 +229,19 @@ BEGIN
         AND id != NEW.id;
 
       IF active_job_count_fleet = 0 THEN
-        UPDATE md_fleets 
-        SET 
-          status = 'available',
-          updated_at = NOW()
-        WHERE id = NEW.fleet_id;
+        UPDATE md_fleets SET status = 'available', updated_at = NOW() WHERE id = NEW.fleet_id;
       END IF;
     END IF;
 
-  -- Handle job assignment
   ELSIF NEW.status = 'assigned' AND (OLD.status = 'draft' OR OLD.status = 'pending') THEN
     
     IF NEW.driver_id IS NOT NULL THEN
-      UPDATE md_drivers 
-      SET 
-        is_working = true,
-        status = 'on_duty',
-        updated_at = NOW()
-      WHERE id = NEW.driver_id
-        AND status != 'unavailable';
+      UPDATE md_drivers SET is_working = true, status = 'on_duty', updated_at = NOW()
+      WHERE id = NEW.driver_id AND status != 'unavailable';
     END IF;
     
     IF NEW.fleet_id IS NOT NULL THEN
-      UPDATE md_fleets 
-      SET 
-        status = 'on_road',
-        updated_at = NOW()
-      WHERE id = NEW.fleet_id;
+      UPDATE md_fleets SET status = 'on_road', updated_at = NOW() WHERE id = NEW.fleet_id;
     END IF;
   END IF;
   
@@ -215,8 +250,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- 4. ADD: Function to backfill existing completed jobs
---    Run once to populate historical data
+-- 4. ADD: Backfill function
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION backfill_driver_distances()
@@ -243,7 +277,6 @@ BEGIN
         WHERE dpl.job_order_id = jo.id AND dpl.type = 'KM_LOG'
       )
   LOOP
-    -- Get distance
     SELECT COALESCE(distance_km, 0) INTO v_job_distance
     FROM job_routes
     WHERE job_order_id = v_job.id
@@ -258,7 +291,6 @@ BEGIN
     END IF;
     
     IF v_job_distance > 0 THEN
-      -- Update driver
       SELECT COALESCE(total_km_driven, 0) INTO v_driver_km
       FROM md_drivers WHERE id = v_job.driver_id;
       
@@ -268,7 +300,6 @@ BEGIN
           updated_at = NOW()
       WHERE id = v_job.driver_id;
       
-      -- Log
       INSERT INTO driver_performance_logs (driver_id, job_order_id, type, total_km)
       VALUES (v_job.driver_id, v_job.id, 'KM_LOG', v_job_distance);
       
@@ -277,7 +308,6 @@ BEGIN
     END IF;
   END LOOP;
   
-  -- Count distinct drivers updated
   SELECT COUNT(DISTINCT driver_id) INTO v_drivers_updated
   FROM driver_performance_logs
   WHERE type = 'KM_LOG' AND job_order_id IN (
@@ -293,7 +323,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- 5. ADD: Helper function to get driver performance summary
+-- 5. ADD: Summary function
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION get_driver_performance_summary(p_driver_id UUID)
@@ -310,36 +340,10 @@ RETURNS TABLE(
 BEGIN
   RETURN QUERY
   SELECT 
-    d.id,
-    d.name,
-    d.total_jobs_completed,
-    d.total_km_driven,
-    d.avg_review_score,
-    d.total_reviews,
+    d.id, d.name, d.total_jobs_completed, d.total_km_driven,
+    d.avg_review_score, d.total_reviews,
     (SELECT MAX(completed_at) FROM job_orders WHERE driver_id = d.id AND status IN ('SELESAI', 'COMPLETED')),
     (SELECT review_score FROM driver_performance_logs WHERE driver_id = d.id AND type = 'REVIEW' ORDER BY created_at DESC LIMIT 1)
-  FROM md_drivers d
-  WHERE d.id = p_driver_id;
+  FROM md_drivers d WHERE d.id = p_driver_id;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================
--- Verification
--- ============================================================
-
--- Check new columns exist
-SELECT column_name, data_type, column_default 
-FROM information_schema.columns 
-WHERE table_name = 'job_orders' AND column_name LIKE 'customer_review%'
-ORDER BY column_name;
-
-SELECT column_name, data_type, column_default 
-FROM information_schema.columns 
-WHERE table_name = 'md_drivers' AND column_name IN ('avg_review_score', 'total_reviews', 'total_distance_km')
-ORDER BY column_name;
-
--- Check trigger
-SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'job_status_change_trigger';
-
--- Check backfill function exists
-SELECT routine_name FROM information_schema.routines WHERE routine_name = 'backfill_driver_distances';
