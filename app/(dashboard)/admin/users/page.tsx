@@ -528,8 +528,8 @@ export default function UserManagementPage() {
               <p className="text-4xl font-black italic tracking-tighter">{stat.val}</p>
            </div>
          ))}
-      </div>
-      
-    </div>
-  );
+       </div>
+     </div>
+   </div>
+ );
 }
