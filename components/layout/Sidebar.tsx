@@ -71,6 +71,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
@@ -96,6 +97,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
@@ -121,6 +123,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
@@ -156,6 +159,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
@@ -172,6 +176,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
@@ -188,6 +193,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
@@ -204,6 +210,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
@@ -220,6 +227,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
