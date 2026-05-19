@@ -1,45 +1,189 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { 
   Activity, 
-  TrendingUp, 
   ShieldCheck, 
   Truck, 
   Users, 
   FileText, 
   ArrowUpRight, 
-  Layers,
-  Search,
-  Navigation as NavIcon,
-  Box,
-  Clock,
   Zap,
   CheckCircle2,
   AlertCircle,
   Timer,
-  BarChart3,
-  MousePointer2
+  RefreshCw,
+  AlertTriangle,
+  Clock,
+  TrendingUp,
+  ChevronRight,
+  Package,
+  FileCheck,
+  DollarSign,
+  CreditCard
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { formatThousand } from '../../sbu/trucking/utils';
+
+type SlaCompliance = {
+  sla_stage: string;
+  total_count: number;
+  pass_count: number;
+  fail_count: number;
+  compliance_pct: number;
+  target_minutes: number;
+};
+
+type Breach = {
+  breach_type: string;
+  wo_number: string;
+  jo_number: string;
+  stage: string;
+  overdue_minutes: number;
+  customer_name: string;
+  vendor_name: string;
+  details: string;
+};
+
+type WoAlert = {
+  wo_id: string;
+  wo_number: string;
+  total_jo: number;
+  completed_jo: number;
+  doc_complete_jo: number;
+  cost_complete_jo: number;
+  all_ready: boolean;
+  missing_jo_details: string;
+  customer_name: string;
+};
+
+type DueAlert = {
+  id: string;
+  invoice_number: string;
+  entity_name: string;
+  amount: number;
+  due_date: string;
+  days_until_due: number;
+  status: string;
+};
+
+const SLA_CONFIG = [
+  { 
+    id: 'SLA 1', 
+    label: 'WO Draft → Submit', 
+    desc: 'CS finalisasi order', 
+    target: '30 min', 
+    icon: Zap, 
+    link: '/hq/work-orders',
+    color: 'blue' 
+  },
+  { 
+    id: 'SLA 2', 
+    label: 'Submit → SBU Assigned', 
+    desc: 'Routing ke SBU', 
+    target: '60 min', 
+    icon: Timer, 
+    link: '/hq/job-orders',
+    color: 'indigo' 
+  },
+  { 
+    id: 'SLA 3', 
+    label: 'Done → Ready Billing', 
+    desc: 'Doc & cost complete', 
+    target: '3 hari', 
+    icon: Package, 
+    link: '/hq/sbu-activities',
+    color: 'purple' 
+  },
+  { 
+    id: 'SLA 4', 
+    label: 'Ready → Invoiced', 
+    desc: 'Finance audit', 
+    target: '1 hari', 
+    icon: FileCheck, 
+    link: '/hq/invoice-customer',
+    color: 'emerald' 
+  },
+  { 
+    id: 'SLA 5', 
+    label: 'Accepted → Paid', 
+    desc: 'AR collection', 
+    target: 'per ToP', 
+    icon: DollarSign, 
+    link: '/hq/invoice-customer',
+    color: 'amber' 
+  },
+  { 
+    id: 'SLA 6', 
+    label: 'Vendor Invoice → Paid', 
+    desc: 'AP discipline', 
+    target: 'per ToP', 
+    icon: CreditCard, 
+    link: '/hq/finance/cost-audit',
+    color: 'rose' 
+  },
+];
+
+const FLEET_COLORS: Record<string, string> = {
+  blue: 'text-blue-600',
+  emerald: 'text-emerald-600',
+  purple: 'text-purple-600',
+  indigo: 'text-indigo-600',
+  amber: 'text-amber-600',
+  rose: 'text-rose-600',
+};
+
+const PROGRESS_COLORS: Record<string, string> = {
+  blue: 'bg-blue-500',
+  emerald: 'bg-emerald-500',
+  purple: 'bg-purple-500',
+  indigo: 'bg-indigo-500',
+  amber: 'bg-amber-500',
+  rose: 'bg-rose-500',
+};
+
+function getSlaStatus(pct: number): { label: string; color: string } {
+  if (pct >= 80) return { label: 'Excellent', color: 'text-emerald-600' };
+  if (pct >= 60) return { label: 'Stable', color: 'text-amber-600' };
+  return { label: 'Delays', color: 'text-rose-600' };
+}
+
+function getProgressColor(pct: number): string {
+  if (pct >= 80) return 'bg-emerald-500';
+  if (pct >= 60) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+function formatOverdue(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) return `${hours}h ${mins}m`;
+  const days = Math.floor(hours / 24);
+  const remainHours = hours % 24;
+  return `${days}d ${remainHours}h`;
+}
+
+function getDueBadge(daysUntilDue: number): { label: string; className: string } {
+  if (daysUntilDue < 0) return { label: 'Overdue', className: 'bg-rose-100 text-rose-700 border-rose-200' };
+  if (daysUntilDue === 0) return { label: 'Hari ini', className: 'bg-orange-100 text-orange-700 border-orange-200' };
+  if (daysUntilDue === 1) return { label: 'H-1', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+  if (daysUntilDue <= 3) return { label: `H-${daysUntilDue}`, className: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
+  return { label: `${daysUntilDue} hari`, className: 'bg-slate-100 text-slate-600 border-slate-200' };
+}
 
 export default function HQOpsDashboardPage() {
-  const supabase = createClient();
+  const supabase = createClient()!;
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  
-  // SLA & KPI States
-  const [slaScores, setSlaScores] = useState({
-    stage1: 0, // WO -> SBU (60m)
-    stage2: 0, // Assign -> WA (120m)
-    stage3: 0, // Done -> Invoice (3 days)
-    global: 0
-  });
-
+  const [slaData, setSlaData] = useState<SlaCompliance[]>([]);
+  const [breaches, setBreaches] = useState<Breach[]>([]);
+  const [woAlerts, setWoAlerts] = useState<WoAlert[]>([]);
+  const [arDueAlerts, setArDueAlerts] = useState<DueAlert[]>([]);
+  const [apDueAlerts, setApDueAlerts] = useState<DueAlert[]>([]);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
   const [metrics, setMetrics] = useState({
     activeMissions: 0,
     totalFleet: 0,
@@ -48,113 +192,210 @@ export default function HQOpsDashboardPage() {
     readyToInvoice: 0
   });
 
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const fetchData = useCallback(async () => {
     if (!profile?.tenant_id) return;
     
     try {
-      setLoading(true);
+      // 1. SLA compliance via RPC
+      const { data: slaResult } = await supabase
+        .rpc('calculate_sla_compliance', { 
+          p_tenant_id: profile.tenant_id, 
+          p_days_back: 30 
+        });
+      setSlaData(slaResult || []);
 
-      // 1. Fetch Job Orders with relationship data
-      const { data: jos, error: joError } = await supabase
-        .from('job_orders')
+      // 2. Active breaches via RPC
+      const { data: breachResult } = await supabase
+        .rpc('get_active_sla_breaches', { 
+          p_tenant_id: profile.tenant_id 
+        });
+      const sortedBreaches = (breachResult || [])
+        .sort((a: Breach, b: Breach) => b.overdue_minutes - a.overdue_minutes)
+        .slice(0, 10);
+      setBreaches(sortedBreaches);
+
+      // 3. WO readiness alerts
+      const { data: woResult, error: woError } = await supabase
+        .from('work_orders')
         .select(`
-            id, status, created_at, updated_at, wa_link_sent_at, completed_at,
-            wo_item:wo_items!wo_item_id (
-                sbu_type,
-                wo:work_orders!wo_id (created_at)
+          id, wo_number, customer_id,
+          wo_items (
+            id,
+            job_orders (
+              id, jo_number, status, is_doc_finished, is_cost_finished
             )
+          )
         `)
-        .eq('tenant_id', profile.tenant_id);
+        .eq('tenant_id', profile.tenant_id)
+        .not('status', 'in', '("completed","cancelled","paid")');
+      
+      if (!woError && woResult) {
+        const alerts: WoAlert[] = [];
+        for (const wo of woResult) {
+          const jos = (wo as any).wo_items?.flatMap((wi: any) => wi.job_orders || []) || [];
+          if (jos.length === 0) continue;
+          const totalJo = jos.length;
+          const completedJo = jos.filter((j: any) => 
+            ['completed', 'COMPLETED', 'PEKERJAAN SELESAI', 'awaiting_audit', 'AWAITING_AUDIT'].includes(j.status)
+          ).length;
+          const docComplete = jos.filter((j: any) => j.is_doc_finished).length;
+          const costComplete = jos.filter((j: any) => j.is_cost_finished).length;
+          const allReady = docComplete === totalJo && costComplete === totalJo;
+          if (!allReady) {
+            const missing = jos
+              .filter((j: any) => !j.is_doc_finished || !j.is_cost_finished)
+              .map((j: any) => {
+                const parts = [];
+                if (!j.is_doc_finished) parts.push('doc');
+                if (!j.is_cost_finished) parts.push('cost');
+                return `${j.jo_number}: ${parts.join(', ')} incomplete`;
+              })
+              .join('; ');
+            alerts.push({
+              wo_id: wo.id,
+              wo_number: wo.wo_number,
+              total_jo: totalJo,
+              completed_jo: completedJo,
+              doc_complete_jo: docComplete,
+              cost_complete_jo: costComplete,
+              all_ready: false,
+              missing_jo_details: missing,
+              customer_name: ''
+            });
+          }
+        }
+        setWoAlerts(alerts.slice(0, 10));
+      }
 
-      if (joError) throw joError;
+      // 4. AR due alerts (customer invoices)
+      const { data: arResult } = await supabase
+        .from('invoices')
+        .select(`
+          id, invoice_number, total_billing, status, due_date,
+          wo:work_orders!wo_id (
+            customer_id
+          )
+        `)
+        .in('status', ['sent', 'accepted'])
+        .order('due_date', { ascending: true })
+        .limit(10);
+      
+      if (arResult) {
+        const now = new Date();
+        const arAlerts: DueAlert[] = [];
+        for (const inv of arResult) {
+          if (!inv.due_date) continue;
+          const due = new Date(inv.due_date);
+          const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysUntilDue <= 3) {
+            const customerName = (inv as any).wo?.customer_id || '';
+            arAlerts.push({
+              id: inv.id,
+              invoice_number: inv.invoice_number || 'N/A',
+              entity_name: customerName,
+              amount: inv.total_billing || 0,
+              due_date: inv.due_date,
+              days_until_due: daysUntilDue,
+              status: inv.status
+            });
+          }
+        }
+        setArDueAlerts(arAlerts);
+      }
 
-      // 2. Fetch Fleet & Driver stats
-      const [fleetRes, driverRes] = await Promise.all([
-          supabase.from('md_fleets').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id),
-          supabase.from('md_drivers').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id)
+      // 5. AP due alerts (vendor invoices)
+      const { data: apResult } = await supabase
+        .from('vendor_invoices')
+        .select(`
+          id, invoice_number, invoice_amount, status, received_at,
+          vendor:md_entities!vendor_id (name)
+        `)
+        .in('status', ['verified', 'submitted'])
+        .order('received_at', { ascending: true })
+        .limit(10);
+      
+      if (apResult) {
+        const now = new Date();
+        const apAlerts: DueAlert[] = [];
+        for (const vi of apResult) {
+          if (!vi.received_at) continue;
+          const due = new Date(vi.received_at);
+          due.setDate(due.getDate() + 30);
+          const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysUntilDue <= 3) {
+            apAlerts.push({
+              id: vi.id,
+              invoice_number: vi.invoice_number || 'N/A',
+              entity_name: (vi as any).vendor?.name || 'Vendor',
+              amount: vi.invoice_amount || 0,
+              due_date: vi.received_at,
+              days_until_due: daysUntilDue,
+              status: vi.status
+            });
+          }
+        }
+        setApDueAlerts(apAlerts);
+      }
+
+      // 6. Fleet & driver stats
+      const [fleetRes, driverRes, joRes] = await Promise.all([
+        supabase.from('md_fleets').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id),
+        supabase.from('md_drivers').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id),
+        supabase.from('job_orders').select('id, status').eq('tenant_id', profile.tenant_id)
       ]);
 
-      // 3. Calculate SLAs
-      const now = new Date();
-      let s1_total = 0, s1_pass = 0;
-      let s2_total = 0, s2_pass = 0;
-      let s3_total = 0, s3_pass = 0;
-
-      (jos || []).forEach(jo => {
-          const joCreated = new Date(jo.created_at);
-          const woCreated = new Date((jo as any).wo_item?.wo?.created_at);
-          
-          // SLA 1: WO -> SBU (60 min)
-          if (woCreated && joCreated) {
-              s1_total++;
-              const diffMin = (joCreated.getTime() - woCreated.getTime()) / (1000 * 60);
-              if (diffMin <= 60) s1_pass++;
-          }
-
-          // SLA 2: Assign -> WA (120 min)
-          // Since assigned_at isn't always there, we use created_at as assignment start
-          if (jo.wa_link_sent_at) {
-              s2_total++;
-              const waSent = new Date(jo.wa_link_sent_at);
-              const diffMin = (waSent.getTime() - joCreated.getTime()) / (1000 * 60);
-              if (diffMin <= 120) s2_pass++;
-          }
-
-          // SLA 3: Done -> Invoice (3 days)
-          if (jo.completed_at && jo.status === 'ready_for_billing') {
-              s3_total++;
-              const completedAt = new Date(jo.completed_at);
-              const readyAt = new Date(jo.updated_at); // Approximation
-              const diffDays = (readyAt.getTime() - completedAt.getTime()) / (1000 * 60 * 60 * 24);
-              if (diffDays <= 3) s3_pass++;
-          }
-      });
-
-      const s1 = s1_total > 0 ? (s1_pass / s1_total) * 100 : 0;
-      const s2 = s2_total > 0 ? (s2_pass / s2_total) * 100 : 0;
-      const s3 = s3_total > 0 ? (s3_pass / s3_total) * 100 : 0;
-      
-      // Weighting logic: 30% S1, 30% S2, 40% S3 (Billing is priority)
-      const global = (s1 * 0.3) + (s2 * 0.3) + (s3 * 0.4);
-
-      setSlaScores({
-          stage1: Math.round(s1),
-          stage2: Math.round(s2),
-          stage3: Math.round(s3),
-          global: Math.round(global)
-      });
-
+      const jos = joRes.data || [];
       setMetrics({
-          activeMissions: (jos || []).filter(j => !['completed', 'cancelled', 'paid', 'ready_for_billing'].includes(j.status)).length,
-          totalFleet: fleetRes.count || 0,
-          activeDrivers: driverRes.count || 0,
-          pendingJobs: (jos || []).filter(j => j.status === 'pending').length,
-          readyToInvoice: (jos || []).filter(j => j.status === 'ready_for_billing').length
+        activeMissions: jos.filter(j => !['completed', 'cancelled', 'paid', 'ready_for_billing'].includes(j.status)).length,
+        totalFleet: fleetRes.count || 0,
+        activeDrivers: driverRes.count || 0,
+        pendingJobs: jos.filter(j => j.status === 'pending').length,
+        readyToInvoice: jos.filter(j => j.status === 'ready_for_billing').length
       });
 
+      setLastRefresh(new Date());
     } catch (err) {
-      console.error("Ops Command Fetch Error:", err);
+      console.error("Ops Dashboard Fetch Error:", err);
     } finally {
       setLoading(false);
     }
-  }, [supabase, profile]);
+  }, [profile]);
 
   useEffect(() => {
     fetchData();
+    intervalRef.current = setInterval(fetchData, 30000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [fetchData]);
 
-  if (loading) {
-      return (
-          <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
-              <div className="w-10 h-10 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mb-4" />
-              <p className="text-xs text-slate-400">Loading dashboard...</p>
-          </div>
-      );
+  const handleManualRefresh = () => {
+    setLoading(true);
+    fetchData();
+  };
+
+  const globalScore = slaData.reduce((acc, sla) => {
+    const weight = sla.sla_stage.includes('SLA 3') ? 0.25 :
+                   sla.sla_stage.includes('SLA 5') ? 0.20 :
+                   sla.sla_stage.includes('SLA 6') ? 0.20 :
+                   sla.sla_stage.includes('SLA 4') ? 0.15 : 0.10;
+    return acc + (sla.compliance_pct || 0) * weight;
+  }, 0);
+
+  if (loading && slaData.length === 0) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-10 h-10 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <p className="text-xs text-slate-400">Loading dashboard...</p>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
-      {/* Header Section */}
+      {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -168,55 +409,274 @@ export default function HQOpsDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-             <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-3">
-                <div className={`w-10 h-10 ${slaScores.global >= 70 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} rounded-lg flex items-center justify-center`}>
-                   <ShieldCheck size={18} />
-                </div>
-                <div>
-                   <p className="text-[10px] font-medium text-slate-400 uppercase">Health Score</p>
-                   <p className={`text-sm font-semibold ${slaScores.global >= 70 ? 'text-emerald-600' : 'text-rose-600'}`}>{slaScores.global}% - {slaScores.global >= 90 ? 'Optimal' : slaScores.global >= 70 ? 'Stable' : 'Critical'}</p>
-                </div>
-             </div>
+            <div className="text-xs text-slate-400">
+              Last update: {lastRefresh.toLocaleTimeString('id-ID')}
+            </div>
+            <button
+              onClick={handleManualRefresh}
+              className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'} />
+            </button>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center gap-3">
+              <div className={`w-10 h-10 ${globalScore >= 70 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} rounded-lg flex items-center justify-center`}>
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <p className="text-[10px] font-medium text-slate-400 uppercase">Health Score</p>
+                <p className={`text-sm font-semibold ${globalScore >= 70 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {Math.round(globalScore)}% - {globalScore >= 90 ? 'Optimal' : globalScore >= 70 ? 'Stable' : 'Critical'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* SLA Metrics */}
+      {/* SLA Compliance Cards */}
       <div className="max-w-7xl mx-auto mb-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {[
-                  { label: 'CS Response', desc: 'WO to SBU', sla: '60 min', score: slaScores.stage1, icon: <Zap size={18}/>, color: 'blue' },
-                  { label: 'Dispatch', desc: 'Assign to WA', sla: '120 min', score: slaScores.stage2, icon: <Timer size={18}/>, color: 'indigo' },
-                  { label: 'Billing', desc: 'Done to Invoice', sla: '3 days', score: slaScores.stage3, icon: <CheckCircle2 size={18}/>, color: 'emerald' },
-              ].map((sla, idx) => (
-                  <Card key={idx} className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
-                      <div className="flex justify-between items-start mb-4">
-                          <div>
-                              <h4 className="text-sm font-semibold text-slate-900">{sla.label}</h4>
-                              <p className="text-xs text-slate-400 mt-0.5">{sla.desc}</p>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-50 border border-slate-100 rounded text-[10px] font-medium text-slate-500">SLA: {sla.sla}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {SLA_CONFIG.map((sla) => {
+            const slaResult = slaData.find(s => s.sla_stage.startsWith(sla.id));
+            const pct = slaResult?.compliance_pct || 0;
+            const status = getSlaStatus(pct);
+            const Icon = sla.icon;
+            return (
+              <Link key={sla.id} href={sla.link}>
+                <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 bg-${sla.color}-50 text-${sla.color}-600 rounded-lg flex items-center justify-center`}>
+                        <Icon size={16} />
                       </div>
-                      
-                      <div className="flex items-end gap-3 mb-4">
-                          <h2 className="text-2xl font-semibold text-slate-900">{sla.score}%</h2>
-                          <span className={`text-xs font-medium mb-0.5 ${sla.score >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                              {sla.score >= 90 ? 'Excellent' : sla.score >= 70 ? 'Stable' : 'Delays'}
-                          </span>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">{sla.label}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">{sla.desc}</p>
                       </div>
+                    </div>
+                    <span className="px-2 py-1 bg-slate-50 border border-slate-100 rounded text-[10px] font-medium text-slate-500">
+                      SLA: {sla.target}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-end gap-3 mb-4">
+                    <h2 className="text-2xl font-semibold text-slate-900">{pct}%</h2>
+                    <span className={`text-xs font-medium mb-0.5 ${status.color}`}>{status.label}</span>
+                  </div>
 
-                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div 
-                              className={`h-full rounded-full transition-all duration-1000 ${sla.score >= 80 ? 'bg-blue-500' : 'bg-amber-500'}`} 
-                              style={{ width: `${sla.score}%` }}
-                          />
-                      </div>
-                  </Card>
-              ))}
-          </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(pct)}`} 
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+
+                  {slaResult && slaResult.total_count > 0 && (
+                    <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>{slaResult.pass_count} pass / {slaResult.fail_count} fail</span>
+                      <span>Total: {slaResult.total_count}</span>
+                    </div>
+                  )}
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Quick Access Grid */}
+      {/* Active Breaches Table */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Breach Aktif — Perlu Intervensi</h3>
+                <p className="text-xs text-slate-400">Top 10 paling overdue</p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-semibold">
+              {breaches.length} active
+            </span>
+          </div>
+
+          {breaches.length === 0 ? (
+            <div className="p-12 flex flex-col items-center justify-center text-center">
+              <CheckCircle2 size={40} className="text-emerald-400 mb-3" />
+              <p className="text-sm font-medium text-slate-600">Tidak ada breach aktif</p>
+              <p className="text-xs text-slate-400 mt-1">Semua SLA berjalan sesuai target</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-medium text-slate-500 uppercase tracking-wide border-b border-slate-100">
+                    <th className="px-5 py-3">Stage</th>
+                    <th className="px-5 py-3">WO#</th>
+                    <th className="px-5 py-3">JO#</th>
+                    <th className="px-5 py-3">Overdue</th>
+                    <th className="px-5 py-3">Customer / Vendor</th>
+                    <th className="px-5 py-3">Detail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {breaches.map((b, i) => (
+                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold ${
+                          b.breach_type === 'SLA 1' ? 'bg-blue-50 text-blue-600' :
+                          b.breach_type === 'SLA 2' ? 'bg-indigo-50 text-indigo-600' :
+                          b.breach_type === 'SLA 3' ? 'bg-purple-50 text-purple-600' :
+                          b.breach_type === 'SLA 4' ? 'bg-emerald-50 text-emerald-600' :
+                          b.breach_type === 'SLA 5' ? 'bg-amber-50 text-amber-600' :
+                          'bg-rose-50 text-rose-600'
+                        }`}>
+                          {b.stage}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-xs font-mono text-slate-700">{b.wo_number}</td>
+                      <td className="px-5 py-3 text-xs font-mono text-slate-500">{b.jo_number || '—'}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs font-semibold text-rose-600">{formatOverdue(b.overdue_minutes)}</span>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-600">{b.customer_name || b.vendor_name || '—'}</td>
+                      <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate">{b.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* WO Readiness + Due Alerts */}
+      <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* WO Readiness */}
+        <Card className="lg:col-span-1 border border-slate-200 shadow-sm rounded-xl bg-white">
+          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
+              <AlertTriangle size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">WO Belum Siap Invoice</h3>
+              <p className="text-xs text-slate-400">Doc/cost JO belum lengkap</p>
+            </div>
+          </div>
+
+          {woAlerts.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">Semua WO siap invoice</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+              {woAlerts.slice(0, 5).map((alert) => (
+                <Link key={alert.wo_id} href={`/hq/work-orders`} className="block p-4 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono font-semibold text-slate-700">{alert.wo_number}</span>
+                    <span className="text-[10px] font-medium text-amber-600">
+                      {alert.doc_complete_jo}/{alert.total_jo} JO
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
+                    <div 
+                      className="h-full bg-amber-500 rounded-full" 
+                      style={{ width: `${(alert.doc_complete_jo / alert.total_jo) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 truncate">{alert.missing_jo_details}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* AR Due Alerts */}
+        <Card className="border border-slate-200 shadow-sm rounded-xl bg-white">
+          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+              <DollarSign size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Invoice Customer — Jatuh Tempo</h3>
+              <p className="text-xs text-slate-400">AR yang perlu ditagih</p>
+            </div>
+          </div>
+
+          {arDueAlerts.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">Tidak ada invoice jatuh tempo</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+              {arDueAlerts.map((alert) => {
+                const badge = getDueBadge(alert.days_until_due);
+                return (
+                  <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono font-semibold text-slate-700">{alert.invoice_number}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badge.className}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">{alert.entity_name}</p>
+                    <p className="text-xs font-semibold text-slate-900 mt-1">
+                      Rp {alert.amount.toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* AP Due Alerts */}
+        <Card className="border border-slate-200 shadow-sm rounded-xl bg-white">
+          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center">
+              <CreditCard size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Invoice Vendor — Perlu Dibayar</h3>
+              <p className="text-xs text-slate-400">AP yang perlu diproses</p>
+            </div>
+          </div>
+
+          {apDueAlerts.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">Tidak ada invoice vendor jatuh tempo</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+              {apDueAlerts.map((alert) => {
+                const badge = getDueBadge(alert.days_until_due);
+                return (
+                  <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono font-semibold text-slate-700">{alert.invoice_number}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badge.className}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">{alert.entity_name}</p>
+                    <p className="text-xs font-semibold text-slate-900 mt-1">
+                      Rp {alert.amount.toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Quick Access + Fleet */}
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/hq/work-orders" className="group">
@@ -250,7 +710,7 @@ export default function HQOpsDashboardPage() {
           <Link href="/hq/sbu-activities" className="group">
             <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white hover:border-purple-300 hover:shadow-md transition-all">
               <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center mb-3 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                <NavIcon size={18} />
+                <Activity size={18} />
               </div>
               <h3 className="text-sm font-semibold text-slate-900 mb-1">Mission Radar</h3>
               <p className="text-xs text-slate-400">Live operations</p>
@@ -278,52 +738,54 @@ export default function HQOpsDashboardPage() {
 
         {/* Fleet Readiness */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 p-6 border border-slate-200 shadow-sm rounded-xl bg-white">
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 className="text-sm font-semibold text-slate-900">Fleet Readiness</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">Real-time asset capacity</p>
-                    </div>
-                </div>
+          <Card className="lg:col-span-2 p-6 border border-slate-200 shadow-sm rounded-xl bg-white">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Fleet Readiness</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Real-time asset capacity</p>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                        { label: 'Total Fleet', value: metrics.totalFleet, color: 'blue', sub: 'Owned assets' },
-                        { label: 'Active Drivers', value: metrics.activeDrivers, color: 'emerald', sub: 'Verified' },
-                        { label: 'Utilisation', value: `${metrics.totalFleet > 0 ? Math.round((metrics.activeMissions / metrics.totalFleet) * 100) : 0}%`, color: 'purple', sub: 'Asset load' },
-                    ].map((m, i) => (
-                        <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] font-medium text-slate-400 uppercase mb-1">{m.label}</p>
-                            <h3 className={`text-xl font-semibold text-${m.color}-600 mb-1`}>{m.value}</h3>
-                            <p className="text-xs text-slate-400">{m.sub}</p>
-                        </div>
-                    ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { label: 'Total Fleet', value: metrics.totalFleet, color: 'blue', sub: 'Owned assets' },
+                { label: 'Active Drivers', value: metrics.activeDrivers, color: 'emerald', sub: 'Verified' },
+                { label: 'Utilisation', value: `${metrics.totalFleet > 0 ? Math.round((metrics.activeMissions / metrics.totalFleet) * 100) : 0}%`, color: 'purple', sub: 'Asset load' },
+              ].map((m, i) => (
+                <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase mb-1">{m.label}</p>
+                  <h3 className={`text-xl font-semibold ${FLEET_COLORS[m.color] || 'text-slate-600'} mb-1`}>{m.value}</h3>
+                  <p className="text-xs text-slate-400">{m.sub}</p>
                 </div>
-            </Card>
+              ))}
+            </div>
+          </Card>
 
-            <Card className="p-6 border border-slate-200 shadow-sm rounded-xl bg-white">
-               <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center"><ShieldCheck size={16}/></div>
-                  <h3 className="text-sm font-semibold text-slate-900">System Status</h3>
-               </div>
-               
-               <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                     <span className="text-xs text-slate-500">Cloud Sync</span>
-                     <span className="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
-                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> Active
-                     </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                     <span className="text-xs text-slate-500">Tenant Nodes</span>
-                     <span className="text-xs font-medium text-slate-700">Consolidated</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                     <span className="text-xs text-slate-500">Last Check</span>
-                     <span className="text-xs font-medium text-slate-700">{new Date().toLocaleTimeString()}</span>
-                  </div>
-               </div>
-            </Card>
+          <Card className="p-6 border border-slate-200 shadow-sm rounded-xl bg-white">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
+                <Clock size={16} />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-900">System Status</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                <span className="text-xs text-slate-500">Cloud Sync</span>
+                <span className="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> Active
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                <span className="text-xs text-slate-500">Auto Refresh</span>
+                <span className="text-xs font-medium text-slate-700">30 detik</span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-xs text-slate-500">Last Check</span>
+                <span className="text-xs font-medium text-slate-700">{lastRefresh.toLocaleTimeString('id-ID')}</span>
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
     </div>
