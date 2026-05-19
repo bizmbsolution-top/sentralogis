@@ -37,7 +37,7 @@ import {
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function DriverPortal() {
-  const [step, setStep] = useState<'auth' | 'dashboard' | 'profile' | 'inspection' | 'jobDetail'>('auth');
+  const [step, setStep] = useState<'auth' | 'dashboard' | 'profile' | 'inspection' | 'jobDetail' | 'performance'>('auth');
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [whatsapp, setWhatsapp] = useState('');
   const [pin, setPin] = useState(['', '', '', '']);
@@ -80,6 +80,8 @@ export default function DriverPortal() {
   const [totalKM, setTotalKM] = useState<number>(0);
 
   const [jobOrders, setJobOrders] = useState<any[]>([]);
+  const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
 
   useEffect(() => {
     if (step === 'dashboard' && isAttendanceModalOpen) fetchFleets();
@@ -92,6 +94,9 @@ export default function DriverPortal() {
       fetchLastInspection();
       fetchTotalKM();
     }
+    if (step === 'performance' && driver?.id) {
+      fetchPerformanceData();
+    }
   }, [step, driver]);
 
   useEffect(() => {
@@ -101,7 +106,6 @@ export default function DriverPortal() {
   const fetchTotalKM = async () => {
     if (!driver?.id) return;
     
-    // Get completed job orders for this driver
     const { data: completedJobs } = await supabase
       .from('job_orders')
       .select('id')
@@ -111,7 +115,6 @@ export default function DriverPortal() {
     if (completedJobs && completedJobs.length > 0) {
       const jobIds = completedJobs.map(j => j.id);
       
-      // Get routes for these jobs and sum up distance_km
       const { data: routes } = await supabase
         .from('job_routes')
         .select('distance_km')
@@ -121,6 +124,42 @@ export default function DriverPortal() {
         const total = routes.reduce((sum: number, route: any) => sum + (Number(route.distance_km) || 0), 0);
         setTotalKM(total);
       }
+    }
+  };
+
+  const fetchPerformanceData = async () => {
+    if (!driver?.id) return;
+    setPerformanceLoading(true);
+    
+    try {
+      const { data: completedJobs } = await supabase
+        .from('job_orders')
+        .select('*, job_routes(distance_km), wo_items(item_code, item_data)')
+        .eq('driver_id', driver.id)
+        .in('status', ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI'])
+        .order('completed_at', { ascending: false })
+        .limit(50);
+      
+      setCompletedJobs(completedJobs || []);
+      
+      if (completedJobs && completedJobs.length > 0) {
+        let totalDistance = 0;
+        let totalEarnings = 0;
+        
+        for (const job of completedJobs) {
+          const routeDist = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
+          totalDistance += routeDist;
+          
+          const driverShare = Number(job.driver_payment_amount || job.wo_items?.item_data?.deal_price || 0);
+          totalEarnings += driverShare;
+        }
+        
+        setTotalKM(totalDistance);
+      }
+    } catch (err) {
+      console.error('Error fetching performance data:', err);
+    } finally {
+      setPerformanceLoading(false);
     }
   };
 
@@ -1088,16 +1127,126 @@ const handleLogin = async (e: React.FormEvent) => {
         </div>
       )}
 
+      {/* Performance View */}
+      {step === 'performance' && (
+        <div className="p-5 space-y-6 animate-in slide-in-from-right duration-300">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-black text-slate-900">Performance</h2>
+            <button onClick={() => setStep('dashboard')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 shadow-sm">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin size={18} className="text-white/70" />
+                <p className="text-xs font-bold text-white/70 uppercase">Total KM</p>
+              </div>
+              <p className="text-3xl font-black">{totalKM > 0 ? totalKM.toFixed(0) : (driver?.total_km_driven || 0).toFixed(0)}</p>
+              <p className="text-xs text-white/60 mt-1">Kilometer ditempuh</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-3xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle size={18} className="text-white/70" />
+                <p className="text-xs font-bold text-white/70 uppercase">Job Selesai</p>
+              </div>
+              <p className="text-3xl font-black">{driver?.total_jobs_completed || completedJobs.length}</p>
+              <p className="text-xs text-white/60 mt-1">Misi berhasil</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-3xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Star size={18} className="text-white/70" />
+                <p className="text-xs font-bold text-white/70 uppercase">Review</p>
+              </div>
+              <p className="text-3xl font-black">{driver?.avg_review_score ? driver.avg_review_score.toFixed(1) : '-'}</p>
+              <p className="text-xs text-white/60 mt-1">{driver?.total_reviews || 0} ulasan</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock size={18} className="text-white/70" />
+                <p className="text-xs font-bold text-white/70 uppercase">Absensi</p>
+              </div>
+              <p className="text-3xl font-black">{driver?.total_absensi || 0}</p>
+              <p className="text-xs text-white/60 mt-1">Hari kerja</p>
+            </div>
+          </div>
+
+          {/* Completed Jobs History */}
+          <div className="bg-white rounded-3xl p-5 shadow-xl border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Riwayat Job</h3>
+              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+                {completedJobs.length} Job
+              </span>
+            </div>
+            
+            {performanceLoading ? (
+              <div className="py-8 text-center">
+                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+                <p className="text-sm text-slate-400">Loading...</p>
+              </div>
+            ) : completedJobs.length === 0 ? (
+              <div className="py-8 text-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <Package size={32} className="text-slate-400" />
+                </div>
+                <p className="text-base font-semibold text-slate-700">Belum ada job selesai</p>
+                <p className="text-sm text-slate-500 mt-1">Job yang selesai akan muncul di sini</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {completedJobs.map((job) => {
+                  const jobDistance = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
+                  return (
+                    <div key={job.id} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{job.jo_number}</p>
+                          <p className="text-xs text-slate-500">
+                            {job.completed_at ? new Date(job.completed_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </p>
+                        </div>
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">SELESAI</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <MapPin size={12} />
+                          <span>{jobDistance > 0 ? jobDistance.toFixed(1) : '-'} km</span>
+                        </div>
+                        {job.driver_payment_amount > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-emerald-600 font-bold">Rp {Number(job.driver_payment_amount).toLocaleString('id-ID')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg p-3 flex justify-around items-center border-t border-indigo-100 shadow-2xl">
-        <button onClick={() => setStep('dashboard')} className="flex flex-col items-center gap-1 p-2 text-indigo-600">
+        <button onClick={() => setStep('dashboard')} className={`flex flex-col items-center gap-1 p-2 ${step === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}>
           <Home size={24} />
           <span className="text-xs font-bold">Home</span>
         </button>
-        <button onClick={() => setStep('inspection')} className="flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-orange-500">
+        <button onClick={() => setStep('performance')} className={`flex flex-col items-center gap-1 p-2 ${step === 'performance' ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <Activity size={24} />
+          <span className="text-xs font-bold">Performance</span>
+        </button>
+        <button onClick={() => setStep('inspection')} className={`flex flex-col items-center gap-1 p-2 ${step === 'inspection' ? 'text-orange-500' : 'text-slate-400'}`}>
           <FileCheck size={24} />
           <span className="text-xs font-bold">Inspeksi</span>
         </button>
-        <button onClick={() => setStep('profile')} className="flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-purple-500">
+        <button onClick={() => setStep('profile')} className={`flex flex-col items-center gap-1 p-2 ${step === 'profile' ? 'text-purple-500' : 'text-slate-400'}`}>
           <User size={24} />
           <span className="text-xs font-bold">Profil</span>
         </button>
