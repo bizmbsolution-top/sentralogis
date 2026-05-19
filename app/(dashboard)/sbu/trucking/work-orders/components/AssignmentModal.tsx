@@ -110,7 +110,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             
             // Exclude fleets with active jobs if any exist
             if (activeJobFleets.length > 0) {
-              query = query.not('id', 'in', `(${activeJobFleets.join(',')})`);
+              const quotedFleets = activeJobFleets.map((id: string) => `'${id}'`).join(',');
+              query = query.not('id', 'in', `(${quotedFleets})`);
             }
             return query;
           })(),
@@ -125,7 +126,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             
             // Exclude drivers with active jobs if any exist
             if (activeJobDrivers.length > 0) {
-              query = query.not('id', 'in', `(${activeJobDrivers.join(',')})`);
+              const quotedDrivers = activeJobDrivers.map((id: string) => `'${id}'`).join(',');
+              query = query.not('id', 'in', `(${quotedDrivers})`);
             }
             return query;
           })(),
