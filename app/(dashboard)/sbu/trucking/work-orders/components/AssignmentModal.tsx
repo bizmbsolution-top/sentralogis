@@ -135,7 +135,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             .eq('tenant_id', tenantId)
             .eq('is_active', true),
             
-          supabase.from('md_fleets').select('id, plate_number, truck_type, truck_brand, status, company_id'),
+          supabase.from('md_fleets').select('id, plate_number, brand, model, status, entity_id'),
           supabase.from('md_drivers').select('id, name, phone, entity_id, is_active').eq('is_active', true),
           
           // [AI] Fetch already-assigned fleets by their IDs regardless of status
