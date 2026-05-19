@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import { 
   Plus, Search, Edit2, Trash2, X, Loader2, User as DriverIcon, Filter, 
   Calendar, CreditCard, Phone, MessageSquare, Camera, Upload, UserCircle,
-  RefreshCw, AlertTriangle
+  RefreshCw, AlertTriangle, MapPin, Star, Briefcase
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +27,11 @@ interface Driver {
   is_active: boolean;
   tenant_id: string;
   entity_id: string;
+  total_km_driven: number;
+  total_distance_km: number;
+  total_jobs_completed: number;
+  total_reviews: number;
+  avg_review_score: number;
   md_entities: { name: string };
 }
 
@@ -477,18 +482,22 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
                ))}
              </select>
 
-             {/* Status Summary */}
-             <div className="ml-auto flex items-center gap-4 text-xs">
-               <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">
-                 Available: {drivers.filter(d => d.status === 'available').length}
-               </span>
-               <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">
-                 On Duty: {drivers.filter(d => d.status === 'on_duty').length}
-               </span>
-               <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-full font-medium">
-                 Unavailable: {drivers.filter(d => d.status === 'unavailable').length}
-               </span>
-             </div>
+              {/* Status Summary */}
+              <div className="ml-auto flex items-center gap-4 text-xs">
+                <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+                  Available: {drivers.filter(d => d.status === 'available').length}
+                </span>
+                <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">
+                  On Duty: {drivers.filter(d => d.status === 'on_duty').length}
+                </span>
+                <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-full font-medium">
+                  Unavailable: {drivers.filter(d => d.status === 'unavailable').length}
+                </span>
+                <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium flex items-center gap-1">
+                  <MapPin size={10} />
+                  Total: {drivers.reduce((sum, d) => sum + (d.total_km_driven || 0), 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })} km
+                </span>
+              </div>
           </div>
 
           {/* Last Sync Info */}
@@ -511,26 +520,27 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
             <div className="overflow-x-auto">
                <table className="w-full text-left">
                   <thead>
-                     <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Code</th>
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Name</th>
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Contact</th>
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Transporter</th>
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
-                        <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Actions</th>
-                     </tr>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Code</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Name</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Contact</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Transporter</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Performance</th>
+                         <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Actions</th>
+                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                      {loading ? (
-                        <tr>
-                           <td colSpan={6} className="px-4 py-16 text-center">
-                              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
-                              <p className="text-xs text-slate-400">Loading drivers...</p>
-                           </td>
-                        </tr>
-                     ) : filteredDrivers.length === 0 ? (
-                        <tr>
-                           <td colSpan={6} className="px-4 py-16 text-center">
+                         <tr>
+                            <td colSpan={7} className="px-4 py-16 text-center">
+                               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
+                               <p className="text-xs text-slate-400">Loading drivers...</p>
+                            </td>
+                         </tr>
+                      ) : filteredDrivers.length === 0 ? (
+                         <tr>
+                            <td colSpan={7} className="px-4 py-16 text-center">
                               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
                                  <DriverIcon size={24} className="text-slate-300" />
                               </div>
@@ -575,10 +585,31 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
                               <td className="px-4 py-3">
                                  <div className="text-sm text-slate-700">{d.md_entities?.name || 'Private HQ'}</div>
                               </td>
-                              <td className="px-4 py-3">
-                                 {getStatusBadge(d)}
-                              </td>
-                              <td className="px-4 py-3 text-right">
+                               <td className="px-4 py-3">
+                                  {getStatusBadge(d)}
+                               </td>
+                               <td className="px-4 py-3 text-right">
+                                  <div className="flex flex-col items-end gap-1">
+                                    <div className="flex items-center gap-1 text-xs text-slate-600">
+                                      <MapPin size={11} className="text-blue-500" />
+                                      <span className="font-semibold">{(d.total_km_driven || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })} km</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-slate-500">
+                                      <Briefcase size={11} className="text-slate-400" />
+                                      <span>{d.total_jobs_completed || 0} jobs</span>
+                                    </div>
+                                    {d.total_reviews > 0 ? (
+                                      <div className="flex items-center gap-0.5 text-xs">
+                                        <Star size={10} className="fill-amber-400 text-amber-400" />
+                                        <span className="font-medium text-slate-700">{(d.avg_review_score || 0).toFixed(1)}</span>
+                                        <span className="text-slate-400">({d.total_reviews})</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400">No reviews</span>
+                                    )}
+                                  </div>
+                               </td>
+                               <td className="px-4 py-3 text-right">
                                  <div className="flex items-center justify-end gap-2">
                                     <button 
                                        onClick={() => handleOpenModal(d)}
