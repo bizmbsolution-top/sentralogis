@@ -204,6 +204,26 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         setFleets(availableFleets);
         setDrivers(availableDrivers);
         
+        const tenantName = (profile?.tenants?.name || '').toUpperCase();
+        const tenantCode = (profile?.tenant_code || '').toUpperCase();
+
+        const trans = (transporterRes.data || [])
+          .filter(t => t.is_vendor || !t.is_customer)
+          .map(t => {
+            const isActuallyOwn = !t.is_vendor || 
+                                 t.name.toUpperCase().includes(tenantName) || 
+                                 t.name.toUpperCase().includes(tenantCode) ||
+                                 t.name.toUpperCase().includes('INTERNAL') ||
+                                 t.name.toUpperCase().includes('(OWN)');
+            
+            return {
+              id: t.id,
+              name: isActuallyOwn && !t.name.includes('(OWN)') ? `(OWN) ${t.name}` : t.name,
+              is_vendor: !isActuallyOwn,
+              is_own: isActuallyOwn
+            };
+          }).sort((a, b) => (a.is_own === b.is_own ? 0 : a.is_own ? -1 : 1));
+
         // [AI] Check readiness for internal drivers (attendance + inspection today)
         const today = new Date().toISOString().split('T')[0];
         const readinessMap: Record<string, { ready: boolean; reason: string; hasAttendance: boolean; hasInspection: boolean; inspectionStatus: string }> = {};
@@ -244,7 +264,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         console.log('[AssignmentModal] Assets Fetched:', {
           fleetsCount: availableFleets.length,
           driversCount: availableDrivers.length,
-          transportersCount: transporterRes.data?.length || 0,
+          transportersCount: trans.length,
           mergedAssignedFleets: assignedFleets.length,
           mergedAssignedDrivers: assignedDriversList.length,
           allFleets: availableFleets.map(f => f.id),
@@ -252,26 +272,6 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         });
         
         console.log('[AssignmentModal] Vehicle type from itemData:', itemData?.vehicle_type_name);
-        
-        const tenantName = (profile?.tenants?.name || '').toUpperCase();
-        const tenantCode = (profile?.tenant_code || '').toUpperCase();
-
-        const trans = (transporterRes.data || [])
-          .filter(t => t.is_vendor || !t.is_customer) // Include vendors OR internal entities (not customers)
-          .map(t => {
-            const isActuallyOwn = !t.is_vendor || 
-                                 t.name.toUpperCase().includes(tenantName) || 
-                                 t.name.toUpperCase().includes(tenantCode) ||
-                                 t.name.toUpperCase().includes('INTERNAL') ||
-                                 t.name.toUpperCase().includes('(OWN)');
-            
-            return {
-              id: t.id,
-              name: isActuallyOwn && !t.name.includes('(OWN)') ? `(OWN) ${t.name}` : t.name,
-              is_vendor: !isActuallyOwn,
-              is_own: isActuallyOwn
-            };
-          }).sort((a, b) => (a.is_own === b.is_own ? 0 : a.is_own ? -1 : 1));
 
         setTransporters(trans);
 
