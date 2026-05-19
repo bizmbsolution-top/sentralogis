@@ -195,7 +195,10 @@ export default function HQOpsDashboardPage() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!profile?.tenant_id) return;
+    if (!profile?.tenant_id) {
+      setLoading(false);
+      return;
+    }
     
     try {
       // 1. SLA compliance via RPC
