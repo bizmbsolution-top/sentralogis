@@ -91,6 +91,12 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         // 2. Fetch available assets and transporters
         // [AI] Also fetch already-assigned fleets/drivers separately so they always appear in dropdowns
         // even if their status is on_road/is_working=true (they were assigned by this WO item)
+        console.log('[AssignmentModal] Fetching assets. tenantId:', tenantId);
+        console.log('[AssignmentModal] assignedFleetIds:', assignedFleetIds);
+        console.log('[AssignmentModal] assignedDriverIds:', assignedDriverIds);
+        console.log('[AssignmentModal] activeJobFleets:', activeJobFleets);
+        console.log('[AssignmentModal] activeJobDrivers:', activeJobDrivers);
+
         const [fleetRes, driverRes, transporterRes, tfRes, tdRes, assignedFleetRes, assignedDriverRes] = await Promise.all([
           // Only show available fleets (not on_road, not non_active)
           (async () => {
@@ -156,9 +162,23 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             : Promise.resolve({ data: [], error: null })
         ]);
 
-        if (fleetRes.error) console.error("Error fetching fleets:", { code: fleetRes.error.code, message: fleetRes.error.message, details: fleetRes.error.details, hint: fleetRes.error.hint });
-        if (driverRes.error) console.error("Error fetching drivers:", { code: driverRes.error.code, message: driverRes.error.message, details: driverRes.error.details, hint: driverRes.error.hint });
-        if (transporterRes.error) console.error("Error fetching transporters:", { code: transporterRes.error.code, message: transporterRes.error.message, details: transporterRes.error.details, hint: transporterRes.error.hint });
+        console.log('[AssignmentModal] Promise.all results:', {
+          fleetData: fleetRes.data?.length || 0, fleetError: fleetRes.error?.message,
+          driverData: driverRes.data?.length || 0, driverError: driverRes.error?.message,
+          transporterData: transporterRes.data?.length || 0, transporterError: transporterRes.error?.message,
+          tfData: tfRes?.data?.length || 0, tfError: tfRes?.error?.message,
+          tdData: tdRes?.data?.length || 0, tdError: tdRes?.error?.message,
+          assignedFleetData: assignedFleetRes?.data?.length || 0, assignedFleetError: assignedFleetRes?.error?.message,
+          assignedDriverData: assignedDriverRes?.data?.length || 0, assignedDriverError: assignedDriverRes?.error?.message,
+        });
+
+        if (fleetRes.error) console.error("[AssignmentModal] Error fetching fleets:", { code: fleetRes.error.code, message: fleetRes.error.message, details: fleetRes.error.details, hint: fleetRes.error.hint });
+        if (driverRes.error) console.error("[AssignmentModal] Error fetching drivers:", { code: driverRes.error.code, message: driverRes.error.message, details: driverRes.error.details, hint: driverRes.error.hint });
+        if (transporterRes.error) console.error("[AssignmentModal] Error fetching transporters:", { code: transporterRes.error.code, message: transporterRes.error.message, details: transporterRes.error.details, hint: transporterRes.error.hint });
+        if (tfRes?.error) console.error("[AssignmentModal] Error fetching all fleets:", { code: tfRes.error.code, message: tfRes.error.message });
+        if (tdRes?.error) console.error("[AssignmentModal] Error fetching all drivers:", { code: tdRes.error.code, message: tdRes.error.message });
+        if (assignedFleetRes?.error) console.error("[AssignmentModal] Error fetching assigned fleets:", { code: assignedFleetRes.error.code, message: assignedFleetRes.error.message });
+        if (assignedDriverRes?.error) console.error("[AssignmentModal] Error fetching assigned drivers:", { code: assignedDriverRes.error.code, message: assignedDriverRes.error.message });
 
         // [AI] Merge assigned fleets/drivers into the available lists so dropdowns always show them
         const availableFleets = fleetRes.data || [];
@@ -314,8 +334,9 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         });
         setAssignments(finalAssignments);
 
-      } catch (err) {
-        toast.error('Gagal memuat data dropdown');
+      } catch (err: any) {
+        console.error('[AssignmentModal] Fetch error:', err);
+        toast.error('Gagal memuat data dropdown: ' + (err.message || 'Unknown error'));
       } finally {
         setLoading(false);
       }
