@@ -2,6 +2,7 @@
 // [AI] reading from .env.local for Supabase credentials
 
 import { createClient } from '@supabase/supabase-js';
+import { runHealthCheck } from '@/lib/monitoring/health-check';
 import type {
   SystemHealth, CriticalAlert, TruckingMetrics, WmsMetrics, ForwardingMetrics,
   WorkflowStep, ErrorEntry, CronJobStatus, DbIntegrityIssue, UserActivityEntry,
@@ -25,7 +26,7 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
   const health: SystemHealth = {
     api: 'online',
     database: 'healthy',
-    supabase: client ? 'connected' : 'disconnected',
+    supabase: 'connected',
     active_users: 0,
     error_rate: 0,
     queue_status: 'healthy',
@@ -50,17 +51,34 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
   const user_activity: UserActivityEntry[] = [];
   const performance: PerformanceMetric[] = [];
 
-  if (!client) return { health, alerts, trucking, wms, forwarding, workflows, errors, audit_logs, crons, db_integrity, user_activity, performance };
+  if (!client) {
+    health.supabase = 'disconnected';
+    return { health, alerts, trucking, wms, forwarding, workflows, errors, audit_logs, crons, db_integrity, user_activity, performance };
+  }
 
   try {
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
     const [
-      auditRes, checkRes, joRes, woRes,
+      healthRes, auditRes, checkRes, joRes, woRes, activeUsersRes,
     ] = await Promise.allSettled([
+      runHealthCheck(),
       client.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(20),
       client.from('monitoring_checks').select('*').order('checked_at', { ascending: false }).limit(20),
       client.from('job_orders').select('id, jo_number, status, driver_id, fleet_id, driver_accepted_at, created_at'),
       client.from('work_orders').select('id, wo_number, status').eq('status', 'DRAFT'),
+      client.from('audit_logs').select('user_id', { count: 'exact', head: true }).not('user_id', 'is', null).gte('created_at', fifteenMinAgo),
     ]);
+
+    // Health checks — live from runHealthCheck()
+    if (healthRes.status === 'fulfilled') {
+      const report = healthRes.value;
+      const sup = report.checks.find((c) => c.component === 'supabase');
+      const api = report.checks.find((c) => c.component === 'api');
+      health.api = api?.status === 'pass' ? 'online' : 'down';
+      health.database = sup?.status === 'pass' ? 'healthy' : 'error';
+      health.supabase = sup?.status === 'pass' ? 'connected' : 'disconnected';
+    }
 
     // Audit logs
     if (auditRes.status === 'fulfilled') {
@@ -117,6 +135,16 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
           status: last?.status === 'pass' ? 'success' : 'failed',
         });
       }
+
+      // Error rate — live from monitoring_checks fail ratio
+      const total = checks.length;
+      const failed = checks.filter((c: any) => c.status === 'fail').length;
+      health.error_rate = total > 0 ? Math.round((failed / total) * 100) : 0;
+    }
+
+    // Active users — distinct user_id from audit_logs last 15min
+    if (activeUsersRes.status === 'fulfilled') {
+      health.active_users = activeUsersRes.value.count ?? 0;
     }
 
     // Integrity
@@ -129,9 +157,6 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
     performance.push(
       { endpoint: '/api/observability', avg_response_ms: 0, error_count: 0, calls: 0 },
     );
-
-    health.active_users = 1;
-    health.error_rate = errors.length > 0 ? Math.min(errors.length * 5, 100) : 0;
 
   } catch (_) { /* silent */ }
 
