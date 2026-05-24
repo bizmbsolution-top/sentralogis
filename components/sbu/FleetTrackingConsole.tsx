@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
    Truck, Search, Loader2, Zap, Box, MapPin, Navigation, ShieldCheck, Maximize2, Activity, MessageSquare, Menu, X, Clock, ChevronRight
@@ -23,6 +24,8 @@ const MissionMap = dynamic(() => import('./MissionMap'), {
 
 export default function FleetTrackingConsole() {
    const { profile } = useAuth();
+   const searchParams = useSearchParams();
+   const joParam = searchParams?.get('jo') || null;
    const [jobOrders, setJobOrders] = useState<any[]>([]);
    const [selectedJoId, setSelectedJoId] = useState<string | null>(null);
    const selectedJo = useMemo(() => jobOrders.find(j => j.id === selectedJoId) || null, [jobOrders, selectedJoId]);
@@ -42,7 +45,26 @@ export default function FleetTrackingConsole() {
    }, []);
 
    const fetchActiveJobs = useCallback(async () => {
-      if (!profile?.tenant_id) return;
+      // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+      let tenantId = profile?.tenant_id;
+      const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+      if (!tenantId && isGlobalRole) {
+         try {
+            const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+            if (tenantData && tenantData.length > 0) {
+               tenantId = tenantData[0].id;
+            }
+         } catch (e) {
+            console.error('Failed to resolve fallback tenant ID for FleetTrackingConsole:', e);
+         }
+      }
+
+      if (!tenantId) {
+         setLoading(false);
+         return;
+      }
+
       try {
          const { data: baseData, error: baseError } = await supabase
             .from('job_orders')
@@ -56,17 +78,30 @@ export default function FleetTrackingConsole() {
                   )
                )
             `)
-            .eq('tenant_id', profile?.tenant_id)
+            .eq('tenant_id', tenantId)
             .order('created_at', { ascending: false });
 
          if (baseError) throw baseError;
 
-         const ACTIVE_STATUSES = ['IN_PROGRESS','DALAM PERJALANAN','ON ROAD','ON JOURNEY','MENUJU ASAL','TIBA DI ASAL','PICKING_UP','DELIVERING','START JOURNEY','MENUNGGU BERANGKAT','STARTED','LOADING','UNLOADING','DITERIMA','SELESAI'];
-         const activeJOs = (baseData || []).filter(jo =>
-            jo.driver_id &&
-            jo.fleet_id &&
-            ACTIVE_STATUSES.includes((jo.status || '').toUpperCase())
-         );
+         // [AI] Expand active status checking to support dynamic stop-based statuses (e.g. 'TIBA DI ...', 'MENUJU ...')
+         const DONE_STATUSES = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE', 'INVOICED', 'PAID'];
+         const REJECTED_STATUSES = ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'];
+         const ACTIVE_STATUSES = [
+            'IN_PROGRESS', 'DALAM PERJALANAN', 'ON ROAD', 'ON JOURNEY', 'ON_ROAD',
+            'MENUJU ASAL', 'TIBA DI ASAL', 'PICKING_UP', 'DELIVERING', 
+            'START JOURNEY', 'MENUNGGU BERANGKAT', 'STARTED', 'LOADING', 
+            'UNLOADING', 'DITERIMA', 'SELESAI', 'ORDER DITERIMA', 'ACCEPTED'
+         ];
+         const activeJOs = (baseData || []).filter(jo => {
+            if (!jo.driver_id || !jo.fleet_id) return false;
+            const s = (jo.status || '').toUpperCase();
+            if (DONE_STATUSES.includes(s) || REJECTED_STATUSES.includes(s) || s === 'DRAFT') return false;
+            return (
+               ACTIVE_STATUSES.includes(s) ||
+               s.startsWith('TIBA DI') ||
+               s.startsWith('MENUJU')
+            );
+         });
 
          if (activeJOs.length > 0) {
             const joIds = activeJOs.map(j => j.id);
@@ -89,15 +124,18 @@ export default function FleetTrackingConsole() {
                const attachments = (docsRes?.data || []).filter((d: any) => d.job_order_id === jo.id);
                
                const enrichedRoutes = routes.map(r => {
-                  if (r.latitude && r.longitude) return r;
-                  const stops = jo.wo_item?.item_data?.stops || [];
-                  const matchingStop = stops.find((s: any) => s.sequence === r.sequence);
-                  return {
-                     ...r,
-                     latitude: matchingStop?.latitude || r.latitude,
-                     longitude: matchingStop?.longitude || r.longitude
-                  };
-               });
+                   const stops = jo.wo_item?.item_data?.stops || [];
+                   const matchingStop = stops.find((s: any) => s.sequence === r.sequence);
+                   return {
+                      ...r,
+                      // [AI] Always use original Work Order stop coordinates for the stop location itself
+                      latitude: matchingStop?.latitude || null,
+                      longitude: matchingStop?.longitude || null,
+                      // [AI] Store driver's actual update coordinates independently to know where they clicked
+                      actual_update_lat: r.latitude || null,
+                      actual_update_lng: r.longitude || null
+                   };
+                });
 
                let iconUrl = fleet?.fleet_type?.icon_url || null;
                if (iconUrl && !iconUrl.startsWith('http')) {
@@ -123,7 +161,14 @@ export default function FleetTrackingConsole() {
             });
 
             setJobOrders(enriched);
-            if (!selectedJoId && enriched.length > 0) setSelectedJoId(enriched[0].id);
+            if (!selectedJoId && enriched.length > 0) {
+               if (joParam) {
+                  const matched = enriched.find(j => j.jo_number === joParam);
+                  setSelectedJoId(matched ? matched.id : enriched[0].id);
+               } else {
+                  setSelectedJoId(enriched[0].id);
+               }
+            }
          } else {
             setJobOrders([]);
          }
@@ -133,7 +178,7 @@ export default function FleetTrackingConsole() {
       } finally {
          setLoading(false);
       }
-   }, [profile?.tenant_id, selectedJoId]);
+    }, [profile?.tenant_id, profile?.role, selectedJoId, joParam]);
 
    useEffect(() => {
       if (profile) {
@@ -170,7 +215,8 @@ export default function FleetTrackingConsole() {
    const getStatusColor = (status: string) => {
       const s = (status || '').toUpperCase();
       if (s.includes('DELIVER') || s.includes('SELESAI') || s.includes('DITERIMA')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      if (s.includes('ROAD') || s.includes('JOURNEY') || s.includes('PERJALANAN') || s.includes('DELIVERING')) return 'bg-blue-50 text-blue-700 border-blue-200';
+      // [AI] Support blue styling for dynamic/active transit statuses
+      if (s.includes('ROAD') || s.includes('JOURNEY') || s.includes('PERJALANAN') || s.includes('DELIVERING') || s.includes('MENUJU') || s.includes('IN_PROGRESS')) return 'bg-blue-50 text-blue-700 border-blue-200';
       if (s.includes('LOADING') || s.includes('PICKING') || s.includes('TIBA')) return 'bg-amber-50 text-amber-700 border-amber-200';
       return 'bg-slate-50 text-slate-600 border-slate-200';
    };

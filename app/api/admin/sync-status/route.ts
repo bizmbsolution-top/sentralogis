@@ -20,14 +20,14 @@ export async function POST(req: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
     const activeStatuses = ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'PAID', 'INVOICED', 'DONE', 'cancelled', 'rejected', 'draft', 'pending'];
 
-    // Find drivers that are on_duty but have no active jobs
+    // [AI] Fetch drivers who are either on_duty or on_road to check for stuck states
     const { data: allOnDutyDrivers, error: driversFetchError } = await supabaseAdmin
       .from('md_drivers')
       .select('id, name, status, is_working')
-      .eq('status', 'on_duty');
+      .in('status', ['on_duty', 'on_road']);
 
     if (driversFetchError) {
-      console.error('[sync-status] Error fetching on-duty drivers:', driversFetchError);
+      console.error('[sync-status] Error fetching on-duty/on-road drivers:', driversFetchError);
       return NextResponse.json({ success: false, error: driversFetchError.message }, { status: 500 });
     }
 
@@ -78,11 +78,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Find fleets that are on_road but have no active jobs
-    const { data: allOnRoadFleets, error: fleetsFetchError } = await supabaseAdmin
+    // Find fleets that are on_duty or on_road but have no active jobs
+    const { data: allActiveFleets, error: fleetsFetchError } = await supabaseAdmin
       .from('md_fleets')
       .select('id, plate_number, status')
-      .eq('status', 'on_road');
+      .in('status', ['on_duty', 'on_road']);
 
     if (fleetsFetchError) {
       console.error('[sync-status] Error fetching on-road fleets:', fleetsFetchError);
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     const fleetsToReset: any[] = [];
 
-    for (const fleet of allOnRoadFleets || []) {
+    for (const fleet of allActiveFleets || []) {
       const { data: activeJobs } = await supabaseAdmin
         .from('job_orders')
         .select('id, status')
@@ -142,9 +142,10 @@ export async function GET() {
   try {
     const activeStatuses = ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'PAID', 'INVOICED', 'DONE', 'cancelled', 'rejected', 'draft', 'pending'];
 
-    const [onDutyDrivers, onRoadFleets, activeJobs] = await Promise.all([
-      supabaseAdmin.from('md_drivers').select('id, name, status, is_working').eq('status', 'on_duty'),
-      supabaseAdmin.from('md_fleets').select('id, plate_number, status').eq('status', 'on_road'),
+    // [AI] Fetch drivers who are either on_duty or on_road to check for stuck states
+    const [onDutyDrivers, activeFleets, activeJobs] = await Promise.all([
+      supabaseAdmin.from('md_drivers').select('id, name, status, is_working').in('status', ['on_duty', 'on_road']),
+      supabaseAdmin.from('md_fleets').select('id, plate_number, status').in('status', ['on_duty', 'on_road']),
       supabaseAdmin.from('job_orders').select('id, driver_id, fleet_id, status').not('status', 'in', `(${activeStatuses.join(',')})`)
     ]);
 

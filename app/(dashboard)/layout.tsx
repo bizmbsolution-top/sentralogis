@@ -6,6 +6,7 @@ import TopNavbar from '@/components/layout/TopNavbar'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { ChatProvider } from '@/lib/contexts/ChatContext'
 
 export default function DashboardLayout({
   children,
@@ -13,7 +14,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, loading, isAuthenticated } = useAuth()
+  const { user, profile, loading, isAuthenticated } = useAuth()
   const router = useRouter()
 
   // [AI] Auth guard with timeout fallback - show content after 5s even if profile still loading
@@ -47,24 +48,30 @@ export default function DashboardLayout({
     return null
   }
 
+  if (!user?.id) {
+    return null
+  }
+
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      
-      <Sidebar 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
-        onLinkClick={() => {}} // [AI] Removed redundant router.refresh() on link click to keep transitions smooth
-      />
-      
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopNavbar 
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
+    <ChatProvider userId={user.id} tenantId={profile?.tenant_id}>
+      <div className="flex min-h-screen bg-slate-50">
+        
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)} 
+          onLinkClick={() => {}} // [AI] Removed redundant router.refresh() on link click to keep transitions smooth
         />
         
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-          {children}
-        </main>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <TopNavbar 
+            onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
+          />
+          
+          <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </ChatProvider>
   )
 }

@@ -41,6 +41,9 @@ interface CompletedJob {
   is_cost_finished?: boolean;
   advance_amount?: number;
   driver_payment_amount?: number;
+  driver_payment_status?: string;
+  base_price?: number;
+  driver_share_percentage?: number;
   created_at: string;
   advance_receipt_url?: string;
 }
@@ -67,6 +70,8 @@ function DocumentsAndFinancesContent() {
           wo_item_id, fleet_id, driver_id,
           advance_amount, advance_status, advance_receipt_url,
           driver_revenue_share,
+          driver_payment_amount, driver_payment_status,
+          base_price, driver_share_percentage,
           is_doc_finished, is_cost_finished, created_at, updated_at
         `)
         .in('status', [
@@ -269,101 +274,42 @@ function DocumentsAndFinancesContent() {
           </div>
         </div>
 
-        {/* Global Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-           <Card className="p-6 border-none shadow-sm rounded-3xl bg-white group hover:shadow-lg transition-all duration-300">
-              <div className="flex items-center gap-4 mb-3">
-                 <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all">
-                    <CheckCircle size={24} />
-                 </div>
-                 <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Driver Accepted</p>
-                    <p className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">{stats.accepted} Units</p>
-                 </div>
-              </div>
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Orders confirmed by drivers awaiting settlement</p>
-           </Card>
-
-           <Card className="p-6 border-none shadow-sm rounded-3xl bg-white group hover:shadow-lg transition-all duration-300">
-              <div className="flex items-center gap-4 mb-3">
-                 <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <TrendingUp size={24} />
-                 </div>
-                 <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">On the Road</p>
-                    <p className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">{stats.onRoad} Units</p>
-                 </div>
-              </div>
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Active fleets currently in deployment</p>
-           </Card>
-
-           <Card className="p-6 border-none shadow-sm rounded-3xl bg-white group hover:shadow-lg transition-all duration-300">
-              <div className="flex items-center gap-4 mb-3">
-                 <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition-all">
-                    <Archive size={24} />
-                 </div>
-                 <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Job Done</p>
-                    <p className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">{stats.jobDone} Units</p>
-                 </div>
-              </div>
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Completed missions awaiting POD verification</p>
-           </Card>
-
-           <Card className="p-6 border-none shadow-sm rounded-3xl bg-slate-900 group hover:shadow-lg transition-all duration-300">
-              <div className="flex items-center gap-4 mb-3">
-                 <div className="w-12 h-12 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center group-hover:bg-emerald-400 group-hover:text-slate-900 transition-all">
-                    <Coins size={24} />
-                 </div>
-                 <div>
-                    <p className="text-[8px] font-black text-white/40 uppercase tracking-widest italic text-emerald-400">Ready to Invoice</p>
-                    <p className="text-xl font-black text-white italic uppercase tracking-tighter">{stats.readyForBilling} Units</p>
-                 </div>
-              </div>
-              <p className="text-[8px] font-bold text-white/30 uppercase tracking-tight">Verified cycles cleared for HQ billing</p>
-           </Card>
-        </div>
-
         {/* Filter Tabs */}
-        <div className="mt-12 flex flex-wrap items-center gap-3 bg-white p-2 rounded-[2.5rem] shadow-sm border border-slate-100 w-fit">
-          {[
-            { id: 'all', label: 'All Records', count: stats.total },
-            { id: 'accepted', label: 'Driver Accepted', count: stats.accepted },
-            { id: 'on-road', label: 'On the Road', count: stats.onRoad },
-            { id: 'done', label: 'Job Done', count: stats.jobDone },
-            { id: 'billing', label: 'Ready for Invoice', count: stats.readyForBilling }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
-              className={`h-12 px-8 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${
-                activeFilter === tab.id 
-                  ? (
-                      tab.id === 'accepted' ? 'bg-amber-50 text-amber-600 border-2 border-amber-200' :
-                      tab.id === 'on-road' ? 'bg-blue-50 text-blue-600 border-2 border-blue-200' :
-                      tab.id === 'done' ? 'bg-rose-50 text-rose-600 border-2 border-rose-200' :
-                      tab.id === 'billing' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
-                      'bg-slate-900 text-white shadow-lg'
-                    )
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-              }`}
-            >
-              {tab.label}
-              <span className={`px-2 py-0.5 rounded-lg text-[9px] ${
-                activeFilter === tab.id 
-                  ? (
-                      tab.id === 'accepted' ? 'bg-amber-600/10 text-amber-600' :
-                      tab.id === 'on-road' ? 'bg-blue-600/10 text-blue-600' :
-                      tab.id === 'done' ? 'bg-rose-600/10 text-rose-600' :
-                      tab.id === 'billing' ? 'bg-emerald-600/10 text-emerald-600' :
-                      'bg-white/20 text-white'
-                    )
-                  : 'bg-slate-100 text-slate-500'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+        <div className="mt-8">
+          <div className="relative">
+            <div className="flex lg:flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide w-fit lg:w-auto max-w-full">
+              <style dangerouslySetInnerHTML={{ __html: `
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
+                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+              `}} />
+              {[
+                { id: 'all', label: 'All', count: stats.total },
+                { id: 'accepted', label: 'Accepted', count: stats.accepted },
+                { id: 'on-road', label: 'On Road', count: stats.onRoad },
+                { id: 'done', label: 'Done', count: stats.jobDone },
+                { id: 'billing', label: 'Ready', count: stats.readyForBilling }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveFilter(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 lg:px-5 lg:py-2.5 rounded-xl text-[10px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-widest transition-all whitespace-nowrap flex-shrink-0 min-h-[44px] ${
+                    activeFilter === tab.id 
+                      ? 'bg-slate-900 text-white shadow-md scale-[1.02]' 
+                      : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] lg:text-[9px] font-black ${
+                    activeFilter === tab.id 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -444,25 +390,28 @@ function DocumentsAndFinancesContent() {
                         </div>
                      </div>
                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Settlement Progress</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Bagi Hasil Driver</p>
                         <div className="flex items-baseline gap-2">
                            <p className="text-xl font-black text-emerald-600 tracking-tighter italic">
-                              {formatRupiah(job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : (job.advance_amount || 0))}
+                              {formatRupiah(job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : ((job.base_price || 0) * (job.driver_share_percentage || 0) / 100))}
+                           </p>
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                              Advance: {formatRupiah(job.advance_amount || 0)}
                            </p>
                            {((job.driver_payment_amount || 0) > 0) && (
-                              <div className="flex items-center gap-2">
-                                 <span className="text-[9px] font-black text-slate-300">/</span>
-                                 <p className="text-[10px] font-black text-blue-500 uppercase italic">
-                                    Paid: {formatRupiah(job.driver_payment_amount || 0)}
-                                 </p>
-                              </div>
+                              <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest">
+                                 Pelunasan: {formatRupiah(job.driver_payment_amount || 0)}
+                              </p>
                            )}
-                        </div>
-                        {((job.driver_payment_amount || 0) > 0) && (
-                           <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest mt-1">
-                              Remaining: {formatRupiah((job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : (job.advance_amount || 0)) - (job.driver_payment_amount || 0))}
+                           <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest">
+                              Sisa: {formatRupiah(Math.max(0, 
+                                (job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : ((job.base_price || 0) * (job.driver_share_percentage || 0) / 100))
+                                - (job.advance_amount || 0) - (job.driver_payment_amount || 0)
+                              ))}
                            </p>
-                        )}
+                        </div>
                      </div>
                      <h3 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter leading-none group-hover:text-blue-600 transition-colors">
                         {job.md_drivers?.name || 'Assigned Driver'}

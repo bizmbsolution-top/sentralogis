@@ -5,6 +5,11 @@ import { use } from 'react';
 import { Truck, MapPin, Phone, ShieldCheck, Activity, MessageSquare } from 'lucide-react';
 import MissionTimeline from '@/components/sbu/MissionTimeline';
 
+const formatWA = (phone: string | null | undefined) => {
+  if (!phone) return '';
+  return phone.replace(/^0/, '62').replace(/^\+/, '').replace(/[^0-9]/g, '');
+};
+
 export default function PublicTrackingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const [jo, setJo] = useState<any>(null);
@@ -120,17 +125,17 @@ export default function PublicTrackingPage({ params }: { params: Promise<{ token
       <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200">
         <div className="max-w-2xl mx-auto grid grid-cols-2 gap-3">
           <a 
-            href={`https://wa.me/${jo.driver?.phone?.replace(/^0/, '62') || ''}`}
+            href={`https://wa.me/${formatWA(jo.driver?.phone)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 bg-emerald-500 text-white rounded-xl text-sm font-medium shadow-sm"
+            className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-medium shadow-sm ${jo.driver?.phone ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400 pointer-events-none'}`}
           >
             <MessageSquare className="w-4 h-4" />
             WhatsApp
           </a>
           <a 
             href={`tel:${jo.driver?.phone || ''}`}
-            className="flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-xl text-sm font-medium shadow-sm"
+            className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-medium shadow-sm ${jo.driver?.phone ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400 pointer-events-none'}`}
           >
             <Phone className="w-4 h-4" />
             Call Driver

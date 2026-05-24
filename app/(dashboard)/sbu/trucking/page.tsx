@@ -33,8 +33,24 @@ export default function SBUTruckingDashboard() {
     const fetchStats = useCallback(async () => {
         try {
             setLoading(true);
-            const tenantId = profile?.tenant_id;
-            if (!tenantId) return;
+            let tenantId = profile?.tenant_id;
+            const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+            if (!tenantId && isGlobalRole) {
+                try {
+                    const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+                    if (tenantData && tenantData.length > 0) {
+                        tenantId = tenantData[0].id;
+                    }
+                } catch (e) {
+                    console.error('Failed to resolve fallback tenant ID for SBUTruckingDashboard:', e);
+                }
+            }
+
+            if (!tenantId) {
+                setLoading(false);
+                return;
+            }
 
             const [josRes, itemsRes, driversRes, fleetsRes] = await Promise.all([
                 supabase.from('job_orders')
@@ -69,17 +85,26 @@ export default function SBUTruckingDashboard() {
             const ACTIVE_TRANSIT_STATUSES = ['IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY', 'TIBA DI ASAL', 'MENUJU ASAL', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'STARTED', 'LOADING', 'UNLOADING'];
 
             const ACTIVE_TRACKING_STATUSES = ['IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY', 'MENUJU ASAL', 'TIBA DI ASAL', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT', 'STARTED', 'LOADING', 'UNLOADING', 'DITERIMA', 'SELESAI'];
-            const active = jos.filter(jo =>
-                jo.driver_id &&
-                jo.fleet_id &&
-                ACTIVE_TRACKING_STATUSES.includes((jo.status || '').toUpperCase())
-            ).length;
+            const active = jos.filter(jo => {
+                if (!jo.driver_id || !jo.fleet_id) return false;
+                const s = (jo.status || '').toUpperCase();
+                return (
+                    ACTIVE_TRACKING_STATUSES.includes(s) ||
+                    s.startsWith('TIBA DI') ||
+                    s.startsWith('MENUJU')
+                );
+            }).length;
 
-            const moving = jos.filter(j => 
-                !DONE_STATUSES.includes(j.status?.toUpperCase()) && 
-                !REJECTED_STATUSES.includes(j.status?.toUpperCase()) &&
-                (j.driver_response === 'accepted' || ACTIVE_TRANSIT_STATUSES.includes(j.status?.toUpperCase()))
-            ).length;
+            const moving = jos.filter(j => {
+                const s = j.status?.toUpperCase() || '';
+                if (DONE_STATUSES.includes(s) || REJECTED_STATUSES.includes(s)) return false;
+                return (
+                    j.driver_response === 'accepted' || 
+                    ACTIVE_TRANSIT_STATUSES.includes(s) ||
+                    s.startsWith('TIBA DI') ||
+                    s.startsWith('MENUJU')
+                );
+            }).length;
 
             const pending = items.filter(i => ['PENDING', 'NEED_ASSIGNMENT', 'NEED_ASSIGN'].includes(i.status?.toUpperCase())).length;
             const completed = jos.filter(j => DONE_STATUSES.includes(j.status?.toUpperCase())).length;

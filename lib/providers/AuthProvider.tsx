@@ -52,6 +52,9 @@ const getDashboardRoute = (role: string) => {
     case 'sbu_manager_tr': return '/sbu/trucking';
     case 'sbu_ops_tr': return '/sbu/trucking/work-orders';
     case 'sbu_fin_tr': return '/sbu/trucking/finances';
+    case 'sbu_manager_wh': return '/sbu/warehouse';
+    case 'sbu_ops_wh': return '/sbu/warehouse/inbound';
+    case 'sbu_admin_wh': return '/sbu/warehouse';
     case 'sbu_fin_wh': return '/sbu/warehouse/finances';
     case 'sbu_fin_fwd': return '/sbu/forwarding/finances';
     case 'driver': return '/driver/jobs';
@@ -73,10 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hasInitializedProfile = useRef(false);
   const isFetchingProfile = useRef(false);
+  const profileCache = useRef<Profile | null>(null);
 
   const fetchFullProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      // Run queries in parallel for faster loading
+      // Run queries in parallel with extended timeout
       const [profileResult, tenantResult] = await Promise.all([
         Promise.race([
           supabase
@@ -84,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('id, full_name, role, is_active, created_at, updated_at')
             .eq('id', userId)
             .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))
         ]),
         Promise.race([
           supabase
@@ -92,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('tenant_id, role_code, full_name')
             .eq('user_id', userId)
             .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))
         ])
       ]);
 
@@ -106,32 +110,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('[Auth] Profile role:', profileData?.role);
       console.log('[Auth] Tenant role_code:', tenantData?.role_code);
 
-      if (profileError || !profileData) {
-        console.error('[Auth] Profile fetch failed:', profileError);
+      // If profiles table fails, try tenant_users only
+      if ((profileError || !profileData) && (!tenantData || tenantError)) {
+        console.error('[Auth] Both profile and tenant fetch failed:', { profileError, tenantError });
         return null;
       }
 
       // Accept role from EITHER profiles.role OR tenant_users.role_code
-      const roleFromProfiles = profileData.role || '';
+      const roleFromProfiles = profileData?.role || '';
       const roleFromTenant = tenantData?.role_code || '';
       const finalRole = roleFromTenant || roleFromProfiles;
 
       console.log('[Auth] Final role:', finalRole);
 
+      // Build profile from available data
+      const sourceData = profileData || tenantData;
       const finalProfile: Profile = {
-        id: profileData.id,
+        id: profileData?.id || tenantData?.user_id || userId,
         email: '',
-        full_name: profileData.full_name || 'User',
+        full_name: profileData?.full_name || tenantData?.full_name || 'User',
         role: finalRole,
-        is_active: profileData.is_active ?? false,
-        created_at: profileData.created_at || '',
-        updated_at: profileData.updated_at || ''
+        is_active: profileData?.is_active ?? true, // Default to true if not found
+        created_at: profileData?.created_at || '',
+        updated_at: profileData?.updated_at || ''
       };
 
       if (!tenantError && tenantData) {
         finalProfile.tenant_id = tenantData.tenant_id;
         finalProfile.tenant_code = tenantData.tenant_id;
-        if (tenantData.full_name) finalProfile.full_name = tenantData.full_name;
       }
 
       // Fetch tenant name in background (non-blocking)
@@ -142,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('tenant_code, name')
             .eq('id', finalProfile.tenant_id)
             .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]).then((result: any) => {
           if (result?.data) {
             finalProfile.tenant_code = result.data.tenant_code;
@@ -187,24 +193,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         const timeoutId = setTimeout(() => {
           if (isFetchingProfile.current) {
+            console.warn('[Auth] Profile fetch timeout, using cache if available');
             isFetchingProfile.current = false;
             setLoading(false);
+            if (profileCache.current) {
+              setProfile(profileCache.current);
+              hasInitializedProfile.current = true;
+            }
           }
-        }, 15000);
+        }, 30000);
         
         try {
           const p = await fetchFullProfile(session.user.id);
           clearTimeout(timeoutId);
           
-          if (!p?.role || p.role === '' || p.is_active === false) {
-            console.error('[Auth] Role validation failed:', { role: p?.role, isActive: p?.is_active });
-            if (!p?.role || p.role === '') {
-              toast.error('Akun tidak memiliki role. Cek tabel profiles.role dan tenant_users.role_code di Supabase.');
-            } else if (p.is_active === false) {
-              toast.error('Akun Anda dinonaktifkan. Hubungi administrator.');
-            } else {
-              toast.error('Akun Anda belum memiliki peran yang valid. Silakan hubungi administrator.');
-            }
+          // Jika fetch gagal/timeout tapi ada cache, pakai cache
+          if (!p && profileCache.current) {
+            console.warn('[Auth] Profile fetch failed, using cached profile');
+            setProfile(profileCache.current);
+            hasInitializedProfile.current = true;
+            isFetchingProfile.current = false;
+            setLoading(false);
+            return;
+          }
+          
+          // Validate profile and role
+          if (!p) {
+            console.error('[Auth] Profile is null');
+            // Jangan langsung logout, beri kesempatan retry
+            toast.error('Gagal memuat profil. Memeriksa koneksi...');
+            isFetchingProfile.current = false;
+            setLoading(false);
+            // Tetap biarkan user logged in, profile akan di-fetch ulang saat auth state change
+            return;
+          }
+
+          if (!p.role || p.role === '') {
+            console.error('[Auth] Role validation failed:', { 
+              role: p.role, 
+              isActive: p.is_active,
+              id: p.id 
+            });
+            toast.error('Akun tidak memiliki role. Hubungi administrator untuk set role di database.');
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            hasInitializedProfile.current = false;
+            isFetchingProfile.current = false;
+            setLoading(false);
+            return;
+          }
+
+          if (p.is_active === false) {
+            console.error('[Auth] Account disabled');
+            toast.error('Akun Anda dinonaktifkan. Hubungi administrator.');
             await supabase.auth.signOut();
             setUser(null);
             setProfile(null);
@@ -215,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           setProfile(p);
+          profileCache.current = p;
           hasInitializedProfile.current = true;
           isFetchingProfile.current = false;
           setLoading(false);
@@ -229,6 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
+          console.error('[Auth] Profile fetch exception:', fetchErr);
           isFetchingProfile.current = false;
           setLoading(false);
         }
@@ -250,6 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasInitializedProfile.current = false;
       isFetchingProfile.current = false;
       setLoading(true);
+      
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
@@ -258,6 +303,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { data: null, error };
       }
 
+      // Wait for profile to be fetched by onAuthStateChange
+      // Give it up to 20 seconds to complete
+      const maxWait = 20000;
+      const startTime = Date.now();
+      
+      while (isFetchingProfile.current && (Date.now() - startTime) < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Check if profile was successfully set
+      if (!hasInitializedProfile.current) {
+        console.warn('[Auth] Profile not initialized after login');
+        // Don't fail the login, let the onAuthStateChange handle validation
+      }
+
+      setLoading(false);
       return { data, error: null };
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');

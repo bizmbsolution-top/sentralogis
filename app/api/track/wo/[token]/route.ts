@@ -90,10 +90,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         } : null
       }
 
+      const woItem = woItemMap.get(jo.wo_item_id) || null;
+      // [AI] Enrich routes with decoupled coordinates: target planned coordinates vs driver actual update coordinates
+      const enrichedRoutes = (routes || []).map((r: any) => {
+        const stops = woItem?.item_data?.stops || [];
+        const matchingStop = stops.find((s: any) => s.sequence === r.sequence);
+        return {
+          ...r,
+          // [AI] Always use original Work Order stop coordinates for the stop location itself
+          latitude: matchingStop?.latitude || null,
+          longitude: matchingStop?.longitude || null,
+          // [AI] Store driver's actual update coordinates independently to know where they clicked
+          actual_update_lat: r.latitude || null,
+          actual_update_lng: r.longitude || null
+        };
+      });
+
       return {
         ...jo,
-        wo_item: woItemMap.get(jo.wo_item_id) || null,
-        routes: routes || [],
+        wo_item: woItem,
+        routes: enrichedRoutes,
         tracking_history: tracking || [],
         driver: driverInfo,
         fleet: fleetInfo

@@ -1,7 +1,7 @@
 "use client";
 
-import { Banknote, PlusCircle, ShieldCheck } from "lucide-react";
-import { formatThousand } from "../../utils";
+import { Banknote, PlusCircle, ShieldCheck, Printer } from "lucide-react";
+import { formatThousand, printCashAdvanceSlip } from "../../utils";
 
 interface CockpitFinancialLedgerProps {
     jo: any;
@@ -49,9 +49,18 @@ export default function CockpitFinancialLedger({
                                                 <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Disbursed</span>
                                                 <span className="text-[24px] font-black italic text-[#1E293B] tracking-tighter leading-none">Rp {formatThousand(ca.amount)}</span>
                                             </div>
-                                            <span className={`text-[10px] font-black px-6 py-2.5 rounded-none uppercase tracking-widest shadow-lg border-2 ${ca.status === 'approved' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-white text-amber-500 border-amber-500'}`}>
-                                                {ca.status === 'approved' ? 'PAID / DISBURSED' : 'AWAITING TRANSFER'}
-                                            </span>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => printCashAdvanceSlip(jo, ca)}
+                                                    className="p-3 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-2 border-slate-200 transition-all flex items-center justify-center hover:border-emerald-500"
+                                                    title="Cetak Slip Kasbon"
+                                                >
+                                                    <Printer className="w-4 h-4" />
+                                                </button>
+                                                <span className={`text-[10px] font-black px-6 py-2.5 rounded-none uppercase tracking-widest shadow-lg border-2 ${ca.status === 'approved' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-white text-amber-500 border-amber-500'}`}>
+                                                    {ca.status === 'approved' ? 'PAID / DISBURSED' : 'AWAITING TRANSFER'}
+                                                </span>
+                                            </div>
                                         </div>
                                         {ca.transfer_proof_url && (
                                             <div className="pt-6 border-t border-slate-100 flex items-center justify-between">

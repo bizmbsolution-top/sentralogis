@@ -5,14 +5,14 @@ let clientInstance: ReturnType<typeof createSupabaseClient<Database>> | null = n
 
 export function createClient() {
   if (typeof window === 'undefined') return createSupabaseClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim(),
+    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
   );
 
   if (clientInstance) return clientInstance;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
 
   if (!url || !key) {
     console.warn("Supabase keys are missing in the browser environment.");

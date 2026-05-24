@@ -54,7 +54,26 @@ export default function IntelligenceTower() {
   const [activeTab, setActiveTab] = useState<'map' | 'details' | 'log'>('map');
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!profile?.tenant_id) return;
+    // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+    let tenantId = profile?.tenant_id;
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+    if (!tenantId && isGlobalRole) {
+      try {
+        const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+        if (tenantData && tenantData.length > 0) {
+          tenantId = tenantData[0].id;
+        }
+      } catch (e) {
+        console.error('Failed to resolve fallback tenant ID for IntelligenceTower:', e);
+      }
+    }
+
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+
     if (!silent) setLoading(true);
     
     try {
@@ -69,7 +88,7 @@ export default function IntelligenceTower() {
             )
         )
       `)
-      .eq('tenant_id', profile.tenant_id)
+      .eq('tenant_id', tenantId)
       .not('driver_id', 'is', null)
       .not('fleet_id', 'is', null)
       .order('created_at', { ascending: false });
@@ -152,7 +171,7 @@ export default function IntelligenceTower() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, profile, selectedJoId]);
+  }, [supabase, profile?.tenant_id, profile?.role, selectedJoId]);
 
   useEffect(() => {
     fetchData();
@@ -193,25 +212,40 @@ export default function IntelligenceTower() {
   };
 
   const handleShareToCustomer = () => {
-    if (!selectedJo?.wo_id) {
-      toast.error('Work Order ID tidak ditemukan');
+    if (!selectedJo) {
+      toast.error('Pilih job order terlebih dahulu');
       return;
     }
-    const link = `${window.location.origin}/track/wo/${selectedJo.wo_id}`;
-    const message = `Halo ${selectedJo.customer_name || 'Pelanggan'},\n\nBerikut link pelacakan pengiriman Anda:\n${selectedJo.wo_number}\n\nPantau semua armada secara real-time:\n${link}`;
+
+    const woId = selectedJo.wo_id || selectedJo.wo_item?.wo?.id || null;
+    const woNumber = selectedJo.wo_number || selectedJo.wo_item?.wo?.wo_number || 'N/A';
+    const joNumber = selectedJo.jo_number || 'N/A';
+    const customerName = selectedJo.customer_name || 'Pelanggan';
+    
+    let link: string;
+    if (woId) {
+      link = `${window.location.origin}/track/wo/${woId}`;
+    } else {
+      const token = selectedJo.driver_link_token || selectedJo.tracking_token || selectedJo.id;
+      link = `${window.location.origin}/jo/${token}`;
+    }
+    
+    const message = `Halo ${customerName},\n\nBerikut link pelacakan pengiriman Anda:\n${woNumber} - ${joNumber}\n\nPantau secara real-time:\n${link}`;
     
     let phone = selectedJo.customer_phone || '';
-    if (!phone) {
-      toast.error('Nomor telepon customer tidak ditemukan');
-      return;
-    }
     phone = phone.replace(/\D/g, '');
     if (phone.startsWith('0')) phone = '62' + phone.substring(1);
     if (phone.startsWith('8')) phone = '62' + phone;
 
-    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
-    toast.success('WhatsApp Web dibuka!');
+    if (phone && phone.length >= 10) {
+      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+    } else {
+      // Fallback: open WhatsApp Web with pre-filled message, user picks contact
+      const waWebUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+      window.open(waWebUrl, '_blank');
+    }
+    toast.success('Membuka WhatsApp...');
   };
 
   // Reusable sidebar content

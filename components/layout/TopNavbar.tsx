@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { Menu, LogOut, User as UserIcon, ChevronDown, Bell, Clock, ArrowRight, XCircle } from 'lucide-react'
+import { useChat } from '@/lib/contexts/ChatContext'
+import { Menu, LogOut, User as UserIcon, ChevronDown, Bell, Clock, ArrowRight, XCircle, MessageSquare } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import ChatInbox from '@/components/chat/ChatInbox'
 
 interface TopNavbarProps {
   onMenuClick: () => void
@@ -13,8 +15,10 @@ interface TopNavbarProps {
 
 const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
   const { profile, logout } = useAuth()
+  const { totalUnread } = useChat()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showChatInbox, setShowChatInbox] = useState(false)
   const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -246,6 +250,21 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         </div>
 
         <div className="flex items-center gap-3 md:gap-5">
+          {/* Chat Icon */}
+          <div className="relative">
+            <button onClick={() => setShowChatInbox(!showChatInbox)} className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group">
+              <MessageSquare size={20} className="group-hover:scale-110 transition-transform" />
+              {totalUnread > 0 && (
+                <>
+                  <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-blue-600 border-2 border-white rounded-full text-[9px] font-black text-white flex items-center justify-center px-1 shadow-sm">
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </span>
+                  <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-blue-600 rounded-full animate-ping opacity-20" />
+                </>
+              )}
+            </button>
+          </div>
+
           <div className="relative">
             <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group">
               <Bell size={20} className="group-hover:rotate-12 transition-transform" />
@@ -354,6 +373,16 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           </div>
         </div>
       </div>
+
+      {/* Chat Inbox */}
+      {profile && (
+        <ChatInbox
+          userId={profile.id}
+          tenantId={profile.tenant_id || undefined}
+          isOpen={showChatInbox}
+          onClose={() => setShowChatInbox(false)}
+        />
+      )}
     </header>
   )
 }

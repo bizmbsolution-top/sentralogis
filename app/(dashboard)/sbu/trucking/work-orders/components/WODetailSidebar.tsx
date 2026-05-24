@@ -7,8 +7,9 @@ import { toast } from 'react-hot-toast';
 import { 
   Truck, Loader2, Calendar, Clock, 
   User, Package, Building2,
-  ArrowLeft, X, Activity
+  ArrowLeft, X, Activity, MessageCircle
 } from 'lucide-react';
+import ChatPanel from '@/components/chat/ChatPanel';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import AssignmentModal from './AssignmentModal';
@@ -47,6 +48,7 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
   const [items, setItems] = useState<WOItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [showChat, setShowChat] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!woId || !profile?.tenant_id) return;
@@ -153,7 +155,16 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
             </div>
           </div>
           <h1 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] italic hidden sm:block">Work Order Detail</h1>
-          <button onClick={onClose} className="sm:hidden text-slate-400"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowChat(true)}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 text-slate-500 flex items-center justify-center border border-slate-200 transition-all active:scale-90"
+              title="Discussion"
+            >
+              <MessageCircle size={16} />
+            </button>
+            <button onClick={onClose} className="text-slate-400"><X size={20}/></button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -296,6 +307,26 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
           )}
         </div>
       </div>
+
+      {/* Chat Modal */}
+      {showChat && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#0a0e27] rounded-t-2xl border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <MessageCircle size={16} className="text-blue-400" />
+                <span className="text-white text-sm font-semibold">Discussion — {wo?.wo_number}</span>
+              </div>
+              <button onClick={() => setShowChat(false)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                <X size={16} className="text-white/60" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden rounded-b-2xl">
+              <ChatPanel channelType="work_order" entityId={woId} userId={profile?.id || ''} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedItem && (
         <AssignmentModal 

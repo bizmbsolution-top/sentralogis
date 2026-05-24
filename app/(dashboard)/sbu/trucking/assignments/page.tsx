@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -22,6 +23,8 @@ import Link from 'next/link';
 import { Printer, X, ShieldCheck as Shield, FileText, User as UserIcon, Truck as TruckIcon, MapPin as MapIcon } from 'lucide-react';
 import { sendNotification } from '@/lib/supabase/notifications';
 import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewModal';
+// [AI] Import printCashAdvanceSlip utility to print cash advance slips for internal drivers directly from assignments list
+import { printCashAdvanceSlip } from '../utils';
 
 // ---------------------------------------------------------
 // DELIVERY NOTE MODAL (Surat Jalan)
@@ -29,141 +32,209 @@ import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewMo
 const DeliveryNoteModal = ({ jo, onClose, profile }: { jo: any; onClose: () => void; profile: any }) => {
   if (!jo) return null;
 
-  const tenantName = profile?.tenants?.name || 'SENTRALOGIS OPS';
+  const [tenantLogo, setTenantLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile?.tenant_id) {
+      supabase
+        .from('tenants')
+        .select('logo_url')
+        .eq('id', profile.tenant_id)
+        .single()
+        .then(({ data }) => {
+          if (data?.logo_url) setTenantLogo(data.logo_url);
+        });
+    }
+  }, [profile?.tenant_id]);
+
+  const tenantName = profile?.tenants?.name || 'SENTRALOGIS';
   const creatorName = profile?.full_name || 'Operational Staff';
-  const customerName = jo.wo_item?.wo?.customer?.name || 'Pelanggan';
+  const customer = jo.wo_item?.wo?.customer || {};
+  const customerName = customer.legal_name || customer.name || '-';
+  const billingParts = [customer.billing_address, customer.billing_city, customer.billing_province, customer.billing_postal_code].filter(Boolean);
+  const customerAddress = billingParts.length > 0 ? billingParts.join(', ') : '-';
   const plateNumber = jo.md_fleets?.plate_number || '-';
   const truckType = jo.md_fleets?.fleet_type?.type_name || '-';
   const driverName = jo.md_drivers?.name || '-';
-  const origin = jo.wo_item?.item_data?.origin_name || jo.wo_item?.item_data?.shipper_city || 'Origin';
-  const destination = jo.wo_item?.item_data?.destination_name || jo.wo_item?.item_data?.recipient_city || 'Destination';
-  const joDate = format(new Date(jo.created_at), 'dd MMMM yyyy', { locale: id });
+  const driverPhone = jo.md_drivers?.phone || jo.driver_phone || '-';
+  
+  const itemData = jo.wo_item?.item_data || {};
+  const locations = itemData.locations || [];
+  const origin = locations.length > 0 
+    ? (locations[0].city || locations[0].name || locations[0].address || '-') 
+    : (itemData.origin_name || itemData.shipper_name || itemData.shipper_city || itemData.pickup_location || '-');
+  const destination = locations.length > 0 
+    ? (locations[locations.length - 1].city || locations[locations.length - 1].name || locations[locations.length - 1].address || '-') 
+    : (itemData.destination_name || itemData.recipient_name || itemData.recipient_city || itemData.delivery_location || '-');
+  const routeDisplay = locations.length > 2 
+    ? `${origin} → ... → ${destination} (${locations.length} stops)`
+    : `${origin} → ${destination}`;
+  
+  const joDate = format(new Date(jo.created_at), 'dd MMM yyyy', { locale: id });
+  const notes = itemData.notes || '-';
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 md:p-8">
-      <div className="bg-slate-900 w-full max-w-4xl h-[90vh] rounded-[2.5rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-slate-700 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+  const content = (
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 overflow-y-auto" id="print-overlay">
+      <div className="bg-white w-full max-w-3xl shadow-lg rounded-sm border border-gray-300" id="print-container">
         
         {/* Header Control */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900">
-           <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center shadow-inner">
-                 <FileText className="text-slate-300" size={20} />
-              </div>
-              <div>
-                 <h2 className="text-sm font-black text-white uppercase tracking-widest italic">Surat Jalan / Delivery Note</h2>
-                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{jo.jo_number}</p>
-              </div>
-           </div>
+        <div className="sticky top-0 z-10 px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between print:hidden">
            <div className="flex items-center gap-3">
-              <Button onClick={() => window.print()} className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest px-6 h-10 flex items-center gap-2 transition-all">
-                 <Printer size={16} /> Print Document
-              </Button>
-              <button onClick={onClose} className="w-10 h-10 bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-                 <X size={20} />
+              <FileText className="text-gray-600" size={16} />
+              <span className="text-sm font-medium text-gray-700">Surat Jalan - {jo.jo_number}</span>
+           </div>
+           <div className="flex items-center gap-2">
+              <button onClick={() => window.print()} className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded flex items-center gap-1.5 transition-colors">
+                 <Printer size={14} /> Print
+              </button>
+              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors">
+                 <X size={16} />
               </button>
            </div>
         </div>
 
         {/* Document Content */}
-        <div className="flex-1 overflow-y-auto p-12 bg-slate-900/50 print:bg-white print:p-0" id="delivery-note-print">
+        <div className="p-6" id="delivery-note-print">
            <style dangerouslySetInnerHTML={{ __html: `
+              @page { size: A4 portrait; margin: 10mm; }
               @media print {
-                body * { visibility: hidden; }
-                #delivery-note-print, #delivery-note-print * { visibility: visible; }
-                #delivery-note-print { position: absolute; left: 0; top: 0; width: 100%; }
+                body > *:not(#print-overlay) {
+                  display: none !important;
+                }
+                #print-overlay {
+                  position: static !important;
+                  width: 100% !important;
+                  height: auto !important;
+                  background: white !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  overflow: visible !important;
+                  z-index: auto !important;
+                }
+                #print-container {
+                  width: 100% !important;
+                  max-width: none !important;
+                  box-shadow: none !important;
+                  border: none !important;
+                  border-radius: 0 !important;
+                  margin: 0 !important;
+                }
+                .print\\:hidden {
+                  display: none !important;
+                }
+                #delivery-note-print {
+                  padding: 0 !important;
+                  margin: 0 !important;
+                }
+                table, tr, td, th, div {
+                  page-break-inside: avoid !important;
+                }
+                html, body {
+                  overflow: visible !important;
+                  height: auto !important;
+                }
               }
            `}} />
 
-           <div className="max-w-[800px] mx-auto border-2 border-slate-200 bg-white shadow-xl print:shadow-none p-12">
+           <div className="max-w-[190mm] mx-auto text-black">
               {/* Header */}
-              <div className="flex justify-between items-start mb-12 border-b-2 border-slate-900 pb-8">
-                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter mb-2">{tenantName}</h1>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] italic">Logistic & Distribution Services</p>
+              <div className="flex justify-between items-start border-b-2 border-black pb-3 mb-5">
+                 <div className="flex items-center gap-3">
+                    {tenantLogo && (
+                       <img src={tenantLogo} alt="Logo" className="h-8 w-auto object-contain" />
+                    )}
+                    <h1 className="text-lg font-bold">{tenantName}</h1>
                  </div>
                  <div className="text-right">
-                    <h2 className="text-xl font-black text-slate-900 uppercase italic mb-1">SURAT JALAN</h2>
-                    <p className="text-xs font-bold text-slate-500">NO: {jo.jo_number}</p>
-                    <p className="text-xs font-bold text-slate-500 mt-1">{joDate}</p>
+                    <h2 className="text-base font-bold">SURAT JALAN</h2>
+                    <p className="text-xs mt-0.5">No: {jo.jo_number}</p>
+                    <p className="text-xs">{joDate}</p>
                  </div>
               </div>
 
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-12 mb-12">
+              {/* Info Section */}
+              <div className="grid grid-cols-2 gap-6 mb-6">
                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Pihak Penerima / Customer</p>
-                    <p className="text-lg font-black text-slate-900 uppercase italic leading-tight">{customerName}</p>
-                    <p className="text-xs font-bold text-slate-500 mt-2">Lokasi Tujuan: {destination}</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Bill To / Customer</p>
+                    <p className="text-sm font-bold">{customerName}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{customerAddress}</p>
                  </div>
-                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Informasi Kendaraan & Driver</p>
-                    <div className="space-y-2">
-                       <div className="flex justify-between text-xs">
-                          <span className="font-bold text-slate-400 uppercase">Driver:</span>
-                          <span className="font-black text-slate-900 uppercase">{driverName}</span>
-                       </div>
-                       <div className="flex justify-between text-xs">
-                          <span className="font-bold text-slate-400 uppercase">Unit:</span>
-                          <span className="font-black text-slate-900 uppercase">{plateNumber}</span>
-                       </div>
-                       <div className="flex justify-between text-xs">
-                          <span className="font-bold text-slate-400 uppercase">Type:</span>
-                          <span className="font-black text-slate-900 uppercase">{truckType}</span>
-                       </div>
+                 <div className="border border-gray-300 rounded-md p-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Kendaraan & Driver</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                       <span className="text-gray-500">Driver:</span>
+                       <span className="font-medium">{driverName}</span>
+                       <span className="text-gray-500">Telp:</span>
+                       <span className="font-medium">{driverPhone}</span>
+                       <span className="text-gray-500">No. Polisi:</span>
+                       <span className="font-medium">{plateNumber}</span>
+                       <span className="text-gray-500">Jenis:</span>
+                       <span className="font-medium">{truckType}</span>
                     </div>
                  </div>
               </div>
 
               {/* Items Table */}
-              <table className="w-full mb-16">
+              <table className="w-full border border-gray-400 mb-5 text-xs">
                  <thead>
-                    <tr className="border-y-2 border-slate-900">
-                       <th className="py-4 text-left text-[10px] font-black uppercase tracking-widest italic">Deskripsi Barang / Jasa</th>
-                       <th className="py-4 text-center text-[10px] font-black uppercase tracking-widest italic w-24">Qty</th>
-                       <th className="py-4 text-left text-[10px] font-black uppercase tracking-widest italic pl-10">Rute Perjalanan</th>
+                    <tr className="bg-gray-50">
+                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold w-10">No</th>
+                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold">Deskripsi Barang</th>
+                       <th className="border border-gray-400 px-3 py-2 text-center font-semibold w-12">Qty</th>
+                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold">Rute</th>
                     </tr>
                  </thead>
-                 <tbody className="divide-y divide-slate-100">
+                 <tbody>
                     <tr>
-                       <td className="py-6">
-                          <p className="text-sm font-black text-slate-900 uppercase italic mb-1">PENGIRIMAN LOGISTIK</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">JO REF: {jo.jo_number}</p>
-                       </td>
-                       <td className="py-6 text-center font-black text-slate-900">1 UNIT</td>
-                       <td className="py-6 pl-10">
-                          <div className="flex items-center gap-2 text-[11px] font-black text-slate-700 uppercase italic">
-                             {origin} <span className="text-slate-300">→</span> {destination}
-                          </div>
-                       </td>
+                       <td className="border border-gray-400 px-3 py-2 text-center">1</td>
+                       <td className="border border-gray-400 px-3 py-2">{truckType}</td>
+                       <td className="border border-gray-400 px-3 py-2 text-center">1</td>
+                       <td className="border border-gray-400 px-3 py-2">{routeDisplay}</td>
                     </tr>
                  </tbody>
               </table>
 
-              {/* Signature Section */}
-              <div className="grid grid-cols-3 gap-8 text-center">
-                 <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-16 italic">Dibuat Oleh (Ops)</p>
-                    <p className="text-xs font-black text-slate-900 uppercase border-t border-slate-900 pt-2 inline-block min-w-[150px] italic">{creatorName}</p>
-                 </div>
-                 <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-16 italic">Driver / Pembawa</p>
-                    <p className="text-xs font-black text-slate-900 uppercase border-t border-slate-900 pt-2 inline-block min-w-[150px] italic">{driverName}</p>
-                 </div>
-                 <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-16 italic">Diterima Oleh</p>
-                    <p className="text-xs font-black text-slate-900 uppercase border-t border-slate-900 pt-2 inline-block min-w-[150px] italic">{customerName}</p>
+              {/* Notes */}
+              <div className="mb-8">
+                 <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Catatan</p>
+                 <div className="border border-gray-300 rounded-md p-3 text-xs text-gray-600 min-h-[35px]">
+                    {notes}
                  </div>
               </div>
 
-              {/* Footer Note */}
-              <div className="mt-20 pt-8 border-t border-slate-100 text-center">
-                 <p className="text-[8px] font-bold text-slate-300 uppercase tracking-[0.5em] italic">Surat Jalan ini sah sebagai bukti pengiriman barang resmi dari {tenantName}</p>
+              {/* Signature Section */}
+              <div className="grid grid-cols-3 gap-8 text-center mb-6">
+                 <div>
+                    <p className="text-xs text-gray-500 mb-12">Dibuat Oleh</p>
+                    <div className="border-t border-black pt-2">
+                       <p className="text-xs font-bold">{creatorName}</p>
+                    </div>
+                 </div>
+                 <div>
+                    <p className="text-xs text-gray-500 mb-12">Driver / Pengirim</p>
+                    <div className="border-t border-black pt-2">
+                       <p className="text-xs font-bold">{driverName}</p>
+                    </div>
+                 </div>
+                 <div>
+                    <p className="text-xs text-gray-500 mb-12">Penerima</p>
+                    <div className="border-t border-black pt-2">
+                       <p className="text-xs font-bold">{customerName}</p>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-gray-200 text-center">
+                 <p className="text-[9px] text-gray-400">Dokumen ini sah sebagai bukti pengiriman resmi dari {tenantName}</p>
               </div>
            </div>
         </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 };
 
 const supabase = createClient();
@@ -192,7 +263,26 @@ export default function JobOrderManagementPage() {
   }, [searchParams]);
 
   const fetchAssignments = useCallback(async (silent = false) => {
-    if (!profile?.tenant_id) return;
+    // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+    let tenantId = profile?.tenant_id;
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+    if (!tenantId && isGlobalRole) {
+      try {
+        const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+        if (tenantData && tenantData.length > 0) {
+          tenantId = tenantData[0].id;
+        }
+      } catch (e) {
+        console.error('Failed to resolve fallback tenant ID for SBU assignments:', e);
+      }
+    }
+
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+
     try {
       if (!silent) setLoading(true);
       
@@ -203,11 +293,11 @@ export default function JobOrderManagementPage() {
           wo_item:wo_items!wo_item_id (
             id, item_data,
             wo:work_orders!wo_id (
-              id, wo_number, customer:md_entities!customer_id (id, name)
+              id, wo_number, customer:md_entities!customer_id (id, legal_name, billing_address, billing_city, billing_province, billing_postal_code)
             )
           )
         `)
-        .eq('tenant_id', profile?.tenant_id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (baseError) throw baseError;
@@ -242,7 +332,7 @@ export default function JobOrderManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, profile?.tenant_id]);
+  }, [supabase, profile?.tenant_id, profile?.role]);
 
   useEffect(() => {
     fetchAssignments();
@@ -291,9 +381,9 @@ export default function JobOrderManagementPage() {
     // [AI] Rejected JOs get their own category — must come before 'assigned' check
     if (REJECTED_STATUSES.includes(s)) return 'rejected';
     if (DONE_STATUSES.includes(s)) return 'completed';
-    if (ACTIVE_STATUSES.includes(s) || dr === 'accepted') return 'active';
+    if (ACTIVE_STATUSES.includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU')) return 'active';
     // ASSIGNED: has driver/fleet, properly deployed via Complete Assignment flow
-    if (jo.driver_id && jo.fleet_id && !DONE_STATUSES.includes(s) && !ACTIVE_STATUSES.includes(s)) return 'assigned';
+    if (jo.driver_id && jo.fleet_id && !DONE_STATUSES.includes(s) && !ACTIVE_STATUSES.includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
     // NEW: no driver/fleet yet
     return 'awaiting';
   }, [ACTIVE_STATUSES, DONE_STATUSES, REJECTED_STATUSES]);
@@ -399,30 +489,38 @@ export default function JobOrderManagementPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="mt-8 flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-indigo-50 w-fit">
-          {[
-            { id: 'all', label: 'All Jobs', count: stats.total },
-            { id: 'new', label: 'New', count: stats.needsAssign },
-            { id: 'assigned', label: 'Assigned', count: stats.assignedCount },
-            { id: 'active', label: 'On Journey', count: stats.onJourney },
-            { id: 'rejected', label: 'Rejected', count: stats.rejected },
-            { id: 'completed', label: 'Job Done', count: stats.jobDone }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedStatus(tab.id)}
-              className={`h-10 px-5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                selectedStatus === tab.id 
-                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-sm' 
-                  : 'text-indigo-400 hover:bg-indigo-50/50 hover:text-indigo-600'
-              }`}
-            >
-              {tab.label}
-              <span className={`px-2 py-0.5 rounded-md text-[8px] ${selectedStatus === tab.id ? 'bg-indigo-200 text-indigo-900' : 'bg-indigo-50/80 text-indigo-500'}`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+        <div className="mt-8">
+          <div className="relative">
+            <div className="flex lg:flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-indigo-50 overflow-x-auto lg:overflow-visible scrollbar-hide w-fit lg:w-auto max-w-full">
+              <style dangerouslySetInnerHTML={{ __html: `
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
+                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+              `}} />
+              {[
+                { id: 'all', label: 'All', count: stats.total },
+                { id: 'new', label: 'New', count: stats.needsAssign },
+                { id: 'assigned', label: 'Assigned', count: stats.assignedCount },
+                { id: 'active', label: 'On Journey', count: stats.onJourney },
+                { id: 'rejected', label: 'Rejected', count: stats.rejected },
+                { id: 'completed', label: 'Done', count: stats.jobDone }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedStatus(tab.id)}
+                  className={`h-[44px] px-3 lg:px-5 rounded-xl text-[10px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
+                    selectedStatus === tab.id 
+                      ? 'bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-sm' 
+                      : 'text-indigo-400 hover:bg-indigo-50/50 hover:text-indigo-600'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] lg:text-[8px] ${selectedStatus === tab.id ? 'bg-indigo-200 text-indigo-900' : 'bg-indigo-50/80 text-indigo-500'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -606,6 +704,15 @@ export default function JobOrderManagementPage() {
                             >
                               <Printer size={14} /> PRINT DN
                             </Button>
+                            {/* [AI] Print cash advance/payout voucher button - only visible if there is an allocated advance amount */}
+                            {Number(jo.advance_amount || 0) > 0 && (
+                              <Button
+                                onClick={() => printCashAdvanceSlip(jo)}
+                                className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 hover:border-emerald-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                              >
+                                <Printer size={14} /> PRINT KASBON
+                              </Button>
+                            )}
                             {getJobCategory(jo) === 'active' ? (
                               <Link href="/hq/sbu-activities" className="w-full block">
                                 <Button className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30 transition-all active:scale-95">

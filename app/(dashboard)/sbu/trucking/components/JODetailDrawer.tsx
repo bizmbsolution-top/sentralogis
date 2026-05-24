@@ -4,10 +4,10 @@ import {
     XCircle, Truck, Activity, Loader2, MapPin, 
     Clock, ImageIcon, ExternalLink, Banknote, 
     CheckCircle2, FileText, Send, Save, PlusCircle, X, ArrowRight, Receipt,
-    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation as NavIcon, History, AlertCircle
+    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation as NavIcon, History, AlertCircle, Printer
 } from "lucide-react";
 import { GoogleMap, MarkerF, DirectionsRenderer, Polyline } from "@react-google-maps/api";
-import { formatThousand, getOperationalStatus } from "../utils";
+import { formatThousand, getOperationalStatus, printCashAdvanceSlip } from "../utils";
 import { useState, useEffect } from "react";
 import { supabase } from '@/lib/supabase/client';
 
@@ -437,9 +437,18 @@ export default function JODetailDrawer({
                                                     <div key={ca.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-[20px] font-black italic text-[#1E293B]">Rp {formatThousand(ca.amount)}</span>
-                                                            <span className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border ${ca.status === 'approved' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-amber-100 text-amber-600 border-amber-200'}`}>
-                                                                {ca.status === 'approved' ? 'Telah Dibayar (Paid)' : 'Menunggu Transfer'}
-                                                            </span>
+                                                            <div className="flex items-center gap-3">
+                                                                <button
+                                                                    onClick={() => printCashAdvanceSlip(jo, ca)}
+                                                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-xl border border-slate-200 transition-all flex items-center justify-center"
+                                                                    title="Cetak Slip Kasbon"
+                                                                >
+                                                                    <Printer className="w-4 h-4" />
+                                                                </button>
+                                                                <span className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest shadow-sm border ${ca.status === 'approved' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-amber-100 text-amber-600 border-amber-200'}`}>
+                                                                    {ca.status === 'approved' ? 'Telah Dibayar (Paid)' : 'Menunggu Transfer'}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         {ca.transfer_proof_url && (
                                                             <div className="pt-4 border-t border-slate-50 flex items-center justify-between">

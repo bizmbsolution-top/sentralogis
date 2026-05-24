@@ -17,6 +17,11 @@ const MissionMap = dynamic(() => import('@/components/sbu/MissionMap'), {
   )
 });
 
+const formatWA = (phone: string | null | undefined) => {
+  if (!phone) return '';
+  return phone.replace(/^0/, '62').replace(/^\+/, '').replace(/[^0-9]/g, '');
+};
+
 export default function WOTrackingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const [data, setData] = useState<any>(null);
@@ -308,17 +313,17 @@ export default function WOTrackingPage({ params }: { params: Promise<{ token: st
           {selectedJo ? (
             <div className="grid grid-cols-2 gap-3">
               <a 
-                href={`https://wa.me/${selectedJo.driver?.phone?.replace(/^0/, '62') || ''}`}
+                href={`https://wa.me/${formatWA(selectedJo.driver?.phone)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 py-3 bg-emerald-500 text-white rounded-xl text-sm font-medium shadow-sm"
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium shadow-sm ${selectedJo.driver?.phone ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400 pointer-events-none'}`}
               >
                 <MessageSquare className="w-4 h-4" />
                 WhatsApp Driver
               </a>
               <a 
                 href={`tel:${selectedJo.driver?.phone || ''}`}
-                className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium shadow-sm"
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium shadow-sm ${selectedJo.driver?.phone ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400 pointer-events-none'}`}
               >
                 <Phone className="w-4 h-4" />
                 Call Driver
@@ -326,10 +331,10 @@ export default function WOTrackingPage({ params }: { params: Promise<{ token: st
             </div>
           ) : (
             <a 
-              href={`https://wa.me/${wo.customer?.phone?.replace(/^0/, '62') || ''}`}
+              href={`https://wa.me/${formatWA(wo.customer?.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 text-white rounded-xl text-sm font-medium shadow-sm"
+              className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-medium shadow-sm ${wo.customer?.phone ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400 pointer-events-none'}`}
             >
               <MessageSquare className="w-4 h-4" />
               Contact Customer Service

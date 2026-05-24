@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const PRICE_PER_TOKEN = 1000;
+import { getTokenPrice } from '@/lib/actions/tokenPriceActions';
+
+const DEFAULT_PRICE_PER_TOKEN = 1000;
 
 export default function TenantTokenPage() {
   const supabase = createClient()!;
@@ -39,6 +41,18 @@ export default function TenantTokenPage() {
   const [amount, setAmount] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pricePerToken, setPricePerToken] = useState(DEFAULT_PRICE_PER_TOKEN);
+
+  useEffect(() => {
+    fetchPrice();
+  }, []);
+
+  const fetchPrice = async () => {
+    const result = await getTokenPrice();
+    if (result.success) {
+      setPricePerToken(result.price);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -97,7 +111,7 @@ export default function TenantTokenPage() {
         .from('topup-proofs')
         .getPublicUrl(fileName);
 
-      const totalPay = parseInt(amount) * PRICE_PER_TOKEN;
+      const totalPay = parseInt(amount) * pricePerToken;
       const { error: reqError } = await supabase.from('topup_requests').insert({
         tenant_id: tenant.id,
         tenant_code: tenant.tenant_code,
@@ -123,7 +137,7 @@ export default function TenantTokenPage() {
     }
   };
 
-  const calculatedPrice = (parseInt(amount) || 0) * PRICE_PER_TOKEN;
+  const calculatedPrice = (parseInt(amount) || 0) * pricePerToken;
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
   const approvedCount = requests.filter((r) => r.status === 'approved').length;

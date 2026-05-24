@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Package, Ship, Anchor, CheckCircle2, Clock, ShieldCheck, MapPin, Search, ChevronRight } from 'lucide-react';
 
 interface CargoStatus {

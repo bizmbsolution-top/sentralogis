@@ -8,7 +8,7 @@ import {
   Truck, Loader2, MapPin, Calendar, Clock, 
   ChevronRight, User, ClipboardList, ArrowLeft,
   CheckCircle2, AlertCircle, Package, Building2,
-  Navigation, ExternalLink, Activity
+  Navigation, ExternalLink, Activity, FileText, Plus, X, DollarSign, Search
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -55,6 +55,18 @@ export default function WorkOrderDetailPage() {
   const [items, setItems] = useState<WOItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [vendorInvoices, setVendorInvoices] = useState<any[]>([]);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    vendor_id: '',
+    invoice_number: '',
+    invoice_amount: '',
+    jo_ids: [] as string[],
+    notes: '',
+  });
+  const [availableVendors, setAvailableVendors] = useState<any[]>([]);
+  const [allJOs, setAllJOs] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!id || !profile?.tenant_id || id === '[id]') return;
@@ -136,6 +148,125 @@ export default function WorkOrderDetailPage() {
     fetchData();
   }, [fetchData]);
 
+  const fetchVendorInvoices = useCallback(async () => {
+    if (!id) return;
+    setVendorLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('vendor_invoices')
+        .select(`
+          *,
+          vendor:md_entities!vendor_id(name, vendor_type)
+        `)
+        .eq('wo_id', id)
+        .order('received_at', { ascending: false });
+
+      if (error) throw error;
+      setVendorInvoices(data || []);
+    } catch (err: any) {
+      console.error('Fetch vendor invoices error:', err);
+    } finally {
+      setVendorLoading(false);
+    }
+  }, [id]);
+
+  const fetchAvailableVendors = useCallback(async () => {
+    if (!profile?.tenant_id) return;
+    try {
+      const { data } = await supabase
+        .from('md_entities')
+        .select('id, name, vendor_type')
+        .eq('tenant_id', profile.tenant_id)
+        .eq('is_vendor', true)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      setAvailableVendors(data || []);
+    } catch (err: any) {
+      console.error('Fetch vendors error:', err);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (id && id !== '[id]') {
+      fetchVendorInvoices();
+      fetchAvailableVendors();
+    }
+  }, [id, fetchVendorInvoices, fetchAvailableVendors]);
+
+  const collectAllJOs = useCallback(() => {
+    const jos: any[] = [];
+    items.forEach(item => {
+      (item.job_orders || []).forEach(jo => {
+        jos.push({
+          id: jo.id,
+          jo_number: jo.jo_number,
+          status: jo.status,
+          transporter_id: jo.transporter_id,
+          transporter_name: jo.transporter?.name || 'Unknown',
+          base_price: jo.base_price,
+          purchase_price: jo.purchase_price,
+        });
+      });
+    });
+    setAllJOs(jos);
+  }, [items]);
+
+  useEffect(() => {
+    collectAllJOs();
+  }, [items, collectAllJOs]);
+
+  const handleCreateVendorInvoice = async () => {
+    if (!createFormData.vendor_id || !createFormData.invoice_amount || createFormData.jo_ids.length === 0) {
+      toast.error('Please fill in all required fields and select at least one JO');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('vendor_invoices').insert({
+        wo_id: id,
+        tenant_id: profile?.tenant_id,
+        vendor_id: createFormData.vendor_id,
+        invoice_number: createFormData.invoice_number || `VEND-${Date.now()}`,
+        invoice_amount: Number(createFormData.invoice_amount),
+        jo_ids: createFormData.jo_ids,
+        notes: createFormData.notes,
+        status: 'pending',
+        received_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+      toast.success('Vendor invoice created');
+      setShowCreateInvoice(false);
+      setCreateFormData({ vendor_id: '', invoice_number: '', invoice_amount: '', jo_ids: [], notes: '' });
+      fetchVendorInvoices();
+    } catch (err: any) {
+      toast.error(`Gagal: ${err.message}`);
+    }
+  };
+
+  const toggleJOSelection = (joId: string) => {
+    setCreateFormData(prev => ({
+      ...prev,
+      jo_ids: prev.jo_ids.includes(joId)
+        ? prev.jo_ids.filter(id => id !== joId)
+        : [...prev.jo_ids, joId]
+    }));
+  };
+
+  const handleVendorSelect = (vendorId: string) => {
+    setCreateFormData(prev => ({ ...prev, vendor_id: vendorId }));
+    const selectedVendor = availableVendors.find(v => v.id === vendorId);
+    if (selectedVendor) {
+      const vendorJOs = allJOs.filter(jo => jo.transporter_id === vendorId);
+      setCreateFormData(prev => ({
+        ...prev,
+        jo_ids: vendorJOs.map(jo => jo.id),
+        invoice_amount: vendorJOs.reduce((sum, jo) => sum + Number(jo.purchase_price || 0), 0).toString(),
+      }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -178,15 +309,233 @@ export default function WorkOrderDetailPage() {
           </div>
           <h1 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] italic">Work Order Cockpit</h1>
           <div className="flex items-center gap-3">
-             <div className="text-right hidden md:block">
+              <div className="text-right hidden md:block">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Customer</p>
                 <p className="text-[11px] font-black text-slate-900 uppercase">{wo.customer.name}</p>
              </div>
              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200">
                 <Building2 size={16} />
-             </div>
-          </div>
-        </div>
+            </div>
+         </div>
+
+         {/* Vendor Invoice Matching Panel */}
+         <div className="lg:col-span-12 mt-8">
+            <Card className="p-6 border-slate-200 shadow-sm bg-white rounded-2xl">
+               <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+                        <FileText size={18} />
+                     </div>
+                     <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Vendor Invoice Matching</h3>
+                        <p className="text-xs text-slate-400">Track vendor invoices for this WO</p>
+                     </div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setShowCreateInvoice(true);
+                      setCreateFormData({ vendor_id: '', invoice_number: '', invoice_amount: '', jo_ids: [], notes: '' });
+                    }}
+                    className="h-9 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-lg"
+                  >
+                     <Plus size={14} className="mr-1" /> Create Invoice
+                  </Button>
+               </div>
+
+               {vendorLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                     <Loader2 className="w-6 h-6 text-rose-600 animate-spin mr-2" />
+                     <p className="text-xs text-slate-400">Loading vendor invoices...</p>
+                  </div>
+               ) : vendorInvoices.length === 0 ? (
+                  <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-xl">
+                     <FileText size={32} className="text-slate-300 mx-auto mb-2" />
+                     <p className="text-xs text-slate-400">No vendor invoices yet. Create one to start tracking.</p>
+                  </div>
+               ) : (
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-left">
+                        <thead>
+                           <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide">Invoice #</th>
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide">Vendor</th>
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide text-right">Amount</th>
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide">JOs</th>
+                              <th className="px-4 py-2.5 text-[10px] font-medium text-slate-500 uppercase tracking-wide">Received</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                           {vendorInvoices.map((inv: any) => {
+                              const statusColors: Record<string, string> = {
+                                 pending: 'bg-amber-50 text-amber-700',
+                                 submitted: 'bg-blue-50 text-blue-700',
+                                 verified: 'bg-emerald-50 text-emerald-700',
+                                 approved: 'bg-purple-50 text-purple-700',
+                                 paid: 'bg-slate-100 text-slate-700',
+                                 rejected: 'bg-rose-50 text-rose-700',
+                              };
+                              return (
+                                 <tr key={inv.id} className="hover:bg-slate-50/50">
+                                    <td className="px-4 py-3 text-xs font-mono text-slate-900">{inv.invoice_number || 'N/A'}</td>
+                                    <td className="px-4 py-3">
+                                       <div className="text-xs text-slate-900">{inv.vendor?.name || 'Unknown'}</div>
+                                       <div className="text-[10px] text-slate-400">{inv.vendor?.vendor_type || '-'}</div>
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900">
+                                       Rp {Number(inv.invoice_amount || 0).toLocaleString('id-ID')}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                       <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${statusColors[inv.status] || 'bg-slate-100 text-slate-600'}`}>
+                                          {inv.status || 'pending'}
+                                       </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                       <div className="flex flex-wrap gap-1">
+                                          {(inv.jo_ids || []).map((joId: string) => {
+                                             const jo = allJOs.find(j => j.id === joId);
+                                             return jo ? (
+                                                <span key={joId} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-mono rounded">
+                                                   {jo.jo_number}
+                                                </span>
+                                             ) : null;
+                                          })}
+                                       </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-slate-500">
+                                       {inv.received_at ? new Date(inv.received_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '-'}
+                                    </td>
+                                 </tr>
+                              );
+                           })}
+                        </tbody>
+                     </table>
+                  </div>
+               )}
+            </Card>
+         </div>
+      </div>
+
+      {/* Create Vendor Invoice Modal */}
+      {showCreateInvoice && (
+         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border-none">
+               <div className="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                  <div>
+                     <h3 className="text-lg font-semibold text-slate-900">Create Vendor Invoice</h3>
+                     <p className="text-xs text-slate-400 mt-0.5">Match vendor costs to this WO</p>
+                  </div>
+                  <button onClick={() => setShowCreateInvoice(false)} className="p-1.5 hover:bg-slate-100 rounded-lg">
+                     <X size={18} className="text-slate-500" />
+                  </button>
+               </div>
+
+               <div className="p-5 space-y-5">
+                  {/* Vendor Selection */}
+                  <div>
+                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Vendor *</label>
+                     <select
+                        value={createFormData.vendor_id}
+                        onChange={(e) => handleVendorSelect(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/10"
+                     >
+                        <option value="">Select vendor...</option>
+                        {availableVendors.map(v => (
+                           <option key={v.id} value={v.id}>[{v.vendor_type}] {v.name}</option>
+                        ))}
+                     </select>
+                  </div>
+
+                  {/* Invoice Number */}
+                  <div>
+                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Invoice Number</label>
+                     <input
+                        type="text"
+                        value={createFormData.invoice_number}
+                        onChange={(e) => setCreateFormData(prev => ({ ...prev, invoice_number: e.target.value }))}
+                        placeholder="Auto-generated if empty"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/10"
+                     />
+                  </div>
+
+                  {/* Invoice Amount */}
+                  <div>
+                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Amount (Rp) *</label>
+                     <input
+                        type="number"
+                        value={createFormData.invoice_amount}
+                        onChange={(e) => setCreateFormData(prev => ({ ...prev, invoice_amount: e.target.value }))}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/10"
+                     />
+                  </div>
+
+                  {/* JO Selection */}
+                  <div>
+                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Link to Job Orders *</label>
+                     <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-50">
+                        {allJOs.length === 0 ? (
+                           <div className="p-4 text-xs text-slate-400 text-center">No JOs available</div>
+                        ) : (
+                           allJOs.map(jo => (
+                              <label
+                                 key={jo.id}
+                                 className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
+                                    createFormData.jo_ids.includes(jo.id) ? 'bg-rose-50' : 'hover:bg-slate-50'
+                                 }`}
+                              >
+                                 <input
+                                    type="checkbox"
+                                    checked={createFormData.jo_ids.includes(jo.id)}
+                                    onChange={() => toggleJOSelection(jo.id)}
+                                    className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                                 />
+                                 <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                       <span className="text-xs font-mono font-medium text-slate-900">{jo.jo_number}</span>
+                                       <span className="text-[10px] text-slate-400">{jo.transporter_name}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                       Purchase: Rp {Number(jo.purchase_price || 0).toLocaleString('id-ID')}
+                                    </div>
+                                 </div>
+                              </label>
+                           ))
+                        )}
+                     </div>
+                     <p className="text-[10px] text-slate-400 mt-1">{createFormData.jo_ids.length} JO(s) selected</p>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Notes</label>
+                     <textarea
+                        value={createFormData.notes}
+                        onChange={(e) => setCreateFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Additional notes..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/10"
+                     />
+                  </div>
+               </div>
+
+               <div className="p-5 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+                  <Button
+                     onClick={() => setShowCreateInvoice(false)}
+                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg"
+                  >
+                     Cancel
+                  </Button>
+                  <Button
+                     onClick={handleCreateVendorInvoice}
+                     className="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm rounded-lg"
+                  >
+                     <Plus size={14} className="mr-1" /> Create Invoice
+                  </Button>
+               </div>
+            </Card>
+         </div>
+      )}
       </div>
 
       <div className="max-w-[1400px] mx-auto px-6 pt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">

@@ -1,0 +1,63 @@
+{
+  "name": "stock-transfer",
+  "version": "v1",
+  "description": "Multi-warehouse stock transfer workflow. Generates PICKING → LOADING → TRUCKING → UNLOADING → PUTAWAY JOs.",
+  "trigger_on_wo_type": "STOCK_TRANSFER",
+  "steps": [
+    {
+      "id": "generate_picking",
+      "name": "Generate PICKING JO",
+      "description": "Create picking job for source warehouse",
+      "action": "create_job_order",
+      "jo_type": "PICKING",
+      "target_org_type": "SBU_WAREHOUSE",
+      "conditions": [],
+      "sla_minutes": 120,
+      "requires_approval": false
+    },
+    {
+      "id": "generate_loading",
+      "name": "Generate LOADING JO",
+      "description": "Create loading job after picking complete",
+      "action": "create_job_order",
+      "jo_type": "LOADING",
+      "target_org_type": "SBU_WAREHOUSE",
+      "depends_on": ["generate_picking"],
+      "sla_minutes": 60,
+      "requires_approval": false
+    },
+    {
+      "id": "generate_trucking",
+      "name": "Generate TRUCKING JO",
+      "description": "Create trucking job for inter-warehouse transport",
+      "action": "create_job_order",
+      "jo_type": "TRUCKING",
+      "target_org_type": "SBU_TRUCKING",
+      "depends_on": ["generate_loading"],
+      "sla_minutes": 480,
+      "requires_approval": false
+    },
+    {
+      "id": "generate_unloading",
+      "name": "Generate UNLOADING JO",
+      "description": "Create unloading job at destination warehouse",
+      "action": "create_job_order",
+      "jo_type": "UNLOADING",
+      "target_org_type": "SBU_WAREHOUSE",
+      "depends_on": ["generate_trucking"],
+      "sla_minutes": 60,
+      "requires_approval": false
+    },
+    {
+      "id": "generate_putaway",
+      "name": "Generate PUTAWAY JO",
+      "description": "Create putaway job to stow items in destination bins",
+      "action": "create_job_order",
+      "jo_type": "PUTAWAY",
+      "target_org_type": "SBU_WAREHOUSE",
+      "depends_on": ["generate_unloading"],
+      "sla_minutes": 120,
+      "requires_approval": false
+    }
+  ]
+}

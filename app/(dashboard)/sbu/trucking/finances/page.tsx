@@ -24,7 +24,26 @@ export default function TruckingFinanceCockpit() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchData = useCallback(async () => {
-    if (!profile?.tenant_id) return;
+    // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+    let tenantId = profile?.tenant_id;
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+    if (!tenantId && isGlobalRole) {
+      try {
+        const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+        if (tenantData && tenantData.length > 0) {
+          tenantId = tenantData[0].id;
+        }
+      } catch (e) {
+        console.error('Failed to resolve fallback tenant ID for SBU finances:', e);
+      }
+    }
+
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // Simplify query to avoid 500 error from complex joins
@@ -34,7 +53,7 @@ export default function TruckingFinanceCockpit() {
             id, jo_number, status, base_price, purchase_price, created_at, 
             wo_item_id, advance_amount, advance_status, is_doc_finished, is_cost_finished
         `)
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
       if (joError) throw joError;
@@ -63,7 +82,7 @@ export default function TruckingFinanceCockpit() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.tenant_id]);
+  }, [profile?.tenant_id, profile?.role]);
 
   useEffect(() => {
     fetchData();

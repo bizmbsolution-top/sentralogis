@@ -2,5 +2,27 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/health",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/trucking-check",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/wms-check",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/forwarding-check",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

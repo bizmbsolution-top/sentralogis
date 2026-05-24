@@ -2,6 +2,47 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createJournalEntry } from '@/lib/finance/journaling'
 
+// [AI] Safe utility to find Job Order by any of the token columns or ID
+// Bypasses PostgREST type casting issues with mixed UUID and string columns
+async function findJobOrder(supabase: any, token: string) {
+  if (!token) return null;
+
+  const isUuid = token.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  const selectColumns = `
+    id, jo_number, status, tenant_id, wo_item_id, tracking_token, 
+    driver_link_token, driver_phone, completed_at, pod_photo_url, driver_response, 
+    advance_amount, advance_status, advance_receipt_url, 
+    driver_id, fleet_id, base_price, driver_share_percentage, driver_payment_amount,
+    accepted_at, started_at, rejection_note
+  `;
+
+  if (isUuid) {
+    // [AI] For valid UUID format: query ID and UUID/VARCHAR token columns safely using .or()
+    const { data, error } = await supabase
+      .from('job_orders')
+      .select(selectColumns)
+      .or(`id.eq.${token},wa_token.eq.${token},tracking_token.eq.${token},driver_link_token.eq.${token}`)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[AI] findJobOrder UUID query failed:', error);
+    }
+    if (data) return data;
+  }
+
+  // [AI] For non-UUID format or if UUID match failed: query only VARCHAR columns to prevent invalid UUID syntax error
+  const { data, error } = await supabase
+    .from('job_orders')
+    .select(selectColumns)
+    .or(`tracking_token.eq.${token},driver_link_token.eq.${token}`)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[AI] findJobOrder VARCHAR query failed:', error);
+  }
+  return data;
+}
+
 // GET: Ambil data JO berdasarkan tracking_token ATAU wa_token
 export async function GET(
   request: NextRequest,
@@ -15,88 +56,8 @@ export async function GET(
       return NextResponse.json({ error: 'Token tidak ditemukan' }, { status: 400 })
     }
 
-    // 1. Ambil data Job Order - search by all token types + id fallback
-    let jobOrder = null;
-    let joError = null;
-    
-    // Use raw REST API with ::text cast to avoid UUID parsing errors
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nsvkewvmzivudkcczhnk.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    const tokenColumns = ['tracking_token', 'wa_token', 'driver_link_token'];
-    
-    for (const col of tokenColumns) {
-      const url = `${supabaseUrl}/rest/v1/job_orders?${col}::text=eq.${encodeURIComponent(token)}&select=id,jo_number,status,tenant_id,wo_item_id,tracking_token,driver_link_token,driver_phone,accepted_at,started_at,loaded_at,unloaded_at,completed_at,pod_photo_url,driver_response,driver_response_at,advance_amount,advance_status,advance_receipt_url,driver_id,fleet_id`;
-      
-      const res = await fetch(url, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        cache: 'no-store'
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          jobOrder = data[0];
-          break;
-        }
-      }
-    }
-
-    // Fallback: try matching by id (UUID format)
-    if (!jobOrder && !joError && token.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      const { data: idMatch, error: idError } = await supabase
-        .from('job_orders')
-        .select(`
-          id,
-          jo_number,
-          status,
-          tenant_id,
-          wo_item_id,
-          tracking_token,
-          driver_link_token,
-          driver_phone,
-          accepted_at,
-          started_at,
-          loaded_at,
-          unloaded_at,
-          completed_at,
-          pod_photo_url,
-          driver_response,
-          driver_response_at,
-          advance_amount,
-          advance_status,
-          advance_receipt_url,
-          wo_item:wo_item_id (
-            id,
-            item_code,
-            sbu_type,
-            item_data,
-            wo:wo_id (
-              id,
-              wo_number,
-              customer_id,
-              execution_date,
-              notes
-            )
-          ),
-          driver_id,
-          fleet_id
-        `)
-        .eq('id', token)
-        .maybeSingle();
-
-      if (idMatch) {
-        jobOrder = idMatch;
-      } else if (idError) {
-        joError = idError;
-      }
-    }
-
-    if (joError) throw joError
+    // [AI] Find Job Order securely using our unified look-up helper
+    const jobOrder = await findJobOrder(supabase, token);
     if (!jobOrder) return NextResponse.json({ error: 'Job Order tidak ditemukan' }, { status: 404 })
 
     // Fetch wo_item separately
@@ -226,32 +187,8 @@ export async function PATCH(
     const { status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note } = body
     const supabase = createAdminClient()
 
-    // 1. Cari JO - search by all token types using raw REST
-    let jo = null;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    const tokenColumns = ['tracking_token', 'wa_token', 'driver_link_token'];
-    
-    for (const col of tokenColumns) {
-      const url = `${supabaseUrl}/rest/v1/job_orders?${col}=eq.${encodeURIComponent(token)}&select=id,jo_number,wo_item_id,base_price,driver_share_percentage,tenant_id,driver_payment_amount`;
-      
-      const res = await fetch(url, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          jo = data[0];
-          break;
-        }
-      }
-    }
-
+    // [AI] Find Job Order securely using our unified look-up helper
+    const jo = await findJobOrder(supabase, token);
     if (!jo) return NextResponse.json({ error: 'JO not found' }, { status: 404 })
 
     // Handle photo upload via base64
@@ -342,6 +279,14 @@ export async function PATCH(
       
       if (routeError) throw routeError
 
+      // [AI] Re-fetch allRoutes to get the latest updated status and prevent stale granularStatus calculations
+      const { data: updatedRoutes } = await supabase
+        .from('job_routes')
+        .select('id, sequence, status, stop_type, location_name')
+        .eq('job_order_id', jo.id)
+        .order('sequence', { ascending: true });
+      if (updatedRoutes) allRoutes = updatedRoutes;
+
       // AUTO-UPDATE loaded_at / unloaded_at on JO and granular status
       let granularStatus = 'IN PROGRESS'
       // allRoutes already fetched above for validation
@@ -385,9 +330,9 @@ export async function PATCH(
       if (route_status === 'completed') {
         const routeInfo = allRoutes?.find((r: any) => r.id === route_id)
         if (routeInfo?.stop_type === 'PICKUP') {
-          await supabase.from('job_orders').update({ loaded_at: new Date().toISOString() }).eq('id', jo.id)
+          await supabase.from('job_orders').update({ updated_at: new Date().toISOString() }).eq('id', jo.id)
         } else if (routeInfo?.stop_type === 'DROPOFF') {
-          await supabase.from('job_orders').update({ unloaded_at: new Date().toISOString() }).eq('id', jo.id)
+          await supabase.from('job_orders').update({ updated_at: new Date().toISOString() }).eq('id', jo.id)
         }
       }
 
@@ -421,9 +366,8 @@ export async function PATCH(
       }
       
       if (newStatus === 'accepted') {
-        updateData.accepted_at = new Date().toISOString()
         updateData.driver_response = 'accepted'
-        updateData.driver_response_at = new Date().toISOString()
+        updateData.accepted_at = new Date().toISOString()
         
         // Notify Finance
         try {
@@ -440,12 +384,13 @@ export async function PATCH(
           console.warn('[API] Finance notification failed:', e)
         }
       }
+      if (newStatus === 'in_progress') {
+        updateData.started_at = new Date().toISOString()
+      }
       if (newStatus === 'rejected') {
         updateData.driver_response = 'rejected'
-        updateData.driver_response_at = new Date().toISOString()
         updateData.rejection_note = rejection_note || null
       }
-      if (newStatus === 'in_progress') updateData.started_at = new Date().toISOString()
       if (newStatus === 'completed') updateData.completed_at = new Date().toISOString()
 
       const { error: joUpdateError } = await supabase

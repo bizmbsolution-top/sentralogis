@@ -54,6 +54,7 @@ interface Entity {
   billing_longitude: number;
   billing_directions: string;
   billing_method: string;
+  payment_terms?: string;
   notes: string;
   is_active: boolean;
   tenant_id: string;
@@ -101,6 +102,7 @@ export default function HQContactsPage() {
     billing_longitude: 0,
     billing_directions: '',
     billing_method: 'hardcopy',
+    payment_terms: '',
     notes: '',
     is_active: true,
     parent_id: '',
@@ -227,6 +229,7 @@ export default function HQContactsPage() {
         billing_longitude: Number(formData.billing_longitude) || 0,
         billing_directions: formData.billing_directions,
         billing_method: formData.billing_method,
+        payment_terms: formData.payment_terms,
         notes: formData.notes,
         is_active: formData.is_active,
         parent_id: formData.parent_id || null,
@@ -366,6 +369,7 @@ export default function HQContactsPage() {
         billing_longitude: entity.billing_longitude || 0,
         billing_directions: entity.billing_directions || '',
         billing_method: entity.billing_method || 'hardcopy',
+        payment_terms: entity.payment_terms || '',
         notes: entity.notes || '',
         is_active: entity.is_active,
         parent_id: entity.parent_id || '',
@@ -397,7 +401,8 @@ export default function HQContactsPage() {
         billing_longitude: 0,
         billing_directions: '',
         billing_method: 'hardcopy',
-        notes: '',
+    payment_terms: '',
+    notes: '',
         is_active: true,
         parent_id: '',
       });
@@ -517,9 +522,12 @@ export default function HQContactsPage() {
                                     {ent.is_customer && <Badge className="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-medium px-2 py-0.5 rounded">Customer</Badge>}
                                     {ent.is_supplier && <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-medium px-2 py-0.5 rounded">Supplier</Badge>}
                                     {ent.is_vendor && <Badge className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-medium px-2 py-0.5 rounded">Vendor</Badge>}
-                                    {ent.is_broker && <Badge className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium px-2 py-0.5 rounded">Broker</Badge>}
-                                 </div>
-                              </td>
+                                     {ent.is_broker && <Badge className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium px-2 py-0.5 rounded">Broker</Badge>}
+                                  </div>
+                                  {ent.payment_terms && (
+                                    <div className="text-[10px] text-emerald-600 font-medium mt-1">TOP: {ent.payment_terms}</div>
+                                  )}
+                               </td>
                               <td className="px-4 py-3">
                                  <div className="space-y-1">
                                     <div className="flex items-center gap-1.5 text-slate-600">
@@ -662,6 +670,26 @@ export default function HQContactsPage() {
                         <option value="epod">E-POD (Langsung Tagih Setelah Scan)</option>
                       </select>
                       <p className="text-[9px] text-slate-400 mt-1 italic">Hardcopy: Butuh tanda terima SJ fisik. E-POD: Cukup verifikasi digital.</p>
+                    </div>
+                  )}
+                  {(formData.is_customer || formData.is_vendor) && (
+                    <div className="animate-in slide-in-from-top-2">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Payment Terms (TOP)</label>
+                      <select 
+                        value={formData.payment_terms}
+                        onChange={(e) => setFormData({...formData, payment_terms: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 bg-emerald-50/30"
+                      >
+                        <option value="">Select TOP...</option>
+                        <option value="COD">COD (Cash on Delivery)</option>
+                        <option value="7 days">7 days</option>
+                        <option value="14 days">14 days</option>
+                        <option value="30 days">30 days</option>
+                        <option value="45 days">45 days</option>
+                        <option value="60 days">60 days</option>
+                        <option value="90 days">90 days</option>
+                      </select>
+                      <p className="text-[9px] text-slate-400 mt-1 italic">Terms of Payment — countdown starts from invoice acceptance.</p>
                     </div>
                   )}
                   <div>

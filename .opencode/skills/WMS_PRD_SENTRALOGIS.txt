@@ -1,0 +1,1004 @@
+# PRODUCT REQUIREMENT DOCUMENT (PRD)
+## Modul Warehouse Management System (WMS)
+### SENTRALOGIS WMS SBU MODUL
+
+---
+
+| Dokumen | Detail |
+| :--- | :--- |
+| **Nama Produk** | SENTRALOGIS WMS (Warehouse Management System) |
+| **Versi Dokumen** | v1.0 |
+| **Tanggal** | 20 Mei 2026 |
+| **Penanggung Jawab** | Tim Product & Engineering SENTRALOGIS |
+| **Lingkup** | Modul WMS dalam Platform Logistik Terintegrasi |
+| **Target Pengguna** | SBU Warehouse, HQ-CS, Finance, Customer 3PL |
+
+---
+
+## DAFTAR ISI
+
+1. [Ringkasan Eksekutif](#1-ringkasan-eksekutif)
+2. [Visi & Tujuan Produk](#2-visi--tujuan-produk)
+3. [Persona Pengguna](#3-persona-pengguna)
+4. [Arsitektur Konseptual](#4-arsitektur-konseptual)
+5. [Fungsionalitas Inti](#5-fungsionalitas-inti)
+6. [Struktur Data & Entitas](#6-struktur-data--entitas)
+7. [Alur Proses Bisnis](#7-alur-proses-bisnis)
+8. [Aturan Bisnis & Validasi](#8-aturan-bisnis--validasi)
+9. [Integrasi Antar Modul](#9-integrasi-antar-modul)
+10. [Antarmuka Pengguna](#10-antarmuka-pengguna)
+11. [Keamanan & Akses](#11-keamanan--akses)
+12. [Roadmap Pengembangan](#12-roadmap-pengembangan)
+13. [Kriteria Sukses](#13-kriteria-sukses)
+14. [Lampiran: Glosarium](#14-lampiran-glosarium)
+
+---
+
+## 1. Ringkasan Eksekutif
+
+### 1.1 Latar Belakang
+
+SENTRALOGIS adalah platform SaaS multitenant logistik terintegrasi dengan SBU lengkap: Forwarding, Trucking, Warehouse, dan Clearance. Saat ini, operasional pergudangan masih berjalan secara semi-manual atau menggunakan sistem terpisah yang tidak terintegrasi dengan modul lain. Hal ini menyebabkan:
+
+- **Inkonsistensi data stok** antar sistem
+- **Keterlambatan penagihan** jasa gudang karena kalkulasi manual
+- **Kesulitan tracking** barang multi-customer dalam satu fasilitas
+- **Tidak ada visibilitas real-time** utilisasi gudang per zona
+- **Profitabilitas per area** tidak terukur
+
+### 1.2 Solusi yang Diusulkan
+
+Sentralogis WMS adalah modul dalam platform logistik terintegrasi yang berfungsi ganda:
+1. **Sebagai pendukung operasional** modul Forwarding (menerima Job Order inbound/outbound)
+2. **Sebagai produk mandiri** untuk layanan 3PL Warehouse Service kepada pelanggan eksternal
+
+### 1.3 Nilai Bisnis
+
+| Stakeholder | Nilai yang Diberikan |
+| :--- | :--- |
+| **SBU Warehouse** | Otomatisasi operasional, tracking real-time, utilisasi optimal |
+| **HQ Finance** | Kalkulasi tagihan otomatis, P&L per area gudang |
+| **Customer Service** | Visibilitas stok customer, update status real-time |
+| **Customer 3PL** | Portal mandiri cek stok, riwayat transaksi, invoice digital |
+| **Manajemen** | Dashboard utilisasi, profitabilitas per zona, pengambilan keputusan berbasis data |
+
+---
+
+## 2. Visi & Tujuan Produk
+
+### 2.1 Visi
+
+**"Menjadi satu-satunya sumber kebenaran (single source of truth) untuk seluruh operasi penyimpanan dan penanganan barang di seluruh fasilitas tenants, yang mampu melayani kompleksitas multi-komoditi, multi-zona, multi-customer, dengan kemampuan penagihan yang fleksibel."**
+
+### 2.2 Tujuan Spesifik (SMART Goals)
+
+| Tujuan | Metrik | Target |
+| :--- | :--- | :--- |
+| **Akurasi Stok** | Selisih stok fisik vs sistem | < 0.1% per bulan |
+| **Kecepatan Inbound** | Waktu dari barang tiba → status "Available" | < 15 menit |
+| **Akurasi Tagihan** | Selisih tagihan manual vs otomatis | < 0.5% per bulan |
+| **Utilisasi Gudang** | Persentase kapasitas terpakai terlaporkan | Real-time dashboard |
+| **Customer Satisfaction** | Skor kepuasan customer 3PL | > 4.5/5.0 |
+
+---
+
+## 3. Persona Pengguna
+
+### 3.1 Internal tenants
+
+| Persona | Tanggung Jawab | Kebutuhan Utama |
+| :--- | :--- | :--- |
+| **Warehouse Supervisor** | Mengelola operasional harian gudang | Assign task, monitor progress, lihat utilisasi zona |
+| **Warehouse Staff (Inbound)** | Menerima barang masuk | Scan cepat, input data, cetak label |
+| **Warehouse Staff (Outbound)** | Menyiapkan barang keluar | Picking list, verifikasi, packing |
+| **Warehouse Staff (VAS)** | Kitting, bundling, repack | Instruksi kerja, BOM, scan komponen |
+| **Warehouse Manager** | Mengelola profitabilitas gudang | P&L per area, efisiensi operasional, laporan |
+| **HQ Customer Service** | Melayani pertanyaan customer | Cek stok real-time, status inbound/outbound |
+| **HQ Finance** | Penagihan jasa gudang | Data pemakaian ruang & handling untuk invoice |
+
+### 3.2 Eksternal (Customer 3PL)
+
+| Persona | Kebutuhan Utama |
+| :--- | :--- |
+| **Customer Warehouse (Shipper)** | Cek stok, buat request inbound/outbound, lihat invoice |
+| **Customer Receiving** | Konfirmasi penerimaan barang di tujuan |
+
+---
+
+## 4. Arsitektur Konseptual
+
+### 4.1 Posisi Modul dalam Platform
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PLATFORM LOGISTIK SENTRALOGIS                  │
+├─────────────────────────────────────────────────────────────┤
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐ │
+│  │ FORWARDING│  │ TRUCKING  │  │ WAREHOUSE │  │ CLEARANCE │ │
+│  │  MODULE   │  │  MODULE   │  │  MODULE   │  │  MODULE   │ │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘ │
+│        │              │              │              │        │
+│        └──────────────┴──────┬───────┴──────────────┘        │
+│                              ▼                               │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │              SHARED KERNEL                               ││
+│  │  • Vendor Master  • Location Master  • Rate Engine       ││
+│  │  • Finance Ledger • Document Vault   • Notification      ││
+│  └──────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Prinsip Desain
+
+1. **Satu Modul, Dua Mode Operasi:**
+   - **Mode Internal:** Menerima Job Order dari modul Forwarding
+   - **Mode 3PL:** Menerima Storage Contract langsung dari customer
+
+2. **SBU sebagai Profit Center:** WMS mencatat biaya operasional internal dan menghasilkan revenue dari customer 3PL
+
+3. **Inventory_ID sebagai Unit Pelacakan Terkecil:** Setiap kemasan fisik unik dilacak dengan ID sendiri
+
+---
+
+## 5. Fungsionalitas Inti
+
+### 5.1 Manajemen Fasilitas & Lokasi
+
+#### 5.1.1 Warehouse Setup
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Multi-Warehouse** | Kelola banyak gudang: DC, Sub-DC, Shop (Konsinyasi) | P0 |
+| **Area Configuration** | Definisikan area: Yard, Indoor Floor, Racking, Cold Storage, Hazmat, Bonded | P0 |
+| **Zone Management** | Bagi area menjadi zona operasional dengan karakteristik spesifik | P0 |
+| **Location Bin** | Tracking hingga level bin/slot/koordinat lantai | P0 |
+| **Capacity Definition** | Kapasitas per area/zona (dalam PAL, CBM, SQM) | P0 |
+
+#### 5.1.2 Karakteristik Area
+
+| Kode Area | Deskripsi | Karakteristik Khusus |
+| :--- | :--- | :--- |
+| `YARD` | Penyimpanan lapangan terbuka | Grid marking, tumpukan terbatas, weather-resistant only |
+| `INDOOR_FLOOR` | Lantai dalam gedung | Block stacking atau palletized, floor load capacity |
+| `RACKING` | Rak bertingkat | Bin location, kapasitas berat per level |
+| `COLD_FREEZER` | Cold storage beku | Suhu -25°C s/d -18°C, sensor IoT wajib |
+| `COLD_CHILLER` | Cold storage dingin | Suhu 0°C s/d 5°C, sensor IoT wajib |
+| `HAZMAT` | Bahan berbahaya | Sertifikasi khusus, ventilasi, isolasi |
+| `BONDED` | Kawasan berikat | Tracking dokumen kepabeanan |
+
+### 5.2 Manajemen Barang & Inventori
+
+#### 5.2.1 SKU Hierarchy
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Product Master** | Data induk produk dengan SKU unik | P0 |
+| **Multi-Level SKU** | Base Unit → Inner Pack → Master Case → Pallet | P0 |
+| **Conversion Matrix** | Faktor konversi antar level (1 master = 4 inner = 48 eaches) | P0 |
+| **Commodity Type** | Tagging komoditi: FROZEN, CHILL, DRY, HAZMAT, FRAGILE, PHARMA | P0 |
+| **Handling Requirement** | Suhu, kelembaban, orientasi, stack limit per SKU | P0 |
+| **Picking Strategy** | FIFO, FEFO, LEFO, Batch Optimized per SKU | P0 |
+
+#### 5.2.2 Unique Inventory Tracking
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Inventory_ID** | Barcode unik per unit fisik (setiap kemasan) | P0 |
+| **Parent-Child Tracking** | Hierarki kemasan (dus besar berisi dus kecil) | P0 |
+| **Lot/Batch Tracking** | Nomor batch, tanggal produksi | P0 |
+| **Expiry Date** | Tanggal kadaluarsa untuk FEFO | P0 |
+| **Serial Number** | Nomor seri untuk elektronik/alat berat | P1 |
+| **Status Inventory** | Available, Reserved, Quarantine, Damaged, In Transit | P0 |
+| **Current Location** | Lokasi real-time sampai level bin | P0 |
+
+### 5.3 Operasional Inbound
+
+#### 5.3.1 Penerimaan Barang
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Receipt Order** | Dokumen penerimaan yang terhubung ke WO/PO/Transfer Order | P0 |
+| **Quick Scan Receiving** | Input via scan barcode/QR dengan auto-populate data | P0 |
+| **CBM/Weight Capture** | Input dimensi dan berat aktual saat inbound | P0 |
+| **Foto Kondisi** | Kamera untuk dokumentasi kondisi barang saat terima | P1 |
+| **Exception Handling** | Catat kerusakan, selisih jumlah, atau overage | P0 |
+| **Label Generation** | Cetak label Inventory_ID otomatis setelah receiving | P0 |
+
+#### 5.3.2 Putaway
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Smart Putaway** | Sistem rekomendasikan lokasi simpan berdasarkan komoditi & kapasitas | P0 |
+| **Zone Validation** | Tolak putaway jika komoditi tidak cocok dengan zona (misal FROZEN ke AMBIENT) | P0 |
+| **Manual Override** | Staff bisa pilih lokasi lain dengan alasan (tercatat di log) | P1 |
+| **Scan-to-Locate** | Scan barcode barang → Scan barcode lokasi → Konfirmasi | P0 |
+
+### 5.4 Operasional Outbound
+
+#### 5.4.1 Picking
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Picking List Generation** | Generate daftar ambil berdasarkan order, diurutkan berdasarkan FIFO/FEFO | P0 |
+| **Wave Picking** | Kelompokkan picking list untuk efisiensi (satu trip ambil banyak order) | P1 |
+| **Guided Picking** | Tablet menuntun staff ke lokasi bin secara berurutan | P1 |
+| **Scan Verification** | Scan barcode barang saat picking untuk verifikasi | P0 |
+| **Picking Exception** | Catat jika barang tidak ditemukan, rusak, atau kadaluarsa | P0 |
+| **FEFO Enforcement** | Sistem tolak scan jika barang yang di-scan bukan yang paling expired | P0 |
+
+#### 5.4.2 Packing & Dispatch
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Packing Station** | Verifikasi barang sebelum dikemas akhir | P0 |
+| **Packing List Auto-Generate** | Cetak packing list per pengiriman | P0 |
+| **Dispatch Confirmation** | Scan akhir sebelum barang keluar gate | P0 |
+| **Loading Validation** | Validasi barang yang dimuat ke truk sesuai delivery order | P1 |
+
+### 5.5 Transformasi Barang
+
+#### 5.5.1 Kitting & Bundling
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Bill of Materials (BOM)** | Definisikan komponen kit: SKU input → SKU output | P0 |
+| **Transformation Order** | Work order untuk melakukan kitting/bundling | P0 |
+| **Component Consumption** | Auto-deduct komponen dari stok saat kitting selesai | P0 |
+| **Output Generation** | Auto-generate Inventory_ID baru untuk hasil kitting | P0 |
+| **Waste Factor** | Konfigurasi toleransi kehilangan material | P1 |
+
+#### 5.5.2 Break-Bulk & Repack
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Break-Bulk Order** | Perintah pecah dus besar menjadi satuan | P0 |
+| **Parent-Child Record** | Catat Inventory_ID induk dan anak-anak hasil pecahan | P0 |
+| **Repack Order** | Perintah pindahkan barang ke kemasan baru (rusak/re-label) | P1 |
+| **Re-label** | Cetak label baru untuk keperluan khusus (konsinyasi, promo) | P1 |
+
+### 5.6 Movement & Transfer
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Internal Movement** | Pindah barang dari Bin A ke Bin B dalam satu gudang | P0 |
+| **Transfer Order** | Pindah stok dari Gudang A ke Gudang B (DC ke Sub-DC) | P0 |
+| **Consignment Transfer** | Pindah stok ke lokasi konsinyasi (ownership tetap PT ABC) | P0 |
+| **In-Transit Tracking** | Stok tercatat "Dalam Perjalanan" antar gudang | P0 |
+| **Receiving at Destination** | Konfirmasi penerimaan di gudang tujuan | P0 |
+
+### 5.7 Cold Chain Management
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Temperature Monitoring** | IoT sensor recording suhu setiap 15 menit | P0 |
+| **Threshold Alert** | Notifikasi jika suhu di luar batas (>30 menit) | P0 |
+| **Quarantine Trigger** | Auto-status "Quarantine" untuk stok di zona yang suhunya breach | P0 |
+| **Temperature Log** | Riwayat suhu per zona untuk audit | P0 |
+| **Cold Chain Certificate** | Generate sertifikat suhu untuk customer | P1 |
+
+### 5.8 Manajemen Kontrak & Penagihan
+
+#### 5.8.1 Storage Contract
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Contract Creation** | Buat kontrak sewa gudang per customer, per gudang, per zona | P0 |
+| **Committed Space** | Ruang yang dijamin tersedia (PAL/CBM/SQM) | P0 |
+| **Overflow Allowance** | Batas kelebihan yang diizinkan dengan tarif premium | P0 |
+| **Multi-Zone Contract** | Satu customer bisa sewa banyak zona dengan tarif berbeda | P0 |
+| **Contract Period** | Tanggal mulai dan berakhir kontrak | P0 |
+| **Billing Method per Contract** | Pilih metode tagihan: Fixed, Variable, atau Kombinasi | P0 |
+
+#### 5.8.2 Multi-Metode Penagihan
+
+| Kode | Metode | Variabel | Contoh Rate |
+| :--- | :--- | :--- | :--- |
+| `STR-FIX` | Sewa Tetap | PAL/Bulan | Rp 500.000/palet/bulan |
+| `STR-CBM` | Sewa per Volume | CBM/Bulan | Rp 50.000/CBM/bulan |
+| `STR-SQM` | Sewa per Luas | M²/Bulan | Rp 150.000/m²/bulan |
+| `STR-COLD` | Sewa Cold + Listrik | PAL/Bulan + kWh | Rp 800.000 + actual |
+| `HD-IN` | Handling Inbound | PAL / CBM / KG | Rp 25.000/palet |
+| `HD-OUT` | Handling Outbound | PAL / CBM / KG | Rp 25.000/palet |
+| `HD-PICK` | Picking | Pick / Baris | Rp 5.000/pick |
+| `HD-KIT` | Kitting | Kit | Rp 20.000/kit |
+| `HD-ALAT` | Sewa Alat | Jam | Rp 200.000/jam |
+| `HD-DOC` | Dokumentasi | Dokumen | Rp 50.000/dokumen |
+
+#### 5.8.3 Kalkulasi Otomatis
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Daily Stock Snapshot** | Catat jumlah stok per customer per zona setiap pukul 23:59 | P0 |
+| **Monthly Average** | Hitung rata-rata pemakaian ruang harian untuk dasar sewa | P0 |
+| **Overflow Calculation** | Hitung selisih jika rata-rata > komitmen | P0 |
+| **Per-Transaction Capture** | Catat setiap handling in/out, picking, kitting untuk tagihan variabel | P0 |
+| **Invoice Simulation** | Preview tagihan sebelum invoice final | P1 |
+| **Auto-Invoice Generation** | Generate invoice berdasarkan kontrak + transaksi aktual | P0 |
+
+### 5.9 Dashboard & Reporting
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Utilization Dashboard** | Persentase terpakai per area/zona (real-time) | P0 |
+| **Stock Aging Report** | Umur stok per customer, alert slow-moving | P1 |
+| **Profitability per Area** | Revenue vs Biaya Operasional per area | P0 |
+| **Customer Stock Report** | Laporan stok yang bisa dibagikan ke customer | P0 |
+| **Transaction History** | Riwayat semua pergerakan barang per Inventory_ID | P0 |
+| **Cold Chain Report** | Riwayat suhu untuk audit keamanan pangan | P1 |
+
+### 5.10 Customer Portal (3PL)
+
+| Fitur | Deskripsi | Prioritas |
+| :--- | :--- | :--- |
+| **Stock Visibility** | Lihat stok real-time: SKU, qty, lot, lokasi gudang | P0 |
+| **Inbound/Outbound Request** | Ajukan permintaan penerimaan atau pengeluaran barang | P1 |
+| **Transaction History** | Riwayat inbound, outbound, movement | P0 |
+| **Invoice & Payment** | Lihat invoice, status pembayaran, download PDF | P0 |
+| **Document Download** | Unduh packing list, foto barang, sertifikat suhu | P1 |
+
+---
+
+## 6. Struktur Data & Entitas
+
+### 6.1 Entity Relationship Diagram (Konseptual)
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  WAREHOUSE      │1───*│  AREA           │1───*│  ZONE           │
+│  (Gudang)       │     │  (Yard/Indoor/  │     │  (Zona Operasi) │
+│                 │     │   Rack/Cold)    │     │                 │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                          │1
+                                                          │
+                                                          │*
+┌─────────────────┐     ┌─────────────────┐     ┌────────▼────────┐
+│  STORAGE        │     │  INVENTORY      │     │  LOCATION_BIN   │
+│  CONTRACT       │1───*│  (Inventory_ID) │*───1│  (Lokasi Simpan)│
+│  (Kontrak Sewa) │     │                 │     │                 │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │
+         │                       │*
+         │                ┌──────▼────────┐
+         │                │  TRANSFORM_   │
+         │                │  ORDER        │
+         │                │  (Kitting/    │
+         │                │   Breakbulk)  │
+         │                └───────────────┘
+         │
+         │*
+┌────────▼────────┐     ┌─────────────────┐
+│  BILLING_RATE   │     │  TRANSACTION_   │
+│  (Tarif)        │     │  LOG            │
+│                 │     │  (In/Out/Move)  │
+└─────────────────┘     └─────────────────┘
+```
+
+### 6.2 Entitas Utama
+
+#### 6.2.1 `Warehouse`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Warehouse_ID` | PK | `DC-JKT` |
+| `Warehouse_Name` | String | "DC Jakarta Pusat" |
+| `Warehouse_Type` | Enum | `DC`, `SUB_DC`, `SHOP`, `DARK_STORE` |
+| `Parent_Warehouse` | FK | Untuk replenishment |
+| `Ownership` | Enum | `OWN`, `3PL_MANAGED`, `KONSINYASI` |
+| `Address` | FK to Location | Alamat lengkap |
+| `Total_Capacity_SQM` | Decimal | Luas total |
+| `Status` | Enum | `ACTIVE`, `INACTIVE`, `MAINTENANCE` |
+
+#### 6.2.2 `Area`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Area_ID` | PK | `DC-JKT-YARD-A` |
+| `Warehouse_ID` | FK | Induk gudang |
+| `Area_Type` | Enum | `YARD`, `INDOOR_FLOOR`, `RACKING`, `COLD_FREEZER`, `COLD_CHILLER`, `HAZMAT`, `BONDED` |
+| `Area_Category` | Enum | `GENERAL`, `FOOD_GRADE`, `DANGEROUS_GOODS` |
+| `Storage_Type` | Enum | `BULK_FLOOR`, `PALLET_STACK`, `RACK_SELECTIVE`, `RACK_DRIVE_IN`, `CANTILEVER` |
+| `Total_Capacity` | Decimal | Kapasitas |
+| `UOM_Capacity` | Enum | `PALLET`, `CBM`, `SQM` |
+| `Temperature_Min` | Decimal | Suhu minimal |
+| `Temperature_Max` | Decimal | Suhu maksimal |
+| `Humidity_Max` | Decimal | Kelembaban maksimal |
+| `Is_Hazmat_Certified` | Boolean | |
+| `Is_Bonded_Zone` | Boolean | |
+
+#### 6.2.3 `Zone`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Zone_ID` | PK | `DC-JKT-YARD-A-Z1` |
+| `Area_ID` | FK | Induk area |
+| `Zone_Name` | String | "Yard-1" |
+| `Zone_Status` | Enum | `ACTIVE`, `FULL`, `MAINTENANCE` |
+
+#### 6.2.4 `Location_Bin`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Bin_ID` | PK | `DC-JKT-RACK-A-01-01-01` |
+| `Zone_ID` | FK | Induk zona |
+| `Aisle` | String | "A" |
+| `Bay` | String | "01" |
+| `Level` | String | "01" |
+| `Position` | String | "01" |
+| `Bin_Type` | Enum | `RACK`, `FLOOR`, `YARD_GRID` |
+| `Max_Weight_Kg` | Decimal | Kapasitas berat |
+| `Max_Dimension` | String | Dimensi maksimal |
+| `Status` | Enum | `EMPTY`, `OCCUPIED`, `RESERVED`, `BLOCKED` |
+
+#### 6.2.5 `Product_SKU`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `SKU` | PK | `ABC-123-MASTER` |
+| `Parent_SKU` | FK | SKU di atasnya (null jika tertinggi) |
+| `SKU_Level` | Enum | `BASE_UNIT`, `INNER_PACK`, `MASTER_CASE`, `PALLET` |
+| `Product_Name` | String | "Minyak Goreng 1L" |
+| `Commodity_Type` | FK | `FROZEN`, `CHILL`, `DRY`, `HAZMAT` |
+| `Picking_Strategy` | Enum | `FIFO`, `FEFO`, `LEFO` |
+| `Is_Sellable` | Boolean | |
+| `Is_Stockable` | Boolean | |
+| `Conversion_To_Base` | Decimal | 48 (1 master = 48 eaches) |
+| `Weight_Kg` | Decimal | |
+| `Dimension_CM` | String | PxLxT |
+
+#### 6.2.6 `Inventory`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Inventory_ID` | PK | `INV-20260520-00001` |
+| `Parent_Inventory_ID` | FK | Kemasan induk |
+| `SKU` | FK | Tipe barang |
+| `Current_Quantity` | Decimal | Isi dalam base unit |
+| `Lot_Number` | String | `LOT-2405-A` |
+| `Expiry_Date` | Date | |
+| `Serial_Number` | String | (Optional) |
+| `Status` | Enum | `AVAILABLE`, `RESERVED`, `QUARANTINE`, `DAMAGED`, `IN_TRANSIT`, `CONSUMED` |
+| `Current_Bin` | FK to Location_Bin | Lokasi saat ini |
+| `Receipt_Date` | DateTime | Tanggal terima |
+| `Last_Movement` | DateTime | |
+
+#### 6.2.7 `Storage_Contract`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Contract_ID` | PK | `SC-2026-001` |
+| `Customer_ID` | FK | |
+| `Warehouse_ID` | FK | |
+| `Area_ID` | FK | Area spesifik yang disewa |
+| `Start_Date` | Date | |
+| `End_Date` | Date | |
+| `Committed_Space` | Decimal | Ruang dijamin |
+| `UOM_Space` | Enum | `PALLET`, `CBM`, `SQM` |
+| `Max_Overflow` | Decimal | |
+| `Billing_Method` | Enum | `MONTHLY_FIXED`, `PER_TRANSACTION`, `HYBRID` |
+| `Status` | Enum | `DRAFT`, `ACTIVE`, `EXPIRED`, `TERMINATED` |
+
+#### 6.2.8 `Billing_Rate`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Rate_ID` | PK | |
+| `Contract_ID` | FK | |
+| `Charge_Code` | FK | `STR-FIX`, `HD-IN`, `HD-PICK`, dll |
+| `Rate_Value` | Decimal | Rp 500.000 |
+| `UOM` | String | `PAL/MONTH` |
+| `Valid_From` | Date | |
+| `Valid_To` | Date | |
+
+#### 6.2.9 `Transformation_Order`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `TO_ID` | PK | `TO-20260520-001` |
+| `TO_Type` | Enum | `BREAK_BULK`, `KITTING`, `BUNDLING`, `REPACK` |
+| `Status` | Enum | `PLANNED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` |
+| `Output_SKU` | FK | SKU hasil |
+| `Planned_Output_Qty` | Integer | |
+| `Actual_Output_Qty` | Integer | |
+| `Input_BOM` | JSON | Bill of Materials |
+| `Location` | FK | Lokasi pengerjaan |
+| `Assigned_User` | FK | Staff |
+
+#### 6.2.10 `Temperature_Log`
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `Log_ID` | PK | |
+| `Zone_ID` | FK | |
+| `Timestamp` | DateTime | |
+| `Temperature_C` | Decimal | |
+| `Humidity_Pct` | Decimal | |
+| `Sensor_ID` | String | |
+| `Status` | Enum | `NORMAL`, `HIGH_ALERT`, `CRITICAL` |
+
+---
+
+## 7. Alur Proses Bisnis
+
+### 7.1 Proses Inbound (Mode 3PL)
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ CUSTOMER │    │    CS    │    │ SUPERVSR │    │  STAFF   │    │  SYSTEM  │
+│  (3PL)   │    │   (HQ)   │    │  (WH)    │    │  (WH)    │    │          │
+└────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │               │               │
+     │ 1. Notifikasi │               │               │               │
+     │   barang      │               │               │               │
+     │   akan datang │               │               │               │
+     │──────────────>│               │               │               │
+     │               │               │               │               │
+     │               │ 2. Buat       │               │               │
+     │               │   Receipt     │               │               │
+     │               │   Order       │               │               │
+     │               │──────────────>│               │               │
+     │               │               │               │               │
+     │               │               │ 3. Assign     │               │
+     │               │               │   staff       │               │
+     │               │               │──────────────>│               │
+     │               │               │               │               │
+     │               │               │               │ 4. Scan      │
+     │               │               │               │   barcode    │
+     │               │               │               │   barang     │
+     │               │               │               │──────────────>│
+     │               │               │               │               │
+     │               │               │               │               │ 5. Validasi
+     │               │               │               │               │   komoditi
+     │               │               │               │               │   vs zona
+     │               │               │               │               │
+     │               │               │               │               │ 6. Assign
+     │               │               │               │               │   lokasi
+     │               │               │               │               │   (Smart
+     │               │               │               │               │   Putaway)
+     │               │               │               │               │
+     │               │               │               │ 7. Scan      │
+     │               │               │               │   lokasi     │
+     │               │               │               │   tujuan     │
+     │               │               │               │──────────────>│
+     │               │               │               │               │
+     │               │               │               │               │ 8. Update
+     │               │               │               │               │   stok
+     │               │               │               │               │   Status:
+     │               │               │               │               │   Available
+     │               │               │               │               │
+     │               │ ◄─────────────────────────────────────────────│
+     │               │ 9. Notifikasi inbound selesai                 │
+     │               │               │               │               │
+     │ ◄─────────────│               │               │               │
+     │ 10. Update    │               │               │               │
+     │     stok di   │               │               │               │
+     │     portal    │               │               │               │
+```
+
+### 7.2 Proses Outbound (FEFO Picking)
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  SYSTEM  │    │ SUPERVSR │    │  STAFF   │    │  SYSTEM  │
+│          │    │  (WH)    │    │  (WH)    │    │  (AUDIT) │
+└────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │               │
+     │ 1. Terima     │               │               │
+     │   Outbound    │               │               │
+     │   Order       │               │               │
+     │──────────────>│               │               │
+     │               │               │               │
+     │               │ 2. Generate   │               │
+     │               │   Picking     │               │
+     │               │   List (FEFO) │               │
+     │<──────────────│               │               │
+     │               │               │               │
+     │ 3. Urutkan    │               │               │
+     │   stok by     │               │               │
+     │   Expiry_Date │               │               │
+     │   ASC         │               │               │
+     │               │               │               │
+     │ 4. Assign     │               │               │
+     │   lokasi      │               │               │
+     │   picking     │               │               │
+     │──────────────>│               │               │
+     │               │               │               │
+     │               │               │ 5. Scan       │
+     │               │               │   Inventory   │
+     │               │               │──────────────>│
+     │               │               │               │
+     │               │               │               │ 6. Validasi
+     │               │               │               │   FEFO:
+     │               │               │               │   Apakah ini
+     │               │               │               │   stok paling
+     │               │               │               │   expired?
+     │               │               │               │
+     │               │               │   ┌──────────────────────┐
+     │               │               │   │ JIKA TIDAK PALING    │
+     │               │               │   │ EXPIRED:             │
+     │               │               │   │ ❌ BLOCK SCAN        │
+     │               │               │   │ ⚠️ "Ambil LOT-A      │
+     │               │               │   │   di Bin X dulu"    │
+     │               │               │   └──────────────────────┘
+     │               │               │               │
+     │               │               │ 7. Jika OK,   │
+     │               │               │   konfirmasi  │
+     │               │               │               │
+     │               │               │               │ 8. Kurangi
+     │               │               │               │   stok
+     │               │               │               │   Status:
+     │               │               │               │   Reserved→
+     │               │               │               │   Picked
+     │               │               │               │
+     │               │ ◄─────────────────────────────│
+     │               │ 9. Picking selesai            │
+```
+
+### 7.3 Proses Kitting
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ SUPERVSR │    │  STAFF   │    │  SYSTEM  │
+│  (WH)    │    │  (VAS)   │    │          │
+└────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │
+     │ 1. Buat       │               │
+     │   Transform   │               │
+     │   Order       │               │
+     │   (Kitting)   │               │
+     │──────────────>│               │
+     │               │               │
+     │               │               │ 2. Validasi BOM
+     │               │               │   Cek stok
+     │               │               │   komponen
+     │               │               │
+     │               │               │ 3. Reserve
+     │               │               │   komponen
+     │               │               │
+     │               │ 4. Instruksi  │
+     │               │   kerja di   │
+     │               │   tablet     │
+     │               │<─────────────│
+     │               │               │
+     │               │ 5. Ambil      │
+     │               │   komponen    │
+     │               │   (scan)      │
+     │               │──────────────>│
+     │               │               │
+     │               │               │ 6. Verifikasi
+     │               │               │   semua
+     │               │               │   komponen
+     │               │               │   terkumpul
+     │               │               │
+     │               │ 7. Kerjakan   │
+     │               │   kitting     │
+     │               │   fisik       │
+     │               │               │
+     │               │ 8. Scan hasil │
+     │               │   kitting     │
+     │               │──────────────>│
+     │               │               │
+     │               │               │ 9. Generate
+     │               │               │   Inventory_ID
+     │               │               │   baru untuk
+     │               │               │   hasil kit
+     │               │               │
+     │               │               │ 10. Deduct
+     │               │               │    komponen
+     │               │               │    Status:
+     │               │               │    Consumed
+     │               │               │
+     │               │               │ 11. Add output
+     │               │               │    ke stok
+     │               │               │
+     │ ◄─────────────────────────────│
+     │ 12. Kitting selesai          │
+```
+
+### 7.4 Proses Kalkulasi Tagihan Bulanan
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│  SYSTEM  │    │ FINANCE  │    │ CUSTOMER │
+│  (CRON)  │    │  (HQ)    │    │  (3PL)   │
+└────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │
+     │ 1. Setiap     │               │
+     │   hari 23:59  │               │
+     │   ambil       │               │
+     │   snapshot    │               │
+     │   stok per    │               │
+     │   contract    │               │
+     │               │               │
+     │ 2. Simpan di  │               │
+     │   daily_stock │               │
+     │   _snapshot   │               │
+     │               │               │
+     │ ══════════════│               │
+     │  AKHIR BULAN  │               │
+     │ ══════════════│               │
+     │               │               │
+     │ 3. Hitung     │               │
+     │   rata-rata   │               │
+     │   harian      │               │
+     │               │               │
+     │ 4. Hitung     │               │
+     │   overflow    │               │
+     │   (rata2 -    │               │
+     │    komitmen)  │               │
+     │               │               │
+     │ 5. Kumpulkan  │               │
+     │   semua       │               │
+     │   transaksi   │               │
+     │   handling    │               │
+     │   in/out/pick │               │
+     │               │               │
+     │ 6. Aplikasikan│               │
+     │   rate card   │               │
+     │   per contract│               │
+     │               │               │
+     │ 7. Generate   │               │
+     │   draft       │               │
+     │   invoice     │               │
+     │──────────────>│               │
+     │               │               │
+     │               │ 8. Review     │
+     │               │   & approve   │
+     │               │──────────────>│
+     │               │               │
+     │               │               │ 9. Terima
+     │               │               │   invoice
+     │               │               │   + detail
+     │               │               │
+```
+
+---
+
+## 8. Aturan Bisnis & Validasi
+
+### 8.1 Validasi Penyimpanan
+
+| Aturan | Deskripsi | Konsekuensi |
+| :--- | :--- | :--- |
+| **COM-ZONE-MATCH** | Komoditi barang harus cocok dengan zona penyimpanan | ❌ Tolak putaway, tampilkan zona yang sesuai |
+| **CAPACITY-CHECK** | Bin/lokasi tidak boleh melebihi kapasitas berat | ❌ Tolak, sarankan lokasi lain |
+| **DIMENSION-CHECK** | Dimensi barang harus muat di lokasi | ❌ Tolak |
+| **TEMP-MATCH** | Suhu requirement SKU harus sesuai dengan suhu zona | ❌ Tolak |
+| **HAZMAT-ISOLATION** | Hazmat harus disimpan di zona khusus, tidak boleh campur dengan food | ❌ Tolak |
+| **STACK-LIMIT** | Jumlah tumpukan tidak boleh melebihi limit SKU atau area | ⚠️ Warning, catat override |
+
+### 8.2 Validasi FEFO/FIFO
+
+| Aturan | Deskripsi | Konsekuensi |
+| :--- | :--- | :--- |
+| **FEFO-ENFORCE** | Barang dengan expiry paling dekat harus dipick duluan | ❌ Block scan jika staff scan batch yang lebih baru |
+| **FEFO-OVERIDE** | Supervisor bisa override dengan alasan (damaged, customer request) | ⚠️ Catat di exception log dengan user dan alasan |
+| **EXPIRY-BLOCK** | Barang expired tidak boleh dipick | ❌ Block, rekomendasikan quarantine |
+| **EXPIRY-WARNING** | Barang akan expired dalam 30 hari | ⚠️ Notifikasi ke supervisor |
+
+### 8.3 Validasi Kitting
+
+| Aturan | Deskripsi | Konsekuensi |
+| :--- | :--- | :--- |
+| **BOM-VALID** | Semua komponen harus tersedia dalam stok | ❌ Jangan mulai jika stok kurang |
+| **COMPONENT-SCAN** | Semua komponen harus di-scan sebelum output bisa digenerate | ❌ System menunggu scan lengkap |
+| **WASTE-TOLERANCE** | Waste tidak boleh melebihi toleransi yang dikonfigurasi | ⚠️ Over-tolerance: supervisor approval |
+
+### 8.4 Validasi Transfer
+
+| Aturan | Deskripsi | Konsekuensi |
+| :--- | :--- | :--- |
+| **STOK-TERSEDIA** | Stok di gudang asal harus mencukupi | ❌ Tolak transfer order |
+| **ZONA-TUJUAN** | Gudang tujuan harus punya kapasitas tersedia | ⚠️ Warning, tapi tetap bisa kirim |
+| **IN-TRANSIT** | Stok tidak bisa dipindahkan lagi saat sedang in-transit | ❌ Block movement |
+
+---
+
+## 9. Integrasi Antar Modul
+
+### 9.1 Integrasi dengan Modul Forwarding
+
+| Dari Forwarding | Ke WMS | Mekanisme |
+| :--- | :--- | :--- |
+| **JO Inbound** | Receipt Order | Forwarding kirim `JO_Inbound_ID` → WMS buat `Receipt_Order` dengan link `Source_JO_ID` |
+| **JO Outbound** | Picking List | Forwarding kirim `JO_Outbound_ID` → WMS generate picking berdasarkan FIFO/FEFO |
+| **JO Stuffing** | Pallet Build-Up | Forwarding kirim daftar WO yang akan dikonsolidasi → WMS buat `Handling_Unit` dan assign isi |
+| **Query Biaya** | Rate Engine | Forwarding tanya biaya handling → WMS kirim tarif spot jika tidak ada kontrak |
+
+### 9.2 Integrasi dengan Shared Kernel
+
+| Modul | Data yang Dipakai WMS | Data yang Diberikan WMS |
+| :--- | :--- | :--- |
+| **Vendor Master** | Data customer 3PL, vendor alat berat, vendor listrik | - |
+| **Location Master** | Alamat gudang, port code | Bin location (jika dibutuhkan modul lain) |
+| **Rate Engine** | Rate card handling, sewa per zona | Actual usage untuk kalkulasi |
+| **Finance Ledger** | - | Transaksi tagihan gudang (AR), biaya operasional (AP) |
+| **Document Vault** | - | Foto barang inbound, Packing List, Sertifikat Suhu |
+
+### 9.3 Integrasi IoT (Cold Chain)
+
+| Sensor | Data | Frekuensi |
+| :--- | :--- | :--- |
+| **Suhu** | Temperature_C | Setiap 15 menit |
+| **Kelembaban** | Humidity_Pct | Setiap 15 menit |
+| **Pintu** | Open/Close Event | Real-time |
+
+**Webhook/API Call:** Sensor → IoT Gateway → WMS API → `Temperature_Log` table
+
+**Alert Rule:** Jika suhu > threshold selama > 30 menit → Notifikasi Supervisor + Auto-quarantine stok di zona tersebut.
+
+---
+
+## 10. Antarmuka Pengguna
+
+### 10.1 Mobile/Tablet App (Staff Gudang)
+
+| Halaman | Fungsi Utama |
+| :--- | :--- |
+| **Dashboard Staff** | List task hari ini: Receiving, Putaway, Picking, Movement |
+| **Quick Receive** | Kamera scan barcode → auto-populate → input qty → foto → submit |
+| **Putaway Mode** | Scan barang → scan lokasi → konfirmasi |
+| **Picking Mode** | Tampilkan daftar pick (urut rute) → scan barang → konfirmasi |
+| **Movement Mode** | Scan barang → scan lokasi asal → scan lokasi tujuan |
+| **Kitting Mode** | Instruksi komponen → scan satu per satu → scan hasil |
+| **Exception Report** | Form cepat untuk laporkan kerusakan/selisih |
+
+**Prinsip Desain:**
+- **Minimum typing**, maksimum scanning
+- **Warna kontras tinggi** (untuk di dalam cold storage dengan cahaya minim)
+- **Mode offline** untuk area dengan sinyal lemah (sync saat konek kembali)
+- **Font besar** untuk digunakan dengan sarung tangan
+
+### 10.2 Web Dashboard (Supervisor & Manager)
+
+| Halaman | Fungsi Utama |
+| :--- | :--- |
+| **Warehouse Overview** | Peta gudang, utilisasi per area (warna hijau/kuning/merah) |
+| **Receiving Monitor** | Daftar Receipt Order, status, SLA timer |
+| **Inventory Browser** | Cari stok per SKU, Customer, Lot, Lokasi |
+| **Picking Monitor** | Daftar picking list, progress per wave |
+| **Transformation Queue** | Daftar kitting/bundling/repack order |
+| **Cold Chain Monitor** | Grafik suhu real-time, alert aktif |
+| **Contract Management** | CRUD kontrak, lihat pemakaian vs komitmen |
+
+### 10.3 Customer Portal (Web)
+
+| Halaman | Fungsi Utama |
+| :--- | :--- |
+| **Stock Dashboard** | Ringkasan stok: total SKU, total palet, per zona |
+| **Inventory Detail** | Tabel stok: SKU, Lot, Expiry, Qty, Lokasi |
+| **Transaction History** | Log inbound, outbound, movement (filter by tanggal) |
+| **Invoice Center** | Lihat invoice, download PDF, status pembayaran |
+| **Request Form** | Ajukan inbound/outbound request |
+| **Document Download** | Packing list, foto inbound, sertifikat suhu |
+
+---
+
+## 11. Keamanan & Akses
+
+### 11.1 Role-Based Access Control
+
+| Role | Akses |
+| :--- | :--- |
+| **Warehouse Staff** | Hanya lihat task yang di-assign, tidak bisa lihat P&L |
+| **Warehouse Supervisor** | Lihat semua task di gudangnya, assign staff, override picking |
+| **Warehouse Manager** | Lihat semua gudang, P&L, kontrak, utilisasi |
+| **HQ Customer Service** | Lihat stok customer (read-only), status inbound/outbound |
+| **HQ Finance** | Lihat kontrak, invoice, daily snapshot (tidak bisa edit stok) |
+| **Customer 3PL** | Hanya lihat stok & transaksi miliknya sendiri |
+| **System Admin** | Full access |
+
+### 11.2 Data Isolation
+
+| Aturan | Deskripsi |
+| :--- | :--- |
+| **Multi-Tenancy** | Customer 3PL hanya bisa melihat data miliknya |
+| **SBU Isolation** | SBU Warehouse hanya lihat data warehouse, tidak bisa lihat detail forwarding kecuali JO terkait |
+| **Audit Log** | Setiap perubahan stok, movement, dan override tercatat dengan timestamp + user ID |
+
+---
+
+## 12. Roadmap Pengembangan
+
+### Fase 1: MVP WMS (3 Bulan)
+- Multi-warehouse & area configuration
+- SKU hierarchy & Inventory_ID tracking
+- Basic inbound (receiving + putaway)
+- Basic outbound (picking + dispatch)
+- Internal movement
+- Location bin management
+- **Go-Live:** 1 gudang DC, tim internal
+
+### Fase 2: Komersial 3PL (Bulan 4-5)
+- Storage Contract management
+- Multi-metode billing (STR-FIX, HD-IN/OUT)
+- Daily stock snapshot & auto-invoice
+- Customer Portal (basic: stok & invoice)
+- **Go-Live:** Customer 3PL pertama
+
+### Fase 3: Advanced Operations (Bulan 6-8)
+- Kitting & bundling (BOM, Transformation Order)
+- Break-bulk & repack
+- FIFO/FEFO enforcement
+- Transfer Order antar gudang
+- Konsinyasi (Shop)
+- **Go-Live:** Full feature warehouse
+
+### Fase 4: Cold Chain & IoT (Bulan 9-10)
+- Cold storage zone dengan validasi suhu
+- IoT sensor integration
+- Temperature monitoring & alert
+- Quarantine automation
+- **Go-Live:** Cold storage facility
+
+### Fase 5: Optimasi & Analytics (Bulan 11-12)
+- Smart putaway (AI-based slotting)
+- Wave picking optimization
+- P&L per area dashboard
+- Predictive capacity planning
+- Mobile app offline mode
+- **Go-Live:** Full platform ready
+
+---
+
+## 13. Kriteria Sukses
+
+### 13.1 Metrik Operasional
+
+| Metrik | Target | Cara Ukur |
+| :--- | :--- | :--- |
+| **Akurasi Stok** | > 99.9% | Cycle count bulanan: (item cocok / total item) |
+| **Inbound SLA** | < 15 menit | Waktu dari scan pertama → status "Available" |
+| **Picking Accuracy** | > 99.5% | Item benar / total item dipick |
+| **FEFO Compliance** | > 99% | Pick sesuai FEFO / total pick |
+
+### 13.2 Metrik Bisnis
+
+| Metrik | Target | Cara Ukur |
+| :--- | :--- | :--- |
+| **Utilisasi Gudang** | > 80% | Total kapasitas terpakai / total kapasitas |
+| **Akurasi Tagihan** | > 99.5% | (Invoice - seharusnya) / seharusnya |
+| **Customer Retention** | > 90% | Customer perpanjang kontrak |
+| **Revenue per SQM** | Naik 10% YoY | Total revenue / total SQM |
+
+---
+
+## 14. Lampiran: Glosarium
+
+| Istilah | Definisi |
+| :--- | :--- |
+| **WMS** | Warehouse Management System |
+| **SKU** | Stock Keeping Unit - Kode unik produk |
+| **Inventory_ID** | Kode unik untuk setiap kemasan fisik yang bisa dilacak |
+| **FIFO** | First In, First Out - Barang masuk pertama, keluar pertama |
+| **FEFO** | First Expired, First Out - Barang kadaluarsa terdekat, keluar pertama |
+| **LEFO** | Last Expired, First Out - Kebalikan FEFO |
+| **Kitting** | Menggabungkan beberapa SKU menjadi satu kit |
+| **Bundling** | Menggabungkan SKU sejenis menjadi paket |
+| **Break-Bulk** | Memecah kemasan besar menjadi satuan lebih kecil |
+| **BOM** | Bill of Materials - Daftar komponen untuk kitting |
+| **3PL** | Third-Party Logistics - Layanan logistik pihak ketiga |
+| **SBU** | Strategic Business Unit - Unit bisnis mandiri |
+| **DC** | Distribution Center - Pusat distribusi |
+| **Sub-DC** | Distribution Center regional |
+| **CY** | Container Yard |
+| **POD** | Proof of Delivery |
+| **VAS** | Value Added Service - Layanan tambahan (kitting, labeling) |
+| **IoT** | Internet of Things - Sensor terhubung |
+| **AR** | Accounts Receivable - Piutang |
+| **AP** | Accounts Payable - Hutang |
+
+---
+
+## Persetujuan
+
+| Pihak | Nama | Tanda Tangan | Tanggal |
+| :--- | :--- | :--- | :--- |
+| **Product Owner** | | | |
+| **VP Engineering** | | | |
+| **Head of SBU Warehouse** | | | |
+| **Head of Finance** | | | |
+| **CTO** | | | |
+
+---
+
+**Dokumen ini adalah cetak biru lengkap untuk membangun Modul Warehouse Management System Sentralogis. Semua fitur, alur, aturan bisnis, dan integrasi yang telah kita diskusikan dari awal hingga akhir tercakup di dalamnya. PRD ini siap menjadi acuan tim engineering untuk memulai pembangunan.**

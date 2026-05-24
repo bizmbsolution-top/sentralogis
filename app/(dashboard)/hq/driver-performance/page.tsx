@@ -7,7 +7,8 @@ import { toast } from 'react-hot-toast';
 import { 
   BarChart3, TrendingUp, Star, MapPin, Users, Award, 
   ChevronDown, ChevronRight, X, Loader2, Search, Filter,
-  ArrowUpRight, ArrowDownRight, Eye, AlertTriangle
+  ArrowUpRight, ArrowDownRight, Eye, AlertTriangle,
+  Clock, CheckCircle, XCircle
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
@@ -39,6 +40,7 @@ interface PerfLog {
 
 export default function DriverPerformancePage() {
   const { profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'performance' | 'attendance'>('performance');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [perfLogs, setPerfLogs] = useState<PerfLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,13 @@ export default function DriverPerformancePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'km' | 'review' | 'jobs'>('km');
   const [showDetailModal, setShowDetailModal] = useState(false);
+  // Attendance tab state
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [selectedAttendanceDriver, setSelectedAttendanceDriver] = useState<any>(null);
+  const [selectedDriverHistory, setSelectedDriverHistory] = useState<any[]>([]);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceHistoryLoading, setAttendanceHistoryLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!profile?.tenant_id) return;
@@ -101,6 +110,85 @@ export default function DriverPerformancePage() {
       toast.error('Gagal mengambil log performance');
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const fetchAttendanceData = useCallback(async () => {
+    if (!profile?.tenant_id) return;
+    setAttendanceLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data: internalDrivers, error: drvErr } = await supabase
+        .from('md_drivers')
+        .select('id, name, phone, status, entity_id, is_working, md_entities!inner(name, is_vendor)')
+        .eq('tenant_id', profile.tenant_id)
+        .eq('is_active', true)
+        .eq('md_entities.is_vendor', false)
+        .not('entity_id', 'is', null);
+      if (drvErr) throw drvErr;
+      const driverIds = (internalDrivers || []).map(d => d.id);
+      if (driverIds.length === 0) { setAttendanceData([]); setAttendanceLoading(false); return; }
+      const [attRes, inspRes] = await Promise.all([
+        supabase.from('driver_attendance')
+          .select('id, driver_id, fleet_id, check_in, status, md_fleets(plate_number)')
+          .in('driver_id', driverIds)
+          .eq('status', 'CHECK_IN')
+          .gte('check_in', today),
+        supabase.from('fleet_inspections')
+          .select('id, driver_id, total_score, status, created_at, md_fleets(plate_number)')
+          .in('driver_id', driverIds)
+          .gte('created_at', today)
+          .order('created_at', { ascending: false }),
+      ]);
+      const attMap: Record<string, any> = {};
+      (attRes.data || []).forEach(a => { attMap[a.driver_id] = a; });
+      const inspMap: Record<string, any> = {};
+      (inspRes.data || []).forEach(i => { if (!inspMap[i.driver_id]) inspMap[i.driver_id] = i; });
+      const merged = (internalDrivers || []).map(d => ({
+        ...d,
+        attendance: attMap[d.id] || null,
+        inspection: inspMap[d.id] || null,
+      }));
+      setAttendanceData(merged);
+    } catch (err: any) {
+      console.error('Fetch attendance error:', err);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, [profile?.tenant_id]);
+
+  useEffect(() => {
+    fetchAttendanceData();
+  }, [fetchAttendanceData]);
+
+  const loadDriverAttendanceHistory = async (driver: any) => {
+    setSelectedAttendanceDriver(driver);
+    setShowAttendanceModal(true);
+    setAttendanceHistoryLoading(true);
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const [attHist, inspHist] = await Promise.all([
+        supabase.from('driver_attendance')
+          .select('*, md_fleets(plate_number)')
+          .eq('driver_id', driver.id)
+          .gte('check_in', sevenDaysAgo)
+          .order('check_in', { ascending: false }),
+        supabase.from('fleet_inspections')
+          .select('*, md_fleets(plate_number)')
+          .eq('driver_id', driver.id)
+          .gte('created_at', sevenDaysAgo)
+          .order('created_at', { ascending: false }),
+      ]);
+      const grouped: Record<string, any> = {};
+      const allDates = new Set<string>();
+      (attHist.data || []).forEach(a => { const d = a.check_in?.split('T')[0]; if (d) { allDates.add(d); if (!grouped[d]) grouped[d] = {}; grouped[d].attendance = a; } });
+      (inspHist.data || []).forEach(i => { const d = i.created_at?.split('T')[0]; if (d) { allDates.add(d); if (!grouped[d]) grouped[d] = {}; grouped[d].inspection = i; } });
+      const history = Array.from(allDates).sort().reverse().map(date => ({ date, ...grouped[date] }));
+      setSelectedDriverHistory(history);
+    } catch (err: any) {
+      console.error('Load history error:', err);
+    } finally {
+      setAttendanceHistoryLoading(false);
     }
   };
 
@@ -185,6 +273,30 @@ export default function DriverPerformancePage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+            {/* Tabs */}
+            <div className="flex bg-white border border-slate-200 rounded-lg p-0.5">
+              <button
+                onClick={() => setActiveTab('performance')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  activeTab === 'performance'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Performance
+              </button>
+              <button
+                onClick={() => setActiveTab('attendance')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  activeTab === 'attendance'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Attendance
+              </button>
+            </div>
+
             <button
               onClick={handleBackfill}
               className="h-10 px-4 bg-white border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 text-slate-600 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
@@ -206,6 +318,8 @@ export default function DriverPerformancePage() {
           </div>
         </div>
       </div>
+
+      {activeTab === 'performance' && <>
 
       {/* Summary Cards */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -362,7 +476,234 @@ export default function DriverPerformancePage() {
         </Card>
       </div>
 
-      {/* Detail Modal */}
+      </>}
+
+      {/* ===== ATTENDANCE TAB ===== */}
+      {activeTab === 'attendance' && (
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Attendance Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                  <Users size={20} className="text-blue-600" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">{attendanceData.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Driver Internal</p>
+            </Card>
+            <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+                  <CheckCircle size={20} className="text-emerald-600" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">{attendanceData.filter(d => d.attendance).length}</p>
+              <p className="text-xs text-slate-500 mt-1">Absen Hari Ini</p>
+            </Card>
+            <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+                  <Clock size={20} className="text-amber-600" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">{attendanceData.filter(d => d.inspection).length}</p>
+              <p className="text-xs text-slate-500 mt-1">Inspeksi Hari Ini</p>
+            </Card>
+            <Card className="p-5 border border-slate-200 shadow-sm rounded-xl bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center">
+                  <XCircle size={20} className="text-rose-600" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {attendanceData.filter(d => d.inspection?.status === 'GROUNDED').length}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">GROUNDED</p>
+            </Card>
+          </div>
+
+          {/* Attendance Driver Table */}
+          <Card className="overflow-hidden border border-slate-200 shadow-sm rounded-xl bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Driver</th>
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Plat Truk</th>
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Absen</th>
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Inspeksi</th>
+                    <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {attendanceLoading ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-16 text-center">
+                        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+                        <p className="text-xs text-slate-400">Loading attendance data...</p>
+                      </td>
+                    </tr>
+                  ) : attendanceData.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-16 text-center">
+                        <p className="text-xs text-slate-400">Tidak ada driver internal</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    attendanceData.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map((d) => (
+                      <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
+                              {d.name.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-slate-900">{d.name}</div>
+                              <div className="text-xs text-slate-400">{d.md_entities?.name || '-'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {d.status === 'on_duty' ? (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">On Duty</span>
+                          ) : d.status === 'on_road' ? (
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full">On Road</span>
+                          ) : d.status === 'unavailable' ? (
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full">Unavailable</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">Available</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-slate-700">{d.attendance?.md_fleets?.plate_number || '-'}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {d.attendance ? (
+                            <span className="text-xs font-medium text-emerald-600">
+                              {new Date(d.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Belum absen</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {d.inspection ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${d.inspection.status === 'LAYAK JALAN' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {d.inspection.status === 'LAYAK JALAN' ? 'Layak' : 'Grounded'}
+                              </span>
+                              <span className="text-[10px] text-slate-400">({d.inspection.total_score})</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">Belum inspeksi</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => loadDriverAttendanceHistory(d)}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                            title="Lihat Riwayat"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ===== ATTENDANCE DETAIL MODAL ===== */}
+      {showAttendanceModal && selectedAttendanceDriver && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border-none">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-lg font-bold text-indigo-600">
+                  {selectedAttendanceDriver.name.charAt(0)}
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{selectedAttendanceDriver.name}</h2>
+                  <p className="text-xs text-slate-500">{selectedAttendanceDriver.md_entities?.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAttendanceModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <h3 className="text-sm font-bold text-slate-900 mb-4">Riwayat 7 Hari Terakhir</h3>
+              {attendanceHistoryLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                </div>
+              ) : selectedDriverHistory.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-8">Belum ada riwayat absen atau inspeksi</p>
+              ) : (
+                <div className="space-y-3">
+                  {selectedDriverHistory.map((day: any) => (
+                    <div key={day.date} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold text-slate-900">
+                          {new Date(day.date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        {day.date === new Date().toISOString().split('T')[0] && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">Hari Ini</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Absen</p>
+                          {day.attendance ? (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-emerald-500" />
+                              <span className="text-xs text-slate-700">
+                                {new Date(day.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - {day.attendance.md_fleets?.plate_number || '-'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <XCircle size={14} className="text-slate-300" />
+                              <span className="text-xs text-slate-400">Tidak absen</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Inspeksi</p>
+                          {day.inspection ? (
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${day.inspection.status === 'LAYAK JALAN' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                                <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                              </div>
+                              <span className={`text-xs font-medium ${day.inspection.status === 'LAYAK JALAN' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {day.inspection.status} ({day.inspection.total_score})
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <XCircle size={14} className="text-slate-300" />
+                              <span className="text-xs text-slate-400">Tidak inspeksi</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Performance Detail Modal */}
       {showDetailModal && selectedDriver && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border-none">

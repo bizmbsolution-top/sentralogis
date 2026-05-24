@@ -81,8 +81,7 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
         return () => { supabase.removeChannel(channel); };
     }, [job.id, supabase]);
 
-    const woItem = Array.isArray(job.work_order_items) ? job.work_order_items[0] : job.work_order_items;
-    const destLoc = woItem?.destination_location;
+    const destLoc = job.destination;
     const destination = useMemo(() => ({ lat: Number(destLoc?.latitude || 0), lng: Number(destLoc?.longitude || 0) }), [destLoc]);
 
     return (
@@ -95,14 +94,14 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                     {/* LEFT: PT INFO */}
                     <div className="flex items-center gap-4 w-full md:w-auto">
                         <div className="w-14 h-14 relative bg-white rounded-2xl overflow-hidden p-2 shadow-xl shrink-0 border-2 border-white/20">
-                            {job.work_orders?.organizations?.logo_url ? (
-                                <Image src={job.work_orders.organizations.logo_url} alt="Logo" fill className="object-contain p-1" />
+                            {job.work_orders?.md_entities?.logo_url ? (
+                                <Image src={job.work_orders.md_entities.logo_url} alt="Logo" fill className="object-contain p-1" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-slate-100"><Truck className="text-slate-900 w-7 h-7" /></div>
                             )}
                         </div>
                         <div className="min-w-0">
-                            <h2 className="text-white text-lg md:text-xl font-black uppercase tracking-tight italic leading-tight truncate">{job.work_orders?.organizations?.name || 'SentraLogis'}</h2>
+                            <h2 className="text-white text-lg md:text-xl font-black uppercase tracking-tight italic leading-tight truncate">{job.work_orders?.md_entities?.name || 'SentraLogis'}</h2>
                             <div className="flex items-center gap-3 mt-1.5">
                                 <span className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-lg shadow-emerald-500/20">
                                     <div className="w-2 h-2 bg-white rounded-full animate-pulse" /> LIVE TRACKING
@@ -126,17 +125,17 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                     <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t border-white/5 md:border-0 pt-4 md:pt-0">
                         <div className="text-right hidden md:block">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block leading-none mb-1.5 text-right">Vehicle Plate</span>
-                            <p className="text-3xl font-black text-white italic leading-none tracking-tighter uppercase">{job.fleets?.plate_number}</p>
+                            <p className="text-3xl font-black text-white italic leading-none tracking-tighter uppercase">{job.md_fleets?.plate_number}</p>
                         </div>
                         <div className="flex flex-col md:items-end">
-                            <p className="text-xl font-black text-white uppercase md:hidden italic tracking-tighter">{job.fleets?.plate_number}</p>
+                            <p className="text-xl font-black text-white uppercase md:hidden italic tracking-tighter">{job.md_fleets?.plate_number}</p>
                             <span className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 mt-1 md:justify-end">
                                 <Clock className="w-4 h-4 text-emerald-500" /> {hasMounted && position ? new Date(position.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                             </span>
                         </div>
                          <button 
                             className="bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-xl shadow-emerald-500/30 border-2 border-white/10"
-                            onClick={() => window.open(`tel:${job.work_orders?.organizations?.phone || ''}`)}
+                            onClick={() => window.open(`tel:${job.work_orders?.md_entities?.phone || ''}`)}
                         >
                             <Phone className="w-6 h-6 fill-white/20" />
                         </button>

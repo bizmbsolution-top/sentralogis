@@ -26,13 +26,15 @@ import {
   CheckSquare,
   Eye,
   Save,
-  Send
+  Send,
+  Printer
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
+import { printCashAdvanceSlip } from '@/app/(dashboard)/sbu/trucking/utils';
 
 interface ExtraCostRow {
   id: string;
@@ -576,9 +578,26 @@ export default function SBUFinanceHybridModal({ job, onClose, onSuccess }: SBUFi
                    <div className="grid grid-cols-2 gap-8">
                       <div>
                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Payout Method</p>
-                         <Badge className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest italic ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                            {job.md_fleets?.md_entities?.is_vendor ? 'Vendor Invoice' : 'Internal Bagi Hasil'}
-                         </Badge>
+                         <div className="flex flex-wrap items-center gap-3">
+                            <Badge className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest italic ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                               {job.md_fleets?.md_entities?.is_vendor ? 'Vendor Invoice' : 'Internal Bagi Hasil'}
+                            </Badge>
+                            
+                            {/* [AI] Print cash advance slip button */}
+                            <Button
+                               onClick={() => printCashAdvanceSlip(job, {
+                                  amount: Number(transferAmount) || job.advance_amount || 0,
+                                  description: "Uang Jalan / Kasbon Driver",
+                                  paid_by: job.md_fleets?.md_entities?.is_vendor ? "Vendor Invoice" : "SBU Trucking (Operational)",
+                                  paid_at: new Date()
+                               })}
+                               variant="ghost"
+                               className="h-8 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 font-black text-[9px] uppercase tracking-widest flex items-center gap-1.5 hover:bg-slate-50 transition-all"
+                            >
+                               <Printer size={12} />
+                               Cetak Slip
+                            </Button>
+                         </div>
                       </div>
                       <div>
                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Amount Due</p>
@@ -821,9 +840,24 @@ export default function SBUFinanceHybridModal({ job, onClose, onSuccess }: SBUFi
                  Cancel
               </Button>
 
+              {/* [AI] Print Cash Advance Slip Button in Footer */}
+              <Button
+                  onClick={() => printCashAdvanceSlip(job, {
+                     amount: Number(transferAmount) || job.advance_amount || 0,
+                     description: "Uang Jalan / Kasbon Driver",
+                     paid_by: job.md_fleets?.md_entities?.is_vendor ? "Vendor Invoice" : "SBU Trucking (Operational)",
+                     paid_at: new Date()
+                  })}
+                  variant="ghost"
+                  className="h-16 px-6 rounded-[1.5rem] border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2"
+               >
+                  <Printer size={16} />
+                  Cetak Slip Kasbon
+               </Button>
+
               {!isLocked ? (
                 <>
-<Button 
+                   <Button 
                      variant="ghost"
                      onClick={handleSaveDraft}
                      disabled={submitting}

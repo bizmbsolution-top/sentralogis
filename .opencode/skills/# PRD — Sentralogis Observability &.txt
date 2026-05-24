@@ -1,0 +1,763 @@
+# PRD — Sentralogis Observability & Debugging System
+
+## Project: Sentralogis Core Monitoring Platform
+
+## Version: 1.0
+
+## Target Stack:
+
+* Next.js
+* Supabase
+* Vercel
+* Antigravity
+* Future modules:
+
+  * SBU Trucking
+  * WMS
+  * Forwarding
+  * Finance
+  * Procurement
+
+---
+
+# 1. Background
+
+Sentralogis saat ini telah memiliki modul SBU Trucking dan akan berkembang ke:
+
+* WMS
+* Forwarding
+* Finance
+* Procurement
+
+Kompleksitas sistem akan meningkat drastis:
+
+* multi workflow
+* multi user
+* multi role
+* multi transaction
+* multi integration
+
+Saat ini debugging masih manual dan reactive:
+
+* menunggu user melapor
+* sulit tracing bug
+* tidak ada audit trail lengkap
+* tidak ada anomaly detection
+* tidak ada centralized observability
+
+Sistem debugging modern diperlukan agar:
+
+* masalah cepat ditemukan
+* operasional tidak chaos
+* data integrity terjaga
+* founder non-technical dapat membaca kondisi sistem
+* future scaling lebih aman
+
+---
+
+# 2. Goals
+
+## Primary Goals
+
+Membangun centralized observability system untuk:
+
+* logging
+* audit trail
+* monitoring
+* error tracking
+* scheduled diagnostics
+* workflow tracing
+* anomaly detection
+
+---
+
+# 3. Non-Goals
+
+Bukan:
+
+* AI auto fixing
+* auto healing distributed infra
+* enterprise Kubernetes monitoring
+* SIEM/security platform
+* DevOps replacement
+
+---
+
+# 4. Core Principles
+
+## 4.1 Traceability First
+
+Semua critical action harus dapat ditelusuri:
+
+* siapa
+* kapan
+* dari mana
+* data sebelum
+* data sesudah
+
+---
+
+## 4.2 Business Workflow Oriented
+
+Debugging bukan per file.
+Debugging berdasarkan:
+
+* shipment flow
+* trucking flow
+* inventory flow
+* forwarding flow
+
+---
+
+## 4.3 Low Cognitive Load
+
+Founder non-technical harus dapat:
+
+* memahami alert
+* membaca health dashboard
+* mengetahui prioritas
+
+Tanpa membaca source code mendalam.
+
+---
+
+## 4.4 Modular Architecture
+
+Monitoring harus reusable untuk:
+
+* trucking
+* WMS
+* forwarding
+* finance
+
+---
+
+# 5. High Level Architecture
+
+```text
+Frontend
+  ↓
+Central Logger
+  ↓
+API Layer
+  ↓
+Audit Trail
+  ↓
+Monitoring Engine
+  ↓
+Alert Engine
+  ↓
+Dashboard + Notifications
+```
+
+---
+
+# 6. System Components
+
+# 6.1 Central Logger System
+
+## Purpose
+
+Standardized logging untuk seluruh aplikasi.
+
+---
+
+## Requirements
+
+### Create:
+
+```text
+/lib/logger.ts
+```
+
+---
+
+## Logging Levels
+
+| Level    | Purpose                  |
+| -------- | ------------------------ |
+| info     | normal business activity |
+| warn     | suspicious condition     |
+| error    | failure                  |
+| critical | operationally dangerous  |
+
+---
+
+## Example
+
+```ts
+logger.info('ASSIGN_DRIVER_START', payload)
+
+logger.error('CREATE_JO_FAILED', error)
+```
+
+---
+
+## Requirements
+
+### Logs MUST contain:
+
+* timestamp
+* module
+* action
+* user_id
+* reference_id
+* correlation_id
+* payload
+* severity
+
+---
+
+# 6.2 Audit Trail System
+
+## Purpose
+
+Permanent business activity history.
+
+---
+
+## Database Table
+
+```sql
+audit_logs
+```
+
+---
+
+## Columns
+
+| Column         | Type        |
+| -------------- | ----------- |
+| id             | uuid        |
+| created_at     | timestamptz |
+| module         | text        |
+| action         | text        |
+| user_id        | uuid        |
+| user_name      | text        |
+| reference_type | text        |
+| reference_id   | text        |
+| correlation_id | text        |
+| severity       | text        |
+| old_data       | jsonb       |
+| new_data       | jsonb       |
+| metadata       | jsonb       |
+
+---
+
+## Mandatory Logging Actions
+
+### Trucking
+
+* assign driver
+* create JO
+* accept job
+* reject job
+* status update
+
+### WMS
+
+* stock movement
+* adjustment
+* picking
+* packing
+* inbound
+* outbound
+
+### Forwarding
+
+* shipment creation
+* container update
+* document upload
+* vessel update
+* invoice creation
+
+---
+
+# 6.3 Error Tracking System
+
+## Tool
+
+Primary:
+
+* [Sentry](https://sentry.io?utm_source=chatgpt.com)
+
+---
+
+## Requirements
+
+Must capture:
+
+* frontend errors
+* API errors
+* server errors
+* unhandled exceptions
+* promise rejection
+
+---
+
+## Metadata
+
+Attach:
+
+* user
+* module
+* route
+* correlation_id
+* browser
+* device
+
+---
+
+# 6.4 Correlation ID System
+
+## Purpose
+
+Trace single workflow end-to-end.
+
+---
+
+## Example
+
+```text
+REQ-20260523-00001
+```
+
+---
+
+## Requirements
+
+Every:
+
+* API request
+* workflow
+* cron job
+* audit log
+* error
+
+Must include correlation_id.
+
+---
+
+# 6.5 Workflow Monitoring Engine
+
+## Purpose
+
+Detect stuck or broken workflows.
+
+---
+
+## Cron-based Monitoring
+
+Use:
+
+* Vercel Cron Jobs
+
+[Vercel Cron Jobs](https://vercel.com/docs/cron-jobs?utm_source=chatgpt.com)
+
+---
+
+# 7. Scheduled Monitoring
+
+# 7.1 Health Check
+
+## Frequency
+
+Every 10 minutes
+
+---
+
+## Checks
+
+* API alive
+* DB connection
+* auth service
+* cron execution
+* Supabase latency
+
+---
+
+# 7.2 Operational Workflow Check
+
+## Frequency
+
+Every 30 minutes
+
+---
+
+## Trucking Checks
+
+* JO stuck
+* driver not accepted
+* duplicate fleet assignment
+* invalid WA token
+* delivery overdue
+
+---
+
+## WMS Checks
+
+* negative stock
+* orphan inventory
+* duplicate allocation
+* picking not completed
+
+---
+
+## Forwarding Checks
+
+* shipment status mismatch
+* missing container
+* missing documents
+* overdue milestones
+
+---
+
+# 7.3 Deep Integrity Scan
+
+## Frequency
+
+Daily at 00:00
+
+---
+
+## Checks
+
+* orphan records
+* duplicate JO number
+* invalid relationships
+* inconsistent totals
+* broken references
+
+---
+
+# 7.4 Cleanup Tasks
+
+## Frequency
+
+Daily at 02:00
+
+---
+
+## Tasks
+
+* cleanup temp files
+* retry failed queue
+* archive logs
+* remove stale sessions
+
+---
+
+# 8. Alerting System
+
+# Alert Channels
+
+## Phase 1
+
+* Email
+* Internal dashboard
+
+## Phase 2
+
+* WhatsApp
+* Telegram
+
+---
+
+# Severity Levels
+
+| Severity | Meaning                 |
+| -------- | ----------------------- |
+| low      | informational           |
+| medium   | operational issue       |
+| high     | business disruption     |
+| critical | severe operational risk |
+
+---
+
+# Example Alerts
+
+## Good Alert
+
+```text
+⚠ Duplicate Fleet Assignment
+
+Fleet:
+B 9123 UX
+
+Assigned:
+JO-24001
+JO-24005
+```
+
+---
+
+## Bad Alert
+
+```text
+Unknown Error
+```
+
+---
+
+# 9. Monitoring Dashboard
+
+# Purpose
+
+Founder-friendly observability center.
+
+---
+
+# Dashboard Widgets
+
+## System Health
+
+* API status
+* DB status
+* error rate
+
+---
+
+## Trucking
+
+* active JO
+* stuck JO
+* failed WA
+* pending acceptance
+
+---
+
+## WMS
+
+* stock anomalies
+* pending picking
+* negative stock
+
+---
+
+## Forwarding
+
+* shipment delays
+* missing milestones
+* pending documents
+
+---
+
+## Error Summary
+
+* top errors
+* frequency
+* affected modules
+
+---
+
+# 10. API Structure
+
+```text
+/app/api/cron/
+    health
+    trucking-check
+    wms-check
+    forwarding-check
+    cleanup
+```
+
+---
+
+# 11. Status History System
+
+## Purpose
+
+Historical workflow visibility.
+
+---
+
+## Required Tables
+
+```text
+job_status_history
+shipment_status_history
+inventory_movement_history
+```
+
+---
+
+## Must Store
+
+* old_status
+* new_status
+* changed_by
+* changed_at
+* correlation_id
+
+---
+
+# 12. Frontend Debugging
+
+# Requirements
+
+## Global Error Boundary
+
+```text
+/app/error.tsx
+```
+
+---
+
+## Debug Mode
+
+```env
+NEXT_PUBLIC_DEBUG=true
+```
+
+---
+
+## Development Debug Panel
+
+Show:
+
+* current state
+* selected IDs
+* API response
+* loading states
+
+---
+
+# 13. Database Observability
+
+# Requirements
+
+Use:
+
+* Supabase logs
+* query logs
+* slow query detection
+
+---
+
+# 14. Security Requirements
+
+Do NOT log:
+
+* passwords
+* tokens
+* secrets
+* sensitive credentials
+
+---
+
+# 15. Performance Requirements
+
+## System must:
+
+* not block primary workflow
+* use async logging
+* minimize DB overhead
+* avoid excessive cron load
+
+---
+
+# 16. Rollout Plan
+
+# Phase 1 — Foundation
+
+## Deliverables
+
+* logger.ts
+* audit_logs
+* try/catch standard
+* correlation_id
+* Sentry
+* error boundary
+
+---
+
+# Phase 2 — Monitoring
+
+## Deliverables
+
+* cron jobs
+* health checks
+* operational checks
+* alerts
+
+---
+
+# Phase 3 — Dashboard
+
+## Deliverables
+
+* monitoring dashboard
+* alert center
+* workflow observability
+
+---
+
+# Phase 4 — Advanced
+
+## Deliverables
+
+* anomaly detection
+* predictive alerts
+* auto retry
+* smart escalation
+
+---
+
+# 17. Success Metrics
+
+## Operational
+
+* Mean Time To Detect < 15 minutes
+* Mean Time To Resolution reduced by 70%
+* Critical operational bug visibility 100%
+
+---
+
+## Technical
+
+* All critical workflows logged
+* All critical actions auditable
+* Scheduled diagnostics active
+
+---
+
+# 18. Future Expansion
+
+Future integrations:
+
+* GPS telemetry
+* IoT devices
+* live fleet tracking
+* queue engine
+* event bus
+* AI anomaly detection
+
+---
+
+# 19. Final Technical Direction
+
+Sentralogis observability architecture should evolve into:
+
+```text
+Sentralogis Core Platform
+├── Auth
+├── Audit Trail
+├── Monitoring
+├── Logging
+├── Workflow Engine
+├── Notifications
+├── Scheduler
+├── Status History
+├── File Storage
+└── Analytics
+```
+
+Modules:
+
+* Trucking
+* WMS
+* Forwarding
+* Finance
+* Procurement
+
+Should plug into the same observability foundation.

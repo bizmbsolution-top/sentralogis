@@ -21,14 +21,35 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // =====================================================
-        // 1. CARI JOB ORDER BERDASARKAN TOKEN
-        // =====================================================
-        const { data: jobOrder, error: fetchError } = await supabase
+        // [AI] 1. CARI JOB ORDER BERDASARKAN TOKEN / UUID FALLBACK
+        let jobOrder = null;
+        let fetchError = null;
+
+        const { data: tokenMatch, error: tokenErr } = await supabase
             .from('job_orders')
             .select('*')
             .eq('driver_link_token', token)
-            .single();
+            .maybeSingle();
+
+        if (tokenMatch) {
+            jobOrder = tokenMatch;
+        } else {
+            if (token.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                const { data: idMatch, error: idErr } = await supabase
+                    .from('job_orders')
+                    .select('*')
+                    .eq('id', token)
+                    .maybeSingle();
+                
+                if (idMatch) {
+                    jobOrder = idMatch;
+                } else {
+                    fetchError = idErr || new Error('Job Order tidak ditemukan');
+                }
+            } else {
+                fetchError = tokenErr || new Error('Job Order tidak ditemukan');
+            }
+        }
 
         if (fetchError || !jobOrder) {
             console.error("JO not found:", fetchError);

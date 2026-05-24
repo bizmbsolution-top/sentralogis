@@ -98,7 +98,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         console.log('[AssignmentModal] activeJobDrivers:', activeJobDrivers);
 
         const [fleetRes, driverRes, transporterRes, tfRes, tdRes, assignedFleetRes, assignedDriverRes] = await Promise.all([
-          // Only show available fleets (not on_road, not non_active)
+          // Only show available fleets (include on_duty for checked-in but unassigned)
           (async () => {
             let query = supabase.from('md_fleets').select(`
               id,
@@ -112,7 +112,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             `)
             .eq('is_active', true)
             .eq('tenant_id', tenantId)
-            .in('status', ['available', 'maintenance']);
+            .in('status', ['available', 'maintenance', 'on_duty']);
             
             // Exclude fleets with active jobs if any exist
             if (activeJobFleets.length > 0) {
@@ -122,13 +122,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             return query;
           })(),
           
-          // Only show drivers who are not currently working
+          // Only show drivers who are available or on_duty (checked in but not yet assigned)
           (async () => {
             let query = supabase.from('md_drivers')
               .select('*')
               .eq('is_active', true)
               .eq('tenant_id', tenantId)
-              .eq('is_working', false);
+              .in('status', ['available', 'on_duty']);
             
             // Exclude drivers with active jobs if any exist
             if (activeJobDrivers.length > 0) {

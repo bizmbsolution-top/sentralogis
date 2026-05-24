@@ -16,6 +16,10 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
 
+import { getTokenPrice } from '@/lib/actions/tokenPriceActions';
+
+const DEFAULT_PRICE_PER_TOKEN = 1000;
+
 export default function TenantTopupPage() {
   const { user, profile } = useAuth();
   const [tenant, setTenant] = useState<any>(null);
@@ -25,8 +29,18 @@ export default function TenantTopupPage() {
   const [amount, setAmount] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pricePerToken, setPricePerToken] = useState(DEFAULT_PRICE_PER_TOKEN);
   
-  const PRICE_PER_TOKEN = 1000;
+  useEffect(() => {
+    fetchPrice();
+  }, []);
+
+  const fetchPrice = async () => {
+    const result = await getTokenPrice();
+    if (result.success) {
+      setPricePerToken(result.price);
+    }
+  };
 
   const fetchData = async () => {
     if (!user) return;
@@ -70,7 +84,7 @@ export default function TenantTopupPage() {
 
       const { data: { publicUrl } } = supabase.storage.from('topup-proofs').getPublicUrl(fileName);
 
-      const totalPay = parseInt(amount) * PRICE_PER_TOKEN;
+      const totalPay = parseInt(amount) * pricePerToken;
       const { error: reqError } = await supabase.from('topup_requests').insert({
         tenant_id: tenant.id, tenant_code: tenant.tenant_code,
         amount: parseInt(amount), total_price: totalPay,
@@ -93,7 +107,7 @@ export default function TenantTopupPage() {
     }
   };
 
-  const calculatedPrice = (parseInt(amount) || 0) * PRICE_PER_TOKEN;
+  const calculatedPrice = (parseInt(amount) || 0) * pricePerToken;
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32 gap-6 animate-pulse">

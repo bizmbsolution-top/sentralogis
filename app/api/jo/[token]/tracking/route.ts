@@ -19,12 +19,30 @@ export async function POST(
       return NextResponse.json({ error: 'Coordinates missing' }, { status: 400 })
     }
 
-    // 1. Ambil JO id berdasarkan token
-    const { data: joData, error: fetchError } = await supabaseAdmin
-      .from('job_orders')
-      .select('id, status')
-      .eq('driver_link_token', token)
-      .single()
+    // 1. Ambil JO id berdasarkan token safely (handles UUID and short string formats)
+    const isUuid = token.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    let joData = null;
+    let fetchError = null;
+
+    if (isUuid) {
+      // Query UUID and varchar columns safely
+      const { data, error } = await supabaseAdmin
+        .from('job_orders')
+        .select('id, status')
+        .or(`id.eq.${token},wa_token.eq.${token},tracking_token.eq.${token},driver_link_token.eq.${token}`)
+        .maybeSingle();
+      joData = data;
+      fetchError = error;
+    } else {
+      // Query varchar columns only to avoid Postgres syntax errors
+      const { data, error } = await supabaseAdmin
+        .from('job_orders')
+        .select('id, status')
+        .or(`tracking_token.eq."${token}",driver_link_token.eq."${token}"`)
+        .maybeSingle();
+      joData = data;
+      fetchError = error;
+    }
 
     if (fetchError || !joData) {
       return NextResponse.json({ error: 'Job Order not found' }, { status: 404 })

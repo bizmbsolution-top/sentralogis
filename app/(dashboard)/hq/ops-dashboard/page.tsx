@@ -21,11 +21,15 @@ import {
   Package,
   FileCheck,
   DollarSign,
-  CreditCard
+  CreditCard,
+  Siren,
+  Megaphone,
+  XCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { toast, Toaster } from 'react-hot-toast';
 
 type SlaCompliance = {
   sla_stage: string;
@@ -183,6 +187,8 @@ export default function HQOpsDashboardPage() {
   const [woAlerts, setWoAlerts] = useState<WoAlert[]>([]);
   const [arDueAlerts, setArDueAlerts] = useState<DueAlert[]>([]);
   const [apDueAlerts, setApDueAlerts] = useState<DueAlert[]>([]);
+  const [escalations, setEscalations] = useState<any[]>([]);
+  const [escalationCount, setEscalationCount] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [metrics, setMetrics] = useState({
     activeMissions: 0,
@@ -342,6 +348,18 @@ export default function HQOpsDashboardPage() {
         setApDueAlerts(apAlerts);
       }
 
+      // 5b. SLA Escalations
+      const { data: escData } = await supabase
+        .from('sla_escalations')
+        .select('*')
+        .eq('tenant_id', profile.tenant_id)
+        .is('resolved_at', null)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      setEscalations(escData || []);
+      setEscalationCount(escData?.length || 0);
+
       // 6. Fleet & driver stats
       const [fleetRes, driverRes, joRes] = await Promise.all([
         supabase.from('md_fleets').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id),
@@ -379,6 +397,30 @@ export default function HQOpsDashboardPage() {
     fetchData();
   };
 
+  const [triggeringEscalation, setTriggeringEscalation] = useState(false);
+
+  const handleTriggerEscalation = async () => {
+    setTriggeringEscalation(true);
+    try {
+      const res = await fetch('/api/admin/sla-escalation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: profile?.tenant_id }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`${result.summary.escalations_created} escalation(s), ${result.summary.notifications_sent} notification(s) sent`);
+        fetchData();
+      } else {
+        toast.error(result.error || 'Failed to trigger escalation');
+      }
+    } catch (err) {
+      toast.error('Failed to trigger escalation');
+    } finally {
+      setTriggeringEscalation(false);
+    }
+  };
+
   const globalScore = slaData.reduce((acc, sla) => {
     const weight = sla.sla_stage.includes('SLA 3') ? 0.25 :
                    sla.sla_stage.includes('SLA 5') ? 0.20 :
@@ -398,6 +440,7 @@ export default function HQOpsDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      <Toaster position="top-right" />
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
@@ -415,6 +458,14 @@ export default function HQOpsDashboardPage() {
             <div className="text-xs text-slate-400">
               Last update: {lastRefresh.toLocaleTimeString('id-ID')}
             </div>
+            <button
+              onClick={handleTriggerEscalation}
+              disabled={triggeringEscalation}
+              className="p-2 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors disabled:opacity-50"
+              title="Trigger SLA Escalation Check"
+            >
+              <Megaphone size={16} className={triggeringEscalation ? 'animate-pulse text-rose-400' : 'text-rose-600'} />
+            </button>
             <button
               onClick={handleManualRefresh}
               className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
@@ -555,6 +606,78 @@ export default function HQOpsDashboardPage() {
           )}
         </Card>
       </div>
+
+      {/* SLA Escalations Panel */}
+      {escalations.length > 0 && (
+        <div className="max-w-7xl mx-auto mb-8">
+          <Card className="border border-rose-200 shadow-sm rounded-xl bg-white overflow-hidden">
+            <div className="p-5 border-b border-rose-100 flex items-center justify-between bg-rose-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center animate-pulse">
+                  <Siren size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-rose-900">SLA Escalations — Active</h3>
+                  <p className="text-xs text-rose-600">Auto-escalated breaches requiring attention</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-rose-200 text-rose-800 rounded-full text-xs font-semibold">
+                {escalationCount} active
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-medium text-slate-500 uppercase tracking-wide border-b border-slate-100">
+                    <th className="px-5 py-3">Level</th>
+                    <th className="px-5 py-3">SLA Stage</th>
+                    <th className="px-5 py-3">WO / JO</th>
+                    <th className="px-5 py-3">Notified</th>
+                    <th className="px-5 py-3">Details</th>
+                    <th className="px-5 py-3">Escalated At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {escalations.map((esc) => {
+                    const levelColors: Record<number, string> = {
+                      1: 'bg-amber-50 text-amber-700 border-amber-200',
+                      2: 'bg-orange-50 text-orange-700 border-orange-200',
+                      3: 'bg-rose-50 text-rose-700 border-rose-200',
+                      4: 'bg-red-100 text-red-800 border-red-300',
+                    };
+                    const levelLabels: Record<number, string> = {
+                      1: '⚠ Warning',
+                      2: '🔔 Breach',
+                      3: '🚨 Critical',
+                      4: '💀 Emergency',
+                    };
+                    return (
+                      <tr key={esc.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-5 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold border ${levelColors[esc.escalation_level] || 'bg-slate-50 text-slate-600'}`}>
+                            {levelLabels[esc.escalation_level] || `Level ${esc.escalation_level}`}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-xs font-mono text-slate-700">{esc.sla_stage}</td>
+                        <td className="px-5 py-3">
+                          <div className="text-xs font-mono text-slate-900">{esc.wo_id ? esc.wo_id.slice(0, 8) : '—'}</div>
+                          {esc.jo_id && <div className="text-[10px] text-slate-400 font-mono">{esc.jo_id.slice(0, 8)}</div>}
+                        </td>
+                        <td className="px-5 py-3 text-xs text-slate-600">{esc.notified_role || '—'}</td>
+                        <td className="px-5 py-3 text-xs text-slate-500 max-w-[250px] truncate">{esc.details}</td>
+                        <td className="px-5 py-3 text-xs text-slate-400">
+                          {esc.created_at ? new Date(esc.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* WO Readiness + Due Alerts */}
       <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-3 gap-6">

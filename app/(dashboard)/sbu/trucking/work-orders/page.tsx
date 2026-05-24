@@ -47,7 +47,26 @@ export default function WorkOrderPlanningPage() {
   }, [searchParams]);
 
   const fetchData = useCallback(async () => {
-    if (!profile?.tenant_id) return;
+    // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+    let tenantId = profile?.tenant_id;
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+    if (!tenantId && isGlobalRole) {
+      try {
+        const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+        if (tenantData && tenantData.length > 0) {
+          tenantId = tenantData[0].id;
+        }
+      } catch (e) {
+        console.error('Failed to resolve fallback tenant ID for SBU work orders:', e);
+      }
+    }
+
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     
     const { data: baseItems, error: baseError } = await supabase
@@ -56,7 +75,7 @@ export default function WorkOrderPlanningPage() {
         *, 
         work_orders!inner(id, wo_number, execution_date, status, md_entities!customer_id(name, legal_name))
       `)
-      .eq('tenant_id', profile.tenant_id)
+      .eq('tenant_id', tenantId)
       .eq('sbu_type', 'TRUCKING')
       .order('created_at', { ascending: false });
 
@@ -93,16 +112,17 @@ export default function WorkOrderPlanningPage() {
       setItems(parsedItems);
     }
     setLoading(false);
-  }, [profile?.tenant_id]);
+  }, [profile?.tenant_id, profile?.role]);
 
   useEffect(() => {
-    if (!profile?.tenant_id) {
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+    if (!profile?.tenant_id && !isGlobalRole) {
       // If we've waited and still no tenant_id, stop loading to show empty or login
       const timer = setTimeout(() => setLoading(false), 2000);
       return () => clearTimeout(timer);
     }
     fetchData();
-  }, [profile?.tenant_id, fetchData]);
+  }, [profile?.tenant_id, profile?.role, fetchData]);
 
   useEffect(() => {
     const itemId = searchParams.get('itemId');
@@ -399,57 +419,65 @@ const filteredItems = useMemo(() => {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 w-fit">
-          {[
-            { id: 'all', label: 'All Units', count: stats.total, color: 'text-slate-500' },
-            { id: 'pending', label: 'Needs Assignment', count: stats.pending, color: 'text-rose-500' },
-            { id: 'assigned_units', label: 'Assigned', count: items.filter(i => {
-              const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-              const anyMoving = jos.some((j: any) => 
-                j.status?.startsWith('MENUJU') || 
-                j.status?.startsWith('TIBA') || 
-                j.status === 'in_progress' || 
-                j.status === 'DALAM PERJALANAN'
-              );
-              const allAssigned = (jos.length > 0 && jos.length >= (i.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id);
-              const statusStr = i.status?.toUpperCase() || '';
-              const isCompleted = ['COMPLETED', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(statusStr);
-              const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(statusStr);
-              // [AI] Exclude rejected/pending handover items
-              const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(statusStr);
-              return (allAssigned || isAssignedStatus) && !anyMoving && !isCompleted && !isRejectedOrPending;
-            }).length, color: 'text-blue-500' },
-            { id: 'on_road', label: 'On Road', count: items.filter(i => {
-              const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-              const anyMoving = jos.some((j: any) => 
-                j.status?.toUpperCase().startsWith('MENUJU') || 
-                j.status?.toUpperCase().startsWith('TIBA') || 
-                ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT'].includes(j.status?.toUpperCase())
-              );
-              const isCompleted = ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(i.status?.toUpperCase() || '');
-              return anyMoving && !isCompleted;
-            }).length, color: 'text-emerald-500' },
-            { id: 'handover_pending', label: 'In Handover', count: stats.handover, color: 'text-orange-500' },
-            { id: 'handover_rejected', label: 'Rejected', count: stats.rejected, color: 'text-rose-500' },
-            { id: 'completed', label: 'Completed', count: stats.completed, color: 'text-slate-900' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedStatus(tab.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                selectedStatus === tab.id ? 'bg-slate-900 text-white shadow-md scale-[1.02]' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              {tab.label}
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black ${
-                selectedStatus === tab.id 
-                  ? 'bg-white/20 text-white' 
-                  : `bg-slate-100 ${tab.color}`
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+        <div className="mt-8">
+          {/* Mobile: Horizontal scrollable tabs | Desktop: Wrapped tabs */}
+          <div className="relative">
+            <div className="flex lg:flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide w-fit lg:w-auto max-w-full">
+              <style dangerouslySetInnerHTML={{ __html: `
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
+                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+              `}} />
+              {[
+                { id: 'all', label: 'All', count: stats.total, color: 'text-slate-500' },
+                { id: 'pending', label: 'Pending', count: stats.pending, color: 'text-rose-500' },
+                { id: 'assigned_units', label: 'Assigned', count: items.filter(i => {
+                  const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
+                  const anyMoving = jos.some((j: any) => 
+                    j.status?.startsWith('MENUJU') || 
+                    j.status?.startsWith('TIBA') || 
+                    j.status === 'in_progress' || 
+                    j.status === 'DALAM PERJALANAN'
+                  );
+                  const allAssigned = (jos.length > 0 && jos.length >= (i.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id);
+                  const statusStr = i.status?.toUpperCase() || '';
+                  const isCompleted = ['COMPLETED', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(statusStr);
+                  const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(statusStr);
+                  const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(statusStr);
+                  return (allAssigned || isAssignedStatus) && !anyMoving && !isCompleted && !isRejectedOrPending;
+                }).length, color: 'text-blue-500' },
+                { id: 'on_road', label: 'On Road', count: items.filter(i => {
+                  const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
+                  const anyMoving = jos.some((j: any) => 
+                    j.status?.toUpperCase().startsWith('MENUJU') || 
+                    j.status?.toUpperCase().startsWith('TIBA') || 
+                    ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT'].includes(j.status?.toUpperCase())
+                  );
+                  const isCompleted = ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(i.status?.toUpperCase() || '');
+                  return anyMoving && !isCompleted;
+                }).length, color: 'text-emerald-500' },
+                { id: 'handover_pending', label: 'Handover', count: stats.handover, color: 'text-orange-500' },
+                { id: 'handover_rejected', label: 'Rejected', count: stats.rejected, color: 'text-rose-500' },
+                { id: 'completed', label: 'Done', count: stats.completed, color: 'text-slate-900' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedStatus(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 lg:px-5 lg:py-2.5 rounded-xl text-[10px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-widest transition-all whitespace-nowrap flex-shrink-0 min-h-[44px] ${
+                    selectedStatus === tab.id ? 'bg-slate-900 text-white shadow-md scale-[1.02]' : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] lg:text-[9px] font-black ${
+                    selectedStatus === tab.id 
+                      ? 'bg-white/20 text-white' 
+                      : `bg-slate-100 ${tab.color}`
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
  

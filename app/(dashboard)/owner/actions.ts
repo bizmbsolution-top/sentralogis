@@ -242,3 +242,202 @@ export async function registerTenantAdmin(params: {
   }
 }
 
+// ============================================
+// TRANSACTIONS (Owner — all topup_requests + token_transactions)
+// ============================================
+
+export async function getAllTopupRequests(filters?: {
+  status?: 'pending' | 'approved' | 'rejected';
+  tenantId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const admin = getAdminClient()
+  try {
+    let query = admin
+      .from('topup_requests')
+      .select(`
+        *,
+        tenants (
+          id,
+          name,
+          tenant_code
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
+    if (filters?.tenantId) {
+      query = query.eq('tenant_id', filters.tenantId)
+    }
+    if (filters?.dateFrom) {
+      query = query.gte('created_at', filters.dateFrom)
+    }
+    if (filters?.dateTo) {
+      query = query.lte('created_at', filters.dateTo)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+    return { success: true, data: data || [] }
+  } catch (error: any) {
+    console.error('getAllTopupRequests error:', error)
+    return { success: false, message: error.message, data: [] }
+  }
+}
+
+export async function getTransactionSummary() {
+  const admin = getAdminClient()
+  try {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+    const [totalRevenue, pendingCount, approvedCount, rejectedCount] = await Promise.all([
+      admin.from('topup_requests').select('total_amount').gte('created_at', monthStart).eq('status', 'approved'),
+      admin.from('topup_requests').select('id').eq('status', 'pending'),
+      admin.from('topup_requests').select('id').eq('status', 'approved'),
+      admin.from('topup_requests').select('id').eq('status', 'rejected'),
+    ])
+
+    const revenue = (totalRevenue.data || []).reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0)
+
+    return {
+      success: true,
+      summary: {
+        totalRevenueMonth: revenue,
+        pendingCount: pendingCount.data?.length || 0,
+        approvedCount: approvedCount.data?.length || 0,
+        rejectedCount: rejectedCount.data?.length || 0,
+      }
+    }
+  } catch (error: any) {
+    console.error('getTransactionSummary error:', error)
+    return { success: false, message: error.message, summary: { totalRevenueMonth: 0, pendingCount: 0, approvedCount: 0, rejectedCount: 0 } }
+  }
+}
+
+export async function getTenantsList() {
+  const admin = getAdminClient()
+  try {
+    const { data, error } = await admin
+      .from('tenants')
+      .select('id, name, tenant_code')
+      .order('name', { ascending: true })
+
+    if (error) throw error
+    return { success: true, data: data || [] }
+  } catch (error: any) {
+    console.error('getTenantsList error:', error)
+    return { success: false, message: error.message, data: [] }
+  }
+}
+
+// ============================================
+// TOKEN PRICES MANAGEMENT
+// ============================================
+
+export async function getTokenPrice() {
+  const admin = getAdminClient()
+  try {
+    const { data, error } = await admin
+      .from('token_prices')
+      .select('*')
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+    
+    return { 
+      success: true, 
+      price: data?.price_per_token || 1000,
+      currency: data?.currency || 'IDR',
+      effectiveFrom: data?.effective_from,
+      notes: data?.notes
+    }
+  } catch (error: any) {
+    console.error('getTokenPrice error:', error)
+    return { success: false, price: 1000, currency: 'IDR' }
+  }
+}
+
+export async function getTokenPriceHistory() {
+  const admin = getAdminClient()
+  try {
+    const { data, error } = await admin
+      .from('token_price_history')
+      .select(`
+        *,
+        changed_by:profiles(full_name, email)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) throw error
+    return { success: true, data: data || [] }
+  } catch (error: any) {
+    console.error('getTokenPriceHistory error:', error)
+    return { success: false, data: [] }
+  }
+}
+
+export async function updateTokenPrice(params: {
+  newPrice: number
+  reason?: string
+  userId?: string
+}) {
+  const admin = getAdminClient()
+  try {
+    // 1. Get current price
+    const { data: currentPrice } = await admin
+      .from('token_prices')
+      .select('price_per_token')
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const oldPrice = currentPrice?.price_per_token || 1000
+
+    // 2. End current price record
+    await admin
+      .from('token_prices')
+      .update({ 
+        effective_to: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .is('effective_to', null)
+
+    // 3. Insert new price record
+    await admin
+      .from('token_prices')
+      .insert({
+        price_per_token: params.newPrice,
+        currency: 'IDR',
+        effective_from: new Date().toISOString(),
+        updated_by: params.userId || null,
+        notes: params.reason || 'Price updated'
+      })
+
+    // 4. Log to history
+    await admin
+      .from('token_price_history')
+      .insert({
+        old_price: oldPrice,
+        new_price: params.newPrice,
+        changed_by: params.userId || null,
+        reason: params.reason || 'Price updated'
+      })
+
+    return { 
+      success: true, 
+      message: `Harga token berhasil diubah dari Rp ${oldPrice.toLocaleString()} ke Rp ${params.newPrice.toLocaleString()}` 
+    }
+  } catch (error: any) {
+    console.error('updateTokenPrice error:', error)
+    return { success: false, message: error.message }
+  }
+}
+

@@ -1,0 +1,1480 @@
+# USER FLOW & DATABASE SCHEMA
+## Modul Warehouse Management System (WMS)
+### Sentralogis Integrated Logistics Platform
+
+---
+
+## BAGIAN 1: USER FLOW
+
+### 1.1 User Flow Diagram Utama
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              WMS SENTRALOGIS - USER FLOW OVERVIEW                         │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+                                        ┌─────────────────┐
+                                        │   LOGIN GATEWAY  │
+                                        └────────┬────────┘
+                                                 │
+                          ┌──────────────────────┼──────────────────────┐
+                          │                      │                      │
+                    ┌─────▼─────┐          ┌─────▼─────┐          ┌─────▼─────┐
+                    │  STAFF    │          │ SUPERVISOR│          │  CUSTOMER │
+                    │  GUDANG   │          │  + MANAGER│          │   PORTAL  │
+                    └─────┬─────┘          └─────┬─────┘          └─────┬─────┘
+                          │                      │                      │
+                          ▼                      ▼                      ▼
+              ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+              │  MOBILE/TABLET    │  │  WEB DASHBOARD    │  │  CUSTOMER PORTAL  │
+              │  (Operasional)    │  │  (Manajemen)      │  │  (Self-Service)   │
+              └───────────────────┘  └───────────────────┘  └───────────────────┘
+```
+
+---
+
+### 1.2 Staff Gudang (Mobile/Tablet App)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              STAFF GUDANG - MOBILE WORKFLOW                               │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────┐
+  │  LOGIN   │
+  └────┬─────┘
+       │
+       ▼
+  ┌──────────────────┐
+  │  DASHBOARD STAFF │
+  │  "Halo, Budi"    │
+  │  Shift: 08:00-   │
+  │  16:00           │
+  └────────┬─────────┘
+           │
+    ┌──────┼──────────────────────────────────────┐
+    │      │                                      │
+    ▼      ▼                                      ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                        TASK LIST HARI INI                              │
+├────────────┬──────────────┬──────────────┬──────────────┬─────────────┤
+│  RECEIVING │   PUTAWAY    │   PICKING    │  MOVEMENT    │    VAS      │
+│   (3 task) │   (5 task)   │   (2 task)   │   (1 task)   │  (0 task)   │
+└─────┬──────┴──────┬───────┴──────┬───────┴──────┬───────┴──────┬──────┘
+      │             │              │              │              │
+      ▼             ▼              ▼              ▼              ▼
+┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
+│ RECEIVING │ │  PUTAWAY  │ │  PICKING  │ │ MOVEMENT  │ │    VAS    │
+│   MODE    │ │   MODE    │ │   MODE    │ │   MODE    │ │   MODE    │
+└───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
+```
+
+---
+
+### 1.3 Mode Receiving (Inbound)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MODE RECEIVING - INBOUND FLOW                                │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────┐
+  │  PILIH RECEIPT ORDER     │
+  │  (dari list task)        │
+  │  RO-20260520-001         │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SCAN LABEL BARANG       │
+  │  (barcode dari supplier  │
+  │   atau label forwarding) │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐      ┌─────────────────────────┐
+  │  AUTO-POPULATE DATA      │      │  JIKA BARCODE TIDAK     │
+  │  • SKU                   │      │  TERBACA:               │
+  │  • Customer              │      │  → Manual input         │
+  │  • Expected Qty          │      │  → Cari SKU dari list   │
+  └────────────┬─────────────┘      └─────────────────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  INPUT DATA AKTUAL       │
+  │  • Jumlah diterima       │
+  │  • Dimensi (PxLxT cm)    │
+  │  • Berat (kg)            │
+  │  • Lot Number            │
+  │  • Expiry Date           │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  FOTO KONDISI BARANG     │
+  │  (optional, mandatory    │
+  │   jika ada kerusakan)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐      ┌─────────────────────────┐
+  │  EXCEPTION CHECK?        │──────│  JIKA ADA KERUSAKAN/    │
+  │                          │      │  SELISIH:               │
+  │  • Sesuai? ✓             │      │  • Foto kerusakan       │
+  │  • Rusak? ✗              │      │  • Catat exception      │
+  │  • Kurang? ✗             │      │  • Tandai "Damaged"     │
+  │  • Lebih? ✗              │      │  • Tandai "Shortage"    │
+  └────────────┬─────────────┘      │  • Tandai "Over"        │
+               │                    └─────────────────────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  SISTEM GENERATE         │
+  │  INVENTORY_ID            │
+  │  & CETAK LABEL           │
+  │                          │
+  │  INV-20260520-00001      │
+  │  SKU: ABC-123            │
+  │  LOT: LOT-MEI26          │
+  │  EXP: 30-Nov-2026        │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  LANJUT KE PUTAWAY?      │
+  │  [YA] → Putaway Mode     │
+  │  [NANTI] → Kembali ke    │
+  │            Task List      │
+  └──────────────────────────┘
+```
+
+---
+
+### 1.4 Mode Putaway
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MODE PUTAWAY - SIMPAN BARANG                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────┐
+  │  SCAN INVENTORY_ID       │
+  │  (label yang sudah       │
+  │   ditempel di barang)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SISTEM TAMPILKAN INFO   │
+  │  • SKU: DAGING-1KG       │
+  │  • Commodity: FROZEN     │
+  │  • Required: FREEZER     │
+  │    (-18°C)               │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SISTEM REKOMENDASIKAN   │
+  │  LOKASI (Smart Putaway)  │
+  │                          │
+  │  ✅ Rekomendasi:         │
+  │  COLD-A / Freezer-1 /    │
+  │  RACK-FZ-01 / BIN-A-03   │
+  │  (Kapasitas: 800kg,      │
+  │   Tersedia: 500kg)       │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐      ┌─────────────────────────┐
+  │  PILIH LOKASI            │      │  OVERRIDE MANUAL?       │
+  │                          │      │  Staff bisa pilih lokasi│
+  │  ○ Ikuti rekomendasi     │      │  lain dengan alasan:    │
+  │  ○ Pilih lokasi lain     │      │  • "Lebih dekat"        │
+  │                          │      │  • "Rekomendasi penuh"  │
+  └────────────┬─────────────┘      │  → Catat di audit log   │
+               │                    └─────────────────────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  SCAN LOKASI TUJUAN      │
+  │  (barcode di rak/bin)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐      ┌─────────────────────────┐
+  │  VALIDASI SISTEM         │      │  JIKA GAGAL VALIDASI:   │
+  │                          │      │  ❌ "Komoditi FROZEN    │
+  │  ✅ Komoditi cocok       │      │      tidak bisa disimpan│
+  │  ✅ Kapasitas cukup      │      │      di ZONE-AMBIENT"   │
+  │  ✅ Dimensi muat         │      │  ❌ "Berat melebihi     │
+  │                          │      │      kapasitas bin"     │
+  └────────────┬─────────────┘      │  → Pilih lokasi lain    │
+               │                    └─────────────────────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  KONFIRMASI SIMPAN       │
+  │  [SIMPAN]                │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SUKSES!                 │
+  │  Status: AVAILABLE       │
+  │  Lokasi: COLD-A/FR1/     │
+  │          RACK-01/BIN-A3  │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  LANJUTKAN?              │
+  │  [SCAN BARANG LAIN]      │
+  │  [KEMBALI KE TASK LIST]  │
+  └──────────────────────────┘
+```
+
+---
+
+### 1.5 Mode Picking (Outbound)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MODE PICKING - OUTBOUND FLOW                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────┐
+  │  PILIH PICKING LIST      │
+  │  PL-20260520-001         │
+  │  Customer: PT XYZ        │
+  │  Total: 15 item          │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SISTEM URUTKAN RUTE     │
+  │  (Guided Picking Path)   │
+  │                          │
+  │  1. ZONE-A / RACK-01     │
+  │  2. ZONE-A / RACK-03     │
+  │  3. ZONE-B / RACK-02     │
+  │  (dalam cold storage)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  ITEM #1 dari 15         │
+  │  SKU: DAGING-1KG         │
+  │  Qty: 5                  │
+  │  Lokasi:                 │
+  │  ZONE-A / RACK-01 /      │
+  │  BIN-A-03                │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SCAN INVENTORY_ID       │
+  │  (scan barcode barang    │
+  │   di bin tersebut)       │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐      ┌─────────────────────────┐
+  │  VALIDASI FEFO           │      │  ❌ BUKAN YANG PALING   │
+  │                          │      │     EXPIRED!            │
+  │  Apakah ini batch        │      │                         │
+  │  paling expired?         │      │  "Stok paling expired:  │
+  │                          │      │   LOT-MEI26, Exp:       │
+  │  ✅ YA (LOT-MEI26,       │      │   30-Jun-2026           │
+  │     Exp: 30-Jun-2026)    │      │   di RACK-01/BIN-A-01"  │
+  │                          │      │                         │
+  └────────────┬─────────────┘      │  → Sistem blok scan     │
+               │                    │  → Hanya supervisor     │
+               ▼                    │    yang bisa override   │
+  ┌──────────────────────────┐      └─────────────────────────┘
+  │  KONFIRMASI QTY          │
+  │  Input: [5] (scan ulang  │
+  │  jika ambil sebagian)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  STATUS BERUBAH:         │
+  │  RESERVED → PICKED       │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  ITEM #2 dari 15...      │
+  │  (ulangi sampai selesai) │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SEMUA ITEM SELESAI      │
+  │  DI-PICK                 │
+  │  [SELESAI]               │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  KONFIRMASI PACKING      │
+  │  (opsional: scan ulang   │
+  │   di packing station)    │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  GENERATE PACKING LIST   │
+  │  + LABEL PENGIRIMAN      │
+  └──────────────────────────┘
+```
+
+---
+
+### 1.6 Supervisor & Manager Web Dashboard
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                         SUPERVISOR & MANAGER - WEB DASHBOARD                              │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────┐
+  │  LOGIN   │
+  └────┬─────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                    MAIN DASHBOARD                                 │
+  ├──────────────┬──────────────┬──────────────┬─────────────────────┤
+  │  RECEIVING   │   PICKING    │   STOCK      │   UTILIZATION       │
+  │  MONITOR     │   MONITOR    │   OVERVIEW   │   MAP               │
+  │              │              │              │                     │
+  │  • 3 Active  │  • 2 Active  │  • 5,432     │  Yard-A: 70% ██░░   │
+  │  • 0 Late    │  • 1 Late    │    items     │  Indoor: 96% ███▓   │
+  │              │              │  • 1,200 PAL │  Rack:   62% ██░░   │
+  │              │              │  • 234 Lot   │  Cold:   97% ███▓   │
+  └──────────────┴──────────────┴──────────────┴─────────────────────┘
+       │
+       ├─────────────────────────────────────────────────────────────┐
+       │                                                             │
+       ▼                                                             ▼
+┌─────────────────┐                                          ┌─────────────────┐
+│  NAVIGASI KIRI  │                                          │  QUICK ACTIONS  │
+│                 │                                          │                 │
+│  • Dashboard    │                                          │  [+ Buat Receipt│
+│  • Receiving    │                                          │      Order]     │
+│  • Inventory    │                                          │  [+ Buat Picking│
+│  • Picking      │                                          │      List]      │
+│  • Movement     │                                          │  [+ Buat Transfer│
+│  • Kitting/VAS  │                                          │      Order]     │
+│  • Transfer     │                                          │  [+ Buat Kitting│
+│  • Cold Chain   │                                          │      Order]     │
+│  • Contract     │                                          │                 │
+│  • Billing      │                                          │                 │
+│  • Reports      │                                          │                 │
+└─────────────────┘                                          └─────────────────┘
+```
+
+---
+
+### 1.7 Sub-Flow: Contract Management (Supervisor)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                         CONTRACT MANAGEMENT - CRUD FLOW                                   │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────┐
+  │  MENU: CONTRACT          │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  LIST KONTRAK            │
+  │  Search: [___________]   │
+  │  Filter: Status          │
+  │  ┌────────────────────┐  │
+  │  │ SC-001 │ PT XYZ   │  │
+  │  │ SC-002 │ PT ABC   │  │
+  │  │ SC-003 │ PT DEF   │  │
+  │  └────────────────────┘  │
+  │  [+ BUAT KONTRAK BARU]   │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────────────────┐
+  │         FORM KONTRAK BARU            │
+  │                                      │
+  │  Customer:    [Pilih Customer ▼]     │
+  │  Warehouse:   [Pilih Warehouse ▼]    │
+  │  Area/Zona:   [Pilih Area ▼]         │
+  │  Tanggal:     [01/06/2026] -         │
+  │               [31/12/2026]           │
+  │                                      │
+  │  ── SEWA RUANG ──────────────────    │
+  │  Komitmen:    [20] [PAL ▼]          │
+  │  Overflow Max:[5] PAL               │
+  │  Metode:      [○ Fixed Monthly]     │
+  │               [○ Per Transaction]    │
+  │               [● Hybrid]            │
+  │                                      │
+  │  ── TARIF ───────────────────────    │
+  │  [+ Tambah Tarif]                    │
+  │  ┌────────────────────────────────┐  │
+  │  │ STR-COLD │ Rp 800.000 │ PAL/MTH│  │
+  │  │ HD-IN    │ Rp  25.000 │ PAL    │  │
+  │  │ HD-OUT   │ Rp  25.000 │ PAL    │  │
+  │  │ HD-PICK  │ Rp   5.000 │ PICK   │  │
+  │  └────────────────────────────────┘  │
+  │                                      │
+  │  [SIMPAN DRAFT] [AKTIFKAN]          │
+  └──────────────────────────────────────┘
+```
+
+---
+
+### 1.8 Sub-Flow: Kitting Order (VAS)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              KITTING ORDER - VAS FLOW                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────┐
+  │  MENU: KITTING/VAS       │
+  │  [+ BUAT KITTING ORDER]  │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────────────────┐
+  │        FORM KITTING ORDER            │
+  │                                      │
+  │  Tipe:        [KITTING ▼]           │
+  │  Output SKU:  [PAKET-STEAK ▼]       │
+  │  Target Qty:  [50] kit              │
+  │  Lokasi:      [DC-JKT / VAS-ZONE]   │
+  │                                      │
+  │  ── BOM (Auto-loaded) ──────────     │
+  │  ┌────────────────────────────────┐  │
+  │  │ SKU           │ Qty/Kit│ Total │  │
+  │  │ DAGING-1KG    │   2    │  100  │  │
+  │  │ SAUS-STEAK    │   1    │   50  │  │
+  │  │ BOX-KIT       │   1    │   50  │  │
+  │  └────────────────────────────────┘  │
+  │                                      │
+  │  Waste Factor: [2] %                 │
+  │                                      │
+  │  [SIMPAN & ASSIGN STAFF]            │
+  └────────────┬─────────────────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  STAFF MENERIMA TASK     │
+  │  DI MOBILE APP           │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  SCAN KOMPONEN SATU-SATU │
+  │  ✅ DAGING-1KG (INV-001) │
+  │  ✅ DAGING-1KG (INV-002) │
+  │  ✅ SAUS-STEAK (INV-050) │
+  │  ✅ BOX-KIT (INV-100)    │
+  │  ... ulangi 50x          │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  GENERATE OUTPUT         │
+  │  50 INVENTORY_ID baru    │
+  │  untuk PAKET-STEAK       │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  DEDUCT KOMPONEN         │
+  │  Status: CONSUMED        │
+  │  ADD OUTPUT KE STOK      │
+  │  Status: AVAILABLE       │
+  └──────────────────────────┘
+```
+
+---
+
+### 1.9 Customer Portal Flow (Self-Service)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              CUSTOMER PORTAL - SELF SERVICE                               │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────┐
+  │  LOGIN   │
+  │  (Email/ │
+  │  Pass)   │
+  └────┬─────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                    CUSTOMER DASHBOARD                             │
+  ├──────────────────────────────────────────────────────────────────┤
+  │  PT XYZ - Selamat Datang                                         │
+  │                                                                  │
+  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
+  │  │ TOTAL    │  │ TOTAL    │  │ ITEM     │  │ INVOICE  │         │
+  │  │ STOK     │  │ PALLET   │  │ UNIK     │  │ BULAN INI│         │
+  │  │ 1,234    │  │ 45       │  │ 89       │  │ Rp 28Jt  │         │
+  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘         │
+  └──────────────────────────────────────────────────────────────────┘
+       │
+       ├─────────────────────────────────────────────────────────────┐
+       │                                                             │
+       ▼                                                             ▼
+┌─────────────────┐                                          ┌─────────────────┐
+│  MENU PORTAL    │                                          │  QUICK LINKS    │
+│                 │                                          │                 │
+│  • Dashboard    │                                          │  [+ Request     │
+│  • Stok Saya    │                                          │      Inbound]   │
+│  • Riwayat      │                                          │  [+ Request     │
+│    Transaksi    │                                          │      Outbound]  │
+│  • Invoice      │                                          │  [Download      │
+│  • Dokumen      │                                          │      Packing    │
+│  • Pengaturan   │                                          │      List]      │
+└─────────────────┘                                          └─────────────────┘
+```
+
+### 1.10 Sub-Flow: Cek Stok di Customer Portal
+
+```
+  ┌──────────────────────────┐
+  │  MENU: STOK SAYA         │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  FILTER STOK             │
+  │  Warehouse: [Semua ▼]    │
+  │  SKU: [Cari SKU______]   │
+  │  Status: [✓ Available]   │
+  │          [✓ Reserved]    │
+  │          [✓ Quarantine]  │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                        TABEL STOK                                 │
+  ├────────┬──────────┬──────────┬──────┬──────────┬─────────────────┤
+  │ SKU    │ Produk   │ Lot      │ Qty  │ Expiry   │ Lokasi          │
+  ├────────┼──────────┼──────────┼──────┼──────────┼─────────────────┤
+  │ ABC-123│ Minyak   │ LOT-A    │ 480  │ 30/06/26 │ DC-JKT/INDOOR-A │
+  │ ABC-123│ Minyak   │ LOT-B    │ 240  │ 31/12/26 │ DC-JKT/INDOOR-A │
+  │ DEF-456│ Daging   │ LOT-MEI  │ 100  │ 30/11/26 │ DC-JKT/COLD-A   │
+  └────────┴──────────┴──────────┴──────┴──────────┴─────────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  KLIK SALAH SATU ITEM    │
+  │  → Detail Inventory      │
+  └────────────┬─────────────┘
+               │
+               ▼
+  ┌──────────────────────────┐
+  │  DETAIL INVENTORY        │
+  │  SKU: ABC-123            │
+  │  Lot: LOT-A              │
+  │  Expiry: 30 Juni 2026    │
+  │                          │
+  │  ── RIWAYAT MOVEMENT ────│
+  │  20/05/26 Inbound        │
+  │  20/05/26 Putaway        │
+  │  20/05/26 Available      │
+  └──────────────────────────┘
+```
+
+---
+
+## BAGIAN 2: DATABASE SCHEMA
+
+### 2.1 Entity Relationship Diagram (ERD)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              SENTRALOGIS WMS - DATABASE SCHEMA (ERD)                                  │
+└────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+                                    ┌─────────────────────┐
+                                    │    ORGANIZATION     │
+                                    │  (SBU Structure)    │
+                                    └──────────┬──────────┘
+                                               │
+                            ┌──────────────────┼──────────────────┐
+                            │                  │                  │
+                   ┌────────▼────────┐ ┌───────▼────────┐ ┌──────▼───────┐
+                   │   WAREHOUSE     │ │   CUSTOMER     │ │    USER      │
+                   │   (Gudang)      │ │   (Penyewa)    │ │  (Staff/CS)  │
+                   └────────┬────────┘ └───────┬────────┘ └──────────────┘
+                            │                  │
+                            │                  │
+              ┌─────────────┼──────┐           │
+              │             │      │           │
+     ┌────────▼────┐ ┌──────▼────┐ │           │
+     │    AREA     │ │   ZONE    │ │           │
+     │  (Yard/     │ │ (Zona     │ │           │
+     │  Indoor/    │ │  Operasi) │ │           │
+     │  Rack/Cold) │ │           │ │           │
+     └─────────────┘ └──────┬────┘ │           │
+                            │       │           │
+                     ┌──────▼────┐  │           │
+                     │ LOCATION  │  │           │
+                     │   _BIN    │  │           │
+                     │  (Rak/    │  │           │
+                     │  Slot)    │  │           │
+                     └──────┬────┘  │           │
+                            │        │           │
+                            │   ┌────▼───────────▼────┐
+                            │   │  STORAGE_CONTRACT   │
+                            │   │  (Kontrak Sewa)     │
+                            │   └────────┬────────────┘
+                            │            │
+                            │   ┌────────▼────────────┐
+                            │   │   BILLING_RATE      │
+                            │   │   (Tarif per Kontrak│
+                            │   └─────────────────────┘
+                            │
+                   ┌────────▼────────────┐
+                   │   PRODUCT_SKU       │
+                   │   (Master Produk)   │
+                   │   + SKU_HIERARCHY   │
+                   └────────┬────────────┘
+                            │
+                   ┌────────▼────────────┐
+                   │    INVENTORY        │
+                   │  (Inventory_ID)     │
+                   │  Unique per Unit    │
+                   └────────┬────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+┌───────▼──────┐   ┌────────▼───────┐   ┌───────▼──────┐
+│ RECEIPT      │   │ PICKING_LIST   │   │ MOVEMENT     │
+│ _ORDER       │   │                │   │ (Internal)   │
+└───────┬──────┘   └───────┬────────┘   └──────────────┘
+        │                   │
+┌───────▼──────┐   ┌───────▼────────┐
+│ RECEIPT      │   │ PICKING        │
+│ _DETAIL      │   │ _DETAIL        │
+└──────────────┘   └────────────────┘
+
+┌───────────────────┐    ┌───────────────────┐    ┌───────────────────┐
+│ TRANSFORM_ORDER   │    │ TRANSFER_ORDER    │    │  TEMPERATURE_LOG  │
+│ (Kitting/Break)   │    │ (Antar Gudang)    │    │  (Cold Chain)     │
+└───────────────────┘    └───────────────────┘    └───────────────────┘
+
+┌───────────────────┐    ┌───────────────────┐
+│ DAILY_STOCK       │    │  BILLING_INVOICE  │
+│ _SNAPSHOT         │    │  (Tagihan)        │
+└───────────────────┘    └───────────────────┘
+```
+
+---
+
+### 2.2 DDL (Data Definition Language)
+
+```sql
+-- ============================================================================
+-- SENTRALOGIS WMS - DATABASE SCHEMA
+-- Version: 1.0
+-- ============================================================================
+
+-- 1. ORGANIZATION (SBU)
+CREATE TABLE organization (
+    org_id          VARCHAR(20) PRIMARY KEY,           -- 'SBU-WH-JKT'
+    org_name        VARCHAR(100) NOT NULL,             -- 'SBU Warehouse Jakarta'
+    org_type        VARCHAR(20) NOT NULL,              -- 'HQ', 'SBU'
+    legal_entity    VARCHAR(100),                      -- 'PT Sentralogis Warehouse'
+    gl_code_prefix  VARCHAR(10),                       -- Prefix kode akun
+    is_internal_vendor BOOLEAN DEFAULT FALSE,
+    parent_org_id   VARCHAR(20),
+    status          VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP
+);
+
+-- 2. WAREHOUSE
+CREATE TABLE warehouse (
+    warehouse_id        VARCHAR(20) PRIMARY KEY,        -- 'DC-JKT'
+    org_id              VARCHAR(20) NOT NULL,
+    warehouse_name      VARCHAR(100) NOT NULL,          -- 'DC Jakarta Pusat'
+    warehouse_type      VARCHAR(20) NOT NULL,           -- 'DC', 'SUB_DC', 'SHOP', 'DARK_STORE'
+    parent_warehouse_id VARCHAR(20),
+    ownership           VARCHAR(20) NOT NULL,           -- 'OWN', '3PL_MANAGED', 'KONSINYASI'
+    address_line1       VARCHAR(200),
+    address_line2       VARCHAR(200),
+    city                VARCHAR(100),
+    province            VARCHAR(100),
+    postal_code         VARCHAR(10),
+    country             VARCHAR(50) DEFAULT 'Indonesia',
+    latitude            DECIMAL(10,7),
+    longitude           DECIMAL(10,7),
+    total_capacity_sqm  DECIMAL(12,2),
+    status              VARCHAR(20) DEFAULT 'ACTIVE',   -- 'ACTIVE', 'INACTIVE', 'MAINTENANCE'
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (org_id) REFERENCES organization(org_id),
+    FOREIGN KEY (parent_warehouse_id) REFERENCES warehouse(warehouse_id)
+);
+
+-- 3. AREA
+CREATE TABLE area (
+    area_id             VARCHAR(30) PRIMARY KEY,        -- 'DC-JKT-YARD-A'
+    warehouse_id        VARCHAR(20) NOT NULL,
+    area_name           VARCHAR(100) NOT NULL,          -- 'Yard A'
+    area_type           VARCHAR(20) NOT NULL,           -- 'YARD','INDOOR_FLOOR','RACKING',
+                                                        -- 'COLD_FREEZER','COLD_CHILLER',
+                                                        -- 'HAZMAT','BONDED','VAS'
+    area_category       VARCHAR(20) NOT NULL DEFAULT 'GENERAL',
+                                                        -- 'GENERAL','FOOD_GRADE','DANGEROUS_GOODS'
+    storage_type        VARCHAR(20),                    -- 'BULK_FLOOR','PALLET_STACK',
+                                                        -- 'RACK_SELECTIVE','RACK_DRIVE_IN',
+                                                        -- 'CANTILEVER','YARD_GRID'
+    total_capacity      DECIMAL(12,2),                  -- Kapasitas total
+    uom_capacity        VARCHAR(10),                    -- 'PALLET','CBM','SQM','CONT'
+    temperature_min     DECIMAL(5,1),                   -- Suhu minimal (Celsius)
+    temperature_max     DECIMAL(5,1),                   -- Suhu maksimal (Celsius)
+    humidity_max        DECIMAL(5,1),                   -- Kelembaban maksimal (%)
+    is_hazmat_certified BOOLEAN DEFAULT FALSE,
+    is_bonded_zone      BOOLEAN DEFAULT FALSE,
+    status              VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id)
+);
+
+-- 4. ZONE
+CREATE TABLE zone (
+    zone_id         VARCHAR(40) PRIMARY KEY,            -- 'DC-JKT-YARD-A-Z1'
+    area_id         VARCHAR(30) NOT NULL,
+    zone_name       VARCHAR(100) NOT NULL,              -- 'Yard-1'
+    zone_sequence   INTEGER,                            -- Urutan untuk picking path
+    status          VARCHAR(20) DEFAULT 'ACTIVE',       -- 'ACTIVE','FULL','MAINTENANCE'
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP,
+    FOREIGN KEY (area_id) REFERENCES area(area_id)
+);
+
+-- 5. LOCATION_BIN
+CREATE TABLE location_bin (
+    bin_id          VARCHAR(60) PRIMARY KEY,            -- 'DC-JKT-Z1-A-01-01-01'
+    zone_id         VARCHAR(40) NOT NULL,
+    aisle           VARCHAR(10),                        -- 'A'
+    bay             VARCHAR(10),                        -- '01'
+    level           VARCHAR(10),                        -- '01' (untuk racking)
+    position        VARCHAR(10),                        -- '01'
+    bin_type        VARCHAR(20) NOT NULL,               -- 'RACK','FLOOR','YARD_GRID',
+                                                        -- 'COLD_RACK','HAZMAT_BIN'
+    max_weight_kg   DECIMAL(10,2),                      -- Kapasitas berat
+    max_dimension   VARCHAR(30),                        -- '120x100x150' (PxLxT cm)
+    current_weight_kg DECIMAL(10,2) DEFAULT 0,
+    status          VARCHAR(20) DEFAULT 'EMPTY',        -- 'EMPTY','OCCUPIED','RESERVED','BLOCKED'
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP,
+    FOREIGN KEY (zone_id) REFERENCES zone(zone_id)
+);
+
+-- 6. CUSTOMER
+CREATE TABLE customer (
+    customer_id     VARCHAR(20) PRIMARY KEY,            -- 'CUST-001'
+    org_id          VARCHAR(20),                        -- SBU yang menangani
+    customer_name   VARCHAR(200) NOT NULL,
+    customer_type   VARCHAR(20) DEFAULT 'COMPANY',      -- 'COMPANY','INDIVIDUAL','GOVERNMENT'
+    tax_id          VARCHAR(50),                        -- NPWP
+    address_line1   VARCHAR(200),
+    address_line2   VARCHAR(200),
+    city            VARCHAR(100),
+    province        VARCHAR(100),
+    postal_code     VARCHAR(10),
+    country         VARCHAR(50) DEFAULT 'Indonesia',
+    phone           VARCHAR(30),
+    email           VARCHAR(100),
+    status          VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP,
+    FOREIGN KEY (org_id) REFERENCES organization(org_id)
+);
+
+-- 7. STORAGE_CONTRACT
+CREATE TABLE storage_contract (
+    contract_id         VARCHAR(20) PRIMARY KEY,        -- 'SC-2026-001'
+    customer_id         VARCHAR(20) NOT NULL,
+    warehouse_id        VARCHAR(20) NOT NULL,
+    area_id             VARCHAR(30),                    -- Area spesifik (optional, bisa multi-area)
+    contract_name       VARCHAR(200),
+    start_date          DATE NOT NULL,
+    end_date            DATE NOT NULL,
+    committed_space     DECIMAL(12,2),                  -- Ruang dijamin
+    uom_space           VARCHAR(10) DEFAULT 'PAL',      -- 'PAL','CBM','SQM'
+    max_overflow        DECIMAL(12,2) DEFAULT 0,        -- Batas overflow
+    overflow_rate_multiplier DECIMAL(5,2) DEFAULT 1.5,  -- Pengali tarif overflow
+    billing_method      VARCHAR(20) DEFAULT 'HYBRID',   -- 'MONTHLY_FIXED','PER_TRANSACTION','HYBRID'
+    payment_term        INTEGER DEFAULT 30,             -- Hari
+    status              VARCHAR(20) DEFAULT 'DRAFT',    -- 'DRAFT','ACTIVE','EXPIRED','TERMINATED'
+    created_by          VARCHAR(50),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (area_id) REFERENCES area(area_id)
+);
+
+-- 8. BILLING_RATE
+CREATE TABLE billing_rate (
+    rate_id             VARCHAR(30) PRIMARY KEY,        -- 'RATE-001'
+    contract_id         VARCHAR(20) NOT NULL,
+    charge_code         VARCHAR(20) NOT NULL,           -- 'STR-FIX','STR-COLD','HD-IN',
+                                                        -- 'HD-OUT','HD-PICK','HD-KIT','HD-ALAT'
+    charge_name         VARCHAR(100),                   -- 'Sewa Cold Storage'
+    rate_value          DECIMAL(15,2) NOT NULL,         -- 800000.00
+    uom                 VARCHAR(20) NOT NULL,           -- 'PAL/MONTH','CBM/MONTH','PAL','KG','HOUR'
+    min_charge          DECIMAL(15,2) DEFAULT 0,
+    valid_from          DATE NOT NULL,
+    valid_to            DATE,
+    status              VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (contract_id) REFERENCES storage_contract(contract_id)
+);
+
+-- 9. PRODUCT_SKU
+CREATE TABLE product_sku (
+    sku                 VARCHAR(30) PRIMARY KEY,        -- 'ABC-123-MASTER'
+    parent_sku          VARCHAR(30),                    -- SKU induk (untuk hierarchy)
+    sku_level           VARCHAR(20) NOT NULL,           -- 'BASE_UNIT','INNER_PACK','MASTER_CASE','PALLET','KIT'
+    product_name        VARCHAR(200) NOT NULL,
+    product_description TEXT,
+    commodity_type      VARCHAR(20) NOT NULL DEFAULT 'DRY',
+                                                        -- 'FROZEN','CHILL','DRY','HAZMAT',
+                                                        -- 'FRAGILE','PHARMA','DANGEROUS'
+    picking_strategy    VARCHAR(10) DEFAULT 'FIFO',     -- 'FIFO','FEFO','LEFO','MANUAL'
+    fefo_attribute      VARCHAR(20) DEFAULT 'EXPIRY_DATE', -- 'EXPIRY_DATE','BEST_BEFORE','MANUFACTURE_DATE'
+    is_sellable         BOOLEAN DEFAULT TRUE,
+    is_stockable        BOOLEAN DEFAULT TRUE,
+    conversion_to_base  DECIMAL(12,4) DEFAULT 1,        -- Faktor konversi ke base unit
+    weight_kg           DECIMAL(10,3),                  -- Berat per unit ini
+    dimension_cm        VARCHAR(30),                    -- '120x100x150'
+    temperature_min      DECIMAL(5,1),                   -- Suhu penyimpanan min
+    temperature_max      DECIMAL(5,1),                   -- Suhu penyimpanan max
+    stack_limit         INTEGER DEFAULT 1,              -- Max tumpukan
+    is_hazmat           BOOLEAN DEFAULT FALSE,
+    hazmat_class        VARCHAR(20),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (parent_sku) REFERENCES product_sku(sku)
+);
+
+-- 10. INVENTORY
+CREATE TABLE inventory (
+    inventory_id            VARCHAR(30) PRIMARY KEY,        -- 'INV-20260520-00001'
+    parent_inventory_id     VARCHAR(30),                    -- Kemasan induk
+    sku                     VARCHAR(30) NOT NULL,
+    current_quantity        DECIMAL(12,4) DEFAULT 1,        -- Isi dalam base unit
+    lot_number              VARCHAR(50),                    -- 'LOT-MEI26'
+    expiry_date             DATE,
+    manufacture_date        DATE,
+    serial_number           VARCHAR(100),                   -- Nomor seri (optional)
+    status                  VARCHAR(20) DEFAULT 'AVAILABLE',-- 'AVAILABLE','RESERVED','PICKED',
+                                                            -- 'QUARANTINE','DAMAGED','IN_TRANSIT',
+                                                            -- 'CONSUMED','EXPIRED'
+    current_bin_id          VARCHAR(60),                    -- Lokasi saat ini
+    customer_id             VARCHAR(20),                    -- Pemilik barang
+    contract_id             VARCHAR(20),                    -- Kontrak terkait
+    receipt_date            TIMESTAMP,
+    last_movement_date      TIMESTAMP,
+    is_consignment          BOOLEAN DEFAULT FALSE,
+    created_by              VARCHAR(50),
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP,
+    FOREIGN KEY (parent_inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku),
+    FOREIGN KEY (current_bin_id) REFERENCES location_bin(bin_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    FOREIGN KEY (contract_id) REFERENCES storage_contract(contract_id)
+);
+
+-- 11. RECEIPT_ORDER
+CREATE TABLE receipt_order (
+    receipt_id          VARCHAR(30) PRIMARY KEY,        -- 'RO-20260520-001'
+    source_type         VARCHAR(20) NOT NULL,           -- 'FORWARDING_JO','TRANSFER_IN',
+                                                        -- 'DIRECT_CUSTOMER','RETURN'
+    source_id           VARCHAR(30),                    -- JO_ID atau Transfer_ID
+    customer_id         VARCHAR(20),
+    warehouse_id        VARCHAR(20) NOT NULL,
+    expected_date       DATE,
+    status              VARCHAR(20) DEFAULT 'PENDING',  -- 'PENDING','PARTIAL','COMPLETED','CANCELLED'
+    notes               TEXT,
+    created_by          VARCHAR(50),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id)
+);
+
+-- 12. RECEIPT_DETAIL
+CREATE TABLE receipt_detail (
+    receipt_detail_id   VARCHAR(30) PRIMARY KEY,        -- 'RD-20260520-001'
+    receipt_id          VARCHAR(30) NOT NULL,
+    sku                 VARCHAR(30) NOT NULL,
+    expected_quantity   DECIMAL(12,4),
+    actual_quantity     DECIMAL(12,4),
+    uom                 VARCHAR(10) DEFAULT 'EA',       -- 'EA','CBM','KG'
+    lot_number          VARCHAR(50),
+    expiry_date         DATE,
+    status              VARCHAR(20) DEFAULT 'PENDING',  -- 'PENDING','RECEIVED','DAMAGED','SHORT','OVER'
+    damage_notes        TEXT,
+    photo_url           TEXT,                           -- URL foto kondisi
+    generated_inventory_id VARCHAR(30),                 -- Inventory_ID hasil receiving
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (receipt_id) REFERENCES receipt_order(receipt_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku),
+    FOREIGN KEY (generated_inventory_id) REFERENCES inventory(inventory_id)
+);
+
+-- 13. PICKING_LIST
+CREATE TABLE picking_list (
+    picking_list_id     VARCHAR(30) PRIMARY KEY,        -- 'PL-20260520-001'
+    source_type         VARCHAR(20) NOT NULL,           -- 'FORWARDING_JO','TRANSFER_OUT',
+                                                        -- 'DIRECT_CUSTOMER','SALES_ORDER'
+    source_id           VARCHAR(30),
+    customer_id         VARCHAR(20),
+    warehouse_id        VARCHAR(20) NOT NULL,
+    scheduled_date      DATE,
+    status              VARCHAR(20) DEFAULT 'PENDING',  -- 'PENDING','IN_PROGRESS','COMPLETED','CANCELLED'
+    assigned_picker     VARCHAR(50),                    -- User ID staff
+    notes               TEXT,
+    created_by          VARCHAR(50),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id)
+);
+
+-- 14. PICKING_DETAIL
+CREATE TABLE picking_detail (
+    picking_detail_id   VARCHAR(30) PRIMARY KEY,
+    picking_list_id     VARCHAR(30) NOT NULL,
+    inventory_id        VARCHAR(30) NOT NULL,           -- Barang spesifik yang harus di-pick
+    sku                 VARCHAR(30) NOT NULL,
+    requested_quantity  DECIMAL(12,4),
+    picked_quantity     DECIMAL(12,4),
+    from_bin_id         VARCHAR(60),
+    status              VARCHAR(20) DEFAULT 'PENDING',  -- 'PENDING','PICKED','NOT_FOUND','DAMAGED'
+    fEFO_override       BOOLEAN DEFAULT FALSE,
+    override_reason     TEXT,
+    override_by         VARCHAR(50),
+    picked_at           TIMESTAMP,
+    FOREIGN KEY (picking_list_id) REFERENCES picking_list(picking_list_id),
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku),
+    FOREIGN KEY (from_bin_id) REFERENCES location_bin(bin_id)
+);
+
+-- 15. MOVEMENT_LOG
+CREATE TABLE movement_log (
+    movement_id         VARCHAR(30) PRIMARY KEY,        -- 'MV-20260520-001'
+    inventory_id        VARCHAR(30) NOT NULL,
+    movement_type       VARCHAR(20) NOT NULL,           -- 'PUTAWAY','RELOCATION','REPLENISHMENT',
+                                                        -- 'QUARANTINE_MOVE','PICKING','CONSOLIDATION'
+    from_bin_id         VARCHAR(60),
+    to_bin_id           VARCHAR(60),
+    from_status         VARCHAR(20),
+    to_status           VARCHAR(20),
+    quantity            DECIMAL(12,4),
+    reference_id        VARCHAR(30),                    -- ID dokumen terkait (RO, PL, TO, dll)
+    performed_by        VARCHAR(50),
+    notes               TEXT,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (from_bin_id) REFERENCES location_bin(bin_id),
+    FOREIGN KEY (to_bin_id) REFERENCES location_bin(bin_id)
+);
+
+-- 16. TRANSFORMATION_ORDER (Kitting/Bundling/Break-Bulk/Repack)
+CREATE TABLE transformation_order (
+    to_id               VARCHAR(30) PRIMARY KEY,        -- 'TO-20260520-001'
+    to_type             VARCHAR(20) NOT NULL,           -- 'BREAK_BULK','KITTING','BUNDLING','REPACK','RELABEL'
+    output_sku          VARCHAR(30),                    -- SKU hasil
+    planned_output_qty  INTEGER,
+    actual_output_qty   INTEGER,
+    input_bom           JSON,                           -- Bill of Materials
+    warehouse_id        VARCHAR(20) NOT NULL,
+    area_id             VARCHAR(30),                    -- Zona VAS
+    assigned_user       VARCHAR(50),
+    status              VARCHAR(20) DEFAULT 'PLANNED',  -- 'PLANNED','IN_PROGRESS','COMPLETED','CANCELLED'
+    waste_factor        DECIMAL(5,2) DEFAULT 0,
+    actual_waste        DECIMAL(5,2) DEFAULT 0,
+    created_by          VARCHAR(50),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (output_sku) REFERENCES product_sku(sku),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (area_id) REFERENCES area(area_id)
+);
+
+-- 17. TRANSFORMATION_COMPONENT (Input untuk Kitting)
+CREATE TABLE transformation_component (
+    component_id        VARCHAR(30) PRIMARY KEY,
+    to_id               VARCHAR(30) NOT NULL,
+    inventory_id        VARCHAR(30) NOT NULL,           -- Barang spesifik yang dikonsumsi
+    sku                 VARCHAR(30) NOT NULL,
+    planned_quantity    DECIMAL(12,4),
+    consumed_quantity   DECIMAL(12,4),
+    status              VARCHAR(20) DEFAULT 'RESERVED', -- 'RESERVED','CONSUMED'
+    FOREIGN KEY (to_id) REFERENCES transformation_order(to_id),
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku)
+);
+
+-- 18. TRANSFORMATION_OUTPUT (Hasil Kitting/Break-Bulk)
+CREATE TABLE transformation_output (
+    output_id           VARCHAR(30) PRIMARY KEY,
+    to_id               VARCHAR(30) NOT NULL,
+    generated_inventory_id VARCHAR(30) NOT NULL,        -- Inventory_ID baru hasil transformasi
+    sku                 VARCHAR(30) NOT NULL,
+    quantity            DECIMAL(12,4),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (to_id) REFERENCES transformation_order(to_id),
+    FOREIGN KEY (generated_inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku)
+);
+
+-- 19. TRANSFER_ORDER (Antar Gudang)
+CREATE TABLE transfer_order (
+    transfer_id         VARCHAR(30) PRIMARY KEY,        -- 'TRF-20260520-001'
+    from_warehouse_id   VARCHAR(20) NOT NULL,
+    to_warehouse_id     VARCHAR(20) NOT NULL,
+    transfer_type       VARCHAR(20) DEFAULT 'REPLENISHMENT',
+                                                        -- 'REPLENISHMENT','CONSIGNMENT','RETURN','RECALL'
+    customer_id         VARCHAR(20),
+    status              VARCHAR(20) DEFAULT 'CREATED',  -- 'CREATED','PICKING','SHIPPED',
+                                                        -- 'IN_TRANSIT','RECEIVED','CANCELLED'
+    notes               TEXT,
+    created_by          VARCHAR(50),
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP,
+    FOREIGN KEY (from_warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (to_warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id)
+);
+
+-- 20. TRANSFER_DETAIL
+CREATE TABLE transfer_detail (
+    transfer_detail_id  VARCHAR(30) PRIMARY KEY,
+    transfer_id         VARCHAR(30) NOT NULL,
+    inventory_id        VARCHAR(30) NOT NULL,
+    sku                 VARCHAR(30) NOT NULL,
+    quantity            DECIMAL(12,4),
+    from_bin_id         VARCHAR(60),
+    to_bin_id           VARCHAR(60),
+    status              VARCHAR(20) DEFAULT 'PENDING',  -- 'PENDING','PICKED','SHIPPED','RECEIVED'
+    FOREIGN KEY (transfer_id) REFERENCES transfer_order(transfer_id),
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (sku) REFERENCES product_sku(sku)
+);
+
+-- 21. TEMPERATURE_LOG
+CREATE TABLE temperature_log (
+    log_id          VARCHAR(30) PRIMARY KEY,
+    zone_id         VARCHAR(40) NOT NULL,
+    sensor_id       VARCHAR(50),                        -- ID sensor IoT
+    timestamp       TIMESTAMP NOT NULL,
+    temperature_c   DECIMAL(5,1),
+    humidity_pct    DECIMAL(5,1),
+    status          VARCHAR(20) DEFAULT 'NORMAL',       -- 'NORMAL','HIGH_ALERT','CRITICAL'
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (zone_id) REFERENCES zone(zone_id)
+);
+
+-- 22. TEMPERATURE_ALERT
+CREATE TABLE temperature_alert (
+    alert_id        VARCHAR(30) PRIMARY KEY,
+    zone_id         VARCHAR(40) NOT NULL,
+    alert_type      VARCHAR(20) NOT NULL,               -- 'HIGH_TEMP','LOW_TEMP','SENSOR_OFFLINE'
+    threshold_value DECIMAL(5,1),
+    actual_value    DECIMAL(5,1),
+    duration_minutes INTEGER,
+    is_resolved     BOOLEAN DEFAULT FALSE,
+    resolved_by     VARCHAR(50),
+    resolved_at     TIMESTAMP,
+    notes           TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (zone_id) REFERENCES zone(zone_id)
+);
+
+-- 23. DAILY_STOCK_SNAPSHOT
+CREATE TABLE daily_stock_snapshot (
+    snapshot_id     VARCHAR(30) PRIMARY KEY,
+    contract_id     VARCHAR(20),
+    customer_id     VARCHAR(20),
+    warehouse_id    VARCHAR(20),
+    area_id         VARCHAR(30),
+    snapshot_date   DATE NOT NULL,
+    total_pallet    DECIMAL(12,4) DEFAULT 0,
+    total_cbm       DECIMAL(12,4) DEFAULT 0,
+    total_weight_kg DECIMAL(12,4) DEFAULT 0,
+    total_items     INTEGER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (contract_id) REFERENCES storage_contract(contract_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (area_id) REFERENCES area(area_id)
+);
+
+-- 24. BILLING_INVOICE
+CREATE TABLE billing_invoice (
+    invoice_id      VARCHAR(30) PRIMARY KEY,            -- 'INV-202606-001'
+    contract_id     VARCHAR(20) NOT NULL,
+    customer_id     VARCHAR(20) NOT NULL,
+    invoice_number  VARCHAR(50),                        -- Nomor invoice resmi
+    billing_period_start DATE NOT NULL,
+    billing_period_end   DATE NOT NULL,
+    total_amount    DECIMAL(15,2) DEFAULT 0,
+    tax_amount      DECIMAL(15,2) DEFAULT 0,
+    grand_total     DECIMAL(15,2) DEFAULT 0,
+    status          VARCHAR(20) DEFAULT 'DRAFT',        -- 'DRAFT','SENT','PAID','OVERDUE','CANCELLED'
+    due_date        DATE,
+    paid_date       DATE,
+    created_by      VARCHAR(50),
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP,
+    FOREIGN KEY (contract_id) REFERENCES storage_contract(contract_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id)
+);
+
+-- 25. BILLING_INVOICE_DETAIL
+CREATE TABLE billing_invoice_detail (
+    detail_id       VARCHAR(30) PRIMARY KEY,
+    invoice_id      VARCHAR(30) NOT NULL,
+    charge_code     VARCHAR(20) NOT NULL,               -- Sesuai billing_rate
+    charge_name     VARCHAR(100),
+    rate_value      DECIMAL(15,2),
+    quantity        DECIMAL(12,4),
+    uom             VARCHAR(20),
+    amount          DECIMAL(15,2),
+    reference_id    VARCHAR(30),                        -- ID transaksi terkait
+    notes           TEXT,
+    FOREIGN KEY (invoice_id) REFERENCES billing_invoice(invoice_id)
+);
+
+-- 26. USER_ACCOUNT
+CREATE TABLE user_account (
+    user_id         VARCHAR(50) PRIMARY KEY,
+    org_id          VARCHAR(20),
+    full_name       VARCHAR(200) NOT NULL,
+    email           VARCHAR(100) UNIQUE,
+    phone           VARCHAR(30),
+    role            VARCHAR(30) NOT NULL,               -- 'WH_STAFF','WH_SUPERVISOR','WH_MANAGER',
+                                                        -- 'HQ_CS','HQ_FINANCE','CUSTOMER','ADMIN'
+    warehouse_id    VARCHAR(20),                        -- Untuk staff gudang spesifik
+    customer_id     VARCHAR(20),                        -- Untuk customer portal login
+    password_hash   VARCHAR(255) NOT NULL,
+    is_active       BOOLEAN DEFAULT TRUE,
+    last_login      TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP,
+    FOREIGN KEY (org_id) REFERENCES organization(org_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouse(warehouse_id),
+    FOREIGN KEY (customer_id) REFERENCES customer(customer_id)
+);
+
+-- 27. AUDIT_LOG
+CREATE TABLE audit_log (
+    log_id          VARCHAR(30) PRIMARY KEY,
+    user_id         VARCHAR(50),
+    action          VARCHAR(50) NOT NULL,               -- 'CREATE','UPDATE','DELETE','OVERRIDE','LOGIN'
+    entity_type     VARCHAR(50),                        -- 'INVENTORY','MOVEMENT','PICKING','CONTRACT'
+    entity_id       VARCHAR(30),                        -- ID entitas yang diubah
+    old_value       JSON,
+    new_value       JSON,
+    ip_address      VARCHAR(50),
+    notes           TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user_account(user_id)
+);
+
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+
+-- Inventory indexes
+CREATE INDEX idx_inventory_status ON inventory(status);
+CREATE INDEX idx_inventory_sku ON inventory(sku);
+CREATE INDEX idx_inventory_customer ON inventory(customer_id);
+CREATE INDEX idx_inventory_bin ON inventory(current_bin_id);
+CREATE INDEX idx_inventory_expiry ON inventory(expiry_date);
+CREATE INDEX idx_inventory_lot ON inventory(lot_number);
+CREATE INDEX idx_inventory_parent ON inventory(parent_inventory_id);
+CREATE INDEX idx_inventory_contract ON inventory(contract_id);
+
+-- Location indexes
+CREATE INDEX idx_location_bin_zone ON location_bin(zone_id);
+CREATE INDEX idx_location_bin_status ON location_bin(status);
+
+-- Movement indexes
+CREATE INDEX idx_movement_inventory ON movement_log(inventory_id);
+CREATE INDEX idx_movement_date ON movement_log(created_at);
+
+-- Picking indexes
+CREATE INDEX idx_picking_status ON picking_list(status);
+CREATE INDEX idx_picking_detail_inventory ON picking_detail(inventory_id);
+
+-- Receipt indexes
+CREATE INDEX idx_receipt_status ON receipt_order(status);
+CREATE INDEX idx_receipt_customer ON receipt_order(customer_id);
+
+-- Temperature indexes
+CREATE INDEX idx_temperature_zone ON temperature_log(zone_id);
+CREATE INDEX idx_temperature_timestamp ON temperature_log(timestamp);
+
+-- Snapshot indexes
+CREATE INDEX idx_snapshot_contract ON daily_stock_snapshot(contract_id);
+CREATE INDEX idx_snapshot_date ON daily_stock_snapshot(snapshot_date);
+
+-- Contract indexes
+CREATE INDEX idx_contract_customer ON storage_contract(customer_id);
+CREATE INDEX idx_contract_status ON storage_contract(status);
+CREATE INDEX idx_contract_dates ON storage_contract(start_date, end_date);
+
+-- Invoice indexes
+CREATE INDEX idx_invoice_contract ON billing_invoice(contract_id);
+CREATE INDEX idx_invoice_customer ON billing_invoice(customer_id);
+CREATE INDEX idx_invoice_status ON billing_invoice(status);
+
+-- User indexes
+CREATE INDEX idx_user_role ON user_account(role);
+CREATE INDEX idx_user_warehouse ON user_account(warehouse_id);
+
+-- ============================================================================
+-- VIEWS (Common Queries)
+-- ============================================================================
+
+-- View: Current Stock per Customer per Warehouse
+CREATE VIEW v_customer_stock AS
+SELECT
+    i.customer_id,
+    c.customer_name,
+    i.sku,
+    ps.product_name,
+    w.warehouse_id,
+    w.warehouse_name,
+    a.area_type,
+    i.lot_number,
+    i.expiry_date,
+    i.status,
+    COUNT(*) AS item_count,
+    SUM(i.current_quantity) AS total_quantity,
+    lb.bin_id AS location
+FROM inventory i
+JOIN customer c ON i.customer_id = c.customer_id
+JOIN product_sku ps ON i.sku = ps.sku
+JOIN location_bin lb ON i.current_bin_id = lb.bin_id
+JOIN zone z ON lb.zone_id = z.zone_id
+JOIN area a ON z.area_id = a.area_id
+JOIN warehouse w ON a.warehouse_id = w.warehouse_id
+WHERE i.status IN ('AVAILABLE', 'RESERVED')
+GROUP BY i.customer_id, c.customer_name, i.sku, ps.product_name,
+         w.warehouse_id, w.warehouse_name, a.area_type, i.lot_number,
+         i.expiry_date, i.status, lb.bin_id;
+
+-- View: Warehouse Utilization
+CREATE VIEW v_warehouse_utilization AS
+SELECT
+    w.warehouse_id,
+    w.warehouse_name,
+    a.area_id,
+    a.area_name,
+    a.area_type,
+    a.total_capacity,
+    a.uom_capacity,
+    COUNT(DISTINCT i.inventory_id) AS occupied_units,
+    SUM(i.current_quantity * ps.weight_kg) AS total_weight_kg,
+    (COUNT(DISTINCT i.inventory_id)::DECIMAL / NULLIF(a.total_capacity, 0)) * 100 AS utilization_pct
+FROM warehouse w
+JOIN area a ON w.warehouse_id = a.warehouse_id
+JOIN zone z ON a.area_id = z.area_id
+JOIN location_bin lb ON z.zone_id = lb.zone_id
+LEFT JOIN inventory i ON lb.bin_id = i.current_bin_id AND i.status IN ('AVAILABLE', 'RESERVED')
+LEFT JOIN product_sku ps ON i.sku = ps.sku
+GROUP BY w.warehouse_id, w.warehouse_name, a.area_id, a.area_name, a.area_type,
+         a.total_capacity, a.uom_capacity;
+
+-- ============================================================================
+-- FUNCTIONS
+-- ============================================================================
+
+-- Function: Get FEFO Pick Suggestion
+CREATE OR REPLACE FUNCTION get_fefo_pick(p_sku VARCHAR, p_quantity DECIMAL)
+RETURNS TABLE(
+    inventory_id VARCHAR,
+    lot_number VARCHAR,
+    expiry_date DATE,
+    current_bin_id VARCHAR,
+    available_quantity DECIMAL
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        i.inventory_id,
+        i.lot_number,
+        i.expiry_date,
+        i.current_bin_id,
+        i.current_quantity
+    FROM inventory i
+    WHERE i.sku = p_sku
+      AND i.status = 'AVAILABLE'
+    ORDER BY i.expiry_date ASC NULLS LAST, i.receipt_date ASC
+    LIMIT (SELECT CEIL(p_quantity)::INTEGER);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: Calculate Monthly Storage Charge
+CREATE OR REPLACE FUNCTION calculate_storage_charge(
+    p_contract_id VARCHAR,
+    p_period_start DATE,
+    p_period_end DATE
+) RETURNS DECIMAL AS $$
+DECLARE
+    avg_daily_pallet DECIMAL;
+    committed_space DECIMAL;
+    overflow_space DECIMAL;
+    fixed_rate DECIMAL;
+    overflow_rate DECIMAL;
+    multiplier DECIMAL;
+    total_charge DECIMAL := 0;
+BEGIN
+    -- Get average daily pallet from snapshot
+    SELECT AVG(total_pallet) INTO avg_daily_pallet
+    FROM daily_stock_snapshot
+    WHERE contract_id = p_contract_id
+      AND snapshot_date BETWEEN p_period_start AND p_period_end;
+
+    -- Get contract details
+    SELECT sc.committed_space, sc.max_overflow, sc.overflow_rate_multiplier
+    INTO committed_space, overflow_space, multiplier
+    FROM storage_contract sc
+    WHERE sc.contract_id = p_contract_id;
+
+    -- Get rate
+    SELECT rate_value INTO fixed_rate
+    FROM billing_rate
+    WHERE contract_id = p_contract_id
+      AND charge_code = 'STR-FIX'
+      AND status = 'ACTIVE';
+
+    -- Calculate overflow
+    IF avg_daily_pallet > committed_space THEN
+        overflow_space := LEAST(avg_daily_pallet - committed_space, COALESCE(overflow_space, 0));
+        total_charge := (committed_space * fixed_rate) + (overflow_space * fixed_rate * multiplier);
+    ELSE
+        total_charge := avg_daily_pallet * fixed_rate;
+    END IF;
+
+    RETURN total_charge;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- TRIGGERS
+-- ============================================================================
+
+-- Trigger: Update location_bin status after inventory change
+CREATE OR REPLACE FUNCTION update_bin_status()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If inventory moved out, check if bin is empty
+    IF OLD.current_bin_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM inventory
+            WHERE current_bin_id = OLD.current_bin_id
+              AND status IN ('AVAILABLE', 'RESERVED', 'QUARANTINE')
+              AND inventory_id != OLD.inventory_id
+        ) THEN
+            UPDATE location_bin SET status = 'EMPTY', current_weight_kg = 0
+            WHERE bin_id = OLD.current_bin_id;
+        END IF;
+    END IF;
+
+    -- If inventory moved in, mark bin occupied
+    IF NEW.current_bin_id IS NOT NULL THEN
+        UPDATE location_bin SET status = 'OCCUPIED'
+        WHERE bin_id = NEW.current_bin_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_bin_status
+AFTER UPDATE OF current_bin_id ON inventory
+FOR EACH ROW
+EXECUTE FUNCTION update_bin_status();
+
+-- Trigger: Log all inventory movements
+CREATE OR REPLACE FUNCTION log_inventory_movement()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.current_bin_id IS DISTINCT FROM NEW.current_bin_id THEN
+        INSERT INTO movement_log (
+            movement_id, inventory_id, movement_type,
+            from_bin_id, to_bin_id, from_status, to_status, quantity
+        ) VALUES (
+            'MV-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || NEXTVAL('movement_seq'),
+            NEW.inventory_id,
+            CASE
+                WHEN OLD.current_bin_id IS NULL THEN 'PUTAWAY'
+                WHEN NEW.current_bin_id IS NULL THEN 'REMOVAL'
+                ELSE 'RELOCATION'
+            END,
+            OLD.current_bin_id,
+            NEW.current_bin_id,
+            OLD.status,
+            NEW.status,
+            NEW.current_quantity
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_log_movement
+AFTER UPDATE ON inventory
+FOR EACH ROW
+EXECUTE FUNCTION log_inventory_movement();
+
+-- ============================================================================
+-- SEQUENCES
+-- ============================================================================
+
+CREATE SEQUENCE inv_seq START 1;
+CREATE SEQUENCE movement_seq START 1;
+CREATE SEQUENCE receipt_seq START 1;
+CREATE SEQUENCE picking_seq START 1;
+CREATE SEQUENCE transfer_seq START 1;
+CREATE SEQUENCE invoice_seq START 1;
+
+-- ============================================================================
+-- END OF SCHEMA
+-- ============================================================================
+```
+
+---
+
+## Ringkasan Skema
+
+| Kategori | Tabel | Jumlah |
+| :--- | :--- | :--- |
+| **Organisasi & Fasilitas** | `organization`, `warehouse`, `area`, `zone`, `location_bin` | 5 |
+| **Customer & Kontrak** | `customer`, `storage_contract`, `billing_rate` | 3 |
+| **Produk & Inventori** | `product_sku`, `inventory` | 2 |
+| **Operasional Inbound** | `receipt_order`, `receipt_detail` | 2 |
+| **Operasional Outbound** | `picking_list`, `picking_detail` | 2 |
+| **Movement & Transfer** | `movement_log`, `transfer_order`, `transfer_detail` | 3 |
+| **Transformasi (VAS)** | `transformation_order`, `transformation_component`, `transformation_output` | 3 |
+| **Cold Chain** | `temperature_log`, `temperature_alert` | 2 |
+| **Keuangan** | `daily_stock_snapshot`, `billing_invoice`, `billing_invoice_detail` | 3 |
+| **User & Audit**

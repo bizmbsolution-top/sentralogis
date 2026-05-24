@@ -25,7 +25,26 @@ export default function SBUDocumentsPage() {
   const [showModal, setShowModal] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!profile?.tenant_id) return;
+    // [AI] Allow global roles like owner_sentralogis to bypass missing tenant_id by falling back to the first available tenant
+    let tenantId = profile?.tenant_id;
+    const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+    if (!tenantId && isGlobalRole) {
+      try {
+        const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+        if (tenantData && tenantData.length > 0) {
+          tenantId = tenantData[0].id;
+        }
+      } catch (e) {
+        console.error('Failed to resolve fallback tenant ID for SBU documents:', e);
+      }
+    }
+
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -39,7 +58,7 @@ export default function SBUDocumentsPage() {
             )
           )
         `)
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id', tenantId)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -50,7 +69,7 @@ export default function SBUDocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.tenant_id]);
+  }, [profile?.tenant_id, profile?.role]);
 
   useEffect(() => {
     fetchData();

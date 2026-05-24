@@ -24,9 +24,25 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   owner_sentralogis: [
     { label: 'Dashboard', icon: '🏠', href: '/owner' },
     { label: 'Tenant Management', icon: '🏢', href: '/owner/tenants' },
-    { label: 'Transaction', icon: '📝', href: '/owner/transactions' },
-    { label: 'Reports', icon: '📊', href: '/owner/reports' },
+    {
+      label: 'Transaction', icon: '📝', href: '#',
+      submenu: [
+        { label: 'Top-Up Requests', icon: '💰', href: '/owner/transactions' },
+        { label: 'Token Ledger', icon: '📒', href: '/owner/topup' },
+      ]
+    },
+    {
+      label: 'Reports', icon: '📊', href: '/owner/reports',
+      submenu: [
+        { label: 'Financial', icon: '💵', href: '/owner/reports/financial' },
+        { label: 'Operational', icon: '⚙️', href: '/owner/reports/operational' },
+        { label: 'Token Analytics', icon: '🔥', href: '/owner/reports/token-analytics' },
+      ]
+    },
+    { label: 'CRM', icon: '💬', href: '/owner/crm' },
+    { label: 'Observability', icon: '📡', href: '/owner/observability' },
     { label: 'Settings', icon: '⚙️', href: '/owner/settings' },
+    { label: 'Profile', icon: '👤', href: '/owner/profile' },
   ],
 
   // Superadmin Tenant
@@ -61,6 +77,17 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Master COA', icon: '📖', href: '/hq/finance/coa' },
       ]
     },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
+        { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
+      ]
+    },
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 
@@ -72,12 +99,23 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
         { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
         { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
         { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
       ]
     },
     {
@@ -98,12 +136,22 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
         { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
         { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
         { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
       ]
     },
     {
@@ -124,12 +172,23 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
     { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
         { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
         { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
         { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+      ]
+    },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
       ]
     },
     {
@@ -160,7 +219,17 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+      ]
+    },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
@@ -177,7 +246,18 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
+      ]
+    },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
@@ -194,7 +274,18 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
+      ]
+    },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
@@ -211,7 +302,18 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
+      ]
+    },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
@@ -228,7 +330,18 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     },
     { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
     { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
     { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
+    {
+      label: 'Warehouse', icon: '🏭', href: '#',
+      submenu: [
+        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
+      ]
+    },
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
@@ -240,6 +353,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
   ],
   sbu_ops_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -247,6 +362,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
   ],
   sbu_admin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -254,6 +371,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
   ],
   sbu_fin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -261,6 +380,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
   ],
   sbu_finance_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -268,6 +389,32 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+  ],
+
+  // SBU Warehouse (Manager, Ops, Admin)
+  sbu_manager_wh: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
+    { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
+  ],
+  sbu_ops_wh: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+  ],
+  sbu_admin_wh: [
+    { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
+    { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
   ],
 
   // SBU Finance Warehouse
