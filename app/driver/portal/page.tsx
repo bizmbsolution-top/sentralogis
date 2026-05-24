@@ -100,6 +100,7 @@ export default function DriverPortal() {
   const [outstandingBalance, setOutstandingBalance] = useState<number>(0);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [totalHak, setTotalHak] = useState<number>(0);
+  const [totalAdvanceReceived, setTotalAdvanceReceived] = useState<number>(0);
   const [completedJobsMonth, setCompletedJobsMonth] = useState<number>(0);
   const [totalCompletedJobsCount, setTotalCompletedJobsCount] = useState<number>(0);
   const [inspectionsList, setInspectionsList] = useState<any[]>([]);
@@ -269,6 +270,7 @@ export default function DriverPortal() {
         let sumEarnings = 0;
         let sumOutstanding = 0;
         let sumHak = 0;
+        let sumAdvanceReceived = 0;
         
         for (const job of completedJobs) {
           const routeDist = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
@@ -277,8 +279,10 @@ export default function DriverPortal() {
           const hakDriver = Number((job.base_price || 0) * (job.driver_share_percentage || 0) / 100);
           sumHak += hakDriver;
 
-          const driverShare = Number(job.driver_payment_amount || 0);
-          sumEarnings += driverShare;
+          const advancePaid = job.advance_status === 'paid' ? Number(job.advance_amount || 0) : 0;
+          const pelunasanPaid = job.driver_payment_status === 'paid' ? Number(job.driver_payment_amount || 0) : 0;
+          sumAdvanceReceived += advancePaid;
+          sumEarnings += advancePaid + pelunasanPaid;
 
           if (job.driver_payment_status !== 'paid') {
             sumOutstanding += hakDriver - (job.advance_status === 'paid' ? Number(job.advance_amount || 0) : 0);
@@ -288,6 +292,7 @@ export default function DriverPortal() {
         setTotalKM(totalDistance);
         setTotalEarnings(sumEarnings);
         setTotalHak(sumHak);
+        setTotalAdvanceReceived(sumAdvanceReceived);
         setOutstandingBalance(sumOutstanding);
 
         // [AI] Count completed jobs in current month for history badge
@@ -323,12 +328,12 @@ export default function DriverPortal() {
   };
 
   const fetchJobOrders = async () => {
-    // [AI] Only fetch NEW assignments (belum diterima). Active/ongoing go to tracking, done to history.
+    // [AI] Fetch all active jobs (assigned to in-progress). Completed jobs go to history only.
     const { data } = await supabase
       .from('job_orders')
       .select('*, md_fleets(plate_number), wo_items(item_code, item_data)')
       .eq('driver_id', driver.id)
-      .in('status', ['assigned', 'ASSIGNED', 'PENDING', 'NEED_ASSIGNMENT', 'ACTIVE'])
+      .not('status', 'in', '("COMPLETED","PEKERJAAN SELESAI","SELESAI","done","DONE","invoiced","INVOICED","paid","PAID")')
       .order('created_at', { ascending: false })
       .limit(20);
     if (data) setJobOrders(data);
@@ -1557,7 +1562,8 @@ export default function DriverPortal() {
                     </div>
                   )}
 
-                  {/* Payment Details info */}
+                  {/* Payment Details info — hide after driver starts journey */}
+                  {['ASSIGNED', 'PENDING', 'NEED_ASSIGNMENT', 'ACTIVE', 'DITERIMA', 'ACCEPTED', 'ORDER DITERIMA'].includes((selectedJob.status || '').toUpperCase()) && (
                   <div className={`rounded-2xl p-4 border space-y-2.5 ${isDark ? 'bg-slate-900 border-slate-850' : 'bg-slate-100 border-slate-200'}`}>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rincian Pembayaran Uang Supir</p>
                     
@@ -1595,6 +1601,7 @@ export default function DriverPortal() {
                       <span className="font-black text-rose-500">Rp {Number(Math.max(0, (selectedJob.base_price || 0) * (selectedJob.driver_share_percentage || 0) / 100 - (selectedJob.advance_amount || 0) - (selectedJob.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
                     </div>
                   </div>
+                  )}
                 </>
               )}
             </div>
@@ -1968,9 +1975,15 @@ export default function DriverPortal() {
                           🚚 {job.wo_items.item_data.stops?.[0]?.location_name || '-'} → {job.wo_items.item_data.stops?.[job.wo_items.item_data.stops?.length - 1]?.location_name || '-'}
                         </div>
                       )}
-                      <div className="flex justify-between items-center text-xs opacity-75 border-t pt-2 border-slate-200/50">
-                        <span className="font-semibold">Total Hak: Rp {Number((job.base_price || 0) * (job.driver_share_percentage || 0) / 100).toLocaleString('id-ID')} {job.advance_status === 'paid' ? `(Adv: Rp ${Number(job.advance_amount || 0).toLocaleString('id-ID')})` : ''}</span>
-                        <span className="font-bold">🛣️ {jobDistance.toFixed(0)} km</span>
+                      <div className="text-[10px] font-semibold opacity-70 border-t pt-2 border-slate-200/50 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span>Total Hak: Rp {Number((job.base_price || 0) * (job.driver_share_percentage || 0) / 100).toLocaleString('id-ID')}</span>
+                          <span>🛣️ {jobDistance.toFixed(0)} km</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Advance: {job.advance_status === 'paid' ? `Rp ${Number(job.advance_amount || 0).toLocaleString('id-ID')} ✓` : 'Pending'}</span>
+                          <span>Sisa: Rp {Number(Math.max(0, (job.base_price || 0) * (job.driver_share_percentage || 0) / 100 - (job.advance_amount || 0) - (job.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -2010,6 +2023,22 @@ export default function DriverPortal() {
               </p>
             </div>
 
+            <div className={`rounded-3xl p-5 shadow-xl border relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-teal-950/40 via-slate-900 to-slate-900 border-teal-500/10' : 'bg-gradient-to-br from-teal-600 to-cyan-700 text-white'}`}>
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-white/10 backdrop-blur shadow-md rounded-2xl flex items-center justify-center">
+                  <Coins size={24} className="text-teal-300" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest opacity-80">Total Uang Jalan (Advance) Diterima</p>
+                  <h4 className="text-3xl font-black mt-0.5">Rp {totalAdvanceReceived.toLocaleString('id-ID')}</h4>
+                </div>
+              </div>
+              <p className="text-xs opacity-75 mt-1 font-semibold leading-relaxed border-t border-white/10 pt-3">
+                *Total uang jalan/advance yang sudah ditransfer ke rekening Anda.
+              </p>
+            </div>
+
             <div className={`rounded-3xl p-5 shadow-xl border relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-500/10' : 'bg-gradient-to-br from-emerald-600 to-teal-700 text-white'}`}>
               <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center gap-3 mb-4">
@@ -2017,12 +2046,12 @@ export default function DriverPortal() {
                   <Coins size={24} className="text-emerald-300" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest opacity-80">Total Sudah Diterima</p>
-                  <h4 className="text-3xl font-black mt-0.5">Rp {totalEarnings.toLocaleString('id-ID')}</h4>
+                  <p className="text-xs font-bold uppercase tracking-widest opacity-80">Total Pelunasan Diterima</p>
+                  <h4 className="text-3xl font-black mt-0.5">Rp {(totalEarnings - totalAdvanceReceived).toLocaleString('id-ID')}</h4>
                 </div>
               </div>
               <p className="text-xs opacity-75 mt-1 font-semibold leading-relaxed border-t border-white/10 pt-3">
-                *Total nominal yang sudah ditransfer ke rekening Anda (advance + pelunasan).
+                *Total pelunasan bagi hasil yang sudah ditransfer ke rekening Anda.
               </p>
             </div>
 
