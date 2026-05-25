@@ -367,7 +367,7 @@ export default function DriverPortal() {
     // [AI] Fetch recent jobs and filter active ones in JS to avoid PostgREST .not('in') syntax issues
     const { data, error } = await supabase
       .from('job_orders')
-      .select('*, md_fleets(plate_number), wo_items(item_code, item_data)')
+      .select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)')
       .eq('driver_id', driver.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -550,43 +550,52 @@ export default function DriverPortal() {
   const handleUpdateJobStatus = async (jobId: string, newStatus: string) => {
     setLoading(true);
     try {
-      const { data: job, error: jobError } = await supabase.from('job_orders').select('*, md_fleets(plate_number)').eq('id', jobId).single();
-      if (jobError) throw new Error('Job tidak ditemukan');
+      let apiStatus = newStatus;
+      if (newStatus === 'DITERIMA') apiStatus = 'accepted';
+      if (newStatus === 'START JOURNEY') apiStatus = 'in_progress';
+      if (newStatus === 'PEKERJAAN SELESAI' || newStatus === 'SELESAI') apiStatus = 'completed';
 
-      const updates: any = { status: newStatus };
-      if (newStatus === 'DITERIMA' || newStatus === 'ACCEPTED') {
-        updates.accepted_at = new Date().toISOString();
-      }
-      if (newStatus === 'STARTED' || newStatus === 'START JOURNEY') {
-        updates.started_at = new Date().toISOString();
-      }
-      if (newStatus === 'SELESAI' || newStatus === 'COMPLETED' || newStatus === 'PEKERJAAN SELESAI') {
-        updates.completed_at = new Date().toISOString();
-        updates.status = 'PEKERJAAN SELESAI';
+      let lat = null, lng = null;
+      try {
+          const pos = await new Promise<any>((resolve, reject) => {
+              if (!navigator.geolocation) return reject('No geolocation');
+              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+          });
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+      } catch (e) {
+          console.warn('Geolocation failed', e);
       }
 
-      const { error: updateError } = await supabase.from('job_orders').update(updates).eq('id', jobId);
-      if (updateError) throw updateError;
-      
-      const finalStatus = updates.status;
-      if ((finalStatus === 'SELESAI' || finalStatus === 'COMPLETED' || finalStatus === 'PEKERJAAN SELESAI') && job) {
-        if (job.fleet_id) {
+      // [AI] Call API to keep Intelligency tracking identical to vendor logic
+      const response = await fetch(`/api/jo/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: apiStatus, lat, lng })
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Gagal memperbarui status');
+      }
+
+      // [AI] Execute internal-only extra actions for PEKERJAAN SELESAI
+      if (apiStatus === 'completed') {
+        const { data: job } = await supabase.from('job_orders').select('fleet_id').eq('id', jobId).single();
+        if (job?.fleet_id) {
           await supabase.from('md_fleets').update({ status: 'available' }).eq('id', job.fleet_id);
         }
         
-        const { data: driverData } = await supabase.from('md_drivers').select('total_jobs_completed, total_km_driven, total_absensi').eq('id', driver.id).single();
-        const newJobsCompleted = (driverData?.total_jobs_completed || 0) + 1;
-        const estimatedKM = 50; // TODO: Calculate actual distance
-        
+        const { data: driverData } = await supabase.from('md_drivers').select('total_jobs_completed, total_km_driven').eq('id', driver.id).single();
+        const estimatedKM = 50;
         await supabase.from('md_drivers').update({
-          total_jobs_completed: newJobsCompleted,
+          total_jobs_completed: (driverData?.total_jobs_completed || 0) + 1,
           total_km_driven: (driverData?.total_km_driven || 0) + estimatedKM
         }).eq('id', driver.id);
 
-        // [AI] Insert performance log for this completed job
         await supabase.from('driver_performance_logs').insert({
           driver_id: driver.id,
-          job_order_id: job.id,
+          job_order_id: jobId,
           type: 'KM_LOG',
           total_km: estimatedKM,
           review_notes: 'Tugas diselesaikan melalui Driver Portal',
@@ -596,9 +605,29 @@ export default function DriverPortal() {
         setSelectedJob(null);
         setStep('dashboard');
       } else {
-        // Reload job details with new status
-        const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data)').eq('id', jobId).single();
-        setSelectedJob(reloadedJob);
+        const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', jobId).single();
+        
+        let finalRoutes = reloadedJob?.job_routes || [];
+        if (finalRoutes.length === 0 && reloadedJob?.wo_items?.item_data?.stops) {
+            const stops = reloadedJob.wo_items.item_data.stops;
+            const routePayloads = stops.map((stop: any, idx: number) => ({
+              job_order_id: reloadedJob.id,
+              sequence: idx + 1,
+              stop_type: stop.stop_type || (idx === 0 ? 'PICKUP' : 'DROPOFF'),
+              source_type: 'MD_LOCATION',
+              source_id: 'LEGACY',
+              location_name: stop.location_name || '-',
+              address: stop.address || '-',
+              status: 'pending'
+            }));
+            const { data: newRoutes } = await supabase.from('job_routes').insert(routePayloads).select('*').order('sequence', { ascending: true });
+            if (newRoutes) finalRoutes = newRoutes;
+        }
+        
+        if (reloadedJob) {
+            reloadedJob.routes = finalRoutes.sort((a: any, b: any) => a.sequence - b.sequence);
+            setSelectedJob(reloadedJob);
+        }
       }
       
       toast.success('Status berhasil diperbarui!');
@@ -607,6 +636,90 @@ export default function DriverPortal() {
       toast.error('Gagal: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateRouteStatus = async (routeId: string, routeStatus: string) => {
+    setLoading(true);
+    try {
+      let lat = null, lng = null;
+      try {
+          const pos = await new Promise<any>((resolve, reject) => {
+              if (!navigator.geolocation) return reject('No geolocation');
+              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+          });
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+      } catch (e) {
+          console.warn('Geolocation failed', e);
+      }
+
+      const response = await fetch(`/api/jo/${selectedJob.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ route_id: routeId, route_status: routeStatus, lat, lng })
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Gagal memperbarui rute');
+      }
+      
+      toast.success(`Berhasil: ${routeStatus.toUpperCase()}`);
+      
+      // Reload job
+      const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', selectedJob.id).single();
+      if (reloadedJob) {
+          reloadedJob.routes = (reloadedJob.job_routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          setSelectedJob(reloadedJob);
+      }
+      fetchJobOrders();
+    } catch (err: any) {
+      toast.error('Gagal: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [photoLoading, setPhotoLoading] = useState<string | null>(null);
+  const handleRoutePhotoUpload = async (routeId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoLoading(routeId);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetch(`/api/jo/${selectedJob.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          route_id: routeId, 
+          pod_photo_base64: base64,
+          pod_photo_name: file.name
+        })
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Gagal simpan foto');
+      }
+      
+      toast.success('Foto berhasil diunggah');
+      const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', selectedJob.id).single();
+      if (reloadedJob) {
+          reloadedJob.routes = (reloadedJob.job_routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          setSelectedJob(reloadedJob);
+      }
+    } catch (err: any) {
+      toast.error('Error foto: ' + err.message);
+    } finally {
+      setPhotoLoading(null);
     }
   };
 
@@ -1248,6 +1361,35 @@ export default function DriverPortal() {
     );
   }
 
+  // [AI] Calculate progress & Milestones for Selected Job (aligned with vendor page)
+  const selectedJobRoutes = (selectedJob?.routes || selectedJob?.job_routes || []).slice().sort((a: any, b: any) => a.sequence - b.sequence);
+  const totalStops = selectedJobRoutes.length;
+  const completedStops = selectedJobRoutes.filter((r: any) => r.status === 'completed').length;
+  
+  const milestones = selectedJob ? [
+    { id: 'start', label: 'TERIMA', status: selectedJob.accepted_at ? 'completed' : 'pending' },
+    { id: 'depart', label: 'BERANGKAT', status: (selectedJob.started_at || (selectedJob.status || '').toUpperCase() === 'DALAM PERJALANAN' || (selectedJob.status || '').toUpperCase().startsWith('MENUJU')) ? 'completed' : (selectedJob.accepted_at || (selectedJob.status || '').toUpperCase() === 'MENUNGGU MULAI / START' || (selectedJob.status || '').toUpperCase() === 'ORDER DITERIMA' ? 'current' : 'pending') },
+    ...selectedJobRoutes.map((s: any) => ({
+      id: s.id,
+      label: s.location_name,
+      status: s.status === 'completed' ? 'completed' : (s.status === 'arrived' || (selectedJob.status || '').toUpperCase().includes(s.location_name.toUpperCase()) ? 'current' : 'pending')
+    })),
+    { id: 'finish', label: 'SELESAI', status: (selectedJob.completed_at || ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID'].includes((selectedJob.status || '').toUpperCase())) ? 'completed' : 'pending' }
+  ] : [];
+
+  const progress = (() => {
+    if (!milestones.length) return 0;
+    const total = milestones.length;
+    const reached = milestones.filter(m => m.status === 'completed').length;
+    const current = milestones.findIndex(m => m.status === 'current');
+    
+    let base = (reached / total) * 100;
+    if (current !== -1) {
+      base = (current / total) * 100 + (1 / total * 50); // halfway to current
+    }
+    return Math.min(base, 100);
+  })();
+
   // Dashboard & Worksheets
   return (
     <div className={`min-h-screen pb-28 font-sans transition-colors duration-300 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -1579,9 +1721,53 @@ export default function DriverPortal() {
                   <p className="text-xs opacity-60 mt-0.5">Plat Nomor Armada: {selectedJob.md_fleets?.plate_number}</p>
                 </div>
                 <span className="px-3 py-1.5 bg-indigo-500 text-white rounded-full text-xs font-black uppercase tracking-widest shadow-md">
-                  {selectedJob.status === 'assigned' ? 'BELUM DI-TERIMA' : selectedJob.status}
+                  {(() => {
+                    const s = (selectedJob.status || '').toUpperCase();
+                    if (s === 'ASSIGNED') return 'BELUM DITERIMA';
+                    if (s === 'ACCEPTED' || s === 'DITERIMA') return 'ORDER DITERIMA';
+                    if (s === 'IN_PROGRESS' || s === 'DALAM PERJALANAN') return 'DALAM PERJALANAN';
+                    if (s === 'COMPLETED' || s === 'PEKERJAAN SELESAI') return 'PEKERJAAN SELESAI';
+                    return s.replace('_', ' ');
+                  })()}
                 </span>
               </div>
+
+              {/* [AI] Journey Pipeline (Milestones) - Aligned with vendor page tracking */}
+              {totalStops > 0 && !['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
+                <div className={`rounded-2xl p-5 border shadow-sm ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <h2 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                     <Activity size={12} className="text-indigo-500 animate-pulse" /> PIPELINE PERJALANAN
+                  </h2>
+                  <div className="relative px-2">
+                    {/* Line background */}
+                    <div className={`absolute top-4 left-4 right-4 h-[2px] rounded-full ${isDark ? 'bg-slate-850' : 'bg-slate-100'}`} />
+                    {/* Line progress */}
+                    <div 
+                      className="absolute top-4 left-4 h-[2px] bg-emerald-500 rounded-full transition-all duration-700"
+                      style={{ width: progress > 0 ? `calc(${progress}% - 32px)` : '0px' }}
+                    />
+                    
+                    <div className="relative flex justify-between">
+                      {milestones.map((m, idx) => (
+                        <div key={m.id} className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black z-10 transition-all duration-500 shadow-sm ${
+                            m.status === 'completed' ? 'bg-emerald-500 text-white' : 
+                            m.status === 'current' ? 'bg-indigo-600 text-white animate-pulse' : 
+                            isDark ? 'bg-slate-800 text-slate-500 border-2 border-slate-850' : 'bg-white border-2 border-slate-100 text-slate-300'
+                          }`}>
+                            {idx + 1}
+                          </div>
+                          <p className={`text-[8px] font-black mt-2 text-center max-w-[60px] truncate uppercase tracking-tighter ${
+                            m.status === 'completed' ? 'text-emerald-500' : m.status === 'current' ? 'text-indigo-500 font-bold' : 'text-slate-400'
+                          }`}>
+                            {m.label}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {selectedJob.wo_items?.item_data && (
                 <>
@@ -1618,15 +1804,12 @@ export default function DriverPortal() {
                     </div>
                   </div>
 
-                  {selectedJob.wo_items.item_data.deal_price && (
+                  {selectedJob.driver_revenue_share !== undefined && (
                     <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
                       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Total Hak Driver</p>
                       <div className="text-2xl font-black text-emerald-500 mt-1">
-                        Rp {Number(selectedJob.advance_amount || 0).toLocaleString('id-ID')}
+                        Rp {Number(selectedJob.driver_revenue_share || 0).toLocaleString('id-ID')}
                       </div>
-                      <p className="text-[10px] opacity-75 mt-1 font-semibold">
-                        Kontrak: Rp {Number(selectedJob.wo_items.item_data.deal_price).toLocaleString('id-ID')}
-                      </p>
                     </div>
                   )}
 
@@ -1637,7 +1820,7 @@ export default function DriverPortal() {
                     
                     <div className="flex justify-between items-center text-sm border-b pb-2 border-slate-250/20">
                       <span className="font-semibold opacity-85">Total Hak Driver</span>
-                      <span className="font-black">Rp {Number(selectedJob.advance_amount || 0).toLocaleString('id-ID')}</span>
+                      <span className="font-black">Rp {Number(selectedJob.driver_revenue_share || 0).toLocaleString('id-ID')}</span>
                     </div>
 
                     <div className="flex justify-between items-center text-sm">
@@ -1669,29 +1852,183 @@ export default function DriverPortal() {
               )}
             </div>
 
-            {/* Stepped Single Dynamic Action Button */}
-            {/* [AI] Only ONE big action button is presented to the driver to keep operations simple and error-proof */}
+            {/* Action Section based on Vendor Logic */}
             <div className="pt-2 border-t border-slate-200/40">
-              {getJobActionButtonConfig(selectedJob.status) ? (() => {
-                const btn = getJobActionButtonConfig(selectedJob.status)!;
-                return (
-                  <button
-                    onClick={() => handleUpdateJobStatus(selectedJob.id, btn.target)}
-                    disabled={loading}
-                    className={`w-full py-4.5 rounded-2xl text-white font-black text-lg tracking-widest transition-all duration-350 active:scale-95 shadow-lg flex items-center justify-center gap-2.5 ${btn.color}`}
-                  >
-                    {loading ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <>
-                        <Truck size={22} className="animate-bounce" />
-                        {btn.verb}
-                      </>
-                    )}
-                  </button>
-                );
-              })() : (
-                <div className="p-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl text-center space-y-1.5">
+              {!['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID'].includes((selectedJob.status || '').toUpperCase()) ? (
+                <div className="space-y-4 mt-2">
+                  {/* Phase 1: Accept */}
+                  {['ASSIGNED', 'PENDING', 'NEED_ASSIGNMENT', 'ACTIVE'].includes((selectedJob.status || '').toUpperCase()) && (
+                    <button
+                      onClick={() => handleUpdateJobStatus(selectedJob.id, 'DITERIMA')}
+                      disabled={loading}
+                      className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all tracking-widest"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> TERIMA TUGAS INI</>}
+                    </button>
+                  )}
+                  {/* Phase 2: Start Journey */}
+                  {['DITERIMA', 'ACCEPTED', 'ORDER DITERIMA'].includes((selectedJob.status || '').toUpperCase()) && (
+                    <button
+                      onClick={() => handleUpdateJobStatus(selectedJob.id, 'START JOURNEY')}
+                      disabled={loading}
+                      className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all tracking-widest"
+                    >
+                      {loading ? <Loader2 className="animate-spin" /> : <><Truck size={22} className="animate-bounce" /> MULAI JALAN (BERANGKAT)</>}
+                    </button>
+                  )}
+
+                  {/* Route Stops with Buttons */}
+                  {selectedJob.routes && selectedJob.routes.length > 0 && (
+                    <div className="space-y-4">
+                      {selectedJob.routes.map((stop: any) => (
+                        <div key={stop.id} className={`rounded-2xl p-4 border shadow-sm transition-all ${
+                          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                        } ${
+                          stop.status === 'completed' ? (isDark ? 'border-emerald-500/30 opacity-60' : 'border-emerald-200 opacity-75') : 
+                          stop.status === 'arrived' ? (isDark ? 'border-blue-500/50 ring-2 ring-blue-500/20' : 'border-blue-300 ring-2 ring-blue-100') : 
+                          ''
+                        }`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex gap-4 flex-1">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                                stop.status === 'completed' ? 'bg-emerald-500/20 text-emerald-500' : 
+                                stop.status === 'arrived' ? 'bg-blue-500/20 text-blue-500' : 
+                                isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                {stop.sequence}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                                    stop.stop_type === 'PICKUP' ? 'bg-blue-500/20 text-blue-500' : 'bg-emerald-500/20 text-emerald-500'
+                                  }`}>
+                                    {stop.stop_type}
+                                  </span>
+                                </div>
+                                <h3 className={`font-bold text-base mt-1 uppercase tracking-tight leading-none truncate ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{stop.location_name}</h3>
+                                <p className={`text-[11px] font-medium leading-relaxed mt-1 break-words ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{stop.address}</p>
+                              </div>
+                            </div>
+                            
+                            {/* Action Utilities (Nav, Camera) */}
+                            <div className="flex flex-col gap-2">
+                              <button 
+                                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.address)}`, '_blank')}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border ${
+                                  isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'
+                                }`}
+                                title="Buka Navigasi"
+                              >
+                                <NavIcon size={18} fill="currentColor" className="opacity-80" />
+                              </button>
+
+                              <div className="relative">
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  capture="environment"
+                                  className="hidden"
+                                  id={`photo-${stop.id}`}
+                                  onChange={(e) => handleRoutePhotoUpload(stop.id, e)}
+                                />
+                                <label 
+                                  htmlFor={`photo-${stop.id}`}
+                                  className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border cursor-pointer ${
+                                    stop.pod_photo_url 
+                                      ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border-emerald-200') 
+                                      : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-200')
+                                  }`}
+                                >
+                                  {photoLoading === stop.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                  ) : stop.pod_photo_url ? (
+                                    <Check size={18} />
+                                  ) : (
+                                    <Camera size={18} />
+                                  )}
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Arrival/Departure Timestamps */}
+                          {(stop.actual_arrival || stop.actual_departure) && (
+                            <div className={`grid grid-cols-2 gap-2 mt-4 pt-4 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                               <div className="text-center">
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Tiba</p>
+                                  <p className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{stop.actual_arrival ? new Date(stop.actual_arrival).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                               </div>
+                               <div className="text-center">
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Berangkat</p>
+                                  <p className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{stop.actual_departure ? new Date(stop.actual_departure).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                               </div>
+                            </div>
+                          )}
+
+                          {/* Route Action Buttons */}
+                          {(['START JOURNEY', 'STARTED', 'IN PROGRESS', 'DALAM PERJALANAN', 'IN_PROGRESS', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
+                            <div className="mt-4">
+                              {stop.status === 'pending' && (
+                                <button
+                                  onClick={() => updateRouteStatus(stop.id, 'arrived')}
+                                  disabled={loading}
+                                  className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
+                                    isDark ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/50' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
+                                  }`}
+                                >
+                                  {loading ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
+                                </button>
+                              )}
+
+                              {stop.status === 'arrived' && (
+                                <button
+                                  onClick={() => updateRouteStatus(stop.id, 'completed')}
+                                  disabled={loading}
+                                  className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
+                                    isDark ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-900/50' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                                  }`}
+                                >
+                                  {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN {stop.stop_type === 'PICKUP' ? 'MUAT' : 'BONGKAR'} ({stop.location_name?.toUpperCase()})</>}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Final Job Completion Action */}
+                  {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
+                    <div className="mt-6 pt-4 border-t border-slate-200/40">
+                      {completedStops < totalStops && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-4 flex items-center gap-3">
+                           <AlertTriangle size={18} className="text-amber-500 shrink-0" />
+                           <p className="text-xs font-bold text-amber-500 uppercase leading-tight">
+                              Masih ada {totalStops - completedStops} lokasi yang belum ditandai selesai. Lanjutkan?
+                           </p>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          const confirmMsg = completedStops < totalStops 
+                            ? 'Masih ada rute yang belum selesai. Apakah Anda yakin ingin mengakhiri tugas ini sekarang?'
+                            : 'Apakah Anda yakin ingin menyelesaikan seluruh tugas ini?';
+                          if (window.confirm(confirmMsg)) {
+                            handleUpdateJobStatus(selectedJob.id, 'PEKERJAAN SELESAI');
+                          }
+                        }}
+                        disabled={loading}
+                        className="w-full h-16 bg-slate-900 text-white hover:bg-slate-800 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all uppercase tracking-widest"
+                      >
+                        {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> AKHIRI TUGAS (SELESAI)</>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl text-center space-y-1.5 mt-4">
                   <CheckCircle className="w-8 h-8 mx-auto" />
                   <p className="text-base font-black">TUGAS TELAH SELESAI</p>
                   <p className="text-xs opacity-80">Terima kasih atas kerja keras Anda! Tugas diarsipkan di tab Keuangan.</p>
@@ -2040,12 +2377,12 @@ export default function DriverPortal() {
                       )}
                       <div className="text-[10px] font-semibold opacity-70 border-t pt-2 border-slate-200/50 space-y-0.5">
                         <div className="flex justify-between">
-                          <span>Total Hak: Rp {Number((job.base_price || 0) * (job.driver_share_percentage || 0) / 100).toLocaleString('id-ID')}</span>
+                          <span>Total Hak: Rp {Number(job.driver_revenue_share || 0).toLocaleString('id-ID')}</span>
                           <span>🛣️ {jobDistance.toFixed(0)} km</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Advance: {job.advance_status === 'paid' ? `Rp ${Number(job.advance_amount || 0).toLocaleString('id-ID')} ✓` : 'Pending'}</span>
-                          <span>Sisa: Rp {Number(Math.max(0, (job.base_price || 0) * (job.driver_share_percentage || 0) / 100 - (job.advance_amount || 0) - (job.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
+                          <span>Sisa: Rp {Number(Math.max(0, (job.driver_revenue_share || 0) - (job.advance_amount || 0) - (job.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
                         </div>
                       </div>
                     </div>
