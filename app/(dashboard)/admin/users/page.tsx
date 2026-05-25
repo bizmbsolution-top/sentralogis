@@ -85,6 +85,7 @@ const SBU_TYPES = [
 export default function UserManagementPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -100,6 +101,7 @@ export default function UserManagementPage() {
     password: "", // Only for new users
     role: "viewer",
     organization_id: "",
+    assigned_warehouse_id: "",
     sbu_access: []
   });
 
@@ -151,6 +153,11 @@ export default function UserManagementPage() {
       const { data: oData } = await orgsQuery;
       setOrganizations(oData || []);
 
+      // 4. Fetch Warehouses
+      let whQuery = supabase.from('md_warehouses').select('id, name, organization_id').eq('is_active', true);
+      const { data: wData } = await whQuery;
+      setWarehouses(wData || []);
+
     } catch (error: unknown) {
       toast.error("Gagal sinkronisasi data kredensial.");
     } finally {
@@ -177,6 +184,22 @@ export default function UserManagementPage() {
           updated_at: new Date().toISOString()
         }).eq('id', formData.id);
         if (error) throw error;
+
+        // Sync to wo_organization_users via API
+        if (formData.organization_id) {
+           await fetch('/api/admin/update-user', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                userId: formData.id,
+                full_name: formData.full_name,
+                role: formData.role,
+                organization_id: formData.organization_id,
+                assigned_warehouse_id: formData.assigned_warehouse_id || null
+             })
+           });
+        }
+        
         toast.success("Informasi profil diperbarui.");
       } else {
         // Create User (Auth requires Edge Function or Admin Client generally)
@@ -200,17 +223,25 @@ export default function UserManagementPage() {
     }
   };
 
-  const openEdit = (p: Profile) => {
+  const openEdit = async (p: Profile) => {
     setFormData({
       id: p.id,
       full_name: p.full_name || "",
       email: p.email || "",
       role: p.role,
       organization_id: p.organization_id || "",
+      assigned_warehouse_id: "", // Will need API to fetch if required
       sbu_access: p.sbu_access || []
     });
     setIsEdit(true);
     setShowModal(true);
+
+    if (p.organization_id) {
+       const { data } = await supabase.from('wo_organization_users').select('assigned_warehouse_id').eq('user_id', p.id).maybeSingle();
+       if (data?.assigned_warehouse_id) {
+          setFormData(prev => ({...prev, assigned_warehouse_id: data.assigned_warehouse_id}));
+       }
+    }
   };
 
   const openAdd = () => {
@@ -221,6 +252,7 @@ export default function UserManagementPage() {
       password: "",
       role: "viewer",
       organization_id: userProfile?.role === 'superadmin' ? "" : userProfile?.organization_id,
+      assigned_warehouse_id: "",
       sbu_access: []
     });
     setIsEdit(false);
@@ -388,7 +420,7 @@ export default function UserManagementPage() {
           )}
        </div>
 
-      {/* 🚀 FORM MODAL */}
+      {/* ≡ƒÜÇ FORM MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center p-6">
            <div className="absolute inset-0 bg-[#05080F]/80 backdrop-blur-xl" onClick={() => setShowModal(false)} />
@@ -434,7 +466,7 @@ export default function UserManagementPage() {
                       <input 
                         type="password" 
                         className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none focus:border-emerald-500/50 tracking-widest"
-                        placeholder="••••••••"
+                        placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó"
                         value={formData.password}
                         onChange={(e) => setFormData({...formData, password: e.target.value})}
                       />
@@ -498,6 +530,27 @@ export default function UserManagementPage() {
                     </div>
                  </div>
 
+                 {/* WAREHOUSE SELECTOR */}
+                 {formData.sbu_access.includes('warehouse') && (
+                   <div className="space-y-3 mt-4">
+                     <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1 italic">Lokasi Gudang Penugasan</label>
+                     <select 
+                       className="w-full h-16 bg-white/5 border border-white/5 rounded-2xl px-6 text-sm font-bold text-white outline-none"
+                       value={formData.assigned_warehouse_id}
+                       onChange={(e) => setFormData({...formData, assigned_warehouse_id: e.target.value})}
+                     >
+                       <option value="">Semua Lokasi Gudang (Manager/Admin)</option>
+                       {warehouses
+                         .filter(w => !formData.organization_id || w.organization_id === formData.organization_id)
+                         .map(w => (
+                           <option key={w.id} value={w.id} className="text-slate-900">{w.name}</option>
+                         ))
+                       }
+                     </select>
+                     <p className="text-[10px] font-medium text-slate-500 px-1">Biarkan kosong jika staf ini menangani semua gudang dalam organisasi.</p>
+                   </div>
+                 )}
+
                  {/* SUBMIT */}
                  <button 
                    onClick={handleSaveUser}
@@ -512,7 +565,7 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {/* 📊 FOOTER STATS */}
+      {/* ≡ƒôè FOOTER STATS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 mt-20 p-10 bg-white/5 rounded-[3.5rem] border border-white/5">
          {[
           { label: 'Total Personel', val: profiles.length, icon: Users, color: 'text-blue-500' },

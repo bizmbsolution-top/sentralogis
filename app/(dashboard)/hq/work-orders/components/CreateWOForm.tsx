@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { generateWONumber } from '@/lib/utils/woNumber';
 import AddTruckingItemModal from './AddTruckingItemModal';
+import AddWarehouseItemModal from './AddWarehouseItemModal';
 import ContactFormModal from '@/components/master/ContactFormModal';
 
 interface CreateWOFormProps {
@@ -438,8 +439,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                      <button 
                        key={sbu.id}
                        disabled={isReadOnly}
-                       onClick={() => !isReadOnly && sbu.id === 'TRUCKING' && setActiveSBUModal('TRUCKING')}
-                       className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 text-center ${sbu.id === 'TRUCKING' && !isReadOnly ? 'bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-600/5' : 'bg-slate-50 border-transparent opacity-50 cursor-not-allowed'}`}
+                       onClick={() => !isReadOnly && (sbu.id === 'TRUCKING' || sbu.id === 'WAREHOUSE') && setActiveSBUModal(sbu.id)}
+                       className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 text-center ${['TRUCKING', 'WAREHOUSE'].includes(sbu.id) && !isReadOnly ? 'bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-600/5' : 'bg-slate-50 border-transparent opacity-50 cursor-not-allowed'}`}
                      >
                         <div className={`p-4 rounded-2xl ${sbu.bg} ${sbu.color} transition-transform group-hover:scale-110`}>
                            <sbu.icon size={24} />
@@ -626,6 +627,20 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         {activeSBUModal === 'TRUCKING' && (
            <AddTruckingItemModal 
+             initialData={editingItem}
+             customerId={formData.customer_id}
+             defaultExecutionDate={formData.execution_date}
+             defaultExecutionTime={formData.execution_time}
+             onClose={() => {
+               setActiveSBUModal(null);
+               setEditingItem(null);
+             }} 
+             onAdd={handleAddItem} 
+           />
+        )}
+
+        {activeSBUModal === 'WAREHOUSE' && (
+           <AddWarehouseItemModal 
              initialData={editingItem}
              customerId={formData.customer_id}
              defaultExecutionDate={formData.execution_date}
