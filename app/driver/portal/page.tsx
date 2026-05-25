@@ -36,14 +36,20 @@ import {
   Calendar,
   AlertOctagon,
   Download,
-  ClipboardList
+  ClipboardList,
+  Expand,
+  Image as ImageIcon
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { useGoogleMaps } from '@/lib/google-maps-context';
+import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 
 export default function DriverPortal() {
+  const { isLoaded } = useGoogleMaps();
   const [step, setStep] = useState<'auth' | 'dashboard' | 'profile' | 'inspection' | 'jobDetail' | 'performance' | 'history'>('auth');
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [whatsapp, setWhatsapp] = useState('');
+  const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
   const [pin, setPin] = useState(['', '', '', '']);
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1369,6 +1375,18 @@ export default function DriverPortal() {
   const totalStops = selectedJobRoutes.length;
   const completedStops = selectedJobRoutes.filter((r: any) => r.status === 'completed').length;
   
+  const mapMarkers = (selectedJobRoutes || []).map((stop: any) => {
+    const lat = stop.latitude ? Number(stop.latitude) : null;
+    const lng = stop.longitude ? Number(stop.longitude) : null;
+    if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng, sequence: stop.sequence, label: stop.location_name };
+    }
+    return null;
+  }).filter(Boolean) as { lat: number; lng: number; sequence: number; label: string }[];
+
+  const polylinePath = mapMarkers.map(m => ({ lat: m.lat, lng: m.lng }));
+  const mapCenter = mapMarkers.length > 0 ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng } : { lat: -6.2, lng: 106.816666 };
+  
   const milestones = selectedJob ? [
     { id: 'start', label: 'TERIMA', status: selectedJob.accepted_at ? 'completed' : 'pending' },
     { id: 'depart', label: 'BERANGKAT', status: (selectedJob.started_at || (selectedJob.status || '').toUpperCase() === 'DALAM PERJALANAN' || (selectedJob.status || '').toUpperCase().startsWith('MENUJU')) ? 'completed' : (selectedJob.accepted_at || (selectedJob.status || '').toUpperCase() === 'MENUNGGU MULAI / START' || (selectedJob.status || '').toUpperCase() === 'ORDER DITERIMA' ? 'current' : 'pending') },
@@ -1621,57 +1639,115 @@ export default function DriverPortal() {
           </div>
         )}
 
-        {/* New Assignment Job Orders List */}
-        <div className={`rounded-3xl p-5 shadow-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-black uppercase tracking-wider">Tugas Baru Untuk Anda</h3>
-            <span className="bg-indigo-500/10 text-indigo-500 px-3 py-1 rounded-full text-xs font-black">
-              {jobOrders.length} Baru
-            </span>
-          </div>
+        {/* Visual premium separation of jobs */}
+        {(() => {
+          const activeJob = jobOrders.find(jo => jo.driver_response === 'accepted');
+          const newJobs = jobOrders.filter(jo => jo.driver_response !== 'accepted');
           
-          {jobOrders.length === 0 ? (
-            <div className="py-10 text-center">
-              <div className={`w-16 h-16 ${isDark ? 'bg-slate-950' : 'bg-slate-50'} rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner`}>
-                <Package size={32} className="text-slate-400" />
-              </div>
-              <p className="text-base font-black">Belum Ada Tugas Baru</p>
-              <p className="text-xs opacity-60 mt-1">Menunggu penugasan baru dari kantor. Pastikan Anda sudah absen dan inspeksi.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {jobOrders.map((jo) => (
-                <div 
-                  key={jo.id} 
-                  onClick={() => { setSelectedJob(jo); setStep('jobDetail'); }}
-                  className={`rounded-2xl p-4 border cursor-pointer hover:scale-[1.01] active:scale-95 transition-all shadow-sm ${
-                    isDark 
-                      ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' 
-                      : 'bg-slate-50 border-slate-150 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <p className="text-base font-black">{jo.jo_number}</p>
-                      <p className="text-xs opacity-60 mt-0.5">Plat Truk: {jo.md_fleets?.plate_number || '-'}</p>
+          return (
+            <>
+              {/* Tugas Aktif Saat Ini Widget */}
+              {activeJob && (
+                <div className="relative rounded-3xl p-6 bg-slate-900 border-2 border-indigo-500/30 text-white shadow-2xl overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-[40px] pointer-events-none" />
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="bg-emerald-500 text-white text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 shadow-lg">
+                          <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /> TUGAS AKTIF SAAT INI
+                        </span>
+                        <h3 className="text-xl font-black mt-2 leading-none tracking-tight">{activeJob.jo_number}</h3>
+                        <p className="text-xs text-slate-400 mt-1.5 uppercase font-bold tracking-tight">Plat Truk: {activeJob.md_fleets?.plate_number || '-'}</p>
+                      </div>
+                      <div className="bg-white/10 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] italic">
+                        {(() => {
+                          const s = (activeJob.status || '').toUpperCase();
+                          if (s === 'ACCEPTED' || s === 'DITERIMA') return 'ORDER DITERIMA';
+                          if (s === 'IN_PROGRESS' || s === 'DALAM PERJALANAN') return 'DALAM PERJALANAN';
+                          if (s === 'COMPLETED' || s === 'PEKERJAAN SELESAI') return 'PEKERJAAN SELESAI';
+                          return s.replace('_', ' ');
+                        })()}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-700">
-                        BELUM DITERIMA
-                      </span>
-                      <ChevronRight size={16} className="opacity-40" />
+
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-2">Shipper / Pelanggan</h4>
+                      <p className="text-base font-black uppercase italic leading-none">{activeJob.wo_items?.item_data?.shipper_name || 'SENTRALOGIS'}</p>
+                      {activeJob.wo_items?.item_data && (
+                        <div className="text-xs text-slate-300 font-semibold mt-3 pt-3 border-t border-white/5">
+                          🚚 {activeJob.wo_items.item_data.stops?.[0]?.location_name || 'Loading Point'} → {activeJob.wo_items.item_data.stops?.[activeJob.wo_items.item_data.stops?.length - 1]?.location_name || 'Unload Point'}
+                        </div>
+                      )}
                     </div>
+
+                    <button
+                      onClick={() => { setSelectedJob(activeJob); setStep('jobDetail'); }}
+                      className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 group"
+                    >
+                      UPDATE PERJALANAN <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </button>
                   </div>
-                  {jo.wo_items?.item_data && (
-                    <div className="text-xs opacity-75 font-semibold mt-2 border-t pt-2 border-slate-200/50">
-                      🚚 {jo.wo_items.item_data.stops?.[0]?.location_name || 'Loading Point'} → {jo.wo_items.item_data.stops?.[jo.wo_items.item_data.stops?.length - 1]?.location_name || 'Unload Point'}
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )}
+
+              {/* New Assignment Job Orders List */}
+              <div className={`rounded-3xl p-5 shadow-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-black uppercase tracking-wider">Penugasan Baru</h3>
+                  <span className="bg-indigo-500/10 text-indigo-500 px-3 py-1 rounded-full text-xs font-black">
+                    {newJobs.length} Baru
+                  </span>
+                </div>
+                
+                {newJobs.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <div className={`w-16 h-16 ${isDark ? 'bg-slate-950' : 'bg-slate-50'} rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner`}>
+                      <Package size={32} className="text-slate-400" />
+                    </div>
+                    <p className="text-base font-black">Belum Ada Tugas Baru</p>
+                    <p className="text-xs opacity-60 mt-1">Menunggu penugasan baru dari kantor. Pastikan Anda sudah absen dan inspeksi.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {newJobs.map((jo) => (
+                      <div 
+                        key={jo.id} 
+                        onClick={() => { setSelectedJob(jo); setStep('jobDetail'); }}
+                        className={`rounded-2xl p-4 border cursor-pointer hover:scale-[1.01] active:scale-95 transition-all shadow-sm ${
+                          isDark 
+                            ? 'bg-slate-950 border-slate-850 hover:bg-slate-900' 
+                            : 'bg-slate-50 border-slate-150 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <p className="text-base font-black">{jo.jo_number}</p>
+                            <p className="text-xs opacity-60 mt-0.5">Plat Truk: {jo.md_fleets?.plate_number || '-'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                              jo.driver_response === 'rejected'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {jo.driver_response === 'rejected' ? 'DITOLAK' : 'BARU / ASSIGNED'}
+                            </span>
+                            <ChevronRight size={16} className="opacity-40" />
+                          </div>
+                        </div>
+                        {jo.wo_items?.item_data && (
+                          <div className="text-xs opacity-75 font-semibold mt-2 border-t pt-2 border-slate-200/50">
+                            🚚 {jo.wo_items.item_data.stops?.[0]?.location_name || 'Loading Point'} → {jo.wo_items.item_data.stops?.[jo.wo_items.item_data.stops?.length - 1]?.location_name || 'Unload Point'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </main>
 
       {/* Bottom Nav Bar */}
@@ -1860,6 +1936,50 @@ export default function DriverPortal() {
               </div>
             )}
 
+            {/* Interactive Google Map ("Peta Petunjuk") */}
+            {isLoaded && mapMarkers.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm overflow-hidden">
+                <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                   <NavIcon size={12} className="text-indigo-600 animate-pulse" /> PETA PETUNJUK RUTE
+                </h2>
+                <div className="h-64 rounded-xl overflow-hidden border border-slate-100 relative">
+                  <GoogleMap
+                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                    center={mapCenter}
+                    zoom={11}
+                    options={{
+                      disableDefaultUI: false,
+                      zoomControl: true,
+                      mapTypeControl: false,
+                      streetViewControl: false,
+                    }}
+                  >
+                    {mapMarkers.map((marker) => (
+                      <MarkerF
+                        key={marker.sequence}
+                        position={{ lat: marker.lat, lng: marker.lng }}
+                        label={{
+                          text: String(marker.sequence),
+                          color: '#ffffff',
+                          fontWeight: 'black',
+                        }}
+                      />
+                    ))}
+                    {polylinePath.length > 1 && (
+                      <PolylineF
+                        path={polylinePath}
+                        options={{
+                          strokeColor: '#3b82f6',
+                          strokeOpacity: 0.8,
+                          strokeWeight: 4,
+                        }}
+                      />
+                    )}
+                  </GoogleMap>
+                </div>
+              </div>
+            )}
+
             {/* Action Section - HANYA TAMPIL JIKA BELUM SELESAI */}
             {!['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
               <div className="space-y-4">
@@ -1941,7 +2061,7 @@ export default function DriverPortal() {
             )}
 
             {/* Rute Perjalanan List */}
-            {totalStops > 0 && !['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
+            {totalStops > 0 && (
               <div className="space-y-4">
                 <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
                    <MapPin size={12} /> RUTE PERJALANAN
@@ -2013,6 +2133,22 @@ export default function DriverPortal() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Photo POD Preview Thumbnail */}
+                    {stop.pod_photo_url && (
+                      <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
+                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block leading-none">Foto Bukti POD</span>
+                         <div 
+                           onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
+                           className="relative w-24 h-24 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer active:scale-95 transition-all group shadow-sm bg-slate-100"
+                         >
+                           <img src={stop.pod_photo_url} alt="POD Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                             <Expand size={16} />
+                           </div>
+                         </div>
+                      </div>
+                    )}
 
                     {/* Arrival/Departure info */}
                     {(stop.actual_arrival || stop.actual_departure) && (
@@ -2115,6 +2251,26 @@ export default function DriverPortal() {
               </div>
             )}
           </main>
+        </div>
+      )}
+
+      {/* 🖼️ PHOTO OVERLAY LIGHTBOX MODAL */}
+      {selectedPhotoPreview && (
+        <div 
+          className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4" 
+          onClick={() => setSelectedPhotoPreview(null)}
+        >
+          <div className="relative max-w-4xl w-full h-full max-h-[80vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+             <button 
+               className="absolute -top-12 right-0 text-white hover:text-slate-300 flex items-center gap-2 font-black uppercase text-xs tracking-widest"
+               onClick={() => setSelectedPhotoPreview(null)}
+             >
+                Close <X className="w-6 h-6" />
+             </button>
+             <div className="relative w-full h-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+                <img src={selectedPhotoPreview} alt="Evidence Full" className="w-full h-full object-contain" />
+             </div>
+          </div>
         </div>
       )}
 

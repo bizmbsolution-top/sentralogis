@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation';
 import { 
   Truck, MapPin, Navigation as NavIcon, Phone, 
   CheckCircle2, Clock, ChevronRight, AlertCircle, 
-  Loader2, Play, Check, X, Camera, Calendar, Activity
+  Loader2, Play, Check, X, Camera, Calendar, Activity,
+  Expand, Image as ImageIcon
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
+import { useGoogleMaps } from '@/lib/google-maps-context';
+import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 
 interface RouteStop {
   id: string;
@@ -51,6 +54,7 @@ interface JobOrder {
 export default function DriverTrackingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const router = useRouter();
+  const { isLoaded } = useGoogleMaps();
   
   const [jobOrder, setJobOrder] = useState<JobOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +62,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const [updating, setUpdating] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -299,6 +304,18 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const totalStops = jobOrder?.routes?.length || 0;
   const completedStops = jobOrder?.routes?.filter((r: any) => r.status === 'completed').length || 0;
 
+  const mapMarkers = (jobOrder?.routes || []).map((stop: any) => {
+    const lat = stop.latitude ? Number(stop.latitude) : null;
+    const lng = stop.longitude ? Number(stop.longitude) : null;
+    if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng, sequence: stop.sequence, label: stop.location_name };
+    }
+    return null;
+  }).filter(Boolean) as { lat: number; lng: number; sequence: number; label: string }[];
+
+  const polylinePath = mapMarkers.map(m => ({ lat: m.lat, lng: m.lng }));
+  const mapCenter = mapMarkers.length > 0 ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng } : { lat: -6.2, lng: 106.816666 };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -476,6 +493,50 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
           </div>
         )}
 
+        {/* Interactive Google Map ("Peta Petunjuk") */}
+        {isLoaded && mapMarkers.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm overflow-hidden">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+               <NavIcon size={12} className="text-indigo-600 animate-pulse" /> PETA PETUNJUK RUTE
+            </h2>
+            <div className="h-64 rounded-xl overflow-hidden border border-slate-100 relative">
+              <GoogleMap
+                mapContainerStyle={{ width: '100%', height: '100%' }}
+                center={mapCenter}
+                zoom={11}
+                options={{
+                  disableDefaultUI: false,
+                  zoomControl: true,
+                  mapTypeControl: false,
+                  streetViewControl: false,
+                }}
+              >
+                {mapMarkers.map((marker) => (
+                  <MarkerF
+                    key={marker.sequence}
+                    position={{ lat: marker.lat, lng: marker.lng }}
+                    label={{
+                      text: String(marker.sequence),
+                      color: '#ffffff',
+                      fontWeight: 'black',
+                    }}
+                  />
+                ))}
+                {polylinePath.length > 1 && (
+                  <PolylineF
+                    path={polylinePath}
+                    options={{
+                      strokeColor: '#3b82f6',
+                      strokeOpacity: 0.8,
+                      strokeWeight: 4,
+                    }}
+                  />
+                )}
+              </GoogleMap>
+            </div>
+          </div>
+        )}
+
         {/* Action Section - HANYA TAMPIL JIKA BELUM SELESAI */}
         {!['completed', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified'].includes(jobOrder.status) && (
           <div className="space-y-4">
@@ -595,6 +656,22 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                         </label>
                       </div>
                     </div>
+
+                    {/* Photo POD Preview Thumbnail */}
+                    {stop.pod_photo_url && (
+                      <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
+                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block leading-none">Foto Bukti POD</span>
+                         <div 
+                           onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
+                           className="relative w-24 h-24 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer active:scale-95 transition-all group shadow-sm bg-slate-100"
+                         >
+                           <img src={stop.pod_photo_url} alt="POD Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                             <Expand size={16} />
+                           </div>
+                         </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Arrival/Departure info */}
@@ -699,6 +776,26 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
             </div>
           </div>
         )}
+
+      {/* 🖼️ PHOTO OVERLAY MODAL */}
+      {selectedPhotoPreview && (
+        <div 
+          className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4" 
+          onClick={() => setSelectedPhotoPreview(null)}
+        >
+          <div className="relative max-w-4xl w-full h-full max-h-[80vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+             <button 
+               className="absolute -top-12 right-0 text-white hover:text-slate-300 flex items-center gap-2 font-black uppercase text-xs tracking-widest"
+               onClick={() => setSelectedPhotoPreview(null)}
+             >
+                Close <X className="w-6 h-6" />
+             </button>
+             <div className="relative w-full h-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+                <img src={selectedPhotoPreview} alt="Evidence Full" className="w-full h-full object-contain" />
+             </div>
+          </div>
+        </div>
+      )}
 
       </main>
     </div>
