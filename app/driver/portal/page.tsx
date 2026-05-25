@@ -45,6 +45,7 @@ export default function DriverPortal() {
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [driver, setDriver] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
 
   // Theme Management: light / dark mode
   // [AI] read and write theme from localStorage, optimized for safe night-driving
@@ -195,6 +196,41 @@ export default function DriverPortal() {
   };
 
   useEffect(() => {
+    const savedSession = localStorage.getItem('sentralogis_driver_session');
+    if (savedSession) {
+      try {
+        const d = JSON.parse(savedSession);
+        if (d && d.id) {
+          setDriver(d);
+          setStep('dashboard');
+        }
+      } catch(e) {}
+    }
+    setMounted(true);
+  }, []);
+
+  const handleCheckOut = async () => {
+    if (!activeShift) return;
+    if (window.confirm("Yakin ingin Check-Out? Armada akan dikembalikan dan Anda akan berstatus OFF DUTY.")) {
+      setLoading(true);
+      try {
+        await supabase.from('driver_attendance').update({ status: 'CHECK_OUT' }).eq('id', activeShift.id);
+        await supabase.from('md_drivers').update({ is_working: false, status: 'available' }).eq('id', driver.id);
+        if (activeShift.fleet_id) {
+          await supabase.from('md_fleets').update({ status: 'available' }).eq('id', activeShift.fleet_id);
+        }
+        setActiveShift(null);
+        setLastInspection(null);
+        toast.success('Berhasil Check-Out. Terima kasih atas kerja keras Anda!');
+      } catch (e: any) {
+        toast.error('Gagal Check-Out: ' + e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
     if (step === 'dashboard' && isAttendanceModalOpen) fetchFleets();
   }, [step, isAttendanceModalOpen]);
 
@@ -328,15 +364,24 @@ export default function DriverPortal() {
   };
 
   const fetchJobOrders = async () => {
-    // [AI] Fetch all active jobs (assigned to in-progress). Completed jobs go to history only.
-    const { data } = await supabase
+    // [AI] Fetch recent jobs and filter active ones in JS to avoid PostgREST .not('in') syntax issues
+    const { data, error } = await supabase
       .from('job_orders')
       .select('*, md_fleets(plate_number), wo_items(item_code, item_data)')
       .eq('driver_id', driver.id)
-      .not('status', 'in', '("COMPLETED","PEKERJAAN SELESAI","SELESAI","done","DONE","invoiced","INVOICED","paid","PAID")')
       .order('created_at', { ascending: false })
-      .limit(20);
-    if (data) setJobOrders(data);
+      .limit(50);
+      
+    if (error) {
+      console.error('Error fetching job orders:', error);
+    } else if (data) {
+      const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID'];
+      const activeJobs = data.filter(jo => {
+        const s = (jo.status || '').toUpperCase();
+        return !completedStatuses.includes(s);
+      });
+      setJobOrders(activeJobs);
+    }
   };
 
   const fetchInspections = async () => {
@@ -709,6 +754,7 @@ export default function DriverPortal() {
         }
         
         setDriver(driverOriginal);
+        localStorage.setItem('sentralogis_driver_session', JSON.stringify(driverOriginal));
         setStep('dashboard');
         toast.success(`Selamat datang, ${driverOriginal.name}!`);
         setLoading(false);
@@ -737,6 +783,7 @@ export default function DriverPortal() {
       }
       
       setDriver(driverData);
+      localStorage.setItem('sentralogis_driver_session', JSON.stringify(driverData));
       setStep('dashboard');
       toast.success(`Selamat datang, ${driverData.name}!`);
     } catch (err: any) {
@@ -790,6 +837,14 @@ export default function DriverPortal() {
   };
 
   const isDark = themeMode === 'dark';
+
+  if (!mounted) {
+    return (
+      <div className={`min-h-screen ${isDark ? 'bg-slate-950' : 'bg-blue-600'} flex items-center justify-center`}>
+        <Loader2 className="animate-spin text-white w-10 h-10" />
+      </div>
+    );
+  }
 
   if (step === 'auth') {
     return (
@@ -1227,7 +1282,11 @@ export default function DriverPortal() {
             </button>
 
             {/* Logout */}
-            <button onClick={() => setStep('auth')} className="w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
+            <button onClick={() => {
+              localStorage.removeItem('sentralogis_driver_session');
+              setDriver(null);
+              setStep('auth');
+            }} className="w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
               <LogOut size={18} />
             </button>
           </div>
@@ -1305,7 +1364,16 @@ export default function DriverPortal() {
                   Absen
                 </button>
               ) : (
-                <span className="text-xs font-black text-emerald-500 flex items-center gap-1">✓ Selesai</span>
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs font-black text-emerald-500 flex items-center gap-1">✓ Selesai</span>
+                  <button 
+                    onClick={handleCheckOut}
+                    disabled={loading}
+                    className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    Check Out
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1554,10 +1622,10 @@ export default function DriverPortal() {
                     <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
                       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Total Hak Driver</p>
                       <div className="text-2xl font-black text-emerald-500 mt-1">
-                        Rp {Number((selectedJob.base_price || 0) * (selectedJob.driver_share_percentage || 0) / 100).toLocaleString('id-ID')}
+                        Rp {Number(selectedJob.advance_amount || 0).toLocaleString('id-ID')}
                       </div>
                       <p className="text-[10px] opacity-75 mt-1 font-semibold">
-                        Kontrak: Rp {Number(selectedJob.wo_items.item_data.deal_price).toLocaleString('id-ID')} ({selectedJob.driver_share_percentage || 0}% Bagi Hasil) &bull; Advance: Rp {Number(selectedJob.advance_amount || 0).toLocaleString('id-ID')}
+                        Kontrak: Rp {Number(selectedJob.wo_items.item_data.deal_price).toLocaleString('id-ID')}
                       </p>
                     </div>
                   )}
@@ -1569,7 +1637,7 @@ export default function DriverPortal() {
                     
                     <div className="flex justify-between items-center text-sm border-b pb-2 border-slate-250/20">
                       <span className="font-semibold opacity-85">Total Hak Driver</span>
-                      <span className="font-black">Rp {Number((selectedJob.base_price || 0) * (selectedJob.driver_share_percentage || 0) / 100).toLocaleString('id-ID')}</span>
+                      <span className="font-black">Rp {Number(selectedJob.advance_amount || 0).toLocaleString('id-ID')}</span>
                     </div>
 
                     <div className="flex justify-between items-center text-sm">
@@ -1585,7 +1653,7 @@ export default function DriverPortal() {
                     </div>
 
                     <div className="flex justify-between items-center text-sm border-t pt-2 border-slate-250/20">
-                      <span className="font-semibold opacity-85">Pelunasan (Bagi Hasil)</span>
+                      <span className="font-semibold opacity-85">Tambahan / Pelunasan</span>
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
                           selectedJob.driver_payment_status === 'paid' ? 'bg-green-500/20 text-green-500' : 'bg-amber-500/20 text-amber-500'
@@ -1594,11 +1662,6 @@ export default function DriverPortal() {
                         </span>
                         <span className="font-black">Rp {Number(selectedJob.driver_payment_amount || 0).toLocaleString('id-ID')}</span>
                       </div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-sm border-t pt-2 border-slate-250/20">
-                      <span className="font-semibold text-rose-500">Sisa Pelunasan</span>
-                      <span className="font-black text-rose-500">Rp {Number(Math.max(0, (selectedJob.base_price || 0) * (selectedJob.driver_share_percentage || 0) / 100 - (selectedJob.advance_amount || 0) - (selectedJob.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
                     </div>
                   </div>
                   )}

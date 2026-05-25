@@ -312,7 +312,7 @@ export default function JobOrderManagementPage() {
         const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
 
         const [driversRes, fleetsRes] = await Promise.all([
-          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] },
+          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone, md_entities(is_vendor)').in('id', driverIds) : { data: [] },
           fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] }
         ]);
 
@@ -689,8 +689,17 @@ export default function JobOrderManagementPage() {
                                   let formattedPhone = driverPhone.replace(/\D/g, '');
                                   if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.substring(1);
                                   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                                  const link = `${origin}/jo/${jo.driver_link_token || jo.id}`;
-                                  const msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number}): ${link}`;
+                                  const isInternal = jo.md_drivers?.md_entities?.is_vendor === false;
+                                  
+                                  let link, msg;
+                                  if (isInternal) {
+                                    link = `${origin}/driver/portal`;
+                                    msg = `Halo ${driverName}, Anda mendapat tugas baru (${jo.jo_number}). Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
+                                  } else {
+                                    link = `${origin}/jo/${jo.driver_link_token || jo.id}`;
+                                    msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number}): ${link}`;
+                                  }
+                                  
                                   window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
                                 }}
                                 className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 hover:border-emerald-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"

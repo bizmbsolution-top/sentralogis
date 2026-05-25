@@ -92,9 +92,10 @@ export default function WorkOrderPlanningPage() {
       const { data: joData } = await supabase
         .from('job_orders')
         .select(`
-          id, wo_item_id, status, wa_link_sent_at, driver_response, tracking_token, jo_number,
+          id, wo_item_id, status, wa_link_sent_at, driver_response, tracking_token, wa_token, jo_number,
           fleet_id, driver_id, is_doc_finished, is_cost_finished,
-          transporter:md_entities!transporter_id(name)
+          transporter:md_entities!transporter_id(name),
+          driver:md_drivers(name, phone, md_entities(is_vendor))
         `)
         .in('wo_item_id', itemIds);
       
@@ -388,48 +389,44 @@ const filteredItems = useMemo(() => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 lg:p-6">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 lg:p-8">
       {/* Header Section */}
-      <div className="max-w-[1600px] mx-auto mb-10">
-        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+      <div className="max-w-[1400px] mx-auto mb-8">
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 border-b border-slate-200 pb-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm rotate-3 hover:rotate-0 transition-transform duration-500 border border-blue-100">
+            <div className="w-12 h-12 bg-white text-slate-800 rounded-xl flex items-center justify-center shadow-sm border border-slate-200">
               <ClipboardList size={24} />
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-6 h-[2px] bg-blue-500 rounded-full"></span>
-                <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.3em]">Operational Planning</p>
-              </div>
-              <h1 className="text-2xl font-black text-indigo-950 italic uppercase tracking-tighter leading-none">Missions Center</h1>
+              <p className="text-sm font-semibold text-slate-500 mb-1">Operational Planning</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-none">Assignment Console</h1>
             </div>
           </div>
 
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="relative group w-full md:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" size={16} />
               <input 
                 type="text" 
                 placeholder="Search Item, WO, or Customer..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-12 pl-12 pr-4 bg-white border border-indigo-100 rounded-2xl text-[11px] font-black focus:border-blue-500/30 focus:ring-4 focus:ring-blue-500/5 transition-all outline-none shadow-sm text-indigo-900"
+                className="w-full h-11 pl-11 pr-4 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all outline-none shadow-sm text-slate-900"
               />
             </div>
           </div>
         </div>
 
-        <div className="mt-8">
-          {/* Mobile: Horizontal scrollable tabs | Desktop: Wrapped tabs */}
+        <div className="mt-6">
           <div className="relative">
-            <div className="flex lg:flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide w-fit lg:w-auto max-w-full">
+            <div className="flex items-center gap-6 border-b border-slate-200 overflow-x-auto scrollbar-hide w-full pb-px">
               <style dangerouslySetInnerHTML={{ __html: `
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
               `}} />
               {[
-                { id: 'all', label: 'All', count: stats.total, color: 'text-slate-500' },
-                { id: 'pending', label: 'Pending', count: stats.pending, color: 'text-rose-500' },
+                { id: 'all', label: 'All Assignments', count: stats.total, color: 'text-slate-500' },
+                { id: 'pending', label: 'Need Assignment', count: stats.pending, color: 'text-rose-500' },
                 { id: 'assigned_units', label: 'Assigned', count: items.filter(i => {
                   const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
                   const anyMoving = jos.some((j: any) => 
@@ -445,7 +442,7 @@ const filteredItems = useMemo(() => {
                   const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(statusStr);
                   return (allAssigned || isAssignedStatus) && !anyMoving && !isCompleted && !isRejectedOrPending;
                 }).length, color: 'text-blue-500' },
-                { id: 'on_road', label: 'On Road', count: items.filter(i => {
+                { id: 'on_road', label: 'On Journey', count: items.filter(i => {
                   const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
                   const anyMoving = jos.some((j: any) => 
                     j.status?.toUpperCase().startsWith('MENUJU') || 
@@ -457,20 +454,20 @@ const filteredItems = useMemo(() => {
                 }).length, color: 'text-emerald-500' },
                 { id: 'handover_pending', label: 'Handover', count: stats.handover, color: 'text-orange-500' },
                 { id: 'handover_rejected', label: 'Rejected', count: stats.rejected, color: 'text-rose-500' },
-                { id: 'completed', label: 'Done', count: stats.completed, color: 'text-slate-900' }
+                { id: 'completed', label: 'Completed', count: stats.completed, color: 'text-slate-900' }
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setSelectedStatus(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 lg:px-5 lg:py-2.5 rounded-xl text-[10px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-widest transition-all whitespace-nowrap flex-shrink-0 min-h-[44px] ${
-                    selectedStatus === tab.id ? 'bg-slate-900 text-white shadow-md scale-[1.02]' : 'text-slate-500 hover:bg-slate-50'
+                  className={`flex items-center gap-2 pb-4 border-b-2 text-sm font-semibold transition-all whitespace-nowrap ${
+                    selectedStatus === tab.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                   }`}
                 >
                   {tab.label}
-                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] lg:text-[9px] font-black ${
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                     selectedStatus === tab.id 
-                      ? 'bg-white/20 text-white' 
-                      : `bg-slate-100 ${tab.color}`
+                      ? 'bg-slate-100 text-slate-900' 
+                      : `bg-slate-50 ${tab.color}`
                   }`}>
                     {tab.count}
                   </span>
@@ -482,89 +479,81 @@ const filteredItems = useMemo(() => {
       </div>
  
       {/* Grid Content */}
-      <div className="max-w-[1600px] mx-auto">
+      <div className="max-w-[1400px] mx-auto pb-20">
         {loading ? (
-          <div className="h-[300px] flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-100">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-3" />
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Syncing Fleet Data...</p>
+          <div className="h-[300px] flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200">
+            <Loader2 className="w-8 h-8 text-slate-400 animate-spin mb-3" />
+            <p className="text-sm font-semibold text-slate-500">Syncing Fleet Data...</p>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="h-[300px] flex flex-col items-center justify-center bg-white rounded-3xl border border-dashed border-slate-200 opacity-70">
+          <div className="h-[300px] flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-slate-200 opacity-70">
             <Box size={48} className="text-slate-300 mb-4" />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No Missions Found</p>
+            <p className="text-sm font-semibold text-slate-500">No Missions Found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in duration-700">
+          <div className="flex flex-col space-y-4 animate-in fade-in duration-500">
             {filteredItems.map((item) => (
               <Card 
                 key={item.id} 
-                className="group rounded-3xl border border-indigo-50 shadow-sm bg-white hover:shadow-md transition-all duration-300 overflow-hidden relative"
+                className="group rounded-xl border border-slate-200 shadow-sm bg-white hover:border-slate-300 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 transition-colors duration-500 group-hover:bg-blue-50/50"></div>
- 
-                <div className="p-6 relative">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center shadow-sm rotate-3 group-hover:rotate-0 transition-transform">
-                      <Layers size={18} />
+                <div className="p-5 sm:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                  
+                  {/* Left: Info */}
+                  <div className="flex-1 min-w-0 flex items-start gap-5">
+                    <div className="w-12 h-12 bg-slate-50 text-slate-600 rounded-lg flex items-center justify-center border border-slate-200 shrink-0">
+                      <Layers size={20} />
                     </div>
-                    {getStatusBadge(item)}
-                  </div>
-
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-1.5">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">WO: {item.work_orders?.wo_number}</p>
-                       <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                       <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest">ITEM: {item.item_code}</p>
-                    </div>
-                    <h3 className="text-lg font-black text-slate-900 italic uppercase tracking-tight leading-none group-hover:text-blue-600 transition-colors">
-                      {item.work_orders?.md_entities?.legal_name || item.work_orders?.md_entities?.name}
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="bg-slate-50 p-4 rounded-xl group-hover:bg-blue-50/50 transition-colors">
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Execution</p>
-                      <div className="flex items-center gap-1.5 text-slate-700">
-                        <Calendar size={12} className="text-blue-500" />
-                        <span className="text-[10px] font-black">{new Date(item.work_orders?.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
+                    
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        {getStatusBadge(item)}
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">WO: {item.work_orders?.wo_number}</span>
+                        <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">ITEM: {item.item_code}</span>
                       </div>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-xl group-hover:bg-blue-50/50 transition-colors">
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Assigned To</p>
-                      <div className="flex items-center gap-1.5 text-slate-700">
-                        <Truck size={12} className="text-blue-500" />
-                        <span className="text-[10px] font-black italic truncate">
-                          {(() => {
-                            const jos = (item.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-                            if (jos.length === 0) return 'Waiting Assignment';
-                            
-                            const firstJo = jos[0];
-                            const transName = firstJo.transporter?.name || 'Assigned';
-                            const joStatus = firstJo.status?.toUpperCase() || '';
-                            
-                            // Check for completion first
-                            if (['COMPLETED', 'DONE', 'READY_FOR_BILLING', 'VERIFIED'].includes(joStatus)) {
-                               return `${transName} - COMPLETED`;
-                            }
-
-                            if (jos.length > 1) return `${jos.length} Units Assigned`;
-                            
-                            if (joStatus.startsWith('MENUJU') || joStatus.startsWith('TIBA') || joStatus === 'DALAM PERJALANAN' || joStatus === 'IN_PROGRESS' || joStatus === 'PICKING_UP' || joStatus === 'DELIVERING' || joStatus === 'START JOURNEY') {
-                              return `${transName} - ON JOURNEY`;
-                            }
-                            
-                            if (joStatus === 'MENUNGGU MULAI / START' || joStatus === 'MENUNGGU BERANGKAT' || firstJo.driver_response === 'accepted') {
-                              return `${transName} - WAITING START`;
-                            }
-                            
-                            return transName;
-                          })()}
-                        </span>
+                      
+                      <h3 className="text-lg font-bold text-slate-900 truncate pr-4">
+                        {item.work_orders?.md_entities?.legal_name || item.work_orders?.md_entities?.name}
+                      </h3>
+                      
+                      <div className="flex flex-wrap items-center gap-6 mt-3">
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Calendar size={14} className="text-slate-400" />
+                          <span className="text-sm font-medium">{new Date(item.work_orders?.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Truck size={14} className="text-slate-400" />
+                          <span className="text-sm font-medium truncate max-w-[200px] xl:max-w-[300px]">
+                            {(() => {
+                              const jos = (item.job_orders || []).filter((j: any) => j.status !== 'cancelled');
+                              if (jos.length === 0) return 'Waiting Assignment';
+                              
+                              const firstJo = jos[0];
+                              const transName = firstJo.transporter?.name || 'Assigned';
+                              const joStatus = firstJo.status?.toUpperCase() || '';
+                              
+                              if (['COMPLETED', 'DONE', 'READY_FOR_BILLING', 'VERIFIED'].includes(joStatus)) {
+                                 return `${transName} - COMPLETED`;
+                              }
+                              if (jos.length > 1) return `${jos.length} Units Assigned`;
+                              if (joStatus.startsWith('MENUJU') || joStatus.startsWith('TIBA') || joStatus === 'DALAM PERJALANAN' || joStatus === 'IN_PROGRESS' || joStatus === 'PICKING_UP' || joStatus === 'DELIVERING' || joStatus === 'START JOURNEY') {
+                                return `${transName} - ON JOURNEY`;
+                              }
+                              if (joStatus === 'MENUNGGU MULAI / START' || joStatus === 'MENUNGGU BERANGKAT' || firstJo.driver_response === 'accepted') {
+                                return `${transName} - WAITING START`;
+                              }
+                              
+                              return transName;
+                            })()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Right: Actions */}
+                  <div className="w-full lg:w-48 shrink-0 flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-100 pt-4 lg:pt-0 lg:pl-6">
                     {(() => {
                       const status = item.status?.toLowerCase();
                       const jos = item.job_orders || [];
@@ -581,17 +570,15 @@ const filteredItems = useMemo(() => {
                         
                         if (isFinal) {
                           return (
-                            <div className="flex-1 h-12 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 border border-emerald-100">
-                                <ShieldCheck size={14} /> Ready for HQ Finance
+                            <div className="w-full h-10 bg-emerald-50 text-emerald-700 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 border border-emerald-200">
+                                <ShieldCheck size={16} /> HQ Finance
                             </div>
                           );
                         }
 
                         return (
-                          <Link href="/sbu/trucking/completed" className="flex-1">
-                            <Button 
-                              className="w-full h-12 bg-slate-900 hover:bg-blue-900/40 text-white border border-slate-700 hover:border-blue-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-slate-900/20"
-                            >
+                          <Link href="/sbu/trucking/completed" className="w-full">
+                            <Button className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2">
                               DOCS & COST <ExternalLink size={14} />
                             </Button>
                           </Link>
@@ -600,22 +587,18 @@ const filteredItems = useMemo(() => {
 
                       if (anyAccepted) {
                         return (
-                          <Link href={`/sbu/trucking/tracking?jo=${jos.find((j:any) => j.driver_response === 'accepted' || j.status === 'in_progress')?.jo_number || jos[0]?.jo_number}`} className="flex-1">
-                            <Button 
-                              className="w-full h-12 bg-slate-900 hover:bg-emerald-900/40 text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-slate-900/20"
-                            >
+                          <Link href={`/sbu/trucking/tracking?jo=${jos.find((j:any) => j.driver_response === 'accepted' || j.status === 'in_progress')?.jo_number || jos[0]?.jo_number}`} className="w-full">
+                            <Button className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2">
                               TRACK MISSION <Activity size={14} />
                             </Button>
                           </Link>
                         );
                       }
                       
-                      // [AI] Rejected items get VIEW-only button
                       if (item.status?.toUpperCase() === 'HANDOVER_REJECTED') {
                         return (
                           <Button 
                             onClick={() => {
-                              // Build a WO-like object for the RejectedViewModal
                               setSelectedRejectedItem({
                                 id: item.work_orders?.id,
                                 wo_number: item.work_orders?.wo_number,
@@ -628,40 +611,48 @@ const filteredItems = useMemo(() => {
                               });
                               setShowRejectedModal(true);
                             }}
-                            className="flex-1 h-12 bg-slate-900 hover:bg-rose-900/40 text-white border border-slate-700 hover:border-rose-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-slate-900/20"
+                            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2"
                           >
-                            <Eye size={14} /> VIEW <ArrowRight size={14} />
+                            <Eye size={14} /> VIEW
                           </Button>
                         );
                       }
 
-                      // Simplified: only show EDIT button on card
                       if (item.status?.toUpperCase() === 'ASSIGNED' || isHandoverApproved) {
-                        // [AI] Check if all JOs are fully assigned (have fleet + driver)
                         const allJOsAssigned = jos.length > 0 && jos.every((j: any) => j.fleet_id && j.driver_id);
                         const isConfirmedAssigned = item.item_data?.confirmed_assigned === true;
                         
                         if (allJOsAssigned || isConfirmedAssigned) {
-                          // Show SEND LINK TO DRIVERS button
                           return (
                             <Button 
                               onClick={() => {
                                 const assignedJOs = jos.filter((j: any) => j.fleet_id && j.driver_id);
                                 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://www.sentralogis.com');
                                 for (const jo of assignedJOs) {
-                                  const driverPhone = jo.driver_phone || '';
-                                  const driverName = 'Driver';
+                                  const driver = jo.driver;
+                                  const driverPhone = driver?.phone || '';
+                                  const driverName = driver?.name || 'Driver';
                                   if (!driverPhone) continue;
                                   let formattedPhone = driverPhone.replace(/\D/g, '');
                                   if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.substring(1);
-                                  const link = `${baseUrl}/jo/${jo.driver_link_token || jo.id}`;
-                                  const msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number || item.item_code}): ${link}`;
+                                  
+                                  const isInternal = driver?.md_entities?.is_vendor === false;
+                                  let link, msg;
+                                  
+                                  if (isInternal) {
+                                    link = `${baseUrl}/driver/portal`;
+                                    msg = `Halo ${driverName}, Anda mendapat tugas baru (${jo.jo_number || item.item_code}). Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
+                                  } else {
+                                    link = `${baseUrl}/driver/response?token=${jo.wa_token}&wo=${jo.id}`;
+                                    msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number || item.item_code}): ${link}`;
+                                  }
+                                  
                                   window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
                                 }
                               }}
-                              className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 hover:border-emerald-400 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/30 active:scale-95"
+                              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
                             >
-                              <MessageCircle size={14} /> SEND LINK TO DRIVERS <ArrowRight size={14} />
+                              <MessageCircle size={14} /> LINK TO DRIVERS
                             </Button>
                           );
                         }
@@ -669,9 +660,9 @@ const filteredItems = useMemo(() => {
                         return (
                           <Button 
                             onClick={() => { setSelectedItemForAssignment(item); setShowAssignmentModal(true); }}
-                            className="flex-1 h-12 bg-slate-900 hover:bg-emerald-900/40 text-white border border-slate-700 hover:border-emerald-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-slate-900/20"
+                            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2"
                           >
-                            {isHandoverApproved ? `MANAGE ${maxJOCount} JO(S)` : 'MANAGE ASSIGNMENTS'} <ArrowRight size={14} />
+                            {isHandoverApproved ? `MANAGE ${maxJOCount} JO(S)` : 'MANAGE'} <ArrowRight size={14} />
                           </Button>
                         );
                       }
@@ -679,7 +670,7 @@ const filteredItems = useMemo(() => {
                       return (
                         <Button 
                           onClick={() => { setSelectedItemForAssignment(item); setShowAssignmentModal(true); }}
-                          className="flex-1 h-12 bg-slate-900 hover:bg-indigo-900/40 text-white border border-slate-700 hover:border-indigo-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-slate-900/20"
+                          className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2"
                         >
                           EDIT <ArrowRight size={14} />
                         </Button>

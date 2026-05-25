@@ -130,8 +130,8 @@ export default function SBUDriverPerformancePage() {
         supabase.from('driver_attendance')
           .select('id, driver_id, fleet_id, check_in, status, md_fleets(plate_number)')
           .in('driver_id', driverIds)
-          .eq('status', 'CHECK_IN')
-          .gte('check_in', today),
+          .gte('check_in', today)
+          .order('check_in', { ascending: false }),
         supabase.from('fleet_inspections')
           .select('id, driver_id, total_score, status, created_at, md_fleets(plate_number)')
           .in('driver_id', driverIds)
@@ -139,7 +139,7 @@ export default function SBUDriverPerformancePage() {
           .order('created_at', { ascending: false }),
       ]);
       const attMap: Record<string, any> = {};
-      (attRes.data || []).forEach(a => { attMap[a.driver_id] = a; });
+      (attRes.data || []).forEach(a => { if (!attMap[a.driver_id]) attMap[a.driver_id] = a; });
       const inspMap: Record<string, any> = {};
       (inspRes.data || []).forEach(i => { if (!inspMap[i.driver_id]) inspMap[i.driver_id] = i; });
       const merged = (internalDrivers || []).map(d => ({
@@ -553,9 +553,14 @@ export default function SBUDriverPerformancePage() {
                         </td>
                         <td className="px-4 py-3">
                           {d.attendance ? (
-                            <span className="text-xs font-medium text-emerald-600">
-                              {new Date(d.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                            <div>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${d.attendance.status === 'CHECK_IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                {d.attendance.status === 'CHECK_IN' ? 'CHECK IN' : 'CHECK OUT'}
+                              </span>
+                              <div className="text-[10px] font-medium text-slate-500 mt-1.5 ml-1">
+                                {new Date(d.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
                           ) : (
                             <span className="text-xs text-slate-400">Belum absen</span>
                           )}
@@ -635,9 +640,13 @@ export default function SBUDriverPerformancePage() {
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Absen</p>
                           {day.attendance ? (
                             <div className="flex items-center gap-2">
-                              <CheckCircle size={14} className="text-emerald-500" />
-                              <span className="text-xs text-slate-700">
-                                {new Date(day.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - {day.attendance.md_fleets?.plate_number || '-'}
+                              {day.attendance.status === 'CHECK_IN' ? (
+                                <CheckCircle size={14} className="text-emerald-500" />
+                              ) : (
+                                <XCircle size={14} className="text-rose-500" />
+                              )}
+                              <span className={`text-xs ${day.attendance.status === 'CHECK_IN' ? 'text-slate-700' : 'text-rose-600 font-medium'}`}>
+                                {day.attendance.status === 'CHECK_IN' ? 'CHECK IN' : 'CHECK OUT'} ({new Date(day.attendance.check_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}) - {day.attendance.md_fleets?.plate_number || '-'}
                               </span>
                             </div>
                           ) : (

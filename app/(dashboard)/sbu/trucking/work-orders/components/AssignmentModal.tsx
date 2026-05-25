@@ -34,6 +34,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const [transporterFleets, setTransporterFleets] = useState<any[]>([]);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
   const [driverReadiness, setDriverReadiness] = useState<Record<string, { ready: boolean; reason: string; hasAttendance: boolean; hasInspection: boolean; inspectionStatus: string }>>({});
+  const [driverAllowances, setDriverAllowances] = useState<any[]>([]);
 
   const [assignments, setAssignments] = useState<any[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
@@ -108,6 +109,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
               brand,
               model,
               status,
+              fleet_type_id,
               md_fleet_types (type_name)
             `)
             .eq('is_active', true)
@@ -116,8 +118,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             
             // Exclude fleets with active jobs if any exist
             if (activeJobFleets.length > 0) {
-              const quotedFleets = activeJobFleets.map((id: string) => `'${id}'`).join(',');
-              query = query.not('id', 'in', `(${quotedFleets})`);
+              const unquotedFleets = activeJobFleets.join(',');
+              query = query.not('id', 'in', `(${unquotedFleets})`);
             }
             return query;
           })(),
@@ -125,15 +127,15 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           // Only show drivers who are available or on_duty (checked in but not yet assigned)
           (async () => {
             let query = supabase.from('md_drivers')
-              .select('*')
+              .select('*, md_entities(is_vendor)')
               .eq('is_active', true)
               .eq('tenant_id', tenantId)
               .in('status', ['available', 'on_duty']);
             
             // Exclude drivers with active jobs if any exist
             if (activeJobDrivers.length > 0) {
-              const quotedDrivers = activeJobDrivers.map((id: string) => `'${id}'`).join(',');
-              query = query.not('id', 'in', `(${quotedDrivers})`);
+              const unquotedDrivers = activeJobDrivers.join(',');
+              query = query.not('id', 'in', `(${unquotedDrivers})`);
             }
             return query;
           })(),
@@ -150,7 +152,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           // This ensures the dropdown always shows the currently-assigned fleet even if it's on_road
           assignedFleetIds.length > 0
             ? supabase.from('md_fleets').select(`
-                id, entity_id, fleet_code, plate_number, brand, model, status,
+                id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id,
                 md_fleet_types (type_name)
               `).in('id', assignedFleetIds)
             : Promise.resolve({ data: [], error: null }),
@@ -158,7 +160,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           // [AI] Fetch already-assigned drivers by their IDs regardless of is_working status
           // This ensures the dropdown always shows the currently-assigned driver even if is_working=true
           assignedDriverIds.length > 0
-            ? supabase.from('md_drivers').select('*').in('id', assignedDriverIds)
+            ? supabase.from('md_drivers').select('*, md_entities(is_vendor)').in('id', assignedDriverIds)
             : Promise.resolve({ data: [], error: null })
         ]);
 
@@ -181,25 +183,33 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         if (assignedDriverRes?.error) console.error("[AssignmentModal] Error fetching assigned drivers:", { code: assignedDriverRes.error.code, message: assignedDriverRes.error.message });
 
         // [AI] Merge assigned fleets/drivers into the available lists so dropdowns always show them
-        const availableFleets = fleetRes.data || [];
+        let availableFleets = fleetRes.data || [];
         const assignedFleets = assignedFleetRes?.data || [];
         const availableFleetIds = new Set(availableFleets.map(f => f.id));
         // Add assigned fleets that weren't in the available query (e.g. status=on_road)
         for (const af of assignedFleets) {
           if (!availableFleetIds.has(af.id)) {
             availableFleets.push(af);
+            availableFleetIds.add(af.id);
           }
         }
         
-        const availableDrivers = driverRes.data || [];
+        // Final deduplication for fleets just to be safe against duplicate keys
+        availableFleets = availableFleets.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+        
+        let availableDrivers = driverRes.data || [];
         const assignedDriversList = assignedDriverRes?.data || [];
         const availableDriverIds = new Set(availableDrivers.map(d => d.id));
         // Add assigned drivers that weren't in the available query (e.g. is_working=true)
         for (const ad of assignedDriversList) {
           if (!availableDriverIds.has(ad.id)) {
             availableDrivers.push(ad);
+            availableDriverIds.add(ad.id);
           }
         }
+        
+        // Final deduplication for drivers just to be safe
+        availableDrivers = availableDrivers.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
 
         setFleets(availableFleets);
         setDrivers(availableDrivers);
@@ -333,10 +343,35 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           }))
         });
         setAssignments(finalAssignments);
+        const missingFleetIds = activeJobFleets.filter(id => !availableFleets.some(f => f.id === id));
+        if (missingFleetIds.length > 0) {
+           const { data: missingFleets } = await supabase.from('md_fleets').select(`
+             id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id,
+             md_fleet_types (type_name)
+           `).in('id', missingFleetIds);
+           if (missingFleets) {
+              setFleets(prev => {
+                const combined = [...prev, ...missingFleets];
+                return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+              });
+           }
+        }
+        
+        // [AI] Fetch driver allowances (ignore 404 if table doesn't exist yet)
+        try {
+          const { data: allowances, error: allowErr } = await supabase
+            .from('md_driver_allowances')
+            .select('*, md_fleet_types(type_name)')
+            .eq('tenant_id', tenantId)
+            .eq('is_active', true);
+          if (allowances && !allowErr) setDriverAllowances(allowances);
+        } catch(e) {
+          // Table probably doesn't exist, ignore
+        }
 
       } catch (err: any) {
-        console.error('[AssignmentModal] Fetch error:', err);
-        toast.error('Gagal memuat data dropdown: ' + (err.message || 'Unknown error'));
+        console.error('[AssignmentModal] Error:', err);
+        toast.error('Gagal mengambil data referensi: ' + err.message);
       } finally {
         setLoading(false);
       }
@@ -351,6 +386,30 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     if (field === 'driver_id') {
       const driver = drivers.find(d => d.id === value);
       if (driver) updated[index].driver_phone = driver.phone;
+    }
+    
+    if (field === 'fleet_id') {
+       const fleet = fleets.find(f => f.id === value);
+       if (fleet) {
+          const origin = (itemData.origin_city || itemData.origin_name || itemData.origin_location_name || '').toUpperCase();
+          const dest = (itemData.destination_city || itemData.destination_name || itemData.destination_location_name || '').toUpperCase();
+          
+          const found = driverAllowances.find(a => 
+            (a.origin_city?.toUpperCase() === origin || origin.includes(a.origin_city?.toUpperCase()) || a.origin_city?.toUpperCase().includes(origin)) &&
+            (a.destination_city?.toUpperCase() === dest || dest.includes(a.destination_city?.toUpperCase()) || a.destination_city?.toUpperCase().includes(dest)) &&
+            a.fleet_type_id === fleet.fleet_type_id
+          );
+          
+          if (found) {
+             updated[index].advance_amount = found.amount;
+             updated[index].save_to_master = false;
+          } else {
+             if (!updated[index].advance_amount) {
+                updated[index].advance_amount = 0;
+             }
+             updated[index].save_to_master = true;
+          }
+       }
     }
     
     if (field === 'transporter_id') {
@@ -591,6 +650,38 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           console.log(`[AssignmentModal] Inserted new JO: ${joNumber}`);
         }
 
+        // [AI] Save to Master Uang Jalan if requested
+        if (assign.save_to_master && !isVendor && assign.fleet_id) {
+          try {
+            const fleet = fleets.find(f => f.id === assign.fleet_id);
+            if (fleet && fleet.fleet_type_id) {
+              const origin = (itemData.origin_city || itemData.origin_name || itemData.origin_location_name || '').toUpperCase();
+              const dest = (itemData.destination_city || itemData.destination_name || itemData.destination_location_name || '').toUpperCase();
+              
+              if (origin && dest && assign.advance_amount > 0) {
+                const { error: masterErr } = await supabase.from('md_driver_allowances').insert({
+                  tenant_id: tenantId,
+                  origin_city: origin,
+                  destination_city: dest,
+                  fleet_type_id: fleet.fleet_type_id,
+                  amount: Number(assign.advance_amount) || 0,
+                  is_active: true
+                });
+                if (masterErr) {
+                  // Ignore unique constraint errors
+                  if (masterErr.code !== '23505') {
+                    console.warn('[AssignmentModal] Failed to save master allowance:', masterErr);
+                  }
+                } else {
+                  console.log(`[AssignmentModal] Saved allowance to master data for ${origin} - ${dest}`);
+                }
+              }
+            }
+          } catch (masterEx) {
+            console.warn('[AssignmentModal] Exception saving master allowance:', masterEx);
+          }
+        }
+
         // 2. Sync Routes (NON-BLOCKING: RLS for job_routes can be restrictive for non-HQ roles)
         if (joId) {
           console.log(`[AssignmentModal] Attempting route sync for JO ID: ${joId}`);
@@ -718,47 +809,47 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(15,23,42,0.15)] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
         
         {/* Header Section */}
-        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <div className="flex items-center gap-6">
-             <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center border border-indigo-100 rotate-3 transition-transform">
-                <Activity size={28} />
+        <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+             <div className="w-10 h-10 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center border border-slate-200">
+                <Activity size={20} />
              </div>
              <div>
-                <h2 className="text-2xl font-black text-indigo-950 italic uppercase tracking-tighter">Assignment Console</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Assignment Console</h2>
                 <div className="flex items-center gap-2 mt-1">
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.work_orders.wo_number}</p>
+                   <p className="text-xs font-medium text-slate-500">{item.work_orders.wo_number}</p>
                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                    <p className="text-xs font-medium text-slate-600">
                       {isHandoverApproved ? `${maxJOCount}/${unitCount} Units (Locked)` : `${unitCount} Fleet Required`}
                     </p>
                 </div>
              </div>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-slate-50 rounded-2xl transition-all text-slate-400 hover:text-slate-700">
-            <X size={24} />
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-slate-700">
+            <X size={20} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/50">
-          {/* WO Summary Card - ENHANCED HEADER */}
+          {/* WO Summary Card - FORMAL ENHANCED HEADER */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-             <div className="md:col-span-3 bg-white border border-slate-100 rounded-[2rem] p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center space-y-6">
+             <div className="md:col-span-3 bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-center space-y-6">
                  <div className="flex items-center gap-4">
-                    <div className="px-4 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] italic">
+                    <div className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded text-xs font-semibold">
                        {itemData.vehicle_type_name || itemData.vehicle_type || '-'}
                     </div>
                     {isHandoverApproved && (
-                      <div className="px-4 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] italic flex items-center gap-1.5">
-                        <ShieldCheck size={12} /> HANDOVER APPROVED — {maxJOCount} JO(s) LOCKED
+                      <div className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-xs font-semibold flex items-center gap-1.5">
+                        <ShieldCheck size={14} /> HANDOVER APPROVED — {maxJOCount} JO(s) LOCKED
                       </div>
                     )}
-                    <div className="flex flex-wrap items-center gap-2 text-slate-600 bg-slate-50 px-4 py-1.5 rounded-xl border border-slate-100">
-                      <MapPin size={14} className="text-rose-500" />
-                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-600 bg-white px-3 py-1 rounded border border-slate-200">
+                      <MapPin size={14} className="text-slate-400" />
+                      <div className="flex items-center gap-2 text-xs font-medium">
                         {(itemData.stops || []).map((stop: any, sIdx: number) => (
                            <span key={sIdx} className="flex items-center">
                               {stop.location_name || stop.name || '-'}
@@ -777,13 +868,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 </div>
                 
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">CUSTOMER / BILL TO</p>
+                   <p className="text-xs font-semibold text-slate-500 mb-1">CUSTOMER / BILL TO</p>
                    <div className="flex items-baseline gap-3">
-                      <h3 className="text-3xl font-black text-indigo-950 uppercase italic tracking-tighter">
+                      <h3 className="text-xl font-bold text-slate-900">
                          {item.work_orders.md_entities.name}
                       </h3>
                       {item.work_orders.md_entities.legal_name && (
-                        <span className="text-sm font-bold text-slate-400 uppercase italic">
+                        <span className="text-sm font-medium text-slate-500">
                            ({item.work_orders.md_entities.legal_name})
                         </span>
                       )}
@@ -791,25 +882,25 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 </div>
              </div>
 
-             <div className="bg-emerald-50/60 border border-emerald-100 rounded-[2rem] p-8 flex flex-col justify-center items-center text-center shadow-[0_4px_25px_rgba(16,185,129,0.03)]">
-                <div className="w-12 h-12 bg-emerald-100/50 rounded-full flex items-center justify-center mb-4 border border-emerald-200/30">
-                   <DollarSign size={24} className="text-emerald-600" />
+             <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-center items-center text-center shadow-sm">
+                <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
+                   <DollarSign size={20} className="text-emerald-600" />
                 </div>
-                <p className="text-[10px] font-black text-emerald-700 uppercase tracking-[0.2em] mb-1">HARGA JUAL (DEALS)</p>
-                <p className="text-3xl font-black text-emerald-600 italic tracking-tighter">{formatRupiah(dealPrice)}</p>
-                <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mt-1">PER FLEET UNIT</p>
+                <p className="text-xs font-semibold text-slate-500 mb-1">HARGA JUAL (DEALS)</p>
+                <p className="text-2xl font-bold text-slate-900">{formatRupiah(dealPrice)}</p>
+                <p className="text-xs font-medium text-slate-400 mt-1">PER FLEET UNIT</p>
              </div>
           </div>
 
-          <div className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                 <h3 className="text-xs font-black text-indigo-950 uppercase tracking-[0.3em] italic">
+          <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                 <h3 className="text-sm font-semibold text-slate-900">
                    {isHandoverApproved ? `Locked Units (${maxJOCount} of ${unitCount} Original)` : 'Deploy Units'}
                  </h3>
                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Syncing</span>
+                       <span className="text-xs font-medium text-slate-500">Live Syncing</span>
                     </div>
                  </div>
               </div>
@@ -869,52 +960,52 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                     const statusFlag = assign.id ? getStatusFlag(assign.status, assign.job_routes) : null;
 
                     return (
-                      <div key={idx} className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.02)] hover:border-indigo-100/80 transition-all group relative overflow-hidden">
+                      <div key={idx} className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm hover:border-slate-300 transition-colors relative overflow-hidden">
                         {statusFlag && (
-                           <div className={`absolute top-0 right-0 px-6 py-2 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest border-l border-b ${statusFlag.color} shadow-sm z-10`}>
+                           <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-lg text-[10px] font-semibold uppercase border-l border-b ${statusFlag.color}`}>
                               {statusFlag.text}
                            </div>
                         )}
                         
-                        <div className="absolute top-0 left-0 px-4 py-2 bg-indigo-50 text-indigo-600 border-r border-b border-indigo-100 rounded-br-2xl text-[8px] font-black uppercase tracking-[0.2em] italic shadow-sm z-10">
+                        <div className="absolute top-0 left-0 px-3 py-1 bg-slate-100 text-slate-600 border-r border-b border-slate-200 rounded-br-lg text-[10px] font-semibold uppercase">
                             Unit {idx + 1} - {itemData.vehicle_type_name || itemData.vehicle_type}
                         </div>
 
                         {assign.id && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100 overflow-hidden">
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
                              <div 
-                               className="h-full bg-blue-500 transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.3)]" 
+                               className="h-full bg-blue-500 transition-all duration-1000" 
                                style={{ width: `${assign.progress_percent || 0}%` }}
                              />
                           </div>
                         )}
 
-                        <div className="flex flex-wrap items-end gap-6">
-                           <div className="flex-1 min-w-[200px] space-y-2 mt-4">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Vendor / Transporter</label>
+                        <div className="flex flex-wrap items-end gap-4 mt-8">
+                           <div className="flex-1 min-w-[200px] space-y-1">
+                              <label className="text-xs font-medium text-slate-500">Vendor / Transporter</label>
                               <select
                                 value={assign.transporter_id || ""}
                                 onChange={(e) => handleAssignmentChange(idx, 'transporter_id', e.target.value)}
-                                className="w-full h-12 px-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                               >
-                                <option value="" className="not-italic bg-white">Pilih Vendor / Transporter</option>
+                                <option value="">Pilih Vendor / Transporter</option>
                                 {assign.transporter_id && !transporters.some(t => t.id === assign.transporter_id) && (
-                                   <option value={assign.transporter_id} className="not-italic text-slate-500 bg-white">Legacy Transporter (ID: {assign.transporter_id.substring(0,6)}...)</option>
+                                   <option value={assign.transporter_id} className="text-slate-500">Legacy Transporter (ID: {assign.transporter_id.substring(0,6)}...)</option>
                                 )}
                                 {transporters.map(t => (
-                                  <option key={t.id} value={t.id} className="not-italic bg-white">{t.name}</option>
+                                  <option key={t.id} value={t.id}>{t.name}</option>
                                 ))}
                               </select>
                            </div>
 
-                           <div className="flex-1 min-w-[150px] space-y-2 mt-4">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Fleet / Armada</label>
+                           <div className="flex-1 min-w-[150px] space-y-1">
+                              <label className="text-xs font-medium text-slate-500">Fleet / Armada</label>
                               <select
                                 value={assign.fleet_id ? String(assign.fleet_id) : ""}
                                 onChange={(e) => handleAssignmentChange(idx, 'fleet_id', e.target.value)}
-                                className="w-full h-12 px-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                               >
-                                <option value="" className="not-italic bg-white">Pilih Armada</option>
+                                <option value="">Pilih Armada</option>
                                 {(() => {
                                   const requestedType = (itemData.vehicle_type_name || itemData.vehicle_type || '').toUpperCase();
                                   const selectedTrans = transporters.find(t => t.id === assign.transporter_id);
@@ -927,12 +1018,12 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                     filteredFleets.unshift(assignedFleet);
                                   }
                                   if (filteredFleets.length === 0) {
-                                    return <option disabled className="text-rose-500 font-bold italic bg-white">Maaf, Anda belum memiliki unit {requestedType}</option>;
+                                    return <option disabled className="text-rose-500 font-medium">Maaf, Anda belum memiliki unit {requestedType}</option>;
                                   }
                                   return filteredFleets.map(f => {
                                     const isBusy = f.status === 'on_road' && assign.fleet_id !== f.id;
                                     return (
-                                      <option key={f.id} value={f.id} disabled={isBusy} className={`not-italic bg-white ${isBusy ? 'text-rose-500' : 'text-slate-800'}`}>
+                                      <option key={f.id} value={f.id} disabled={isBusy} className={isBusy ? 'text-rose-500' : 'text-slate-800'}>
                                         {f.md_fleet_types?.type_name || 'Fleet'} - {f.plate_number} {isBusy ? ' [BUSY / ON ROAD]' : ` (${f.status?.toUpperCase() || 'AVAILABLE'})`}
                                       </option>
                                     );
@@ -941,14 +1032,14 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                               </select>
                            </div>
 
-                           <div className="flex-1 min-w-[150px] space-y-2 mt-4">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Driver / Sopir</label>
+                           <div className="flex-1 min-w-[150px] space-y-1">
+                              <label className="text-xs font-medium text-slate-500">Driver / Sopir</label>
                               <select
                                 value={assign.driver_id ? String(assign.driver_id) : ""}
                                 onChange={(e) => handleAssignmentChange(idx, 'driver_id', e.target.value)}
-                                className="w-full h-12 px-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                               >
-                                <option value="" className="not-italic bg-white">Pilih Driver</option>
+                                <option value="">Pilih Driver</option>
                                 {(() => {
                                   const selectedTrans = assign.transporter_id ? transporters.find(t => t.id === assign.transporter_id) : null;
                                   const filteredDrivers = drivers.filter(d => {
@@ -964,7 +1055,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                     const readinessLabel = notReady ? ` [${readiness.reason.toUpperCase()}]` : '';
                                     
                                     return (
-                                      <option key={d.id} value={d.id} disabled={isBusy || notReady} className={`not-italic bg-white ${(isBusy || notReady) ? 'text-rose-500' : 'text-slate-800'}`}>
+                                      <option key={d.id} value={d.id} disabled={isBusy || notReady} className={(isBusy || notReady) ? 'text-rose-500' : 'text-slate-800'}>
                                         {d.name} {isBusy ? ' [BUSY / ON ROAD]' : readinessLabel || ` (${d.status?.toUpperCase() || 'AVAILABLE'})`}
                                       </option>
                                     );
@@ -972,17 +1063,17 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                               </select>
                            </div>
 
-                           <div className={`flex-1 min-w-[200px] space-y-2 mt-4 transition-all duration-500 ${isVendor ? 'opacity-100 scale-100' : 'opacity-30 grayscale pointer-events-none'}`}>
-                              <div className="flex justify-between items-center px-1">
-                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Harga Beli (Vendor)</label>
+                           <div className={`flex-1 min-w-[200px] space-y-1 transition-opacity duration-300 ${isVendor ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                              <div className="flex justify-between items-center h-4">
+                                 <label className="text-xs font-medium text-slate-500">Harga Beli (Vendor)</label>
                                  {isVendor && purchasePrice > 0 && (
-                                    <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${marginColor}`}>
+                                    <div className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase ${marginColor}`}>
                                        {marginStatus} {marginPercent.toFixed(1)}%
                                     </div>
                                  )}
                               </div>
                               <div className="relative">
-                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">Rp</span>
+                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">Rp</span>
                                  <input
                                    type="text"
                                    value={formatNumber(assign.purchase_price)}
@@ -991,17 +1082,19 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                      handleAssignmentChange(idx, 'purchase_price', raw ? parseInt(raw, 10) : 0);
                                    }}
                                    disabled={!isVendor}
-                                   className="w-full h-12 pl-10 pr-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                   className="w-full h-10 pl-8 pr-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                                    placeholder="0"
                                  />
                               </div>
                            </div>
 
                            {isVendor && (
-                              <div className="flex-1 min-w-[200px] space-y-2 animate-in slide-in-from-top-2 duration-300">
-                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Harga Jual (Customer)</label>
+                              <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
+                                 <div className="h-4 flex items-center">
+                                    <label className="text-xs font-medium text-slate-500">Harga Jual (Customer)</label>
+                                 </div>
                                  <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">Rp</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">Rp</span>
                                     <input
                                       type="text"
                                       value={formatNumber(assign.base_price)}
@@ -1009,49 +1102,21 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                         const raw = e.target.value.replace(/\D/g, '');
                                         handleAssignmentChange(idx, 'base_price', raw ? parseInt(raw, 10) : 0);
                                       }}
-                                      className="w-full h-12 pl-10 pr-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                      className="w-full h-10 pl-8 pr-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                                       placeholder="0"
                                     />
                                  </div>
                               </div>
-                           )}
+                            )}
 
                             {isOwn && (
                               <>
-                                <div className="flex-1 min-w-[200px] space-y-2 animate-in slide-in-from-top-2 duration-300">
-                                  <div className="flex justify-between items-center px-1">
-                                    <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Bagi Hasil Driver (%)</label>
-                                    {basePrice > 0 && (
-                                      <div className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm bg-blue-50 text-blue-600 border border-blue-100">
-                                        Payout: {formatRupiah(driverPayout)} ({sharePct}%)
-                                      </div>
-                                    )}
+                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
+                                  <div className="h-4 flex items-center">
+                                     <label className="text-xs font-medium text-slate-500">Uang Jalan (Bagi Hasil)</label>
                                   </div>
                                   <div className="relative">
-                                    <input
-                                      type="number"
-                                      defaultValue={assign.driver_share_percentage || 40}
-                                      onChange={(e) => {
-                                        const pct = e.target.value;
-                                        const updated = [...assignments];
-                                        updated[idx] = { ...updated[idx], driver_share_percentage: pct };
-                                        const payout = basePrice * (Number(pct) / 100);
-                                        updated[idx].advance_amount = Math.round(payout * 0.5);
-                                        setAssignments(updated);
-                                      }}
-                                      className="w-full h-12 px-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black text-slate-800 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none cursor-text"
-                                      placeholder="40"
-                                      max="100"
-                                      min="0"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">%</span>
-                                  </div>
-                                </div>
-                               
-                               <div className="flex-1 min-w-[200px] space-y-2 animate-in slide-in-from-top-2 duration-300">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Uang Jalan (Advance)</label>
-                                  <div className="relative">
-                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">Rp</span>
+                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">Rp</span>
                                      <input
                                        type="text"
                                        value={formatNumber(assign.advance_amount)}
@@ -1059,17 +1124,37 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                          const raw = e.target.value.replace(/\D/g, '');
                                          handleAssignmentChange(idx, 'advance_amount', raw ? parseInt(raw, 10) : 0);
                                        }}
-                                       className="w-full h-12 pl-10 pr-4 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-black italic text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all outline-none"
+                                       className="w-full h-10 pl-8 pr-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
                                        placeholder="0"
                                      />
                                   </div>
                                </div>
-                             </>
+
+                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300 flex flex-col justify-end">
+                                  <div className="h-10 flex items-center">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                      <div className="relative flex items-center justify-center">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={assign.save_to_master || false}
+                                          onChange={(e) => handleAssignmentChange(idx, 'save_to_master', e.target.checked)}
+                                          className="peer appearance-none w-4 h-4 border border-slate-300 rounded checked:border-indigo-500 checked:bg-indigo-500 transition-all cursor-pointer"
+                                        />
+                                        <CheckCircle size={12} className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">Simpan Master</span>
+                                        <span className="text-[10px] text-slate-500">Simpan tarif ini ke master data</span>
+                                      </div>
+                                    </label>
+                                  </div>
+                               </div>
+                              </>
                             )}
 
-                           <div className="flex-1 min-w-[50px] space-y-2">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 opacity-0">WA</label>
-                              <div className="flex gap-2">
+                           <div className="flex-1 min-w-[40px] space-y-1 flex flex-col justify-end">
+                              <div className="h-4"></div>
+                              <div className="flex h-10 items-center">
                                  {assign.tracking_token && (
                                     <button
                                        onClick={() => {
@@ -1080,14 +1165,23 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                           let formattedPhone = phone.replace(/\D/g, '');
                                           if (formattedPhone.startsWith('0')) { formattedPhone = '62' + formattedPhone.substring(1); }
                                           const origin = window.location.origin;
-                                          const link = `${origin}/driver/response?token=${assign.wa_token}&wo=${assign.id}`;
-                                          const msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda: ${link}`;
+                                          const isInternal = driver?.md_entities?.is_vendor === false;
+                                          
+                                          let link, msg;
+                                          if (isInternal) {
+                                            link = `${origin}/driver/portal`;
+                                            msg = `Halo ${driverName}, Anda mendapat tugas baru. Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
+                                          } else {
+                                            link = `${origin}/driver/response?token=${assign.wa_token}&wo=${assign.id}`;
+                                            msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda: ${link}`;
+                                          }
+                                          
                                           window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
                                        }}
-                                       className="h-12 w-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center hover:bg-emerald-100 transition-all border border-emerald-200 active:scale-95"
+                                       className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200"
                                        title="Send WA Link"
                                     >
-                                       <MessageCircle size={20} />
+                                       <MessageCircle size={18} />
                                     </button>
                                  )}
                               </div>
@@ -1101,12 +1195,12 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           </div>
         </div>
 
-        <div className="p-6 md:p-8 border-t border-slate-100 bg-white sticky bottom-0 z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="p-6 border-t border-slate-200 bg-white sticky bottom-0 z-10 flex flex-col md:flex-row justify-between items-center gap-6">
            <div className="flex items-center gap-4 text-slate-600">
-              <ShieldCheck size={20} className="text-indigo-600" />
+              <ShieldCheck size={20} className="text-slate-500" />
               <div>
-                 <p className="text-[9px] font-black uppercase tracking-[0.2em] italic text-slate-700">Mission Critical</p>
-                 <p className="text-xs font-bold text-slate-400 italic">Assign units to initiate operational phase</p>
+                 <p className="text-sm font-semibold text-slate-900">Mission Critical</p>
+                 <p className="text-xs text-slate-500">Assign units to initiate operational phase</p>
               </div>
            </div>
 
@@ -1114,7 +1208,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
               <button
                 onClick={handleSaveDraft}
                 disabled={assigning}
-                className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all border border-amber-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="flex-1 md:flex-none px-6 h-10 rounded-md font-medium text-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
                 <Save size={16} /> Save Draft
               </button>
@@ -1123,7 +1217,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                   type="button"
                   onClick={() => handleSave(onHandover)}
                   disabled={assigning}
-                  className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all border border-rose-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                  className="flex-1 md:flex-none px-6 h-10 rounded-md font-medium text-sm bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                 >
                   <AlertTriangle size={16} /> Handover to HQ
                 </button>

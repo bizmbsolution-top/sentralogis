@@ -471,6 +471,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       submenu: [
         { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
         { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
+        { label: 'Tarif Uang Jalan', icon: '💵', href: '/tenant/master/driver-allowances' },
         { label: 'Fleets', icon: '🚚', href: '/tenant/master/fleets' },
         { label: 'Drivers', icon: '👤', href: '/tenant/master/drivers' },
       ]
