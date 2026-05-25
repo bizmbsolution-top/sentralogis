@@ -124,9 +124,8 @@ export function printCashAdvanceSlip(jo: any, ca?: any) {
 
     // Bagi hasil (profit sharing) — calculate if driver_payment_amount = 0
     const basePrice = Number(jo.base_price || 0);
-    const sharePct = Number(jo.driver_share_percentage || 0);
-    const driverPayout = Number(jo.driver_payment_amount || 0) || (basePrice > 0 && sharePct > 0 ? Math.round(basePrice * sharePct / 100) : 0);
-    const sisaPelunasan = Math.max(0, driverPayout - amountVal); // [AI] Sisa setelah POD: total bagi hasil - advance yang sudah diterima
+    const driverPayout = amountVal;
+    const sisaPelunasan = Number(jo.driver_payment_amount || 0); // Jika ada pelunasan tambahan
 
     // Build WO items rows
     let woItemsHtml = '';
@@ -232,11 +231,9 @@ th{background:#000;color:#fff;font-weight:700;text-align:center}
 
 <div class="dashed"></div>
 
-<div class="section-title">Bagi Hasil (Profit Sharing)</div>
-<div class="row"><span class="label">Nilai Kontrak</span><span class="value">: Rp ${formatThousand(basePrice)}</span></div>
-<div class="row"><span class="label">Persentase Driver</span><span class="value">: ${sharePct}%</span></div>
-<div class="row"><span class="label">Nilai Bagi Hasil Driver</span><span class="value">: Rp ${formatThousand(driverPayout)}</span></div>
-<div class="row"><span class="label">Sisa Pelunasan (POD)</span><span class="value">: Rp ${formatThousand(sisaPelunasan)}</span></div>
+<div class="section-title">Rincian Hak Driver</div>
+<div class="row"><span class="label">Nilai Kontrak (Customer)</span><span class="value">: Rp ${formatThousand(basePrice)}</span></div>
+<div class="row"><span class="label">Total Hak Driver</span><span class="value">: Rp ${formatThousand(driverPayout)}</span></div>
 
 <div class="dashed"></div>
 
