@@ -288,7 +288,7 @@ export default function DriverPortal() {
         .from('job_orders')
         .select('*, job_routes(distance_km), wo_items(item_code, item_data)')
         .eq('driver_id', driver.id)
-        .in('status', ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI'])
+        .or('status.ilike.%SELESAI%,status.eq.COMPLETED,status.eq.DONE,status.eq.INVOICED,status.eq.PAID')
         .order('completed_at', { ascending: false })
         .limit(50);
         
@@ -296,7 +296,7 @@ export default function DriverPortal() {
         .from('job_orders')
         .select('*', { count: 'exact', head: true })
         .eq('driver_id', driver.id)
-        .in('status', ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI']);
+        .or('status.ilike.%SELESAI%,status.eq.COMPLETED,status.eq.DONE,status.eq.INVOICED,status.eq.PAID');
 
       setCompletedJobs(completedJobs || []);
       setTotalCompletedJobsCount(count || 0);
@@ -312,7 +312,7 @@ export default function DriverPortal() {
           const routeDist = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
           totalDistance += routeDist;
           
-          const hakDriver = Number((job.base_price || 0) * (job.driver_share_percentage || 0) / 100);
+          const hakDriver = Number(job.advance_amount || 0);
           sumHak += hakDriver;
 
           const advancePaid = job.advance_status === 'paid' ? Number(job.advance_amount || 0) : 0;
