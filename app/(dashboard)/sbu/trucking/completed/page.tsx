@@ -75,7 +75,7 @@ function DocumentsAndFinancesContent() {
           is_doc_finished, is_cost_finished, created_at, updated_at
         `)
         .in('status', [
-            'accepted', 'ORDER DITERIMA', 
+            'accepted', 'ORDER DITERIMA', 'DITERIMA',
             'in_progress', 'DALAM PERJALANAN', 'START JOURNEY',
             'completed', 'done', 'PEKERJAAN SELESAI', 
             'ready_for_billing', 'verified', 'VERIFIED',
@@ -204,10 +204,10 @@ function DocumentsAndFinancesContent() {
 
   const stats = useMemo(() => ({
     total: searchedJobs.length,
-    accepted: searchedJobs.filter(j => ['ACCEPTED', 'ORDER DITERIMA'].includes(j.status?.toUpperCase())).length,
+    accepted: searchedJobs.filter(j => ['ACCEPTED', 'ORDER DITERIMA', 'DITERIMA'].includes(j.status?.toUpperCase())).length,
     onRoad: searchedJobs.filter(j => ['ASSIGNED', 'MENUNGGU BERANGKAT', 'PICKING_UP', 'DELIVERING', 'IN_PROGRESS', 'DALAM PERJALANAN', 'START JOURNEY'].includes(j.status?.toUpperCase())).length,
-    jobDone: searchedJobs.filter(j => ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())).length,
-    readyForBilling: searchedJobs.filter(j => ['READY_FOR_BILLING', 'VERIFIED'].includes(j.status?.toUpperCase())).length
+    jobDone: searchedJobs.filter(j => ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase()) && !j.is_doc_finished).length,
+    readyForBilling: searchedJobs.filter(j => j.is_doc_finished || ['READY_FOR_BILLING', 'VERIFIED'].includes(j.status?.toUpperCase())).length
   }), [searchedJobs]);
 
   const filteredJobs = useMemo(() => {
@@ -217,10 +217,10 @@ function DocumentsAndFinancesContent() {
         if (['INVOICED', 'PAID'].includes(s)) return false;
 
         if (activeFilter === 'all') return true;
-        if (activeFilter === 'accepted') return s === 'ACCEPTED' || s === 'ORDER DITERIMA';
+        if (activeFilter === 'accepted') return s === 'ACCEPTED' || s === 'ORDER DITERIMA' || s === 'DITERIMA';
         if (activeFilter === 'on-road') return ['ASSIGNED', 'MENUNGGU BERANGKAT', 'PICKING_UP', 'DELIVERING', 'IN_PROGRESS', 'DALAM PERJALANAN', 'START JOURNEY'].includes(s);
-        if (activeFilter === 'done') return ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'AWAITING_AUDIT'].includes(s);
-        if (activeFilter === 'billing') return ['READY_FOR_BILLING', 'VERIFIED'].includes(s);
+        if (activeFilter === 'done') return ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'AWAITING_AUDIT'].includes(s) && !j.is_doc_finished;
+        if (activeFilter === 'billing') return j.is_doc_finished || ['READY_FOR_BILLING', 'VERIFIED'].includes(s);
         return true;
     });
   }, [searchedJobs, activeFilter]);
@@ -337,7 +337,7 @@ function DocumentsAndFinancesContent() {
                      </div>
                      <div className="flex flex-col items-end gap-2">
                         {/* Status Payout */}
-                        {(['accepted', 'ORDER DITERIMA'].includes(job.status?.toLowerCase())) && job.advance_status !== 'paid' && (
+                        {(['accepted', 'order diterima', 'diterima'].includes(job.status?.toLowerCase() || '')) && job.advance_status !== 'paid' && (
                             <Badge className={`border font-black text-[8px] px-3 py-1 uppercase tracking-widest italic animate-pulse ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                                 {job.md_fleets?.md_entities?.is_vendor ? 'AWAITING DP (VENDOR)' : 'AWAITING SETTLEMENT (INTERNAL)'}
                             </Badge>
@@ -356,6 +356,11 @@ function DocumentsAndFinancesContent() {
                         {/* Status Cost Audit */}
                         {job.has_pending_audit && (
                             <Badge className="bg-amber-50 text-amber-700 border border-amber-200 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic animate-pulse">CS AUDIT PENDING</Badge>
+                        )}
+
+                        {/* Status Docs Ready (doc finished, awaiting cost) */}
+                        {job.is_doc_finished && !['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status?.toLowerCase()) && (
+                            <Badge className="bg-indigo-50 text-indigo-600 border border-indigo-100 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic">DOCS READY</Badge>
                         )}
 
                         {/* Status Ready to Invoice */}
@@ -492,7 +497,7 @@ function DocumentsAndFinancesContent() {
                      )}
 
                      {/* INITIAL PAYOUT PHASE (For Accepted Only) */}
-                     {['accepted', 'ORDER DITERIMA'].includes(job.status) && job.advance_status !== 'paid' && (
+                     {['accepted', 'order diterima', 'diterima'].includes(job.status?.toLowerCase() || '') && job.advance_status !== 'paid' && (
                         <div className="space-y-3">
                            <div className={`border rounded-2xl p-4 flex items-center justify-between ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 border-orange-100' : 'bg-blue-50 border-blue-100'}`}>
                               <div>

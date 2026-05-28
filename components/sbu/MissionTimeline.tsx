@@ -158,6 +158,31 @@ export default function MissionTimeline({
           );
         })}
       </div>
+
+      {/* RAW GPS Tracking Logs */}
+      {tracking && tracking.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-slate-200">
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
+             <MapPin size={12} /> Intelligency Tracking Logs
+          </h4>
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {tracking.map((t: any, i: number) => (
+               <div key={t.id || i} className="text-[10px] flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <div className="w-10 text-slate-400 shrink-0 font-medium pt-0.5">{formatTime(t.created_at)}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-700 uppercase tracking-wide">{t.status_update}</p>
+                    {t.notes && <p className="text-slate-500 mt-0.5">{t.notes}</p>}
+                    {t.latitude && t.longitude && (
+                        <p className="text-[9px] text-slate-400 mt-1 font-mono">
+                          {t.latitude}, {t.longitude}
+                        </p>
+                    )}
+                  </div>
+               </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

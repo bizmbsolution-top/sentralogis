@@ -232,7 +232,6 @@ th{background:#000;color:#fff;font-weight:700;text-align:center}
 <div class="dashed"></div>
 
 <div class="section-title">Rincian Hak Driver</div>
-<div class="row"><span class="label">Nilai Kontrak (Customer)</span><span class="value">: Rp ${formatThousand(basePrice)}</span></div>
 <div class="row"><span class="label">Total Hak Driver</span><span class="value">: Rp ${formatThousand(driverPayout)}</span></div>
 
 <div class="dashed"></div>

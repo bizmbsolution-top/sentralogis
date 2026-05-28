@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, LogIn } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 interface MouseStar {
@@ -36,7 +37,8 @@ export default function LoginPage() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
   const [cardGlowAngle, setCardGlowAngle] = useState(0);
-  const { login } = useAuth();
+  const { login, user, logout: signOut, loading: authLoading } = useAuth();
+  const router = useRouter();
 
   const mouseStarsRef = useRef<MouseStar[]>([]);
   const walkingGlassesRef = useRef<WalkingGlasses[]>([]);
@@ -359,8 +361,24 @@ export default function LoginPage() {
                 <p className="mt-2 text-sm text-white/40">Sign in to your workspace</p>
               </div>
 
+              {user && !authLoading && (
+                <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <p className="text-xs text-blue-300 font-semibold uppercase tracking-wider mb-1">Active Session</p>
+                  <p className="text-sm text-white font-medium">{user.email}</p>
+                  <div className="flex gap-3 mt-3">
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      className="text-xs text-white/50 hover:text-white transition-colors underline underline-offset-2"
+                    >
+                      Sign out & switch account
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Login Form */}
-              <form onSubmit={handleLogin} className="space-y-5 relative z-10">
+              <form onSubmit={handleLogin} className="space-y-5 relative z-10" autoComplete="off">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-white/50 uppercase tracking-wider ml-1">
                     Email
@@ -374,6 +392,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@company.com"
+                      autoComplete="email"
                       className="w-full pl-12 pr-4 py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
                       required
                     />
@@ -393,6 +412,7 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••"
+                      autoComplete="current-password"
                       className="w-full pl-12 pr-14 py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
                       required
                     />

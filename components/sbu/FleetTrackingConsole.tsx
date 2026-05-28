@@ -565,9 +565,9 @@ export default function FleetTrackingConsole() {
                {showLog && (
                   <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={() => setShowLog(false)} />
                )}
-               <div className={`${
-                  showLog ? "translate-x-0" : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"
-               } fixed lg:relative right-0 top-0 bottom-0 w-full lg:w-0 md:w-96 bg-white border-l border-slate-200 z-50 lg:z-auto transition-all duration-300 flex flex-col shadow-xl lg:shadow-none`}>
+                <div className={`${
+                   showLog ? "translate-x-0 lg:w-96" : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"
+                } fixed lg:relative right-0 top-0 bottom-0 w-full md:w-96 bg-white border-l border-slate-200 z-50 lg:z-auto transition-all duration-300 flex flex-col shadow-xl lg:shadow-none`}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
                      <h3 className="text-sm font-semibold text-slate-900">Mission Log</h3>
                      <button 

@@ -17,3 +17,15 @@ export const toEnglish = (indonesian: string): string => {
   const entry = Object.values(STATUS_MAP).find(e => e.label === indonesian);
   return entry?.id ?? indonesian;
 };
+
+export {
+  JO_DONE_STATUSES,
+  JO_REJECTED_STATUSES,
+  JO_ACTIVE_STATUSES,
+  categorizeJoStatus,
+  isJoDone,
+  isJoRejected,
+  isJoActive,
+  isJoBlockingAsset,
+  filterActiveJobOrders,
+} from './domain/jo/status';

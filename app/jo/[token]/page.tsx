@@ -6,7 +6,7 @@ import {
   Truck, MapPin, Navigation as NavIcon, Phone, 
   CheckCircle2, Clock, ChevronRight, AlertCircle, 
   Loader2, Play, Check, X, Camera, Calendar, Activity,
-  Expand, Image as ImageIcon
+  Expand, Image as ImageIcon, Lock
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
@@ -692,13 +692,31 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                   {(jobOrder.status === 'in_progress' || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU') || jobOrder.status.startsWith('TIBA')) && (
                     <div className="mt-5">
                       {stop.status === 'pending' && (
-                        <button
-                          onClick={() => updateRouteStatus(stop.id, 'arrived')}
-                          disabled={updating !== null}
-                          className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
-                        >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
-                        </button>
+                        (() => {
+                          const firstUncompleted = jobOrder.routes.find((r: any) => r.status !== 'completed');
+                          const isNext = firstUncompleted?.id === stop.id;
+                          
+                          if (isNext) {
+                            return (
+                              <button
+                                onClick={() => updateRouteStatus(stop.id, 'arrived')}
+                                disabled={updating !== null}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                              >
+                                {updating === stop.id ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
+                              </button>
+                            );
+                          } else {
+                            return (
+                              <button
+                                disabled
+                                className="w-full py-4 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-200 cursor-not-allowed"
+                              >
+                                <Lock size={14} /> SELESAIKAN STOP SEBELUMNYA DULU
+                              </button>
+                            );
+                          }
+                        })()
                       )}
 
                       {stop.status === 'arrived' && stop.stop_type === 'PICKUP' && (

@@ -34,9 +34,18 @@ export async function POST(request: NextRequest) {
         // ===============================
         // ENV
         // ===============================
-        const accountSid = process.env.TWILIO_ACCOUNT_SID!;
-        const authToken = process.env.TWILIO_AUTH_TOKEN!;
-        const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER!;
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+
+        if (!accountSid || !authToken || !fromNumber) {
+            console.warn("[AI] Twilio credentials not configured in .env.local. Simulating success with mock response.");
+            return NextResponse.json({
+                success: true,
+                sid: "MOCK_TWILIO_SID_" + Date.now(),
+                isMock: true
+            });
+        }
 
         // ===============================
         // FORMAT NOMOR

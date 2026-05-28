@@ -1,0 +1,430 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  type AssignmentSlot,
+  type WoItemContext,
+  type TransporterOption,
+  buildJoNumber,
+  generateDriverLinkToken,
+  generateTrackingToken,
+  getRouteOriginDest,
+  isEmptySlot,
+  isFilledAssignment,
+  parseItemData,
+  resolveIsVendor,
+  validateVendorPurchasePrice,
+  computeMaxJoCount,
+} from '@/lib/domain/jo/assignment';
+import {
+  fetchDriverReadinessForToday,
+  validateInternalDriverReadiness,
+  computeDriverReadiness,
+} from '@/lib/domain/driver/readiness';
+
+export type SaveAssignmentMode = 'draft' | 'confirm' | 'handover';
+
+export interface WoItemSaveContext {
+  id: string;
+  wo_id: string;
+  status: string;
+  item_code?: string;
+  work_orders?: { wo_number?: string };
+  item_data: unknown;
+}
+
+export interface DriverSaveInfo {
+  id: string;
+  name: string;
+  md_entities?: { is_vendor?: boolean } | null;
+}
+
+export interface FleetSaveInfo {
+  id: string;
+  fleet_type_id?: string | null;
+}
+
+export interface SaveAssignmentsInput {
+  tenantId: string;
+  woItem: WoItemSaveContext;
+  assignments: AssignmentSlot[];
+  mode: SaveAssignmentMode;
+  dealPrice: number;
+  transporters: TransporterOption[];
+  drivers: DriverSaveInfo[];
+  fleets: FleetSaveInfo[];
+}
+
+export interface SaveAssignmentsResult {
+  success: boolean;
+  savedCount: number;
+  woItemStatus: string;
+  error?: string;
+  isHandoverFlow: boolean;
+}
+
+function woNumberFromItem(item: WoItemSaveContext): string {
+  return item.work_orders?.wo_number || item.item_code || 'WO';
+}
+
+function buildRoutePayloads(joId: string, itemData: WoItemContext) {
+  const stops = itemData.stops || [];
+  const estDistanceKm = itemData.est_distance_km ?? null;
+  const estDuration = itemData.est_duration ?? null;
+
+  return stops.map((stop: Record<string, unknown>, sIdx: number) => ({
+    job_order_id: joId,
+    sequence: sIdx + 1,
+    stop_type: (stop.stop_type as string) || (sIdx === 0 ? 'PICKUP' : 'DROPOFF'),
+    source_type: (stop.source_type as string) || 'MD_LOCATION',
+    source_id: String(stop.source_id || 'LEGACY'),
+    location_name: (stop.location_name as string) || (stop.name as string) || '-',
+    address: (stop.address as string) || (stop.location_address as string) || '-',
+    latitude:
+      stop.latitude !== null && stop.latitude !== undefined
+        ? Number(stop.latitude)
+        : null,
+    longitude:
+      stop.longitude !== null && stop.longitude !== undefined
+        ? Number(stop.longitude)
+        : null,
+    contact_name: (stop.contact_name as string) || '-',
+    contact_phone: (stop.contact_phone as string) || '-',
+    status: 'pending',
+    distance_km: sIdx === stops.length - 1 ? estDistanceKm : null,
+    duration_minutes:
+      sIdx === stops.length - 1 && estDuration
+        ? parseInt(String(estDuration).replace(/\D/g, ''), 10) || null
+        : null,
+  }));
+}
+
+async function syncJobRoutes(
+  supabase: SupabaseClient,
+  joId: string,
+  itemData: WoItemContext
+): Promise<void> {
+  const { data: existingRoutes, error: routeFetchErr } = await supabase
+    .from('job_routes')
+    .select('id')
+    .eq('job_order_id', joId);
+
+  if (routeFetchErr) {
+    console.warn('[assignmentSave] Route fetch failed:', routeFetchErr.message);
+    return;
+  }
+
+  if (existingRoutes && existingRoutes.length > 0) return;
+
+  const stops = itemData.stops || [];
+  if (stops.length === 0) return;
+
+  const routePayloads = buildRoutePayloads(joId, itemData);
+  const { error: routeInsErr } = await supabase.from('job_routes').insert(routePayloads);
+  if (routeInsErr) {
+    console.warn('[assignmentSave] Route insert suppressed:', routeInsErr.message);
+  }
+}
+
+async function saveMasterAllowance(
+  supabase: SupabaseClient,
+  tenantId: string,
+  itemData: WoItemContext,
+  fleet: FleetSaveInfo,
+  advanceAmount: number
+): Promise<void> {
+  if (!fleet.fleet_type_id || advanceAmount <= 0) return;
+
+  const { origin, dest } = getRouteOriginDest(itemData);
+  if (!origin || !dest) return;
+
+  const { error } = await supabase.from('md_driver_allowances').insert({
+    tenant_id: tenantId,
+    origin_city: origin,
+    destination_city: dest,
+    fleet_type_id: fleet.fleet_type_id,
+    amount: advanceAmount,
+    is_active: true,
+  });
+
+  if (error && error.code !== '23505') {
+    console.warn('[assignmentSave] Master allowance insert failed:', error.message);
+  }
+}
+
+async function upsertJobOrder(
+  supabase: SupabaseClient,
+  assign: AssignmentSlot,
+  payload: Record<string, unknown>,
+  isInsert: boolean
+): Promise<string> {
+  if (assign.id && !isInsert) {
+    const { error } = await supabase
+      .from('job_orders')
+      .update({
+        ...payload,
+        driver_link_token: assign.driver_link_token || generateDriverLinkToken(),
+      })
+      .eq('id', assign.id);
+    if (error) throw error;
+    return assign.id;
+  }
+
+  const { data, error } = await supabase
+    .from('job_orders')
+    .insert({
+      ...payload,
+      driver_link_token: generateDriverLinkToken(),
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+export async function saveAssignments(
+  supabase: SupabaseClient,
+  input: SaveAssignmentsInput
+): Promise<SaveAssignmentsResult> {
+  const {
+    tenantId,
+    woItem,
+    assignments,
+    mode,
+    dealPrice,
+    transporters,
+    drivers,
+    fleets,
+  } = input;
+
+  const itemData = parseItemData(woItem.item_data);
+  const woNumber = woNumberFromItem(woItem);
+  const isHandoverFlow = mode === 'handover';
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    if (mode === 'draft') {
+      for (let i = 0; i < assignments.length; i++) {
+        const assign = assignments[i];
+        if (isEmptySlot(assign)) continue;
+
+        const joNumber = assign.jo_number || buildJoNumber(woNumber, i);
+        const payload = {
+          wo_item_id: woItem.id,
+          tenant_id: tenantId,
+          jo_number: joNumber,
+          transporter_id: assign.transporter_id || null,
+          vendor_id: assign.transporter_id || null,
+          fleet_id: assign.fleet_id || null,
+          driver_id: assign.driver_id || null,
+          driver_phone: assign.driver_phone || null,
+          purchase_price: Number(assign.purchase_price) || 0,
+          base_price: Number(assign.base_price) || dealPrice,
+          driver_share_percentage: Number(assign.driver_share_percentage) || 0,
+          advance_amount: Number(assign.advance_amount) || 0,
+          estimated_margin:
+            (Number(assign.base_price) || dealPrice) -
+            (Number(assign.purchase_price) || 0),
+          wa_token: assign.wa_token || generateTrackingToken(),
+          tracking_token: assign.tracking_token || generateTrackingToken(),
+          total_stops: itemData.stops?.length || 0,
+          updated_at: new Date().toISOString(),
+          status: 'pending',
+        };
+
+        await upsertJobOrder(supabase, assign, payload, !assign.id);
+      }
+
+      const currentItemData = parseItemData(woItem.item_data) as Record<string, unknown>;
+      const updatedItemData = { ...currentItemData };
+      delete updatedItemData.confirmed_assigned;
+      delete updatedItemData.confirmed_assigned_at;
+
+      const { error: woUpdateError } = await supabase
+        .from('wo_items')
+        .update({ status: 'pending', item_data: updatedItemData })
+        .eq('id', woItem.id);
+
+      if (woUpdateError) throw woUpdateError;
+
+      return {
+        success: true,
+        savedCount: assignments.filter((a) => !isEmptySlot(a)).length,
+        woItemStatus: 'pending',
+        isHandoverFlow: false,
+      };
+    }
+
+    // confirm | handover
+    const filledAssignments = assignments.filter(isFilledAssignment);
+
+    await supabase
+      .from('job_orders')
+      .delete()
+      .eq('wo_item_id', woItem.id)
+      .eq('status', 'pending')
+      .is('driver_id', null)
+      .is('fleet_id', null);
+
+    for (let i = 0; i < filledAssignments.length; i++) {
+      const assign = filledAssignments[i];
+      const originalIndex = assignments.indexOf(assign);
+
+      const transporter = transporters.find((t) => t.id === assign.transporter_id);
+      const driver = drivers.find((d) => d.id === assign.driver_id);
+      const isVendor = resolveIsVendor(transporter, driver?.md_entities?.is_vendor);
+
+      const vendorErr = validateVendorPurchasePrice(
+        assign,
+        isVendor,
+        String(originalIndex + 1)
+      );
+      if (vendorErr) {
+        return { success: false, savedCount: 0, woItemStatus: woItem.status, error: vendorErr, isHandoverFlow };
+      }
+
+      if (!isVendor && assign.driver_id) {
+        const checks = await fetchDriverReadinessForToday(
+          supabase,
+          assign.driver_id,
+          today
+        );
+        const readiness = computeDriverReadiness({
+          driverStatus: undefined,
+          ...checks,
+          isVendor: false,
+        });
+        const readinessErr = validateInternalDriverReadiness(
+          readiness,
+          driver?.name || 'Driver'
+        );
+        if (readinessErr) {
+          return {
+            success: false,
+            savedCount: 0,
+            woItemStatus: woItem.status,
+            error: readinessErr,
+            isHandoverFlow,
+          };
+        }
+      }
+
+      const joNumber = buildJoNumber(woNumber, originalIndex);
+      const payload = {
+        wo_item_id: woItem.id,
+        tenant_id: tenantId,
+        jo_number: joNumber,
+        transporter_id: assign.transporter_id || null,
+        vendor_id: assign.transporter_id || null,
+        fleet_id: assign.fleet_id,
+        driver_id: assign.driver_id,
+        driver_phone: assign.driver_phone || null,
+        purchase_price: Number(assign.purchase_price) || 0,
+        base_price: Number(assign.base_price) || dealPrice,
+        driver_share_percentage: Number(assign.driver_share_percentage) || 0,
+        advance_amount: Number(assign.advance_amount) || 0,
+        estimated_margin:
+          (Number(assign.base_price) || dealPrice) -
+          (Number(assign.purchase_price) || 0),
+        wa_token: assign.wa_token || generateTrackingToken(),
+        tracking_token: assign.tracking_token || generateTrackingToken(),
+        total_stops: itemData.stops?.length || 0,
+        updated_at: new Date().toISOString(),
+        status:
+          assign.id && assign.status && assign.status !== 'pending'
+            ? assign.status
+            : 'assigned',
+      };
+
+      const joId = await upsertJobOrder(supabase, assign, payload, !assign.id);
+
+      if (assign.save_to_master && !isVendor && assign.fleet_id) {
+        const fleet = fleets.find((f) => f.id === assign.fleet_id);
+        if (fleet) {
+          await saveMasterAllowance(
+            supabase,
+            tenantId,
+            itemData,
+            fleet,
+            Number(assign.advance_amount) || 0
+          );
+        }
+      }
+
+      await syncJobRoutes(supabase, joId, itemData);
+    }
+
+    const effectiveUnitCount = computeMaxJoCount(itemData);
+    const { data: actualJOs } = await supabase
+      .from('job_orders')
+      .select('id')
+      .eq('wo_item_id', woItem.id)
+      .not('status', 'eq', 'pending');
+
+    const successfulAssignments = actualJOs?.length || 0;
+    const allUnitsAssigned = successfulAssignments >= effectiveUnitCount;
+    const newStatus = isHandoverFlow
+      ? woItem.status
+      : allUnitsAssigned
+        ? 'assigned'
+        : 'pending';
+
+    const currentItemData = parseItemData(woItem.item_data) as Record<string, unknown>;
+    const updatePayload: { status: string; item_data?: Record<string, unknown> } = {
+      status: newStatus,
+    };
+
+    if (allUnitsAssigned && !isHandoverFlow) {
+      updatePayload.item_data = {
+        ...currentItemData,
+        confirmed_assigned: true,
+        confirmed_assigned_at: new Date().toISOString(),
+      };
+    }
+
+    const { error: woUpdateError } = await supabase
+      .from('wo_items')
+      .update(updatePayload)
+      .eq('id', woItem.id);
+
+    if (woUpdateError) throw woUpdateError;
+
+    const { data: siblingItems } = await supabase
+      .from('wo_items')
+      .select('status')
+      .eq('wo_id', woItem.wo_id);
+
+    const allAssigned = siblingItems?.every((i) =>
+      ['assigned', 'active', 'in_progress', 'completed'].includes(
+        (i.status || '').toLowerCase()
+      )
+    );
+
+    if (allAssigned) {
+      await supabase
+        .from('work_orders')
+        .update({ status: 'assigned' })
+        .eq('id', woItem.wo_id);
+    }
+
+    return {
+      success: true,
+      savedCount: successfulAssignments,
+      woItemStatus: newStatus,
+      isHandoverFlow,
+    };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'object'
+          ? JSON.stringify(err)
+          : String(err);
+    return {
+      success: false,
+      savedCount: 0,
+      woItemStatus: woItem.status,
+      error: message,
+      isHandoverFlow,
+    };
+  }
+}

@@ -446,8 +446,19 @@ export default function ContactsPage() {
                   <tr key={ent.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50 transition-colors' : 'bg-slate-50/30 hover:bg-slate-50 transition-colors'}>
                     <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{ent.entity_code}</td>
                     <td className="px-4 py-4">
-                      <div className="font-medium text-slate-900">{ent.name}</div>
-                      <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
+                      <div className="flex items-center gap-3">
+                        {ent.logo_url ? (
+                          <img src={ent.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                            {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-medium text-slate-900">{ent.name}</div>
+                          <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">

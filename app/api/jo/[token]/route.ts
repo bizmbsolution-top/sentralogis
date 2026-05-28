@@ -432,6 +432,46 @@ export async function PATCH(
         }
       }
 
+      // [AI] Fleet & Driver stats update on completion (admin client, not browser)
+      if (newStatus === 'completed') {
+        // Mark fleet as available
+        if (jo.fleet_id) {
+          try {
+            await supabase.from('md_fleets').update({ status: 'available' }).eq('id', jo.fleet_id);
+          } catch (e) {
+            console.error('[API] Fleet status update failed:', e);
+          }
+        }
+        // Increment driver stats
+        if (jo.driver_id) {
+          try {
+            const { data: driverData } = await supabase
+              .from('md_drivers')
+              .select('total_jobs_completed, total_km_driven')
+              .eq('id', jo.driver_id)
+              .single();
+            const estimatedKM = 50;
+            await supabase
+              .from('md_drivers')
+              .update({
+                total_jobs_completed: (driverData?.total_jobs_completed || 0) + 1,
+                total_km_driven: (driverData?.total_km_driven || 0) + estimatedKM
+              })
+              .eq('id', jo.driver_id);
+            await supabase.from('driver_performance_logs').insert({
+              driver_id: jo.driver_id,
+              job_order_id: jo.id,
+              type: 'KM_LOG',
+              total_km: estimatedKM,
+              review_notes: 'Tugas diselesaikan melalui Driver Portal',
+              tenant_id: jo.tenant_id
+            });
+          } catch (e) {
+            console.error('[API] Driver stats update failed:', e);
+          }
+        }
+      }
+
       // SINKRONISASI STATUS BERTAHAP
       if (jo.wo_item_id) {
         try {

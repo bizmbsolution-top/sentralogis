@@ -75,6 +75,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
         { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
         { label: 'Master COA', icon: '📖', href: '/hq/finance/coa' },
+        { label: 'Master Pajak', icon: '💵', href: '/hq/finance/tax-management' },
       ]
     },
     {

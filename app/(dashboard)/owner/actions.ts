@@ -42,6 +42,7 @@ export async function fetchTenantsAdmin() {
           id: t.id,
           tenant_code: t.tenant_code,
           name: t.name,
+          logo_url: t.logo_url || null,
           subscription_tier: t.subscription_tier,
           token_balance: t.token_balance,
           user_id: t.user_id,

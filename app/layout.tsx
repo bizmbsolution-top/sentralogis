@@ -9,8 +9,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'SENTRALOGIS | Unified Operational Matrix',
   description: 'The next generation of enterprise logistics orchestration.',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 };
+
+export const viewport = 'width=device-width, initial-scale=1, maximum-scale=1';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

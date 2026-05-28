@@ -279,19 +279,26 @@ export default function HQOpsDashboardPage() {
       }
 
       // 4. AR due alerts (customer invoices)
-      const { data: arResult } = await supabase
+      const { data: arInvoices } = await supabase
         .from('invoices')
-        .select(`
-          id, invoice_number, total_billing, status, due_date,
-          wo:work_orders!wo_id (
-            customer_id
-          )
-        `)
+        .select('id, invoice_number, total_billing, status, due_date, wo_id')
         .in('status', ['sent', 'accepted'])
         .order('due_date', { ascending: true })
         .limit(10);
-      
-      if (arResult) {
+
+      if (arInvoices && arInvoices.length > 0) {
+        const woIds = arInvoices.map(i => i.wo_id).filter(Boolean);
+        const { data: workOrders } = await supabase
+          .from('work_orders')
+          .select('id, customer_id')
+          .in('id', woIds);
+
+        const woMap = new Map((workOrders || []).map(wo => [wo.id, wo.customer_id]));
+        const arResult = arInvoices.map(inv => ({
+          ...inv,
+          wo: woMap.has(inv.wo_id) ? { customer_id: woMap.get(inv.wo_id) } : null,
+        }));
+
         const now = new Date();
         const arAlerts: DueAlert[] = [];
         for (const inv of arResult) {
@@ -315,17 +322,26 @@ export default function HQOpsDashboardPage() {
       }
 
       // 5. AP due alerts (vendor invoices)
-      const { data: apResult } = await supabase
+      const { data: apInvoices } = await supabase
         .from('vendor_invoices')
-        .select(`
-          id, invoice_number, invoice_amount, status, received_at,
-          vendor:md_entities!vendor_id (name)
-        `)
+        .select('id, invoice_number, invoice_amount, status, received_at, vendor_id')
         .in('status', ['verified', 'submitted'])
         .order('received_at', { ascending: true })
         .limit(10);
-      
-      if (apResult) {
+
+      if (apInvoices && apInvoices.length > 0) {
+        const vendorIds = apInvoices.map(i => i.vendor_id).filter(Boolean);
+        const { data: vendors } = await supabase
+          .from('md_entities')
+          .select('id, name')
+          .in('id', vendorIds);
+
+        const vendorMap = new Map((vendors || []).map(v => [v.id, v.name]));
+        const apResult = apInvoices.map(vi => ({
+          ...vi,
+          vendor: vendorMap.has(vi.vendor_id) ? { name: vendorMap.get(vi.vendor_id) } : null,
+        }));
+
         const now = new Date();
         const apAlerts: DueAlert[] = [];
         for (const vi of apResult) {

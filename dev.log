@@ -1,0 +1,938 @@
+﻿
+> sentralogis@0.1.0 dev
+> next dev
+
+   Γû▓ Next.js 15.4.10
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.3:3000
+   - Environments: .env.local
+
+ Γ£ô Starting...
+ Γ£ô Ready in 1835ms
+ Γùï Compiling /invoice-print-demo ...
+ Γ£ô Compiled /invoice-print-demo in 4.8s (838 modules)
+npm :  ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to 
+viewport export instead.
+At line:1 char:1
++ npm run dev 2>&1 | Out-File -FilePath dev.log -Encoding utf8
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( ΓÜá Unsupporte...export instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 5237ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 238ms
+ Γùï Compiling /manifest.webmanifest ...
+ Γ£ô Compiled /manifest.webmanifest in 1895ms (848 modules)
+ GET /manifest.webmanifest 200 in 2231ms
+ Γùï Compiling /_not-found ...
+ Γ£ô Compiled /_not-found in 569ms (839 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /_not-found. Please move it to viewport export 
+instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /logo.png 404 in 1109ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /_not-found. Please move it to viewport export 
+instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /logo.png 404 in 53ms
+ Γ£ô Compiled in 384ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 90ms
+ GET /manifest.webmanifest 200 in 39ms
+ Γ£ô Compiled in 305ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 46ms
+ GET /manifest.webmanifest 200 in 21ms
+ Γ£ô Compiled in 285ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 48ms
+ GET /manifest.webmanifest 200 in 24ms
+ Γ£ô Compiled in 253ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 34ms
+ GET /manifest.webmanifest 200 in 20ms
+ Γ£ô Compiled in 269ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 55ms
+ GET /manifest.webmanifest 200 in 20ms
+ Γ£ô Compiled in 239ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 35ms
+ GET /manifest.webmanifest 200 in 17ms
+ Γ£ô Compiled in 354ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 40ms
+ GET /manifest.webmanifest 200 in 26ms
+ Γ£ô Compiled in 321ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 80ms
+ GET /manifest.webmanifest 200 in 21ms
+ Γ£ô Compiled in 219ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 41ms
+ GET /manifest.webmanifest 200 in 18ms
+ Γ£ô Compiled in 285ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 54ms
+ GET /manifest.webmanifest 200 in 22ms
+ Γ£ô Compiled in 224ms (352 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 34ms
+ GET /manifest.webmanifest 200 in 22ms
+ Γ£ô Compiled in 621ms (834 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 491ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /invoice-print-demo. Please move it to viewport 
+export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /invoice-print-demo 200 in 37ms
+ GET /manifest.webmanifest 200 in 29ms
+ Γùï Compiling /api/invoice/pdf ...
+ Γ£ô Compiled /api/invoice/pdf in 697ms (898 modules)
+ GET /api/invoice/pdf 400 in 1113ms
+[invoice/pdf] Supabase query error: {
+  code: '22P02',
+  details: null,
+  hint: null,
+  message: 'invalid input syntax for type uuid: "non-existent-id"'
+}
+ GET /api/invoice/pdf?invoice_id=non-existent-id 500 in 1106ms
+ Γùï Compiling /hq/invoice-customer/[id] ...
+ Γ£ô Compiled /hq/invoice-customer/[id] in 671ms (921 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/some-id?print=1 200 in 3026ms
+ Γùï Compiling /hq/invoice-customer ...
+ Γ£ô Compiled /hq/invoice-customer in 2.8s (860 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 3759ms
+ Γ£ô Compiled in 1032ms (369 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 233ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 98ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 101ms
+ Γ£ô Compiled /manifest.webmanifest in 450ms (510 modules)
+ GET /manifest.webmanifest 200 in 709ms
+ Γ£ô Compiled /hq/invoice-customer/[id] in 343ms (519 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1275ms
+ GET /manifest.webmanifest 200 in 47ms
+ Γ£ô Compiled in 899ms (869 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 744ms
+ Γ£ô Compiled /manifest.webmanifest in 147ms (519 modules)
+ GET /manifest.webmanifest 200 in 258ms
+ Γ£ô Compiled in 477ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 744ms
+ GET /manifest.webmanifest 200 in 35ms
+ Γ£ô Compiled in 563ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 687ms
+ GET /manifest.webmanifest 200 in 29ms
+ Γ£ô Compiled in 643ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 712ms
+ GET /manifest.webmanifest 200 in 25ms
+ Γùï Compiling /api/invoice/pdf ...
+ Γ£ô Compiled /api/invoice/pdf in 1321ms (579 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 5587ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1247ms
+ Γ£ô Compiled /manifest.webmanifest in 375ms (583 modules)
+ GET /manifest.webmanifest 200 in 605ms
+[Puppeteer] Failed to load resource: the server responded with a status of 404 ()
+[Puppeteer] Failed to load resource: the server responded with a status of 404 ()
+[invoice/pdf] Failed to generate PDF: Waiting for selector `[class*="print-only"]` failed
+[invoice/pdf] Failed to generate PDF: Waiting for selector `[class*="print-only"]` failed
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 500 in 21602ms
+[Puppeteer] Failed to load resource: the server responded with a status of 404 ()
+[invoice/pdf] Failed to generate PDF: Waiting for selector `[class*="print-only"]` failed
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 500 in 17925ms
+[Puppeteer] Failed to load resource: the server responded with a status of 404 ()
+[invoice/pdf] Failed to generate PDF: Waiting for selector `[class*="print-only"]` failed
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 500 in 17969ms
+ Γ£ô Compiled in 2.6s (869 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1240ms
+ Γùï Compiling /manifest.webmanifest ...
+ Γ£ô Compiled /manifest.webmanifest in 747ms (519 modules)
+ GET /manifest.webmanifest 200 in 1083ms
+ Γ£ô Compiled in 1029ms (369 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 878ms
+ GET /manifest.webmanifest 200 in 38ms
+ Γùï Compiling /api/invoice/pdf ...
+ Γ£ô Compiled /api/invoice/pdf in 549ms (584 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1492ms
+ GET /manifest.webmanifest 200 in 49ms
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 6398ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1299ms
+ GET /manifest.webmanifest 200 in 48ms
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 4010ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 111ms
+ GET /manifest.webmanifest 200 in 45ms
+ Γ£ô Compiled in 1540ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 395ms
+ GET /manifest.webmanifest 200 in 66ms
+ Γ£ô Compiled in 1424ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 263ms
+ GET /manifest.webmanifest 200 in 44ms
+ Γ£ô Compiled in 1203ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 182ms
+ GET /manifest.webmanifest 200 in 49ms
+ Γ£ô Compiled in 1473ms (888 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 187ms
+ GET /manifest.webmanifest 200 in 52ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 573ms
+ GET /manifest.webmanifest 200 in 59ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 857ms
+ GET /manifest.webmanifest 200 in 28ms
+ Γ¿» ./app/(dashboard)/hq/invoice-customer/[id]/page.tsx
+Error:   [31mx[0m Expected a semicolon
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                         ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+  [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                         ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+  [31mx[0m Expected '</', got ':'
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                                 ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/(dashboard)/hq/invoice-customer/[id]/page.tsx
+ Γùï Compiling /_error ...
+ Γ¿» ./app/(dashboard)/hq/invoice-customer/[id]/page.tsx
+Error:   [31mx[0m Expected a semicolon
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                         ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+  [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                         ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+  [31mx[0m Expected '</', got ':'
+     ,-[[36;1;4mC:\Users\sonad\projectQ\sentralogis\app\(dashboard)\hq\invoice-customer\[id]\page.tsx[0m:819:1]
+ [2m816[0m |               <div
+ [2m817[0m |                 style={{
+ [2m818[0m |                   display: "flex",
+ [2m819[0m |                   justify-content: "space-between",
+     : [35;1m                                 ^[0m
+ [2m820[0m |                   alignItems: "flex-start",
+ [2m821[0m |                 }}
+ [2m822[0m |               >
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/(dashboard)/hq/invoice-customer/[id]/page.tsx
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 500 in 8779ms
+ Γ£ô Compiled /_not-found in 1447ms (1184 modules)
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /_not-found. Please move it to viewport export 
+instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ ΓÜá Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/47a77a59ec48ace5.webpack.hot-update.json 404 in 1794ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 829ms
+ Γ£ô Compiled /manifest.webmanifest in 423ms (698 modules)
+ GET /manifest.webmanifest 200 in 542ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1264ms
+ GET /manifest.webmanifest 200 in 46ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 923ms
+ GET /manifest.webmanifest 200 in 54ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 90ms
+ GET /manifest.webmanifest 200 in 36ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 769ms
+ GET /manifest.webmanifest 200 in 26ms
+ GET /manifest.webmanifest 200 in 29ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 812ms
+ GET /manifest.webmanifest 200 in 50ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer 200 in 153ms
+ GET /manifest.webmanifest 200 in 47ms
+ ΓÜá Unsupported metadata viewport is configured in metadata export in /hq/invoice-customer/[id]. Please move it to 
+viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 801ms
+ GET /manifest.webmanifest 200 in 30ms
+ Γ£ô Compiled in 2.4s (1212 modules)
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 900ms
+ GET /manifest.webmanifest 200 in 74ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1233ms
+ GET /manifest.webmanifest 200 in 46ms
+ Γùï Compiling /hq/finance/summary ...
+ Γ£ô Compiled /hq/finance/summary in 1986ms (1223 modules)
+ GET /hq/finance/summary 200 in 2253ms
+ GET /manifest.webmanifest 200 in 66ms
+ GET /hq/invoice-customer 200 in 87ms
+ GET /manifest.webmanifest 200 in 32ms
+ GET /hq/invoice-customer 200 in 552ms
+ GET /manifest.webmanifest 200 in 65ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 812ms
+ GET /manifest.webmanifest 200 in 28ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 859ms
+ GET /manifest.webmanifest 200 in 44ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 749ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 790ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 883ms
+ GET /manifest.webmanifest 200 in 47ms
+ GET /manifest.webmanifest 200 in 42ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 856ms
+ GET /manifest.webmanifest 200 in 49ms
+ Γùï Compiling /hq/business ...
+ Γ£ô Compiled /hq/business in 3.5s (1253 modules)
+ GET /hq/business 200 in 3787ms
+ GET /hq/business 200 in 73ms
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 1192ms
+ GET /manifest.webmanifest 200 in 76ms
+ Γùï Compiling /hq/ops-dashboard ...
+ Γ£ô Compiled /hq/ops-dashboard in 1893ms (1266 modules)
+ GET /hq/ops-dashboard 200 in 2165ms
+ GET /hq/ops-dashboard 200 in 57ms
+ GET /manifest.webmanifest 200 in 62ms
+ GET /hq/invoice-customer 200 in 88ms
+ GET /manifest.webmanifest 200 in 35ms
+ Γùï Compiling /api/invoice/pdf ...
+ Γ£ô Compiled /api/invoice/pdf in 1071ms (795 modules)
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 901ms
+ GET /manifest.webmanifest 200 in 38ms
+ GET /api/invoice/pdf?invoice_id=6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 8413ms
+ Γ£ô Compiled in 838ms (1246 modules)
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 805ms
+ Γ£ô Compiled /manifest.webmanifest in 176ms (715 modules)
+ GET /manifest.webmanifest 200 in 282ms
+ Γ£ô Compiled in 1064ms (1265 modules)
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 200 in 718ms
+ GET /manifest.webmanifest 200 in 25ms
+ Γ¿» Error: Cannot find module './4985.js'
+Require stack:
+- C:\Users\sonad\projectQ\sentralogis\.next\server\webpack-runtime.js
+- C:\Users\sonad\projectQ\sentralogis\.next\server\app\(dashboard)\hq\invoice-customer\[id]\page.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\require.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\load-components.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\utils.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\options.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\index.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\next.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\sonad\projectQ\sentralogis\.next\server\app\(dashboard)\hq\ops-dashboard\page.js:10:8474)
+    at Object.<anonymous> 
+(C:\Users\sonad\projectQ\sentralogis\.next\server\app\(dashboard)\hq\ops-dashboard\page.js:10:8544) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/hq/ops-dashboard'
+}
+ Γ¿» Error: Cannot find module './8548.js'
+Require stack:
+- C:\Users\sonad\projectQ\sentralogis\.next\server\webpack-runtime.js
+- C:\Users\sonad\projectQ\sentralogis\.next\server\app\(dashboard)\hq\invoice-customer\[id]\page.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\require.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\load-components.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\utils.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\options.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\index.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\next.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:327)
+    at Object.<anonymous> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:374) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /hq/ops-dashboard 500 in 400ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json',
+  page: '/hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1'
+}
+ Γ¿» Error: Cannot find module './8548.js'
+Require stack:
+- C:\Users\sonad\projectQ\sentralogis\.next\server\webpack-runtime.js
+- C:\Users\sonad\projectQ\sentralogis\.next\server\app\(dashboard)\hq\invoice-customer\[id]\page.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\require.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\load-components.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\utils.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\options.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\index.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\next.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:327)
+    at Object.<anonymous> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:374) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ Γ¿» Failed to generate static paths for /hq/invoice-customer/[id]:
+[Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\build-manifest.json'] {
+  type: 'Error',
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\build-manifest.json'
+}
+ Γ¿» Failed to generate static paths for /hq/invoice-customer/[id]:
+[Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\build-manifest.json'] {
+  type: 'Error',
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\build-manifest.json'
+}
+ GET /hq/invoice-customer/6b636657-f9ee-4a6a-9383-6b0bb2e5d1d1 500 in 1291ms
+ Γùï Compiling /_not-found ...
+ Γ£ô Compiled /_not-found in 2.4s (1237 modules)
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ GET /_next/static/chunks/fallback/webpack.js 500 in 4763ms
+ GET /_next/static/chunks/fallback/main.js 500 in 4757ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 4754ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 4738ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 4737ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json',
+  page: '/hq/invoice-customer'
+}
+ Γ¿» Error: Cannot find module './8548.js'
+Require stack:
+- C:\Users\sonad\projectQ\sentralogis\.next\server\webpack-runtime.js
+- C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\require.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\load-components.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\utils.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\options.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\index.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\next.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:327)
+    at Object.<anonymous> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:374) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /hq/invoice-customer 500 in 505ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ GET /_next/static/chunks/fallback/webpack.js 500 in 1714ms
+ GET /_next/static/chunks/fallback/main.js 500 in 1712ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 1708ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 2129ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 1007ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json',
+  page: '/hq/invoice-customer'
+}
+ Γ¿» Error: Cannot find module './8548.js'
+Require stack:
+- C:\Users\sonad\projectQ\sentralogis\.next\server\webpack-runtime.js
+- C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\require.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\load-components.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\utils.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\options.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\swc\index.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\config.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\next.js
+- C:\Users\sonad\projectQ\sentralogis\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:327)
+    at Object.<anonymous> (C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js:1:374) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ GET /hq/invoice-customer 500 in 538ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json'
+}
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 1862ms
+ GET /_next/static/chunks/fallback/webpack.js 500 in 1865ms
+ GET /_next/static/chunks/fallback/main.js 500 in 1861ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 1852ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 1849ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json',
+  page: '/hq/invoice-customer'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\pages-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\pages-manifest.json'
+}
+ GET /hq/invoice-customer 500 in 183ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 303ms
+ GET /_next/static/chunks/fallback/main.js 500 in 300ms
+ GET /_next/static/chunks/fallback/webpack.js 500 in 299ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 293ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 291ms
+ Γùï Compiling / ...
+ Γ£ô Compiled / in 2.4s (1247 modules)
+ Γ¿» [Error: ENOENT: no such file or directory, open 'C:\Users\sonad\projectQ\sentralogis\.next\routes-manifest.json'] 
+{
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\routes-manifest.json',
+  page: '/'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 3244ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app\\_not-found\\page.js'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app\\_not-found\\page.js'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app\\_not-found\\page.js'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app\\_not-found\\page.js'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app\_not-found\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app\\_not-found\\page.js'
+}
+ GET /_next/static/chunks/fallback/webpack.js 500 in 331ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 328ms
+ GET /_next/static/chunks/fallback/main.js 500 in 325ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 310ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 305ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json',
+  page: '/'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\pages-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\pages-manifest.json'
+}
+ GET / 500 in 190ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ GET /_next/static/chunks/fallback/webpack.js 500 in 397ms
+ GET /_next/static/chunks/fallback/main.js 500 in 393ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 391ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 403ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 401ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json',
+  page: '/'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\pages-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\pages-manifest.json'
+}
+ GET / 500 in 190ms
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ Γ¿» [Error: ENOENT: no such file or directory, open 
+'C:\Users\sonad\projectQ\sentralogis\.next\server\app-paths-manifest.json'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\sonad\\projectQ\\sentralogis\\.next\\server\\app-paths-manifest.json'
+}
+ GET /_next/static/chunks/fallback/webpack.js 500 in 330ms
+ GET /_next/static/chunks/fallback/main.js 500 in 328ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 324ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 323ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 321ms
+[?25h

@@ -69,6 +69,7 @@ export default function HQContactsPage() {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [tenantInfo, setTenantInfo] = useState<{ name: string; logo_url: string | null } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier' | 'vendor' | 'broker'>('all');
   
@@ -112,6 +113,9 @@ export default function HQContactsPage() {
   useEffect(() => {
     if (profile?.tenant_id) {
       setTenantId(profile.tenant_id);
+      supabase.from('tenants').select('name, logo_url').eq('id', profile.tenant_id).single().then(({ data }) => {
+        if (data) setTenantInfo(data);
+      });
     }
   }, [profile]);
 
@@ -422,11 +426,17 @@ export default function HQContactsPage() {
       <div className="max-w-7xl mx-auto mb-8">
          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
             <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-sm">
-                  <Users size={22} />
-               </div>
+               {tenantInfo?.logo_url ? (
+                 <img src={tenantInfo.logo_url} alt={tenantInfo.name} className="w-12 h-12 rounded-xl object-contain bg-white border border-slate-200 p-1.5 shadow-sm" />
+               ) : (
+                 <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-sm">
+                    <Users size={22} />
+                 </div>
+               )}
                <div>
-                  <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Contact Management</p>
+                  <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                    {tenantInfo?.name ? `${tenantInfo.name} — ` : ''}Contact Management
+                  </p>
                   <h1 className="text-xl md:text-2xl font-semibold text-slate-900 leading-tight">Contacts</h1>
                </div>
             </div>
@@ -510,13 +520,24 @@ export default function HQContactsPage() {
                                     {ent.entity_code}
                                  </span>
                               </td>
-                              <td className="px-4 py-3">
-                                 <div className="text-sm font-medium text-slate-900">{ent.name}</div>
-                                 {ent.parent && (
-                                   <div className="text-xs text-blue-500 mt-0.5">Child of {ent.parent.name}</div>
-                                 )}
-                                 <div className="text-xs text-slate-400 mt-0.5">{ent.legal_name || '-'}</div>
-                              </td>
+                               <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    {ent.logo_url ? (
+                                      <img src={ent.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                                        {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="text-sm font-medium text-slate-900">{ent.name}</div>
+                                      {ent.parent && (
+                                        <div className="text-xs text-blue-500 mt-0.5">Child of {ent.parent.name}</div>
+                                      )}
+                                      <div className="text-xs text-slate-400 mt-0.5">{ent.legal_name || '-'}</div>
+                                    </div>
+                                  </div>
+                               </td>
                               <td className="px-4 py-3">
                                  <div className="flex flex-wrap gap-1">
                                     {ent.is_customer && <Badge className="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-medium px-2 py-0.5 rounded">Customer</Badge>}

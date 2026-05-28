@@ -38,7 +38,8 @@ import {
   Download,
   ClipboardList,
   Expand,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Lock
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
@@ -54,6 +55,7 @@ export default function DriverPortal() {
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [driver, setDriver] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<{ name: string; logo_url: string | null } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   // Theme Management: light / dark mode
@@ -122,6 +124,15 @@ export default function DriverPortal() {
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const [installTab, setInstallTab] = useState<'android' | 'ios'>('android');
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  };
 
   // Theme Sync on Mount, SW Registration, & PWA Install Prompts
   // [AI] Setting up localStorage theme sync, service worker register and capturing beforeinstallprompt event
@@ -211,6 +222,7 @@ export default function DriverPortal() {
         const d = JSON.parse(savedSession);
         if (d && d.id) {
           setDriver(d);
+          if (d.tenant_id) fetchTenantInfo(d.tenant_id);
           setStep('dashboard');
         }
       } catch(e) {}
@@ -244,13 +256,13 @@ export default function DriverPortal() {
   }, [step, isAttendanceModalOpen]);
 
   useEffect(() => {
-    if (step === 'dashboard' && driver?.id) {
+    if ((step === 'dashboard' || step === 'profile') && driver?.id) {
       fetchActiveShift();
       fetchJobOrders();
       fetchInspections();
       fetchTotalKM();
     }
-    if ((step === 'performance' || step === 'dashboard') && driver?.id) {
+    if ((step === 'performance' || step === 'dashboard' || step === 'profile') && driver?.id) {
       fetchPerformanceData();
       fetchAttendanceHistory();
     }
@@ -258,14 +270,20 @@ export default function DriverPortal() {
 
   const fetchTotalKM = async () => {
     if (!driver?.id) return;
-    const { data: completedJobs } = await supabase
+    const { data: allJobs } = await supabase
       .from('job_orders')
-      .select('id')
+      .select('id, status')
       .eq('driver_id', driver.id)
-      .eq('status', 'PEKERJAAN SELESAI');
+      .limit(50);
     
-    if (completedJobs && completedJobs.length > 0) {
-      const jobIds = completedJobs.map(j => j.id);
+    const doneStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
+    const doneJobs = (allJobs || []).filter(jo => {
+      const s = (jo.status || '').toUpperCase();
+      return doneStatuses.includes(s);
+    });
+    
+    if (doneJobs.length > 0) {
+      const jobIds = doneJobs.map(j => j.id);
       const { data: routes } = await supabase
         .from('job_routes')
         .select('distance_km')
@@ -282,42 +300,76 @@ export default function DriverPortal() {
     if (!driver?.id) return;
     const { data } = await supabase
       .from('driver_attendance')
-      .select('*, md_fleets(plate_number)')
+      .select('*')
       .eq('driver_id', driver.id)
       .order('check_in', { ascending: false })
       .limit(10);
-    if (data) setAttendanceHistory(data);
+    if (data) {
+      const fleetIds = data.map(a => a.fleet_id).filter(Boolean);
+      if (fleetIds.length > 0) {
+        const { data: fleets } = await supabase.from('md_fleets').select('id, plate_number').in('id', fleetIds);
+        const fleetMap = new Map((fleets || []).map(f => [f.id, f]));
+        data.forEach(a => { a.md_fleets = fleetMap.get(a.fleet_id) || null; });
+      }
+      setAttendanceHistory(data);
+    }
   };
 
   const fetchPerformanceData = async () => {
     if (!driver?.id) return;
     setPerformanceLoading(true);
     try {
-      const { data: completedJobs } = await supabase
+      const { data: allJobs } = await supabase
         .from('job_orders')
-        .select('*, job_routes(distance_km), wo_items(item_code, item_data)')
+        .select('*')
         .eq('driver_id', driver.id)
-        .or('status.ilike.%SELESAI%,status.eq.COMPLETED,status.eq.DONE,status.eq.INVOICED,status.eq.PAID')
-        .order('completed_at', { ascending: false })
+        .order('completed_at', { ascending: false, nulls: 'last' })
         .limit(50);
-        
-      const { count } = await supabase
-        .from('job_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('driver_id', driver.id)
-        .or('status.ilike.%SELESAI%,status.eq.COMPLETED,status.eq.DONE,status.eq.INVOICED,status.eq.PAID');
+      
+      const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
+      const completedJobs = (allJobs || []).filter(jo => {
+        const s = (jo.status || '').toUpperCase();
+        return completedStatuses.includes(s);
+      });
 
-      setCompletedJobs(completedJobs || []);
-      setTotalCompletedJobsCount(count || 0);
+      // [AI] Fetch wo_items, job_routes separately to avoid join 400 errors
+      let enrichedJobs = completedJobs || [];
+      const woItemIds = completedJobs.map(j => j.wo_item_id).filter(Boolean);
+      const joIds = completedJobs.map(j => j.id).filter(Boolean);
+      
+      const [woRes, routesRes] = await Promise.all([
+        woItemIds.length > 0
+          ? supabase.from('wo_items').select('id, item_code, item_data').in('id', woItemIds)
+          : Promise.resolve({ data: [], error: null }),
+        joIds.length > 0
+          ? supabase.from('job_routes').select('job_order_id, distance_km').in('job_order_id', joIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+      
+      const woMap = new Map((woRes.data || []).map(w => [w.id, w]));
+      const routesMap = new Map();
+      (routesRes.data || []).forEach(r => {
+        if (!routesMap.has(r.job_order_id)) routesMap.set(r.job_order_id, []);
+        routesMap.get(r.job_order_id).push(r);
+      });
+      
+      enrichedJobs = completedJobs.map(j => ({
+        ...j,
+        wo_items: woMap.get(j.wo_item_id) || null,
+        job_routes: routesMap.get(j.id) || []
+      }));
+      
+      setCompletedJobs(enrichedJobs);
+      setTotalCompletedJobsCount(enrichedJobs.length);
 
-      if (completedJobs && completedJobs.length > 0) {
+      if (enrichedJobs && enrichedJobs.length > 0) {
         let totalDistance = 0;
         let sumEarnings = 0;
         let sumOutstanding = 0;
         let sumHak = 0;
         let sumAdvanceReceived = 0;
         
-        for (const job of completedJobs) {
+        for (const job of enrichedJobs) {
           const routeDist = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
           totalDistance += routeDist;
           
@@ -344,7 +396,7 @@ export default function DriverPortal() {
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
-        const monthCount = completedJobs.filter((j: any) => {
+        const monthCount = enrichedJobs.filter((j: any) => {
           if (!j.completed_at) return false;
           const d = new Date(j.completed_at);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
@@ -360,49 +412,110 @@ export default function DriverPortal() {
 
   const fetchActiveShift = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('driver_attendance')
-      .select('*, md_fleets(plate_number)')
+      .select('*')
       .eq('driver_id', driver.id)
       .eq('status', 'CHECK_IN')
       .gte('check_in', today)
       .order('check_in', { ascending: false })
       .limit(1)
       .single();
-    if (data) setActiveShift({ ...data, fleet: data.md_fleets });
+    if (data && !error) {
+      if (data.fleet_id) {
+        const { data: fleet } = await supabase.from('md_fleets').select('id, plate_number').eq('id', data.fleet_id).single();
+        if (fleet) data.md_fleets = fleet;
+      }
+      setActiveShift({ ...data, fleet: data.md_fleets });
+    }
   };
 
   const fetchJobOrders = async () => {
-    // [AI] Fetch recent jobs and filter active ones in JS to avoid PostgREST .not('in') syntax issues
+    // [AI] Fetch active job orders, filter out completed in JS
+    // Note: All joins done separately to avoid PostgREST 400 errors
     const { data, error } = await supabase
       .from('job_orders')
-      .select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)')
+      .select('*')
       .eq('driver_id', driver.id)
       .order('created_at', { ascending: false })
       .limit(50);
       
     if (error) {
-      console.error('Error fetching job orders:', error);
-    } else if (data) {
-      const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID'];
-      const activeJobs = data.filter(jo => {
-        const s = (jo.status || '').toUpperCase();
-        return !completedStatuses.includes(s);
-      });
-      setJobOrders(activeJobs);
+      console.error('[AI] Error fetching job orders:', JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint }));
+      setJobOrders([]);
+      return;
     }
+    
+    if (!data || data.length === 0) {
+      setJobOrders([]);
+      return;
+    }
+    
+    // [AI] Fetch related data separately to avoid join 400 errors
+    const woItemIds = data.map(jo => jo.wo_item_id).filter(Boolean);
+    const joIds = data.map(jo => jo.id);
+    const fleetIds = data.map(jo => jo.fleet_id).filter(Boolean);
+    
+    const [woRes, routesRes, fleetsRes] = await Promise.all([
+      woItemIds.length > 0
+        ? supabase.from('wo_items').select('id, item_code, item_data').in('id', woItemIds)
+        : Promise.resolve({ data: [], error: null }),
+      joIds.length > 0
+        ? supabase.from('job_routes').select('*').in('job_order_id', joIds).order('sequence', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      fleetIds.length > 0
+        ? supabase.from('md_fleets').select('id, plate_number').in('id', fleetIds)
+        : Promise.resolve({ data: [], error: null })
+    ]);
+    
+    const woMap = new Map((woRes.data || []).map(w => [w.id, w]));
+    const routesMap = new Map();
+    (routesRes.data || []).forEach(r => {
+      if (!routesMap.has(r.job_order_id)) routesMap.set(r.job_order_id, []);
+      routesMap.get(r.job_order_id).push(r);
+    });
+    const fleetMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
+    
+    const dataWithJoins = data.map(jo => ({
+      ...jo,
+      wo_items: woMap.get(jo.wo_item_id) || null,
+      job_routes: routesMap.get(jo.id) || [],
+      md_fleets: fleetMap.get(jo.fleet_id) || null
+    }));
+    
+          const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
+    const activeJobs = dataWithJoins.filter(jo => {
+      const s = (jo.status || '').toUpperCase();
+      return !completedStatuses.includes(s);
+    });
+    setJobOrders(activeJobs);
+  };
+
+  const reloadJobWithFleet = async (jobId: string) => {
+    const { data: job } = await supabase.from('job_orders').select('*').eq('id', jobId).single();
+    if (job && job.fleet_id) {
+      const { data: fleet } = await supabase.from('md_fleets').select('id, plate_number').eq('id', job.fleet_id).single();
+      if (fleet) job.md_fleets = fleet;
+    }
+    return job;
   };
 
   const fetchInspections = async () => {
     const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
       .from('fleet_inspections')
-      .select('*, md_fleets(plate_number)')
+      .select('*')
       .eq('driver_id', driver.id)
       .gte('created_at', today)
       .order('created_at', { ascending: false })
       .limit(20);
     if (data && data.length > 0) {
+      const fleetIds = data.map(i => i.fleet_id).filter(Boolean);
+      if (fleetIds.length > 0) {
+        const { data: fleets } = await supabase.from('md_fleets').select('id, plate_number').in('id', fleetIds);
+        const fleetMap = new Map((fleets || []).map(f => [f.id, f]));
+        data.forEach(i => { i.md_fleets = fleetMap.get(i.fleet_id) || null; });
+      }
       setInspectionsList(data);
       setLastInspection(data[0]);
     } else {
@@ -561,7 +674,7 @@ export default function DriverPortal() {
     try {
       let apiStatus = newStatus;
       if (newStatus === 'DITERIMA') apiStatus = 'accepted';
-      if (newStatus === 'START JOURNEY') apiStatus = 'in_progress';
+      if (newStatus === 'START JOURNEY' || newStatus === 'IN_PROGRESS') apiStatus = 'in_progress';
       if (newStatus === 'PEKERJAAN SELESAI' || newStatus === 'SELESAI') apiStatus = 'completed';
 
       let lat = null, lng = null;
@@ -588,52 +701,39 @@ export default function DriverPortal() {
         throw new Error(result.error || 'Gagal memperbarui status');
       }
 
-      // [AI] Execute internal-only extra actions for PEKERJAAN SELESAI
+      // [AI] Fleet & driver updates now handled by API (admin client)
       if (apiStatus === 'completed') {
-        const { data: job } = await supabase.from('job_orders').select('fleet_id').eq('id', jobId).single();
-        if (job?.fleet_id) {
-          await supabase.from('md_fleets').update({ status: 'available' }).eq('id', job.fleet_id);
-        }
-        
-        const { data: driverData } = await supabase.from('md_drivers').select('total_jobs_completed, total_km_driven').eq('id', driver.id).single();
-        const estimatedKM = 50;
-        await supabase.from('md_drivers').update({
-          total_jobs_completed: (driverData?.total_jobs_completed || 0) + 1,
-          total_km_driven: (driverData?.total_km_driven || 0) + estimatedKM
-        }).eq('id', driver.id);
-
-        await supabase.from('driver_performance_logs').insert({
-          driver_id: driver.id,
-          job_order_id: jobId,
-          type: 'KM_LOG',
-          total_km: estimatedKM,
-          review_notes: 'Tugas diselesaikan melalui Driver Portal',
-          tenant_id: driver.tenant_id
-        });
-        
         setSelectedJob(null);
         setStep('dashboard');
       } else {
-        const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', jobId).single();
-        
-        let finalRoutes = reloadedJob?.job_routes || [];
-        if (finalRoutes.length === 0 && reloadedJob?.wo_items?.item_data?.stops) {
-            const stops = reloadedJob.wo_items.item_data.stops;
-            const routePayloads = stops.map((stop: any, idx: number) => ({
-              job_order_id: reloadedJob.id,
-              sequence: idx + 1,
-              stop_type: stop.stop_type || (idx === 0 ? 'PICKUP' : 'DROPOFF'),
-              source_type: 'MD_LOCATION',
-              source_id: 'LEGACY',
-              location_name: stop.location_name || '-',
-              address: stop.address || '-',
-              status: 'pending'
-            }));
-            const { data: newRoutes } = await supabase.from('job_routes').insert(routePayloads).select('*').order('sequence', { ascending: true });
-            if (newRoutes) finalRoutes = newRoutes;
-        }
+        const reloadedJob = await reloadJobWithFleet(jobId);
         
         if (reloadedJob) {
+            const woId = reloadedJob.wo_item_id;
+            if (woId) {
+              const { data: wo } = await supabase.from('wo_items').select('id, item_code, item_data').eq('id', woId).maybeSingle();
+              reloadedJob.wo_items = wo;
+            }
+            
+            const { data: existingRoutes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
+            let finalRoutes = existingRoutes || [];
+            
+            if (finalRoutes.length === 0 && reloadedJob?.wo_items?.item_data?.stops) {
+                const stops = reloadedJob.wo_items.item_data.stops;
+                const routePayloads = stops.map((stop: any, idx: number) => ({
+                  job_order_id: reloadedJob.id,
+                  sequence: idx + 1,
+                  stop_type: stop.stop_type || (idx === 0 ? 'PICKUP' : 'DROPOFF'),
+                  source_type: 'MD_LOCATION',
+                  source_id: 'LEGACY',
+                  location_name: stop.location_name || '-',
+                  address: stop.address || '-',
+                  status: 'pending'
+                }));
+                const { data: newRoutes } = await supabase.from('job_routes').insert(routePayloads).select('*').order('sequence', { ascending: true });
+                if (newRoutes) finalRoutes = newRoutes;
+            }
+            
             reloadedJob.routes = finalRoutes.sort((a: any, b: any) => a.sequence - b.sequence);
             setSelectedJob(reloadedJob);
         }
@@ -651,6 +751,17 @@ export default function DriverPortal() {
   const updateRouteStatus = async (routeId: string, routeStatus: string) => {
     setLoading(true);
     try {
+      // [AI] Frontend sequential validation: pastikan stop sebelumnya sudah completed
+      if (selectedJobRoutes?.length > 0) {
+        const currentIndex = selectedJobRoutes.findIndex((r: any) => r.id === routeId);
+        if (currentIndex > 0) {
+          const prevRoute = selectedJobRoutes[currentIndex - 1];
+          if (prevRoute?.status !== 'completed') {
+            throw new Error(`Selesaikan stop sebelumnya (${prevRoute?.location_name || '-'}) terlebih dahulu`);
+          }
+        }
+      }
+
       let lat = null, lng = null;
       try {
           const pos = await new Promise<any>((resolve, reject) => {
@@ -677,9 +788,15 @@ export default function DriverPortal() {
       toast.success(`Berhasil: ${routeStatus.toUpperCase()}`);
       
       // Reload job
-      const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', selectedJob.id).single();
+      const reloadedJob = await reloadJobWithFleet(selectedJob.id);
       if (reloadedJob) {
-          reloadedJob.routes = (reloadedJob.job_routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          const woId = reloadedJob.wo_item_id;
+          if (woId) {
+            const { data: wo } = await supabase.from('wo_items').select('id, item_code, item_data').eq('id', woId).maybeSingle();
+            reloadedJob.wo_items = wo;
+          }
+          const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
+          reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
           setSelectedJob(reloadedJob);
       }
       fetchJobOrders();
@@ -720,9 +837,15 @@ export default function DriverPortal() {
       }
       
       toast.success('Foto berhasil diunggah');
-      const { data: reloadedJob } = await supabase.from('job_orders').select('*, md_fleets(plate_number), wo_items(item_code, item_data), job_routes(*)').eq('id', selectedJob.id).single();
+      const reloadedJob = await reloadJobWithFleet(selectedJob.id);
       if (reloadedJob) {
-          reloadedJob.routes = (reloadedJob.job_routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          const woId = reloadedJob.wo_item_id;
+          if (woId) {
+            const { data: wo } = await supabase.from('wo_items').select('id, item_code, item_data').eq('id', woId).maybeSingle();
+            reloadedJob.wo_items = wo;
+          }
+          const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
+          reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
           setSelectedJob(reloadedJob);
       }
     } catch (err: any) {
@@ -821,6 +944,15 @@ export default function DriverPortal() {
     }
   };
 
+  const fetchTenantInfo = async (tenantId: string) => {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('name, logo_url')
+      .eq('id', tenantId)
+      .maybeSingle();
+    if (data && !error) setTenantInfo(data);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const pinString = pin.join('');
@@ -855,14 +987,19 @@ export default function DriverPortal() {
         }
         
         if (driverOriginal.is_working) {
-          const { data: activeJobs } = await supabase
+          const { data: allRecentJobs } = await supabase
             .from('job_orders')
-            .select('id')
+            .select('id, status')
             .eq('driver_id', driverOriginal.id)
-            .in('status', ['DITERIMA', 'STARTED', 'LOADING', 'UNLOADING'])
-            .limit(1);
+            .limit(10);
           
-          if (!activeJobs || activeJobs.length === 0) {
+    const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
+          const activeJobs = (allRecentJobs || []).filter(jo => {
+            const s = (jo.status || '').toUpperCase();
+            return !completedStatuses.includes(s);
+          });
+          
+          if (activeJobs.length === 0) {
             await supabase.from('md_drivers').update({
               is_working: false,
               status: 'available'
@@ -876,6 +1013,7 @@ export default function DriverPortal() {
         }
         
         setDriver(driverOriginal);
+        if (driverOriginal.tenant_id) fetchTenantInfo(driverOriginal.tenant_id);
         localStorage.setItem('sentralogis_driver_session', JSON.stringify(driverOriginal));
         setStep('dashboard');
         toast.success(`Selamat datang, ${driverOriginal.name}!`);
@@ -884,14 +1022,19 @@ export default function DriverPortal() {
       }
       
       if (driverData.is_working) {
-        const { data: activeJobs } = await supabase
+        const { data: allRecentJobs } = await supabase
           .from('job_orders')
-          .select('id')
+          .select('id, status')
           .eq('driver_id', driverData.id)
-          .in('status', ['DITERIMA', 'STARTED', 'LOADING', 'UNLOADING'])
-          .limit(1);
+          .limit(10);
         
-        if (!activeJobs || activeJobs.length === 0) {
+        const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'READY_FOR_BILLING', 'VERIFIED'];
+        const activeJobs = (allRecentJobs || []).filter(jo => {
+          const s = (jo.status || '').toUpperCase();
+          return !completedStatuses.includes(s);
+        });
+        
+        if (activeJobs.length === 0) {
           await supabase.from('md_drivers').update({
             is_working: false,
             status: 'available'
@@ -905,6 +1048,7 @@ export default function DriverPortal() {
       }
       
       setDriver(driverData);
+      if (driverData.tenant_id) fetchTenantInfo(driverData.tenant_id);
       localStorage.setItem('sentralogis_driver_session', JSON.stringify(driverData));
       setStep('dashboard');
       toast.success(`Selamat datang, ${driverData.name}!`);
@@ -918,39 +1062,35 @@ export default function DriverPortal() {
 
   // Helper to resolve Single Dynamic Button Verb and Color
   // [AI] Unified Indonesian verbs for ease of use by gaptek drivers
+  // [AI] Master button config — sync status constants with actual API output values
+  // API writes: ORDER DITERIMA | DALAM PERJALANAN | PEKERJAAN SELESAI
+  // Portal sends: DITERIMA | START JOURNEY | PEKERJAAN SELESAI
   const getJobActionButtonConfig = (status: string) => {
-    const s = (status || '').toUpperCase();
-    if (s === 'ASSIGNED' || s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') {
+    const s = (status || '').toUpperCase().trim();
+    if (['ASSIGNED', 'PENDING', 'NEED_ASSIGNMENT', 'ACTIVE', 'HANDOVER_PENDING'].includes(s)) {
       return {
         verb: 'TERIMA TUGAS INI',
         target: 'DITERIMA',
         color: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
       };
     }
-    if (s === 'DITERIMA' || s === 'ACCEPTED' || s === 'ORDER DITERIMA') {
+    if (['DITERIMA', 'ACCEPTED', 'ORDER DITERIMA', 'MENUNGGU BERANGKAT', 'MENUNGGU MULAI / START'].includes(s)) {
       return {
         verb: 'MULAI JALAN (START)',
         target: 'START JOURNEY',
         color: 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'
       };
     }
-    if (s === 'STARTED' || s === 'START JOURNEY' || s === 'DALAM PERJALANAN' || s === 'MENUJU ASAL' || s === 'ON JOURNEY') {
+    if (['STARTED', 'START JOURNEY', 'DALAM PERJALANAN', 'IN PROGRESS', 'IN_PROGRESS', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes(s) || s.startsWith('MENUJU') || s.startsWith('TIBA')) {
       return {
-        verb: 'MULAI MUAT (LOADING)',
-        target: 'LOADING',
+        verb: 'PERJALANAN AKTIF',
+        target: 'IN_PROGRESS',
         color: 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/30'
       };
     }
-    if (s === 'LOADING' || s === 'PICKING_UP') {
+    if (['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'VERIFIED', 'READY_FOR_BILLING'].includes(s)) {
       return {
-        verb: 'MULAI BONGKAR (UNLOAD)',
-        target: 'UNLOADING',
-        color: 'bg-orange-600 hover:bg-orange-700 shadow-orange-600/30'
-      };
-    }
-    if (s === 'UNLOADING' || s === 'DELIVERING' || s === 'TIBA DI TUJUAN') {
-      return {
-        verb: 'TUGAS SELESAI (SELESAI)',
+        verb: 'TUGAS SELESAI',
         target: 'PEKERJAAN SELESAI',
         color: 'bg-green-600 hover:bg-green-700 shadow-green-600/30'
       };
@@ -1417,31 +1557,45 @@ export default function DriverPortal() {
       <Toaster position="top-center" />
       
       {/* Visual Premium Header */}
-      <header className={`relative p-5 pb-16 rounded-b-[2.5rem] shadow-2xl overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white border-b border-indigo-900/20' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white'}`}>
+      <header className={`relative p-4 pb-14 rounded-b-[2.5rem] shadow-2xl overflow-hidden transition-all duration-300 ${isDark ? 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white border-b border-indigo-900/20' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white'}`}>
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-[80px] pointer-events-none" />
         
-        {/* Top Row: Title + Theme Toggle + Panic SOS Button */}
+        {/* Top Row: Tenant Brand + Title + Theme Toggle + Panic SOS Button */}
         <div className="flex justify-between items-center relative z-10">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest opacity-70">Driver Portal</p>
-            <h2 className="text-2xl font-black mt-0.5">{driver?.name || 'Supir SentraLogis'}</h2>
+          <div className="flex items-center gap-2.5">
+            {tenantInfo?.logo_url ? (
+              <img
+                src={tenantInfo.logo_url}
+                alt={tenantInfo.name}
+                className="w-9 h-9 rounded-xl object-contain bg-white/20 backdrop-blur-md p-1 border border-white/20"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
+                <Building size={18} className="opacity-70" />
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">
+                {tenantInfo?.name || 'SENTRALOGIS'} — Driver Portal
+              </p>
+              <h2 className="text-xl font-bold mt-0">{driver?.name || 'Supir'}</h2>
+            </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Download/Install PWA Button */}
             {/* [AI] PWA Install button is always visible in the header for driver convenience */}
             <button 
               onClick={handleInstallPWA} 
-              className="w-10 h-10 bg-amber-500 border border-amber-400 text-white rounded-2xl flex items-center justify-center hover:bg-amber-600 transition-all shrink-0 animate-bounce shadow-lg shadow-amber-500/20"
+              className="w-9 h-9 bg-amber-500 border border-amber-400 text-white rounded-xl flex items-center justify-center hover:bg-amber-600 transition-all shrink-0 animate-bounce shadow-lg shadow-amber-500/20"
               title="Unduh Aplikasi SentraLogis"
             >
-              <Download size={18} />
+              <Download size={16} />
             </button>
 
-
             {/* Mode Switcher */}
-            <button onClick={toggleTheme} className="w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
-              {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} />}
+            <button onClick={toggleTheme} className="w-9 h-9 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
+              {isDark ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} />}
             </button>
 
             {/* Logout */}
@@ -1449,24 +1603,24 @@ export default function DriverPortal() {
               localStorage.removeItem('sentralogis_driver_session');
               setDriver(null);
               setStep('auth');
-            }} className="w-10 h-10 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
-              <LogOut size={18} />
+            }} className="w-9 h-9 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0">
+              <LogOut size={16} />
             </button>
           </div>
         </div>
 
         {/* Attendance Status Widget */}
-        <div className="mt-6 bg-white/10 backdrop-blur-md rounded-3xl p-5 border border-white/15 shadow-inner">
+        <div className="mt-4 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 shadow-inner">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${activeShift ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-slate-500/30 text-slate-300'}`}>
-                {activeShift ? <CheckCircle size={24} /> : <Clock size={24} />}
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${activeShift ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-slate-500/30 text-slate-300'}`}>
+                {activeShift ? <CheckCircle size={20} /> : <Clock size={20} />}
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-60">Status Driver</p>
-                <p className="text-xl font-black mt-0.5">{activeShift ? 'AKTIF BEKERJA (ON DUTY)' : 'BELUM ABSEN (OFF DUTY)'}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Status Driver</p>
+                <p className="text-base font-bold mt-0">{activeShift ? 'AKTIF BEKERJA (ON DUTY)' : 'BELUM ABSEN (OFF DUTY)'}</p>
                 {activeShift && (
-                  <span className="inline-block mt-1 text-xs font-black bg-white/15 px-2.5 py-0.5 rounded-full">
+                  <span className="inline-block mt-1 text-[10px] font-black bg-white/15 px-2 py-0.5 rounded-full">
                     🚛 {activeShift.fleet?.plate_number}
                   </span>
                 )}
@@ -1477,9 +1631,9 @@ export default function DriverPortal() {
           {/* Action Buttons: Moved SOS below Status Driver */}
           <button 
             onClick={() => setIsSOSModalOpen(true)}
-            className="mt-4 w-full flex items-center justify-center gap-2 py-3.5 bg-rose-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-rose-500/20 hover:bg-rose-600 active:scale-[0.98] transition-all"
+            className="mt-3 w-full flex items-center justify-center gap-2 py-3 bg-rose-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-500/20 hover:bg-rose-600 active:scale-[0.98] transition-all"
           >
-            <AlertOctagon size={20} className="animate-pulse" />
+            <AlertOctagon size={18} className="animate-pulse" />
             TOMBOL DARURAT (SOS)
           </button>
         </div>
@@ -2041,7 +2195,7 @@ export default function DriverPortal() {
                 )}
 
                 {/* Phase 2: Start Journey */}
-                {selectedJob.driver_response === 'accepted' && ['assigned', 'accepted', 'ORDER DITERIMA', 'MENUNGGU BERANGKAT', 'MENUNGGU MULAI / START'].includes(selectedJob.status) && (
+                {selectedJob.driver_response === 'accepted' && ['assigned', 'accepted', 'DITERIMA', 'ORDER DITERIMA', 'MENUNGGU BERANGKAT', 'MENUNGGU MULAI / START'].includes(selectedJob.status) && (
                   <button
                     onClick={() => handleUpdateJobStatus(selectedJob.id, 'START JOURNEY')}
                     disabled={loading}
@@ -2168,13 +2322,31 @@ export default function DriverPortal() {
                     {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
                       <div className="mt-5">
                         {stop.status === 'pending' && (
-                          <button
-                            onClick={() => updateRouteStatus(stop.id, 'arrived')}
-                            disabled={loading}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
-                          >
-                            {loading ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
-                          </button>
+                          (() => {
+                            const firstUncompleted = selectedJobRoutes.find((r: any) => r.status !== 'completed');
+                            const isNext = firstUncompleted?.id === stop.id;
+                            
+                            if (isNext) {
+                              return (
+                                <button
+                                  onClick={() => updateRouteStatus(stop.id, 'arrived')}
+                                  disabled={loading}
+                                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                                >
+                                  {loading ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
+                                </button>
+                              );
+                            } else {
+                              return (
+                                <button
+                                  disabled
+                                  className="w-full py-4 bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-500 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 cursor-not-allowed"
+                                >
+                                  <Lock size={14} /> SELESAIKAN STOP SEBELUMNYA DULU
+                                </button>
+                              );
+                            }
+                          })()
                         )}
 
                         {stop.status === 'arrived' && stop.stop_type === 'PICKUP' && (

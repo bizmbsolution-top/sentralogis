@@ -23,6 +23,55 @@ import WODetailSidebar from './components/WODetailSidebar';
 import HandoverSbuModal from '../components/HandoverSbuModal';
 import RejectedViewModal from '../../../../(dashboard)/hq/work-orders/components/RejectedViewModal';
 
+export const filterItemByTab = (item: any, tabId: string) => {
+  const s = item.status?.toUpperCase() || '';
+  
+  // CRITICAL: Prevent PAID/INVOICED leakage
+  if (['INVOICED', 'PAID'].includes(s)) return false;
+
+  const jos = (item.job_orders || []).filter((j: any) => j.status !== 'cancelled');
+  const totalUnits = item.item_data?.unit_count || jos.length || 1;
+  const isHandoverApproved = item.item_data?.handover_approved === true;
+  
+  // Check how many JOs have driver and fleet assigned (exclude pending drafts)
+  const assignedJOs = jos.filter((j: any) => j.driver_id && j.fleet_id && j.status !== 'pending');
+  const hasAnyAssigned = assignedJOs.length > 0;
+  
+  const allJobsCompleted = jos.length > 0 && jos.length >= totalUnits && jos.every((j: any) => 
+    ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
+  );
+  
+  const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
+  
+  const anyMoving = !isCompleted && jos.some((j: any) => 
+    j.status?.toUpperCase().startsWith('MENUJU') || 
+    j.status?.toUpperCase().startsWith('TIBA') || 
+    ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+  );
+
+  const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
+  const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
+  const hasAssignedStatus = s === 'ASSIGNED' || s === 'ACTIVE';
+
+  if (tabId === 'all') return true;
+  
+  if (tabId === 'pending') {
+    return (!hasAnyAssigned && (s === 'PENDING' || s === 'NEED_ASSIGNMENT')) || (s === 'PENDING' && !allAssigned);
+  }
+  
+  if (tabId === 'assigned_units') {
+    const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(s);
+    return (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) && !anyMoving && !isCompleted && !isRejectedOrPending;
+  }
+  
+  if (tabId === 'on_road') return anyMoving && !isCompleted;
+  if (tabId === 'completed') return isCompleted;
+  if (tabId === 'handover_pending') return s === 'HANDOVER_PENDING';
+  if (tabId === 'handover_rejected') return s === 'HANDOVER_REJECTED';
+  
+  return item.status === tabId;
+};
+
 export default function WorkOrderPlanningPage() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
@@ -137,12 +186,13 @@ export default function WorkOrderPlanningPage() {
   }, [searchParams, items]);
 
   const stats = {
-    total: items.length,
-    pending: items.filter(i => ['pending', 'need_assignment', 'NEED_ASSIGNMENT', 'PENDING'].includes(i.status?.toUpperCase())).length,
-    active: items.filter(i => ['active', 'assigned', 'in_progress', 'ACTIVE', 'ASSIGNED', 'IN_PROGRESS', 'ORDER DITERIMA', 'DALAM PERJALANAN', 'MENUNGGU MULAI / START', 'PICKING_UP', 'DELIVERING', 'MENUNGGU BERANGKAT', 'START JOURNEY'].includes(i.status?.toUpperCase())).length,
-    handover: items.filter(i => i.status?.toUpperCase() === 'HANDOVER_PENDING').length,
-    rejected: items.filter(i => i.status?.toUpperCase() === 'HANDOVER_REJECTED').length,
-    completed: items.filter(i => ['completed', 'DONE', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified', 'awaiting_audit', 'COMPLETED', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(i.status?.toUpperCase())).length
+    total: items.filter(i => filterItemByTab(i, 'all')).length,
+    pending: items.filter(i => filterItemByTab(i, 'pending')).length,
+    assigned_units: items.filter(i => filterItemByTab(i, 'assigned_units')).length,
+    on_road: items.filter(i => filterItemByTab(i, 'on_road')).length,
+    handover: items.filter(i => filterItemByTab(i, 'handover_pending')).length,
+    rejected: items.filter(i => filterItemByTab(i, 'handover_rejected')).length,
+    completed: items.filter(i => filterItemByTab(i, 'completed')).length
   };
 
   useEffect(() => {
@@ -166,59 +216,7 @@ const filteredItems = useMemo(() => {
       
       if (!matchesSearch) return false;
 
-      const s = item.status?.toUpperCase() || '';
-      
-      // CRITICAL: Prevent PAID/INVOICED leakage
-      if (['INVOICED', 'PAID'].includes(s)) return false;
-
-      const jos = (item.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-      const totalUnits = item.item_data?.unit_count || jos.length || 1;
-      const isHandoverApproved = item.item_data?.handover_approved === true;
-      const maxJOCount = isHandoverApproved ? (Number(item.item_data.max_jo_count) || 0) : totalUnits;
-      
-      // Check how many JOs have driver and fleet assigned
-      const assignedJOs = jos.filter((j: any) => j.driver_id && j.fleet_id);
-      const hasAnyAssigned = assignedJOs.length > 0;
-      
-      const allJobsCompleted = jos.length > 0 && jos.length >= totalUnits && jos.every((j: any) => 
-        ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
-      );
-      
-      const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
-      
-      const anyMoving = !isCompleted && jos.some((j: any) => 
-        j.status?.toUpperCase().startsWith('MENUJU') || 
-        j.status?.toUpperCase().startsWith('TIBA') || 
-        ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
-      );
-
-      // More lenient check - if item status is 'assigned' show in assigned tab
-      const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id);
-      const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
-      const hasAssignedStatus = s === 'ASSIGNED' || s === 'ACTIVE';
-
-      // Debug logging
-      console.log(`Item ${item.item_code}: status=${s}, jos=${jos.length}, assignedJOs=${assignedJOs.length}, totalUnits=${totalUnits}, isAssignedStatus=${isAssignedStatus}, hasAssignedStatus=${hasAssignedStatus}`);
-
-      if (selectedStatus === 'all') return true;
-      
-      // Pending: show if no units assigned yet OR status is PENDING/NEED_ASSIGNMENT
-      if (selectedStatus === 'pending') {
-        return (!hasAnyAssigned && (s === 'PENDING' || s === 'NEED_ASSIGNMENT')) || (s === 'PENDING' && !allAssigned);
-      }
-      
-      // Assigned: show if has any assigned OR status is ASSIGNED/ACTIVE OR handover approved
-      // [AI] Exclude rejected/pending handover items from assigned tab
-      if (selectedStatus === 'assigned_units') {
-        const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(s);
-        return (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) && !anyMoving && !isCompleted && !isRejectedOrPending;
-      }
-      
-      if (selectedStatus === 'on_road') return anyMoving && !isCompleted;
-      if (selectedStatus === 'completed') return isCompleted;
-      if (selectedStatus === 'handover_pending') return s === 'HANDOVER_PENDING';
-      if (selectedStatus === 'handover_rejected') return s === 'HANDOVER_REJECTED';
-      return item.status === selectedStatus;
+      return filterItemByTab(item, selectedStatus);
     });
   }, [items, searchTerm, selectedStatus]);
 
@@ -265,10 +263,10 @@ const filteredItems = useMemo(() => {
     
     const anyAccepted = jos.some((j:any) => 
       j.driver_response === 'accepted' || 
-      ['ORDER DITERIMA', 'MENUNGGU MULAI / START', 'ACCEPTED', 'MENUNGGU BERANGKAT'].includes(j.status?.toUpperCase())
+      ['ORDER DITERIMA', 'MENUNGGU MULAI / START', 'ACCEPTED', 'MENUNGGU BERANGKAT', 'DITERIMA'].includes(j.status?.toUpperCase())
     );
 
-    const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id);
+    const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
     const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
     
     // [AI] Check rejected status before assigned
@@ -283,7 +281,7 @@ const filteredItems = useMemo(() => {
       return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON ROAD</Badge>;
     }
 
-    if (anyAccepted || s === 'ORDER DITERIMA' || s === 'MENUNGGU MULAI / START') {
+    if (anyAccepted || s === 'ORDER DITERIMA' || s === 'MENUNGGU MULAI / START' || s === 'DITERIMA') {
        return <Badge className="!bg-emerald-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ACCEPTED</Badge>;
     }
 
@@ -427,31 +425,8 @@ const filteredItems = useMemo(() => {
               {[
                 { id: 'all', label: 'All Assignments', count: stats.total, color: 'text-slate-500' },
                 { id: 'pending', label: 'Need Assignment', count: stats.pending, color: 'text-rose-500' },
-                { id: 'assigned_units', label: 'Assigned', count: items.filter(i => {
-                  const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-                  const anyMoving = jos.some((j: any) => 
-                    j.status?.startsWith('MENUJU') || 
-                    j.status?.startsWith('TIBA') || 
-                    j.status === 'in_progress' || 
-                    j.status === 'DALAM PERJALANAN'
-                  );
-                  const allAssigned = (jos.length > 0 && jos.length >= (i.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id);
-                  const statusStr = i.status?.toUpperCase() || '';
-                  const isCompleted = ['COMPLETED', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(statusStr);
-                  const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(statusStr);
-                  const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(statusStr);
-                  return (allAssigned || isAssignedStatus) && !anyMoving && !isCompleted && !isRejectedOrPending;
-                }).length, color: 'text-blue-500' },
-                { id: 'on_road', label: 'On Journey', count: items.filter(i => {
-                  const jos = (i.job_orders || []).filter((j: any) => j.status !== 'cancelled');
-                  const anyMoving = jos.some((j: any) => 
-                    j.status?.toUpperCase().startsWith('MENUJU') || 
-                    j.status?.toUpperCase().startsWith('TIBA') || 
-                    ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT'].includes(j.status?.toUpperCase())
-                  );
-                  const isCompleted = ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(i.status?.toUpperCase() || '');
-                  return anyMoving && !isCompleted;
-                }).length, color: 'text-emerald-500' },
+                { id: 'assigned_units', label: 'Assigned', count: stats.assigned_units, color: 'text-blue-500' },
+                { id: 'on_road', label: 'On Journey', count: stats.on_road, color: 'text-emerald-500' },
                 { id: 'handover_pending', label: 'Handover', count: stats.handover, color: 'text-orange-500' },
                 { id: 'handover_rejected', label: 'Rejected', count: stats.rejected, color: 'text-rose-500' },
                 { id: 'completed', label: 'Completed', count: stats.completed, color: 'text-slate-900' }
@@ -558,7 +533,7 @@ const filteredItems = useMemo(() => {
                       const status = item.status?.toLowerCase();
                       const jos = item.job_orders || [];
                       const anyAccepted = jos.some((j: any) => j.driver_response === 'accepted' || j.status === 'in_progress');
-                      const allAssigned = (jos.length > 0 && jos.length >= (item.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id);
+                      const allAssigned = (jos.length > 0 && jos.length >= (item.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
                       const anyNeedWa = jos.some((j: any) => !j.wa_link_sent_at && j.driver_response !== 'accepted');
                       const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(status);
                       const isHandoverApproved = item.item_data?.handover_approved === true;
@@ -643,7 +618,7 @@ const filteredItems = useMemo(() => {
                                     link = `${baseUrl}/driver/portal`;
                                     msg = `Halo ${driverName}, Anda mendapat tugas baru (${jo.jo_number || item.item_code}). Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
                                   } else {
-                                    link = `${baseUrl}/driver/response?token=${jo.wa_token}&wo=${jo.id}`;
+                                    link = `${baseUrl}/jo/${jo.driver_link_token || jo.id}`;
                                     msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number || item.item_code}): ${link}`;
                                   }
                                   

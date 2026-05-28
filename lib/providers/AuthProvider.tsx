@@ -264,11 +264,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (event === 'SIGNED_IN') {
             setShowLoginToast(true);
-          }
-
-          if (typeof window !== 'undefined' && window.location.pathname === '/login') {
-            const dashboardRoute = getDashboardRoute(p.role);
-            router.push(dashboardRoute);
+            if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+              const dashboardRoute = getDashboardRoute(p.role);
+              router.push(dashboardRoute);
+            }
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
@@ -335,7 +334,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasInitializedProfile.current = false;
 
       if (typeof window !== 'undefined') {
-        localStorage.clear();
+        localStorage.removeItem('sentralogis-auth');
+        localStorage.removeItem('supabase.auth.token');
         sessionStorage.clear();
         
         const cookies = document.cookie.split(";");

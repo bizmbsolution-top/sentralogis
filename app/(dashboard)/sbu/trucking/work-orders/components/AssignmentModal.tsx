@@ -13,6 +13,24 @@ import {
   X, Edit2, Plus, Trash2, GripVertical, FileText, DollarSign
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { saveAssignmentsAction } from '@/lib/actions/assignmentActions';
+import {
+  computeDriverReadiness,
+} from '@/lib/domain/driver/readiness';
+import {
+  type AssignmentSlot,
+  type TransporterOption,
+  buildInitialAssignmentSlots,
+  computeMaxJoCount,
+  getActiveAssetIdsFromJos,
+  getRouteOriginDest,
+  mapTransportersForTenant,
+  matchDriverAllowance,
+  parseItemData,
+  resolveIsVendor,
+  computeMargin,
+} from '@/lib/domain/jo/assignment';
+import { buildDriverAssignmentMessage, buildWaLink } from '@/lib/domain/phone';
 
 interface AssignmentModalProps {
   item: any;
@@ -30,20 +48,20 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   // Selection Data
   const [fleets, setFleets] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [transporters, setTransporters] = useState<any[]>([]);
+  const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [transporterFleets, setTransporterFleets] = useState<any[]>([]);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
   const [driverReadiness, setDriverReadiness] = useState<Record<string, { ready: boolean; reason: string; hasAttendance: boolean; hasInspection: boolean; inspectionStatus: string }>>({});
   const [driverAllowances, setDriverAllowances] = useState<any[]>([]);
 
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentSlot[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
 
-  const itemData = typeof item?.item_data === 'string' ? JSON.parse(item.item_data) : (item?.item_data || {});
+  const itemData = parseItemData(item?.item_data);
   const dealPrice = Number(itemData.deal_price) || 0;
   const unitCount = Number(itemData.unit_count) || 1;
   const isHandoverApproved = itemData.handover_approved === true;
-  const maxJOCount = isHandoverApproved ? (Number(itemData.max_jo_count) || 0) : unitCount;
+  const maxJOCount = computeMaxJoCount(itemData);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,16 +96,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         const assignedFleetIds = (jos || []).map(j => j.fleet_id).filter(Boolean);
         const assignedDriverIds = (jos || []).map(j => j.driver_id).filter(Boolean);
 
-        // Get list of drivers/fleets that have active jobs (not completed)
-        const activeJobDrivers = (jos || [])
-          .filter(j => !['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'PAID', 'INVOICED', 'DONE'].includes(j.status))
-          .map(j => j.driver_id)
-          .filter(Boolean);
-        
-        const activeJobFleets = (jos || [])
-          .filter(j => !['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'PAID', 'INVOICED', 'DONE'].includes(j.status))
-          .map(j => j.fleet_id)
-          .filter(Boolean);
+        const { activeFleetIds: activeJobFleets, activeDriverIds: activeJobDrivers } =
+          getActiveAssetIdsFromJos(jos || []);
 
         // 2. Fetch available assets and transporters
         // [AI] Also fetch already-assigned fleets/drivers separately so they always appear in dropdowns
@@ -216,23 +226,11 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         
         const tenantName = (profile?.tenants?.name || '').toUpperCase();
         const tenantCode = (profile?.tenant_code || '').toUpperCase();
-
-        const trans = (transporterRes.data || [])
-          .filter(t => t.is_vendor || !t.is_customer)
-          .map(t => {
-            const isActuallyOwn = !t.is_vendor || 
-                                 t.name.toUpperCase().includes(tenantName) || 
-                                 t.name.toUpperCase().includes(tenantCode) ||
-                                 t.name.toUpperCase().includes('INTERNAL') ||
-                                 t.name.toUpperCase().includes('(OWN)');
-            
-            return {
-              id: t.id,
-              name: isActuallyOwn && !t.name.includes('(OWN)') ? `(OWN) ${t.name}` : t.name,
-              is_vendor: !isActuallyOwn,
-              is_own: isActuallyOwn
-            };
-          }).sort((a, b) => (a.is_own === b.is_own ? 0 : a.is_own ? -1 : 1));
+        const trans = mapTransportersForTenant(
+          transporterRes.data || [],
+          tenantName,
+          tenantCode
+        );
 
         // [AI] Check readiness for internal drivers (attendance + inspection today)
         const today = new Date().toISOString().split('T')[0];
@@ -248,24 +246,20 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
               supabase.from('fleet_inspections').select('status').eq('driver_id', d.id).gte('created_at', `${today}T00:00:00`).order('created_at', { ascending: false }).limit(1)
             ]);
             
-            const hasAttendance = attRes.data && attRes.data.length > 0;
-            const hasInspection = inspRes.data && inspRes.data.length > 0;
-            const inspectionStatus = inspRes.data?.[0]?.status || 'N/A';
-            
-            if (d.status === 'unavailable') {
-              readinessMap[d.id] = { ready: false, reason: 'Sakit/Cuti', hasAttendance: false, hasInspection: false, inspectionStatus: 'N/A' };
-            } else if (!hasAttendance) {
-              readinessMap[d.id] = { ready: false, reason: 'Belum absen', hasAttendance: false, hasInspection: false, inspectionStatus: 'N/A' };
-            } else if (!hasInspection) {
-              readinessMap[d.id] = { ready: false, reason: 'Belum inspeksi', hasAttendance: true, hasInspection: false, inspectionStatus: 'N/A' };
-            } else if (inspectionStatus === 'GROUNDED') {
-              readinessMap[d.id] = { ready: false, reason: 'Fleet GROUNDED', hasAttendance: true, hasInspection: true, inspectionStatus: 'GROUNDED' };
-            } else {
-              readinessMap[d.id] = { ready: true, reason: 'Ready', hasAttendance: true, hasInspection: true, inspectionStatus: inspectionStatus };
-            }
+            readinessMap[d.id] = computeDriverReadiness({
+              driverStatus: d.status,
+              hasAttendance: !!(attRes.data && attRes.data.length > 0),
+              hasInspection: !!(inspRes.data && inspRes.data.length > 0),
+              inspectionStatus: inspRes.data?.[0]?.status || 'N/A',
+              isVendor: false,
+            });
           } else {
-            // Vendor drivers don't need attendance/inspection check
-            readinessMap[d.id] = { ready: true, reason: 'Vendor', hasAttendance: true, hasInspection: true, inspectionStatus: 'N/A' };
+            readinessMap[d.id] = computeDriverReadiness({
+              isVendor: true,
+              hasAttendance: true,
+              hasInspection: true,
+              inspectionStatus: 'N/A',
+            });
           }
         }
         
@@ -285,63 +279,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
         setTransporters(trans);
 
-        // 3. Initialize assignments: Show ALL existing JOs first, then add empty slots if count < maxJOCount
-        const unitCount = Number(itemData.unit_count) || 1;
-        const isHandoverApproved = itemData.handover_approved === true;
-        const maxJOCount = isHandoverApproved ? (Number(itemData.max_jo_count) || 0) : unitCount;
         const internalHqId = trans.find(t => t.is_own)?.id || '';
-        
-        const existingAssignments = (jos || []).map(existing => {
-          console.log('[AssignmentModal] Mapping JO:', existing.jo_number, 'transporter_id:', existing.transporter_id, 'driver_id:', existing.driver_id, 'fleet_id:', existing.fleet_id);
-          return {
-            id: existing.id,
-            transporter_id: existing.transporter_id || null,
-            fleet_id: existing.fleet_id,
-            driver_id: existing.driver_id,
-            driver_phone: existing.driver_phone || '',
-            purchase_price: existing.purchase_price || 0,
-            base_price: existing.base_price || dealPrice,
-            driver_share_percentage: existing.driver_share_percentage || 40,
-            advance_amount: existing.advance_amount || 0,
-            advance_status: existing.advance_status || 'unpaid',
-            wa_link_sent_at: existing.wa_link_sent_at,
-            jo_number: existing.jo_number,
-            tracking_token: existing.tracking_token,
-            wa_token: existing.wa_token,
-            status: existing.status || 'assigned',
-            job_routes: [],
-            progress_percent: 0
-          };
-        });
-
-        const emptySlotsNeeded = isHandoverApproved ? 0 : Math.max(0, maxJOCount - existingAssignments.length);
-        const emptySlots = Array.from({ length: emptySlotsNeeded }).map(() => ({
-          transporter_id: internalHqId || null,
-          fleet_id: null,
-          driver_id: null,
-          driver_phone: '',
-          purchase_price: 0,
-          base_price: dealPrice,
-          driver_share_percentage: 40,
-          status: 'draft',
-          id: undefined,
-          jo_number: undefined
-        }));
-
-        const finalAssignments = [...existingAssignments, ...emptySlots];
-        console.log('[AssignmentModal] Setting assignments:', {
-          existingCount: existingAssignments.length,
-          emptyCount: emptySlots.length,
-          total: finalAssignments.length,
-          assignments: finalAssignments.map((a: any) => ({ 
-            id: a.id, 
-            jo_number: a.jo_number,
-            transporter_id: a.transporter_id,
-            driver_id: a.driver_id, 
-            fleet_id: a.fleet_id,
-            status: a.status
-          }))
-        });
+        const finalAssignments = buildInitialAssignmentSlots(
+          (jos || []) as AssignmentSlot[],
+          itemData,
+          dealPrice,
+          internalHqId
+        );
         setAssignments(finalAssignments);
         const missingFleetIds = activeJobFleets.filter(id => !availableFleets.some(f => f.id === id));
         if (missingFleetIds.length > 0) {
@@ -391,17 +335,16 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     if (field === 'fleet_id') {
        const fleet = fleets.find(f => f.id === value);
        if (fleet) {
-          const origin = (itemData.origin_city || itemData.origin_name || itemData.origin_location_name || '').toUpperCase();
-          const dest = (itemData.destination_city || itemData.destination_name || itemData.destination_location_name || '').toUpperCase();
-          
-          const found = driverAllowances.find(a => 
-            (a.origin_city?.toUpperCase() === origin || origin.includes(a.origin_city?.toUpperCase()) || a.origin_city?.toUpperCase().includes(origin)) &&
-            (a.destination_city?.toUpperCase() === dest || dest.includes(a.destination_city?.toUpperCase()) || a.destination_city?.toUpperCase().includes(dest)) &&
-            a.fleet_type_id === fleet.fleet_type_id
+          const { origin, dest } = getRouteOriginDest(itemData);
+          const found = matchDriverAllowance(
+            driverAllowances,
+            origin,
+            dest,
+            fleet.fleet_type_id
           );
           
           if (found) {
-             updated[index].advance_amount = found.amount;
+             updated[index].advance_amount = Number(found.amount) || 0;
              updated[index].save_to_master = false;
           } else {
              if (!updated[index].advance_amount) {
@@ -431,81 +374,35 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     }
 
     setAssigning(true);
-    console.log('[AssignmentModal] Saving draft for item:', item.id);
 
     try {
-      // [AI] Save ALL assignments including partial ones (without fleet/driver)
-      // This allows user to continue editing later
-      const generateToken = () => {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      };
-      
-      for (let i = 0; i < assignments.length; i++) {
-        const assign = assignments[i];
-        
-        // Skip if no data at all (completely empty slot)
-        if (!assign.id && !assign.transporter_id && !assign.fleet_id && !assign.driver_id) {
-          continue;
-        }
-        
-        const selectedTransporter = transporters.find(t => t.id === assign.transporter_id);
-        const woNumber = item.work_orders?.wo_number || item.item_code;
-        const joNumber = assign.jo_number || `${woNumber}-${String(i + 1).padStart(2, '0')}`;
-        
-        const payload = {
-          wo_item_id: item.id,
-          tenant_id: tenantId,
-          jo_number: joNumber,
-          transporter_id: assign.transporter_id || null,
-          vendor_id: assign.transporter_id || null,
-          fleet_id: assign.fleet_id || null,
-          driver_id: assign.driver_id || null,
-          driver_phone: assign.driver_phone || null,
-          purchase_price: Number(assign.purchase_price) || 0,
-          base_price: Number(assign.base_price) || dealPrice,
-          driver_share_percentage: Number(assign.driver_share_percentage) || 0,
-          advance_amount: Number(assign.advance_amount) || 0,
-          estimated_margin: (Number(assign.base_price) || dealPrice) - (Number(assign.purchase_price) || 0),
-          wa_token: assign.wa_token || generateToken(),
-          tracking_token: assign.tracking_token || generateToken(),
-          total_stops: itemData.stops?.length || 0,
-          updated_at: new Date().toISOString(),
-          status: 'pending' // [AI] Always pending for drafts
-        };
+      const result = await saveAssignmentsAction({
+        tenantId,
+        woItem: {
+          id: item.id,
+          wo_id: item.wo_id,
+          status: item.status,
+          item_code: item.item_code,
+          work_orders: item.work_orders,
+          item_data: item.item_data,
+        },
+        assignments,
+        mode: 'draft',
+        dealPrice,
+        transporters,
+        drivers,
+        fleets,
+      });
 
-        if (assign.id) {
-          const { error: updErr } = await supabase.from('job_orders').update({
-            ...payload,
-            driver_link_token: assign.driver_link_token || Math.random().toString(36).substring(2, 15),
-          }).eq('id', assign.id);
-          if (updErr) throw updErr;
-          console.log(`[AssignmentModal] Updated draft JO: ${joNumber}`);
-        } else {
-          const { data: newJo, error: insErr } = await supabase.from('job_orders').insert({
-            ...payload,
-            driver_link_token: Math.random().toString(36).substring(2, 15),
-          }).select('id').single();
-          
-          if (insErr) throw insErr;
-          console.log(`[AssignmentModal] Inserted draft JO: ${joNumber}`);
-        }
+      if (!result.success) {
+        toast.error(`Gagal save draft: ${result.error}`);
+        return;
       }
 
-      // Keep WO item status as pending so user can continue editing
-      const { error: woUpdateError } = await supabase
-        .from('wo_items')
-        .update({ status: 'pending' })
-        .eq('id', item.id);
-      
-      if (woUpdateError) throw woUpdateError;
-      
       toast.success('Draft saved — bisa lanjut edit nanti');
-      console.log('[AssignmentModal] Draft saved successfully.');
       onSuccess();
-    } catch (err: any) {
-      console.error('[AssignmentModal] Draft Save Error:', err);
-      const errorMessage = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       toast.error(`Gagal save draft: ${errorMessage}`);
     } finally {
       setAssigning(false);
@@ -522,276 +419,40 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     }
 
     setAssigning(true);
-    console.log('[AssignmentModal] Starting save process for item:', item.id);
 
     try {
-      // [AI] Only process assignments that have BOTH fleet_id AND driver_id
-      // Skip empty slots — they should NOT create ghost JO records
-      const filledAssignments = assignments.filter(a => a.fleet_id && a.driver_id);
-      const emptyAssignments = assignments.filter(a => !a.fleet_id || !a.driver_id);
-      
-      console.log(`[AssignmentModal] Filled: ${filledAssignments.length}, Empty: ${emptyAssignments.length}`);
+      const result = await saveAssignmentsAction({
+        tenantId,
+        woItem: {
+          id: item.id,
+          wo_id: item.wo_id,
+          status: item.status,
+          item_code: item.item_code,
+          work_orders: item.work_orders,
+          item_data: item.item_data,
+        },
+        assignments,
+        mode: nextAction ? 'handover' : 'confirm',
+        dealPrice,
+        transporters,
+        drivers,
+        fleets,
+      });
 
-      // 1. Clean up stale/pending job orders (only truly empty ones with no fleet/driver)
-      const { error: delErr } = await supabase
-        .from('job_orders')
-        .delete()
-        .eq('wo_item_id', item.id)
-        .eq('status', 'pending')
-        .is('driver_id', null)
-        .is('fleet_id', null);
-      
-      if (delErr) {
-        console.warn('[AssignmentModal] Cleanup warning (non-fatal):', delErr);
+      if (!result.success) {
+        toast.error(result.error || 'Gagal menyimpan assignment');
+        return;
       }
 
-      const generateToken = () => {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      };
-      
-      // 2. Only save filled assignments
-      for (let i = 0; i < filledAssignments.length; i++) {
-        const assign = filledAssignments[i];
-        const originalIndex = assignments.indexOf(assign);
-        console.log(`[AssignmentModal] Processing filled assignment ${i + 1}/${filledAssignments.length} (original slot ${originalIndex + 1})`);
-        
-        const selectedTransporter = transporters.find(t => t.id === assign.transporter_id);
-        const isVendor = selectedTransporter?.is_vendor;
-        
-        if (isVendor && (!assign.purchase_price || assign.purchase_price <= 0)) {
-          toast.error(`Harga beli untuk unit ${originalIndex + 1} harus diisi untuk vendor`);
-          setAssigning(false);
-          return;
-        }
-
-        // [AI] For internal/own drivers, validate attendance & inspection before assignment
-        if (!isVendor && assign.driver_id) {
-          const today = new Date().toISOString().split('T')[0];
-          
-          // Check attendance today
-          const { data: todayAttendance } = await supabase
-            .from('driver_attendance')
-            .select('id')
-            .eq('driver_id', assign.driver_id)
-            .eq('status', 'CHECK_IN')
-            .gte('check_in', `${today}T00:00:00`)
-            .limit(1);
-          
-          if (!todayAttendance || todayAttendance.length === 0) {
-            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
-            toast.error(`${driverName} belum absen hari ini. Driver harus absen sebelum di-assign.`);
-            setAssigning(false);
-            return;
-          }
-
-          // Check inspection today
-          const { data: todayInspection } = await supabase
-            .from('fleet_inspections')
-            .select('status')
-            .eq('driver_id', assign.driver_id)
-            .gte('created_at', `${today}T00:00:00`)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          
-          if (!todayInspection || todayInspection.length === 0) {
-            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
-            toast.error(`${driverName} belum inspeksi fleet hari ini. Driver harus inspeksi sebelum di-assign.`);
-            setAssigning(false);
-            return;
-          }
-
-          if (todayInspection[0].status === 'GROUNDED') {
-            const driverName = drivers.find(d => d.id === assign.driver_id)?.name || 'Driver';
-            toast.error(`${driverName} - fleet tidak layak jalan (GROUNDED). Tidak bisa di-assign.`);
-            setAssigning(false);
-            return;
-          }
-        }
-
-        const woNumber = item.work_orders?.wo_number || item.item_code;
-        const joNumber = `${woNumber}-${String(originalIndex + 1).padStart(2, '0')}`;
-        
-        const payload = {
-          wo_item_id: item.id,
-          tenant_id: tenantId,
-          jo_number: joNumber,
-          transporter_id: assign.transporter_id || null,
-          vendor_id: assign.transporter_id || null,
-          fleet_id: assign.fleet_id,
-          driver_id: assign.driver_id,
-          driver_phone: assign.driver_phone || null,
-          purchase_price: Number(assign.purchase_price) || 0,
-          base_price: Number(assign.base_price) || dealPrice,
-          driver_share_percentage: Number(assign.driver_share_percentage) || 0,
-          advance_amount: Number(assign.advance_amount) || 0,
-          estimated_margin: (Number(assign.base_price) || dealPrice) - (Number(assign.purchase_price) || 0),
-          wa_token: assign.wa_token || generateToken(),
-          tracking_token: assign.tracking_token || generateToken(),
-          total_stops: itemData.stops?.length || 0,
-          updated_at: new Date().toISOString(),
-          status: assign.id ? assign.status : 'assigned'
-        };
-
-        let joId = assign.id;
-
-        if (assign.id) {
-          const { error: updErr } = await supabase.from('job_orders').update(payload).eq('id', assign.id);
-          if (updErr) throw updErr;
-          console.log(`[AssignmentModal] Updated JO: ${joNumber}`);
-        } else {
-          const { data: newJo, error: insErr } = await supabase.from('job_orders').insert({
-            ...payload,
-            driver_link_token: Math.random().toString(36).substring(2, 15),
-          }).select('id').single();
-          
-          if (insErr) throw insErr;
-          joId = newJo.id;
-          console.log(`[AssignmentModal] Inserted new JO: ${joNumber}`);
-        }
-
-        // [AI] Save to Master Uang Jalan if requested
-        if (assign.save_to_master && !isVendor && assign.fleet_id) {
-          try {
-            const fleet = fleets.find(f => f.id === assign.fleet_id);
-            if (fleet && fleet.fleet_type_id) {
-              const origin = (itemData.origin_city || itemData.origin_name || itemData.origin_location_name || '').toUpperCase();
-              const dest = (itemData.destination_city || itemData.destination_name || itemData.destination_location_name || '').toUpperCase();
-              
-              if (origin && dest && assign.advance_amount > 0) {
-                const { error: masterErr } = await supabase.from('md_driver_allowances').insert({
-                  tenant_id: tenantId,
-                  origin_city: origin,
-                  destination_city: dest,
-                  fleet_type_id: fleet.fleet_type_id,
-                  amount: Number(assign.advance_amount) || 0,
-                  is_active: true
-                });
-                if (masterErr) {
-                  // Ignore unique constraint errors
-                  if (masterErr.code !== '23505') {
-                    console.warn('[AssignmentModal] Failed to save master allowance:', masterErr);
-                  }
-                } else {
-                  console.log(`[AssignmentModal] Saved allowance to master data for ${origin} - ${dest}`);
-                }
-              }
-            }
-          } catch (masterEx) {
-            console.warn('[AssignmentModal] Exception saving master allowance:', masterEx);
-          }
-        }
-
-        // 2. Sync Routes (NON-BLOCKING: RLS for job_routes can be restrictive for non-HQ roles)
-        if (joId) {
-          console.log(`[AssignmentModal] Attempting route sync for JO ID: ${joId}`);
-          try {
-            const { data: existingRoutes, error: routeFetchErr } = await supabase.from('job_routes').select('id').eq('job_order_id', joId);
-            if (routeFetchErr) console.warn('[AssignmentModal] Route fetch failed:', routeFetchErr);
-
-            if (!existingRoutes || existingRoutes.length === 0) {
-              const stops = itemData.stops || [];
-              const estDistanceKm = itemData.est_distance_km || null;
-              const estDuration = itemData.est_duration || null;
-              if (stops.length > 0) {
-                const routePayloads = stops.map((stop: any, sIdx: number) => ({
-                  job_order_id: joId,
-                  sequence: sIdx + 1,
-                  stop_type: stop.stop_type || (sIdx === 0 ? 'PICKUP' : 'DROPOFF'),
-                  source_type: stop.source_type || 'MD_LOCATION',
-                  source_id: String(stop.source_id || 'LEGACY'),
-                  location_name: stop.location_name || stop.name || '-',
-                  address: stop.address || stop.location_address || '-',
-                  latitude: stop.latitude !== null && stop.latitude !== undefined ? Number(stop.latitude) : null,
-                  longitude: stop.longitude !== null && stop.longitude !== undefined ? Number(stop.longitude) : null,
-                  contact_name: stop.contact_name || '-',
-                  contact_phone: stop.contact_phone || '-',
-                  status: 'pending',
-                  distance_km: sIdx === stops.length - 1 ? estDistanceKm : null,
-                  duration_minutes: sIdx === stops.length - 1 ? (estDuration ? parseInt(estDuration.replace(/\D/g, '')) || null : null) : null
-                }));
-                const { error: routeInsErr } = await supabase.from('job_routes').insert(routePayloads);
-                if (routeInsErr) {
-                   console.warn('[AssignmentModal] Route Insert suppressed (RLS issue):', routeInsErr.message);
-                   // We don't throw here to allow the JO assignment to proceed
-                } else {
-                   console.log(`[AssignmentModal] Successfully created routes for JO ${joId}`);
-                }
-              }
-            }
-          } catch (routeErr: any) {
-             console.warn('[AssignmentModal] Route Sync logic error (suppressed):', routeErr);
-          }
-        }
-      }
-
-      // 3. Finalize WO Item status
-      console.log('[AssignmentModal] Finalizing WO Item status...');
-      
-      // [AI] If handover was approved, use max_jo_count as the limit
-      const effectiveUnitCount = isHandoverApproved ? maxJOCount : (unitCount || 1);
-      
-      // Count saved assignments (only filled ones)
-      const successfulAssignments = filledAssignments.length;
-      const allUnitsAssigned = successfulAssignments >= effectiveUnitCount;
-      
-      console.log(`[AssignmentModal] Saved: ${successfulAssignments}/${effectiveUnitCount} - All assigned: ${allUnitsAssigned}`);
-      
-      // [AI] If nextAction is handover, don't change status — handover modal will set it to handover_pending
-      const isHandoverFlow = !!nextAction;
-      const newStatus = isHandoverFlow ? item.status : (allUnitsAssigned ? 'assigned' : 'pending');
-      
-      // [AI] If all units assigned, set confirmed_approved flag in item_data
-      const currentItemData = typeof item?.item_data === 'string' ? JSON.parse(item.item_data) : (item?.item_data || {});
-      const updatePayload: any = { status: newStatus };
-      if (allUnitsAssigned && !isHandoverFlow) {
-        updatePayload.item_data = {
-          ...currentItemData,
-          confirmed_assigned: true,
-          confirmed_assigned_at: new Date().toISOString()
-        };
-      }
-      
-      const { error: woUpdateError } = await supabase
-        .from('wo_items')
-        .update(updatePayload)
-        .eq('id', item.id);
-      
-      if (woUpdateError) throw woUpdateError;
-      console.log(`[AssignmentModal] WO Item status set to: ${newStatus}`);
-
-      // 4. Update parent Work Order status if needed
-      const { data: siblingItems } = await supabase
-        .from('wo_items')
-        .select('status')
-        .eq('wo_id', item.wo_id);
-      
-      const allAssigned = siblingItems?.every(i => ['assigned', 'active', 'in_progress', 'completed'].includes(i.status?.toLowerCase()));
-      
-      if (allAssigned) {
-        await supabase
-          .from('work_orders')
-          .update({ status: 'assigned' })
-          .eq('id', item.wo_id);
-      }
-      
-      // [AI] Different toast for handover flow vs normal save
-      if (isHandoverFlow) {
-        toast.success(`${successfulAssignments} JO(s) saved — proceeding to handover...`);
+      if (result.isHandoverFlow) {
+        toast.success(`${result.savedCount} JO(s) saved — proceeding to handover...`);
+        nextAction?.();
       } else {
         toast.success('Assignment berhasil disimpan');
+        onSuccess();
       }
-      console.log('[AssignmentModal] Save process completed successfully.');
-      
-      if (nextAction) {
-        nextAction();
-      } else {
-        onSuccess(); 
-      } 
-    } catch (err: any) {
-      console.error('[AssignmentModal] Critical Save Error:', err);
-      // Detailed error logging for objects that don't serialize well
-      const errorMessage = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       toast.error(`Gagal menyimpan assignment: ${errorMessage}`);
     } finally {
       setAssigning(false);
@@ -853,7 +514,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                         {(itemData.stops || []).map((stop: any, sIdx: number) => (
                            <span key={sIdx} className="flex items-center">
                               {stop.location_name || stop.name || '-'}
-                              {sIdx < (itemData.stops?.length - 1) && <span className="mx-2 text-slate-300">→</span>}
+                              {sIdx < ((itemData.stops?.length ?? 0) - 1) && <span className="mx-2 text-slate-300">→</span>}
                            </span>
                         ))}
                         {(!itemData.stops || itemData.stops.length === 0) && (
@@ -916,15 +577,15 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                     const selectedTransporter = assign.transporter_id 
                       ? transporters.find(t => t.id === assign.transporter_id)
                       : transporters.find(t => t.is_own);
-                    const isVendor = selectedTransporter?.is_vendor;
+                    const driverEntity = drivers.find(d => d.id === assign.driver_id)?.md_entities;
+                    const isVendor = resolveIsVendor(selectedTransporter, driverEntity?.is_vendor);
                     const isOwn = selectedTransporter?.is_own;
                     const purchasePrice = Number(assign.purchase_price) || 0;
                     const effectiveBasePrice = Number(assign.base_price) > 0 ? Number(assign.base_price) : (Number(dealPrice) > 0 ? Number(dealPrice) : Number(itemData?.deal_price || 0));
                     const basePrice = effectiveBasePrice;
                     const sharePct = Number(assign.driver_share_percentage) || 0;
                    
-                    const margin = basePrice - purchasePrice;
-                    const marginPercent = basePrice > 0 ? (margin / basePrice) * 100 : 0;
+                    const { margin, percent: marginPercent } = computeMargin(basePrice, purchasePrice);
                     const driverPayout = basePrice * (sharePct / 100);
                     
                     let marginStatus = "MARGIN AMAN";
@@ -957,7 +618,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                        return { text: status.toUpperCase().replace(/_/g, ' '), color: 'bg-slate-100 text-slate-500 border-slate-200' };
                      };
 
-                    const statusFlag = assign.id ? getStatusFlag(assign.status, assign.job_routes) : null;
+                    const statusFlag = assign.id ? getStatusFlag(assign.status || '', []) : null;
 
                     return (
                       <div key={idx} className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm hover:border-slate-300 transition-colors relative overflow-hidden">
@@ -975,7 +636,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
                              <div 
                                className="h-full bg-blue-500 transition-all duration-1000" 
-                               style={{ width: `${assign.progress_percent || 0}%` }}
+                               style={{ width: '0%' }}
                              />
                           </div>
                         )}
@@ -1064,7 +725,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                            </div>
 
                            <div className={`flex-1 min-w-[200px] space-y-1 transition-opacity duration-300 ${isVendor ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                              <div className="flex justify-between items-center h-4">
+                              <div className="flex justify-between items-center w-full pb-1">
                                  <label className="text-xs font-medium text-slate-500">Harga Beli (Vendor)</label>
                                  {isVendor && purchasePrice > 0 && (
                                     <div className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase ${marginColor}`}>
@@ -1090,7 +751,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
                            {isVendor && (
                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
-                                 <div className="h-4 flex items-center">
+                                 <div className="flex items-center pb-1">
                                     <label className="text-xs font-medium text-slate-500">Harga Jual (Customer)</label>
                                  </div>
                                  <div className="relative">
@@ -1112,7 +773,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                             {isOwn && (
                               <>
                                <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
-                                  <div className="h-4 flex items-center">
+                                  <div className="flex items-center pb-1">
                                      <label className="text-xs font-medium text-slate-500">Uang Jalan (Bagi Hasil)</label>
                                   </div>
                                   <div className="relative">
@@ -1162,21 +823,17 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                           const driverName = driver?.name || 'Driver';
                                           const phone = assign.driver_phone || driver?.phone || '';
                                           if (!phone) { toast.error('Nomor telepon driver tidak ditemukan'); return; }
-                                          let formattedPhone = phone.replace(/\D/g, '');
-                                          if (formattedPhone.startsWith('0')) { formattedPhone = '62' + formattedPhone.substring(1); }
                                           const origin = window.location.origin;
                                           const isInternal = driver?.md_entities?.is_vendor === false;
-                                          
-                                          let link, msg;
-                                          if (isInternal) {
-                                            link = `${origin}/driver/portal`;
-                                            msg = `Halo ${driverName}, Anda mendapat tugas baru. Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
-                                          } else {
-                                            link = `${origin}/driver/response?token=${assign.wa_token}&wo=${assign.id}`;
-                                            msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda: ${link}`;
-                                          }
-                                          
-                                          window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                                          const link = isInternal
+                                            ? `${origin}/driver/portal`
+                                            : `${origin}/jo/${assign.driver_link_token || assign.id}`;
+                                          const msg = buildDriverAssignmentMessage({
+                                            driverName,
+                                            isInternal,
+                                            link,
+                                          });
+                                          window.open(buildWaLink(phone, msg), '_blank');
                                        }}
                                        className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200"
                                        title="Send WA Link"

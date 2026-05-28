@@ -18,6 +18,7 @@ interface Tenant {
   id: string
   tenant_code: string
   name: string
+  logo_url: string | null
   subscription_tier: string
   token_balance: number
   user_id: string
@@ -255,8 +256,12 @@ export default function OwnerTenantsPage() {
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold border ${tenant.status === 'active' ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-rose-50 text-rose-400 border-rose-200'}`}>
-                      {tenant.name ? tenant.name.charAt(0) : '?'}
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold border overflow-hidden ${tenant.status === 'active' ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-rose-50 text-rose-400 border-rose-200'}`}>
+                      {tenant.logo_url ? (
+                        <img src={tenant.logo_url} alt={tenant.name} className="w-full h-full object-contain p-1" />
+                      ) : (
+                        tenant.name ? tenant.name.charAt(0) : '?'
+                      )}
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-900 leading-tight">{tenant.name || 'Unnamed Tenant'}</h3>

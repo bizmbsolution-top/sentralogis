@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/Badge';
 import {
   FileText, Search, Loader2, Banknote,
   ArrowRight, CheckCircle2, Clock, AlertCircle,
-  Send, Eye, Printer, RefreshCw, Calendar, DollarSign
+  Send, Eye, Printer, RefreshCw, Calendar, DollarSign, ExternalLink
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 import { toast, Toaster } from 'react-hot-toast';
 
 const supabase = createClient()!;
@@ -58,22 +59,42 @@ type InvoiceRow = {
   invoice_number: string | null;
   total_billing: number;
   tax_amount: number;
-  grand_total: number;
   status: string;
   due_date: string | null;
-  invoiced_at: string | null;
+  invoice_date: string | null;
   sent_at: string | null;
   customer_accepted_invoice_at: string | null;
-  customer_paid_at: string | null;
-  payment_terms: string | null;
+  paid_at: string | null;
   days_until_due: number | null;
   jo_count: number;
   completed_jo: number;
   ready_for_billing: boolean;
 };
 
+const handleDownloadPdf = async (invoiceId: string, invoiceNumber: string | null) => {
+  try {
+    const res = await fetch(`/api/invoice/pdf?invoice_id=${invoiceId}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice-${invoiceNumber || invoiceId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    toast.error('Gagal download PDF: ' + (err.message || 'unknown'));
+  }
+};
+
 export default function HQInvoiceCustomerPage() {
   const { profile } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<InvoiceRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,7 +109,7 @@ export default function HQInvoiceCustomerPage() {
         .from('work_orders')
         .select(`
           id, wo_number, customer_id, created_at,
-          customer:md_entities!customer_id(name, legal_name, payment_terms),
+          customer:md_entities!customer_id(name, legal_name),
           wo_items (
             id,
             job_orders (
@@ -100,15 +121,24 @@ export default function HQInvoiceCustomerPage() {
         .not('status', 'in', '("cancelled")')
         .order('created_at', { ascending: false });
 
-      if (woError) throw woError;
+      if (woError) {
+        console.error('WO query error detail:', { message: woError.message, details: woError.details, hint: woError.hint, code: woError.code });
+        throw woError;
+      }
 
-      const { data: invoices } = await supabase
+      const { data: invoices, error: invError } = await supabase
         .from('invoices')
         .select('*')
-        .eq('tenant_id', profile.tenant_id);
+        .in('wo_id', (wos || []).map(w => w.id));
+
+      if (invError) {
+        console.warn('Invoices query warning:', { message: invError.message, details: invError.details, code: invError.code });
+      }
 
       const invoiceMap = new Map();
-      (invoices || []).forEach(inv => invoiceMap.set(inv.wo_id, inv));
+      if (invoices && invoices.length > 0) {
+        invoices.forEach(inv => invoiceMap.set(inv.wo_id, inv));
+      }
 
       const rows: InvoiceRow[] = [];
       for (const wo of wos || []) {
@@ -126,7 +156,6 @@ export default function HQInvoiceCustomerPage() {
         const inv = invoiceMap.get(wo.id);
 
         const customerName = (wo as any).customer?.legal_name || (wo as any).customer?.name || '';
-        const paymentTerms = (wo as any).customer?.payment_terms || '';
 
         let status = 'draft';
         let dueDate: string | null = null;
@@ -143,16 +172,14 @@ export default function HQInvoiceCustomerPage() {
           wo_number: wo.wo_number,
           customer_name: customerName,
           invoice_number: inv?.invoice_number || null,
-          total_billing: totalBilling,
+          total_billing: inv?.total_billing != null ? Number(inv.total_billing) : totalBilling,
           tax_amount: inv?.tax_amount || 0,
-          grand_total: inv?.grand_total || totalBilling,
           status,
           due_date: dueDate,
-          invoiced_at: inv?.invoiced_at || null,
+          invoice_date: inv?.invoice_date || null,
           sent_at: inv?.sent_at || null,
           customer_accepted_invoice_at: inv?.customer_accepted_invoice_at || null,
-          customer_paid_at: inv?.customer_paid_at || null,
-          payment_terms: paymentTerms,
+          paid_at: inv?.paid_at || null,
           days_until_due: getDaysUntilDue(dueDate),
           jo_count: jos.length,
           completed_jo: completedJo,
@@ -162,7 +189,7 @@ export default function HQInvoiceCustomerPage() {
 
       setData(rows);
     } catch (err: any) {
-      console.error('Fetch Error:', err);
+      console.error('Fetch Error:', err?.message || JSON.stringify(err), err?.details || '', err?.code || '');
       toast.error('Gagal mengambil data invoice');
     } finally {
       setLoading(false);
@@ -197,11 +224,11 @@ export default function HQInvoiceCustomerPage() {
       readyCount: ready.length,
       readyTotal: ready.reduce((s, d) => s + d.total_billing, 0),
       sentCount: sent.length,
-      sentTotal: sent.reduce((s, d) => s + d.grand_total, 0),
+      sentTotal: sent.reduce((s, d) => s + d.total_billing, 0),
       acceptedCount: accepted.length,
-      acceptedTotal: accepted.reduce((s, d) => s + d.grand_total, 0),
+      acceptedTotal: accepted.reduce((s, d) => s + d.total_billing, 0),
       paidCount: paid.length,
-      paidTotal: paid.reduce((s, d) => s + d.grand_total, 0),
+      paidTotal: paid.reduce((s, d) => s + d.total_billing, 0),
       overdueCount: data.filter(d => (d.days_until_due ?? 0) < 0 && ['sent', 'accepted'].includes(d.status)).length,
     };
   }, [data]);
@@ -210,28 +237,21 @@ export default function HQInvoiceCustomerPage() {
     try {
       const invNumber = `INV-${row.wo_number.replace('WO', '')}`;
       const dueDate = new Date();
-      if (row.payment_terms) {
-        const days = parseInt(row.payment_terms.replace(/\D/g, '')) || 30;
-        dueDate.setDate(dueDate.getDate() + days);
-      } else {
-        dueDate.setDate(dueDate.getDate() + 30);
-      }
+      dueDate.setDate(dueDate.getDate() + 30);
 
-      const { error } = await supabase.from('invoices').insert({
+      const { data: newInv, error } = await supabase.from('invoices').insert({
         wo_id: row.wo_id,
-        tenant_id: profile?.tenant_id,
         invoice_number: invNumber,
         total_billing: row.total_billing,
         tax_amount: 0,
-        grand_total: row.total_billing,
         status: 'draft',
-        due_date: dueDate.toISOString(),
-        invoiced_at: new Date().toISOString(),
-      });
+        invoice_date: new Date().toISOString().split('T')[0],
+        due_date: dueDate.toISOString().split('T')[0],
+      }).select().single();
 
       if (error) throw error;
       toast.success(`Invoice ${invNumber} created`);
-      fetchData();
+      router.push(`/hq/invoice-customer/${newInv.id}`);
     } catch (err: any) {
       toast.error(`Gagal: ${err.message}`);
     }
@@ -271,7 +291,7 @@ export default function HQInvoiceCustomerPage() {
     try {
       const { error } = await supabase.from('invoices').update({
         status: 'paid',
-        customer_paid_at: new Date().toISOString(),
+        paid_at: new Date().toISOString(),
       }).eq('id', row.id);
 
       if (error) throw error;
@@ -436,8 +456,8 @@ export default function HQInvoiceCustomerPage() {
                           <div className="text-sm text-slate-900 truncate max-w-[200px]">{row.customer_name || '-'}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="text-sm font-semibold text-slate-900">{formatRupiah(row.grand_total)}</div>
-                          {row.total_billing !== row.grand_total && (
+                          <div className="text-sm font-semibold text-slate-900">{formatRupiah(row.total_billing)}</div>
+                          {row.total_billing !== row.total_billing && (
                             <div className="text-[10px] text-slate-400">Base: {formatRupiah(row.total_billing)}</div>
                           )}
                         </td>
@@ -459,11 +479,7 @@ export default function HQInvoiceCustomerPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {row.payment_terms ? (
-                            <div className="text-xs text-slate-700">{row.payment_terms}</div>
-                          ) : (
-                            <span className="text-xs text-slate-400">-</span>
-                          )}
+                          <span className="text-xs text-slate-400">-</span>
                           {topDays !== null && row.status === 'accepted' && (
                             <div className="text-[10px] text-slate-400 mt-0.5">{topDays} days TOP</div>
                           )}
@@ -509,12 +525,22 @@ export default function HQInvoiceCustomerPage() {
                               </Button>
                             )}
                             {row.invoice_number && (
-                              <button
-                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                title="Print"
-                              >
-                                <Printer size={14} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => router.push(`/hq/invoice-customer/${row.id}`)}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                  title="View Invoice"
+                                >
+                                  <Eye size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadPdf(row.id, row.invoice_number)}
+                                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                  title="Download PDF"
+                                >
+                                  <FileText size={14} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
