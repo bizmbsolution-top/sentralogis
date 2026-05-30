@@ -27,7 +27,7 @@ async function checkSupabase(): Promise<HealthCheckResult> {
     const client = createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { error } = await client.from('audit_logs').select('id').limit(1);
+    const { error } = await client.from('md_warehouses').select('id').limit(1);
     if (error) throw error;
     return { component: 'supabase', status: 'pass', latency_ms: Date.now() - start };
   } catch (err: unknown) {
