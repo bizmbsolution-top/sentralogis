@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, LogIn } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 interface MouseStar {
@@ -38,7 +37,6 @@ export default function LoginPage() {
   const [mounted, setMounted] = useState(false);
   const [cardGlowAngle, setCardGlowAngle] = useState(0);
   const { login, user, logout: signOut, loading: authLoading } = useAuth();
-  const router = useRouter();
 
   const mouseStarsRef = useRef<MouseStar[]>([]);
   const walkingGlassesRef = useRef<WalkingGlasses[]>([]);
@@ -175,6 +173,7 @@ export default function LoginPage() {
           toast.error(error.message || 'Login gagal');
         }
       }
+      // [AI] Navigation handled by AuthProvider onAuthStateChange
     } catch {
       toast.error('Terjadi kesalahan. Coba lagi.');
     } finally {
@@ -184,6 +183,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-[#050816] flex items-center justify-center">
+      
+      {/* Exit Button */}
+      <div className="absolute top-6 left-6 z-50">
+        <a href="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+          <ArrowRight className="w-4 h-4 rotate-180" />
+          <span className="text-xs font-bold uppercase tracking-wider">Kembali ke Website</span>
+        </a>
+      </div>
+
       {/* Deep Space Background */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-to-br from-[#050816] via-[#0a0e27] to-[#0d1b3e]" />
