@@ -11,20 +11,20 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { profile, loading } = useAuth();
+  const { profile, loading, profileLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !profileLoading) {
       if (!profile) {
         router.push('/login');
       } else if (allowedRoles && profile.role && !allowedRoles.includes(profile.role)) {
         router.push('/');
       }
     }
-  }, [profile, loading, allowedRoles, router]);
+  }, [profile, loading, profileLoading, allowedRoles, router]);
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <LoadingSpinner message="Authenticating Sequence..." />

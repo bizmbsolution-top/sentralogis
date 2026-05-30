@@ -1,0 +1,70 @@
+Created At: 2026-05-28T07:20:16Z
+Completed At: 2026-05-28T07:20:16Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 840 to 920
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+840:                                 {dueBadge.label}
+841:                               </span>
+842:                             </div>
+843:                           ) : (
+844:                             <span className="text-xs text-slate-500">-</span>
+845:                           )}
+846:                         </td>
+847:                         <td className="px-4 py-3">
+848:                           {row.payment_terms ? (
+849:                             <div className="text-xs text-slate-700">{row.payment_terms}</div>
+850:                           ) : (
+851:                             <span className="text-xs text-slate-500">-</span>
+852:                           )}
+853:                           {topDays !== null && row.status === 'accepted' && (
+854:                             <div className="text-[10px] text-slate-500 mt-0.5">{topDays} days TOP</div>
+855:                           )}
+856:                         </td>
+857:                         <td className="px-4 py-3 text-right no-print">
+858:                           <div className="flex items-center justify-end gap-1">
+859:                             {row.status === 'ready' && (
+860:                               <Button
+861:                                 size="sm"
+862:                                 onClick={() => openGenerateModal(row)}
+863:                                 className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg"
+864:                               >
+865:                                 <FileText size
+<truncated 1307 bytes>
+' || row.status === 'sent') && (
+887:                               <Button
+888:                                 size="sm"
+889:                                 onClick={() => handlePaidInvoice(row)}
+890:                                 className="h-8 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg"
+891:                               >
+892:                                 <DollarSign size={12} className="mr-1" /> Paid
+893:                               </Button>
+894:                             )}
+895:                             {row.invoice_number && (
+896:                               <button
+897:                                 onClick={() => handlePrint(row)}
+898:                                 className="p-2 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all no-print"
+899:                                 title="Print"
+900:                               >
+901:                                 <Printer size={14} />
+902:                               </button>
+903:                             )}
+904:                           </div>
+905:                         </td>
+906:                       </tr>
+907:                     );
+908:                   })
+909:                 )}
+910:               </tbody>
+911:             </table>
+912:           </div>
+913:         </Card>
+914:       </div>
+915: 
+916:       {/* PRINT PREVIEW MODAL */}
+917:       {printRow && (
+918:         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto print-modal" onClick={handlePrintClose}>
+919:           <div className="w-full max-w-[210mm] bg-white shadow-2xl mt-8 mb-8" onClick={e => e.stopPropagation()} style={{ borderRadius: 0 }}>
+920:             {/* Top action bar — matches Audit Invoice toolbar */}
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

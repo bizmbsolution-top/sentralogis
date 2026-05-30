@@ -1,0 +1,14 @@
+Created At: 2026-05-28T07:20:52Z
+Completed At: 2026-05-28T07:20:52Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/supabase/migrations/044_invoice_line_items.sql`
+Total Lines: 6
+Total Bytes: 336
+Showing lines 1 to 6
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: -- Add line_items JSONB column to invoices table for draft persistence
+2: ALTER TABLE invoices ADD COLUMN IF NOT EXISTS line_items JSONB;
+3: 
+4: -- Allow storing line item selections (COA, tax, qty, unit_price, description) as draft
+5: COMMENT ON COLUMN invoices.line_items IS 'Stores line item selections as JSON array for draft invoice editing';
+6: 
+The above content shows the entire, complete file contents of the requested file.

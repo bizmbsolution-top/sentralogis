@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentralogis.com - Cinematic Logistics Intelligence Hub</title>
+  
+  <!-- CSS Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- GSAP Animation Engine via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
+  <style>
+    /* [AI] Custom styles for Neo-Brutalist elements & grid floors */
+    .brutal-border {
+      border: 4px solid #000000;
+    }
+    
+    .brutal-shadow-yellow {
+      box-shadow: 6px 6px 0px 0px #000000;
+    }
+    
+    .brutal-shadow-black {
+      box-shadow: 6px 6px 0px 0px #FFDE4D;
+    }
+
+    /* Blueprint grid styling */
+    .blueprint-floor {
+      background-size: 50px 50px;
+      background-image: 
+        linear-gradient(to right, rgba(10, 37, 64, 0.12) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(10, 37, 64, 0.12) 1px, transparent 1px);
+    }
+    
+    @keyframes gridFlow {
+      0% {
+        background-position: 0 0;
+      }
+      100% {
+        background-position: 0 50px; /* Garis mengalir maju secara 3D */
+      }
+    }
+    
+    .animate-grid-flow {
+      animation: gridFlow 3s linear infinite;
+    }
+    
+    /* 3D projection viewports */
+    .isometric-container {
+      perspective: 1000px;
+      transform-style: preserve-3d;
+    }
+
+    .isometric-floor {
+      transform: rotateX(60deg) rotateZ(-45deg);
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+    }
+
+    /* Flat claymorphism/brutalist shapes */
+    .brutal-box {
+      border: 4px solid #000000;
+      box-shadow: 4px 4px 0px 0px #000000;
+      transform-style: preserve-3d;
+      transform-origin: bottom center;
+    }
+
+    /* Typewriter animation cursor */
+    .cursor-blink::after {
+      content: '|';
+      animation: blink 0.8s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="bg-[#F4F6F9] text-black font-sans overflow-x-hidden selection:bg-[#FFDE4D] selection:text-black">
+
+  <!-- Main Scroll Container -->
+  <div id="main-scroll-container" class="relative w-full h-[600vh]">
+    
+    <!-- FIXED VIEWPORT WINDOW -->
+    <div id="cinematic-viewport" class="fixed top-0 left-0 w-full h-screen overflow-hidden flex items-center justify-center bg-[#F4F6F9] z-10">
+      
+      <!-- Fixed Header Navigation -->
+      <header class="absolute top-0 left-0 right-0 z-50 bg-white border-b-4 border-black px-6 py-4 flex justify-between items-center shadow-[0_4px_0_0_rgba(0,0,0,1)]">
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-black uppercase tracking-tighter text-black">Sentralogis</span>
+          <span class="text-[9px] font-black uppercase bg-[#FFDE4D] px-2 py-0.5 border-2 border-black">CONTROL TOWER</span>
+        </div>
+        <div class="text-xs font-mono font-black uppercase">
+          SCROLL TO ORCHESTRATE
+        </div>
+      </header>
+
+      <!-- Isometric 3D Space Canvas -->
+      <div class="isometric-container w-[150vw] h-[150vh] flex items-center justify-center pointer-events-none relative">
+        
+        <!-- Rotating and Scaling Floor Grid -->
+        <div id="grid-floor" class="isometric-floor w-[2000px] h-[2000px] blueprint-floor bg-white border-4 border-black relative flex items-center justify-center opacity-0 animate-grid-flow">
+          
+          <!-- Abstract Symmetrical Grid Blueprint Lines -->
+          <div class="absolute inset-0 border-8 border-black border-dashed opacity-25"></div>
+
+          <!-- ==================== ANIMATION ASSETS (isometric layer objects) ==================== -->
+
+          <!-- Ships / Kapal Kontainer (Babak 1) -->
+          <div id="vessel-ship" class="absolute w-80 h-32 brutal-box bg-[#1F2833] text-[#FFDE4D] flex flex-col justify-between p-4 transform translate-y-[300px] opacity-0" style="transform-style: preserve-3d;">
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-black uppercase tracking-widest">// OCEAN_VESSEL</span>
+              <span class="text-3xl">🚢</span>
+            </div>
+            <div class="border-t-2 border-black pt-2 font-mono text-[10px] space-y-0.5">
+              <p class="font-black text-white">MV. PACIFIC INTEL</p>
+              <p>PREDICTIVE ETA: DETECTED</p>
+            </div>
+          </div>
+
+          <!-- Cargo container block (Babak 1) -->
+          <div id="cargo-container" class="absolute w-16 h-16 brutal-box bg-[#FFDE4D] text-black flex items-center justify-center font-black text-2xl transform translate-y-[-200px] opacity-0 z-20">
+            📦
+          </div>
+
+          <!-- Container Trailer Truck (Babak 1 & 2) -->
+          <div id="trailer-truck" class="absolute w-44 h-16 brutal-box bg-white text-black flex items-center justify-between px-4 transform translate-x-[-400px] opacity-0" style="transform-style: preserve-3d;">
+            <div class="text-left font-mono">
+              <span class="text-[8px] font-black text-gray-400 block">// TRUCK_SBU</span>
+              <span class="text-xs font-black block mt-0.5">B-9214-UX</span>
+            </div>
+            <div class="text-3xl">🚛</div>
+          </div>
+
+          <!-- Distribution Center Warehouse (Babak 2 & 3) -->
+          <div id="mega-warehouse" class="absolute w-96 h-64 brutal-box bg-[#1F2833] border-4 border-black text-[#FFDE4D] flex flex-col justify-between p-6 transform scale-0 opacity-0" style="transform-style: preserve-3d;">
+            <div class="flex justify-between items-start border-b-2 border-black pb-3">
+              <div>
+                <span class="text-[8px] font-black text-slate-400 block">// WMS_HUBS</span>
+                <span class="text-base font-black text-white uppercase block mt-0.5">Distribution Center DC-A</span>
+              </div>
+              <span class="text-3xl">🏢</span>
+            </div>
+
+            <!-- Warehouse Inside Grid Area (Revealed on Zoom In) -->
+            <div id="warehouse-inside" class="flex-1 flex items-center justify-around py-4 opacity-0">
+              <div class="text-center font-mono brutal-box bg-white text-black p-2 text-[9px] font-black uppercase">
+                <div class="text-xl">🤖</div>
+                <p class="mt-1">Forklift Active</p>
+              </div>
+              <div id="laser-scanner" class="text-center font-mono brutal-box bg-[#FFDE4D] text-black p-2 text-[9px] font-black uppercase relative">
+                <div class="text-xl">👤</div>
+                <p class="mt-1">Tally Scan</p>
+                <div id="laser-beam" class="absolute left-1/2 top-0 bottom-0 w-1 bg-red-600 animate-pulse hidden"></div>
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center text-[10px] font-mono border-t-2 border-black pt-3">
+              <span>STORAGE SPACE: FEFO ACTIVE</span>
+              <span class="text-white">Blind Count Enabled</span>
+            </div>
+          </div>
+
+          <!-- Distribution Box Truck (Babak 3 & 4) -->
+          <div id="box-truck" class="absolute w-36 h-14 brutal-box bg-white text-black flex items-center justify-between px-3 transform translate-x-[-300px] opacity-0" style="transform-style: preserve-3d;">
+            <div class="text-left font-mono">
+              <span class="text-[8px] font-black text-gray-400 block">// DIST_BOX</span>
+              <span class="text-xs font-black block mt-0.5">MBS-902</span>
+            </div>
+            <div class="text-2xl">🚚</div>
+          </div>
+
+          <!-- Satellite Hub Warehouse (Babak 4) -->
+          <div id="satellite-hub" class="absolute w-48 h-36 brutal-box bg-[#1F2833] border-4 border-black text-[#FFDE4D] flex flex-col justify-between p-3 transform scale-0 opacity-0" style="transform-style: preserve-3d;">
+            <div class="flex justify-between items-center">
+              <span class="text-[8px] font-black uppercase tracking-wider text-slate-400">// SAT_HUB</span>
+              <span class="text-xl">🏪</span>
+            </div>
+            <span class="text-xs font-black text-white uppercase text-center py-2">SBU Last-Mile Hub</span>
+            <div class="h-1 w-full bg-black rounded-none overflow-hidden">
+              <div class="h-full bg-[#FFDE4D]" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <!-- Swarm Motorcycles (Babak 4) -->
+          <div id="swarm-bikes-container" class="absolute w-40 h-40 flex items-center justify-center pointer-events-none opacity-0">
+            <div class="bike absolute text-3xl brutal-box bg-[#FFDE4D] p-2 border-2 border-black transform translate-x-[-100px] translate-y-[-100px]">🛵</div>
+            <div class="bike absolute text-3xl brutal-box bg-[#FFDE4D] p-2 border-2 border-black transform translate-x-[100px] translate-y-[-100px]">🛵</div>
+            <div class="bike absolute text-3xl brutal-box bg-[#FFDE4D] p-2 border-2 border-black transform translate-x-[-100px] translate-y-[100px]">🛵</div>
+            <div class="bike absolute text-3xl brutal-box bg-[#FFDE4D] p-2 border-2 border-black transform translate-x-[100px] translate-y-[100px]">🛵</div>
+          </div>
+
+          <!-- Giant Proof of Delivery (POD) (Babak 5) -->
+          <div id="pod-document" class="absolute w-80 h-96 brutal-box bg-white text-black p-6 flex flex-col justify-between transform translate-z-[-300px] opacity-0" style="transform-style: preserve-3d;">
+            <div class="border-b-4 border-black pb-4 flex justify-between items-center">
+              <div>
+                <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">// PROOF_OF_DELIVERY</span>
+                <h4 class="font-black text-xl tracking-tighter uppercase mt-0.5">Digital e-POD Tanda Terima</h4>
+              </div>
+              <span class="text-3xl">📝</span>
+            </div>
+
+            <div class="py-6 border-b-2 border-black border-dashed flex-1 flex flex-col justify-center items-center">
+              <div class="text-5xl animate-bounce">✓</div>
+              <p class="font-mono text-xs font-black mt-2 text-center uppercase tracking-wider text-green-600 bg-green-50 px-3 py-1 border border-green-500">
+                UPLOAD SUCCESSFUL via WhatsApp
+              </p>
+            </div>
+
+            <!-- Stacks of gold coins/money sheets inside the POD -->
+            <div id="financial-sla-box" class="pt-4 flex flex-col items-center">
+              <div class="inline-block bg-[#FFDE4D] text-black text-xs font-black uppercase px-4 py-2 border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                SLA INVOICING: 14 DETIK.
+              </div>
+              <div id="coin-stacks" class="flex gap-2.5 mt-3 h-12 justify-center items-end">
+                <div class="w-5 bg-yellow-400 border border-black transform scale-y-0" style="transform-origin: bottom;"></div>
+                <div class="w-5 bg-yellow-400 border border-black transform scale-y-0" style="transform-origin: bottom;"></div>
+                <div class="w-5 bg-yellow-400 border border-black transform scale-y-0" style="transform-origin: bottom;"></div>
+                <div class="w-5 bg-yellow-400 border border-black transform scale-y-0" style="transform-origin: bottom;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Professional Silhouettes (Babak 5) -->
+          <div id="human-professionals" class="absolute w-96 h-64 flex justify-around items-end pointer-events-none opacity-0 z-30" style="transform-style: preserve-3d;">
+            <!-- Male Driver / Tally -->
+            <div class="flex flex-col items-center space-y-2 transform translate-z-[50px]">
+              <div class="w-20 h-32 brutal-box bg-black text-[#FFDE4D] flex items-center justify-center font-black text-4xl shadow-lg">
+                👨‍✈️
+              </div>
+              <span class="text-[9px] font-mono font-black uppercase bg-[#FFDE4D] text-black px-2 py-0.5 border-2 border-black shadow-sm">
+                Supir / Tally
+              </span>
+            </div>
+            
+            <!-- Female Forwarding Admin -->
+            <div class="flex flex-col items-center space-y-2 transform translate-z-[50px]">
+              <div class="w-20 h-32 brutal-box bg-black text-[#FFDE4D] flex items-center justify-center font-black text-4xl shadow-lg">
+                👩‍💼
+              </div>
+              <span class="text-[9px] font-mono font-black uppercase bg-[#FFDE4D] text-black px-2 py-0.5 border-2 border-black shadow-sm">
+                Fwd Admin
+              </span>
+            </div>
+
+            <!-- Golden shockwave ring -->
+            <div id="gold-shockwave" class="absolute w-8 h-8 rounded-full border-4 border-[#FFDE4D] scale-0 opacity-0"></div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ==================== BABAK 6: THE GRAND REVEAL (OUTRO) ==================== -->
+      <div id="grand-reveal-outro" class="absolute inset-0 flex flex-col justify-center items-center pointer-events-none opacity-0 z-50 px-6">
+        <div class="space-y-6 text-center max-w-2xl">
+          <!-- Outro Typewriter Logo -->
+          <h1 id="outro-logo" class="text-4xl sm:text-6xl font-black tracking-tighter uppercase text-black cursor-blink"></h1>
+          <p id="outro-tagline" class="text-sm sm:text-base font-black uppercase tracking-widest bg-[#FFDE4D] text-black px-4 py-2 border-4 border-black inline-block shadow-[4px_4px_0px_rgba(0,0,0,1)] opacity-0">
+            The End-to-End Logistics Intelligence Hub
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Side HUD Display for context tracking -->
+    <div class="fixed right-6 top-24 z-40 hidden md:flex flex-col gap-4 font-mono text-[10px] font-black uppercase">
+      <div class="hud-node p-3 brutal-box bg-white text-black shadow-md border-2 border-black" id="hud-0">LAUTAN DATA</div>
+      <div class="hud-node p-3 brutal-box bg-white text-black shadow-md border-2 border-black opacity-30" id="hud-1">SBU OPERASIONAL</div>
+      <div class="hud-node p-3 brutal-box bg-white text-black shadow-md border-2 border-black opacity-30" id="hud-2">MID-MILE LOGISTIK</div>
+      <div class="hud-node p-3 brutal-box bg-white text-black shadow-md border-2 border-black opacity-30" id="hud-3">MIKRO KURIR</div>
+      <div class="hud-node p-3 brutal-box bg-white text-black shadow-md border-2 border-black opacity-30" id="hud-4">FINANCE INTELLIGENCE</div>
+      <div class="hud-node p-3 brutal-box bg-[#FFDE4D] text-black shadow-md border-2 border-black opacity-30" id="hud-5">GRAND REVEAL</div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript Animation Timeline Configuration -->
+  <script>
+    // Verify GSAP exists in current workspace
+    if (typeof gsap === "undefined" || typeof ScrollTrigger === "undefined") {
+      console.error("GSAP or ScrollTrigger libraries failed to load via CDN");
+    }
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Initial positioning setup with 3D pop-up rotation
+    // We rotate the elements by rotationX: -90 so they stand upright like a 3D pop-up cardboard scene!
+    gsap.set("#vessel-ship", { x: -160, y: 150, z: 0, rotationX: -90 });
+    gsap.set("#cargo-container", { x: 0, y: -250, z: 50, rotationX: -90 });
+    gsap.set("#trailer-truck", { x: -450, y: -80, z: 0, rotationX: -90 });
+    gsap.set("#mega-warehouse", { x: -50, y: -100, z: 0, rotationX: -90 });
+    gsap.set("#box-truck", { x: -280, y: -20, z: 0, rotationX: -90 });
+    gsap.set("#satellite-hub", { x: 100, y: -80, z: 0, rotationX: -90 });
+    gsap.set("#swarm-bikes-container", { x: 100, y: -80, z: 0, rotationX: -90 });
+    gsap.set("#pod-document", { x: -150, y: -180, z: -100, rotationX: -90 });
+    gsap.set("#human-professionals", { x: -120, y: -120, z: 0, rotationX: -90 });
+
+    // GSAP ScrollTrigger timeline configuration
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: "#main-scroll-container",
+        start: "top top",
+        end: "bottom bottom",
+        scrub: 1.5,
+        pin: "#cinematic-viewport",
+        invalidateOnRefresh: true,
+      }
+    });
+
+    // ==================== STORIES PROGRESS TIMELINE ====================
+
+    // --- BABAK 1: LAUTAN DATA (0% - 15%) ---
+    tl.to("#grid-floor", { opacity: 1, duration: 1 })
+      .to("#hud-0", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Container ship rises vertically with a satisfying bounce
+      .to("#vessel-ship", { opacity: 1, y: -20, duration: 2.5, ease: "back.out(2)" })
+      
+      // Abstract crane drops container down onto truck trailer position
+      .to("#cargo-container", { opacity: 1, y: -10, duration: 1.8, ease: "bounce.out" })
+      .to("#trailer-truck", { opacity: 1, x: -160, duration: 2, ease: "power2.out" }, "<")
+      
+      // Container ship sinks back down and disappears
+      .to("#vessel-ship", { y: 250, opacity: 0, duration: 2, ease: "power2.in" })
+      
+      // Truck drives forward along grid
+      .to("#cargo-container", { x: 100, duration: 3, ease: "sine.inOut" })
+      .to("#trailer-truck", { x: 100, duration: 3, ease: "sine.inOut" }, "<");
+
+    // --- BABAK 2: INDUSTRIAL HUB & OPERATIONS (15% - 35%) ---
+    tl.to(".hud-node", { backgroundColor: "#FFFFFF", opacity: 0.3, duration: 0.1 })
+      .to("#hud-1", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Massive DC Warehouse building assembles/rises from floor
+      .to("#mega-warehouse", { opacity: 1, scale: 1, duration: 2.5, ease: "back.out(1.5)" })
+      
+      // Trailer truck enters docking door and fades out
+      .to("#cargo-container", { x: -50, y: -100, opacity: 0, duration: 2, ease: "sine.in" })
+      .to("#trailer-truck", { x: -50, y: -100, opacity: 0, duration: 2, ease: "sine.in" }, "<")
+      
+      // Cinematic Zoom In inside warehouse roof
+      .to("#grid-floor", { scale: 1.8, x: 200, y: 150, duration: 3, ease: "power2.inOut" })
+      .to("#warehouse-inside", { opacity: 1, duration: 1.5 })
+      .set("#laser-beam", { display: "block" })
+      .to("#laser-beam", { x: 10, yoyo: true, repeat: 4, duration: 0.4 })
+      .set("#laser-beam", { display: "none" });
+
+    // --- BABAK 3: DOMESTIC DISTRIBUTION (35% - 55%) ---
+    tl.to(".hud-node", { backgroundColor: "#FFFFFF", opacity: 0.3, duration: 0.1 })
+      .to("#hud-2", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Zoom out of the warehouse
+      .to("#warehouse-inside", { opacity: 0, duration: 1 })
+      .to("#grid-floor", { scale: 1, x: 0, y: 0, duration: 2.5, ease: "power2.inOut" }, "<")
+      
+      // Distribution Box Truck emerges
+      .to("#box-truck", { opacity: 1, x: -80, duration: 2, ease: "power2.out" })
+      
+      // Warehouse sinks back into floor grid
+      .to("#mega-warehouse", { scale: 0, opacity: 0, duration: 2, ease: "power2.in" })
+      
+      // Box truck drives forward
+      .to("#box-truck", { x: 150, y: -100, duration: 3, ease: "sine.inOut" });
+
+    // --- BABAK 4: MICRO DELIVERY (55% - 70%) ---
+    tl.to(".hud-node", { backgroundColor: "#FFFFFF", opacity: 0.3, duration: 0.1 })
+      .to("#hud-3", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Satellite hub pops up
+      .to("#satellite-hub", { opacity: 1, scale: 1, duration: 2, ease: "back.out(1.2)" })
+      .to("#box-truck", { x: 100, y: -80, opacity: 0, duration: 1.5, ease: "sine.in" })
+      
+      // Satellite hub and box truck scale down and sink
+      .to("#satellite-hub", { scale: 0, opacity: 0, duration: 2, ease: "power2.in" })
+      
+      // Swarm of motorcycles burst out
+      .to("#swarm-bikes-container", { opacity: 1, duration: 0.2 })
+      .to(".bike", { x: (i) => [-250, 250, -250, 250][i], y: (i) => [-250, -250, 250, 250][i], opacity: 0, duration: 2.5, ease: "power2.out" })
+      .to("#swarm-bikes-container", { opacity: 0, duration: 0.1 }, "-=0.5");
+
+    // --- BABAK 5: FINANCIAL & HUMAN INTELLIGENCE (70% - 90%) ---
+    tl.to(".hud-node", { backgroundColor: "#FFFFFF", opacity: 0.3, duration: 0.1 })
+      .to("#hud-4", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Giant e-POD document rises horizontally
+      .to("#pod-document", { opacity: 1, y: -50, z: 0, duration: 3, ease: "back.out(1.5)" })
+      
+      // Money stacks/coins rise rapidly
+      .to("#coin-stacks div", { scaleY: 1, stagger: 0.2, duration: 1.5, ease: "elastic.out(1, 0.3)" })
+      
+      // Dissolve into floor (fade out POD)
+      .to("#pod-document", { opacity: 0, y: 150, z: -100, duration: 2, ease: "power2.in" })
+      
+      // Professional human silhouettes rise
+      .to("#human-professionals", { opacity: 1, y: -20, duration: 2.5, ease: "back.out(1.3)" })
+      
+      // Golden wave shockwave triggers
+      .to("#gold-shockwave", { scale: 50, opacity: 1, duration: 2, ease: "power2.out" })
+      .to("#gold-shockwave", { opacity: 0, duration: 0.5 }, "-=0.5");
+
+    // --- BABAK 6: THE GRAND REVEAL (90% - 100%) ---
+    tl.to(".hud-node", { backgroundColor: "#FFFFFF", opacity: 0.3, duration: 0.1 })
+      .to("#hud-5", { backgroundColor: "#FFDE4D", opacity: 1, duration: 0.2 }, "<")
+      
+      // Dissolve grid floor & humans
+      .to("#human-professionals", { opacity: 0, y: 100, duration: 1.5, ease: "power2.in" })
+      .to("#grid-floor", { opacity: 0, duration: 1.5 }, "<")
+      .set(".hud-node", { display: "none" })
+      
+      // Reveal Outro Center
+      .to("#grand-reveal-outro", { opacity: 1, pointerEvents: "auto", duration: 1 })
+      
+      // Typewriter Logo Outro Animation
+      .to("#outro-logo", {
+        duration: 2.5,
+        text: "Sentralogis.com",
+        onStart: () => {
+          let text = "Sentralogis.com";
+          let el = document.getElementById("outro-logo");
+          el.innerHTML = "";
+          el.className += " cursor-blink";
+          let charIndex = 0;
+          let typingInterval = setInterval(() => {
+            if (charIndex < text.length) {
+              el.innerHTML += text.charAt(charIndex);
+              charIndex++;
+            } else {
+              clearInterval(typingInterval);
+            }
+          }, 150);
+        }
+      })
+      
+      // Tagline reveal below logo
+      .to("#outro-tagline", { opacity: 1, y: 0, duration: 1.5, ease: "back.out(1.5)" });
+
+  </script>
+</body>
+</html>

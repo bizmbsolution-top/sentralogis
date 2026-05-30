@@ -90,6 +90,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
       ]
     },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 
@@ -131,6 +132,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
       ]
     },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
   hq_ops: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
@@ -168,6 +170,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
       ]
     },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
   hq_finance: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
@@ -206,6 +209,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
       ]
     },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
 
   // ============================================
@@ -360,6 +364,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_ops_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -369,6 +374,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_admin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -378,6 +384,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_fin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -387,6 +394,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_finance_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -396,6 +404,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
 
   // SBU Warehouse (Manager, Ops, Admin)

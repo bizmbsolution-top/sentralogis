@@ -72,6 +72,8 @@ export interface DbIntegrityIssue {
   table: string;
   count: number;
   severity: 'low' | 'medium' | 'high';
+  remediable?: boolean;
+  anomaly_type?: string;
 }
 
 export interface UserActivityEntry {

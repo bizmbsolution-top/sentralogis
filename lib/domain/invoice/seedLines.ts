@@ -11,7 +11,11 @@ export interface SeedJobOrder {
   base_price?: number;
   fleet?: { plate_number?: string; md_fleet_types?: { type_name?: string } } | null;
   driver?: { name?: string } | null;
-  wo_item?: { item_data?: Record<string, unknown> };
+  wo_item?: {
+    unit_price?: number;
+    total_revenue?: number;
+    item_data?: Record<string, unknown>;
+  };
 }
 
 export interface SeedExtraCost {
@@ -53,7 +57,7 @@ export function buildSeedLines(
   for (const jo of jobOrders) {
     const itemData = (jo.wo_item?.item_data || {}) as Record<string, unknown>;
     const route = buildRoute(itemData);
-    const unit = Number(jo.base_price) || 0;
+    const unit = Number(jo.wo_item?.unit_price) || Number(jo.base_price) || 0;
     lines.push({
       id: `ritase-${jo.id}`,
       line_type: 'ritase',

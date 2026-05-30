@@ -1,0 +1,44 @@
+Created At: 2026-05-28T07:23:25Z
+Completed At: 2026-05-28T07:23:25Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 190 to 225
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+190:         const paymentTerms = (wo as any).customer?.payment_terms || '';
+191: 
+192:         let status = 'draft';
+193:         let dueDate: string | null = null;
+194:         if (inv) {
+195:           status = inv.status || 'draft';
+196:           dueDate = inv.due_date || null;
+197:         } else if (readyForBilling) {
+198:           status = 'ready';
+199:         }
+200: 
+201:         rows.push({
+202:           id: inv?.id || wo.id,
+203:           wo_id: wo.id,
+204:           wo_number: wo.wo_number,
+205:           customer_name: customerName,
+206:           invoice_number: inv?.invoice_number || null,
+207:           total_billing: totalBilling,
+208:           tax_amount: inv?.tax_amount || 0,
+209:           grand_total: inv ? (Number(inv.total_billing) || 0) + (Number(inv.tax_amount) || 0) : totalBilling,
+210:           status,
+211:           due_date: dueDate,
+212:           invoiced_at: inv?.invoiced_at || null,
+213:           sent_at: inv?.sent_at || null,
+214:           customer_accepted_invoice_at: inv?.customer_accepted_invoice_at || null,
+215:           customer_paid_at: inv?.customer_paid_at || null,
+216:           payment_terms: paymentTerms,
+217:           days_until_due: getDaysUntilDue(dueDate),
+218:           jo_count: jos.length,
+219:           completed_jo: completedJo,
+220:           ready_for_billing: readyForBilling,
+221:           line_items: inv?.line_items || null,
+222:           job_orders: jos.map((j: any) => ({
+223:             id: j.id,
+224:             jo_number: j.jo_number,
+225:             status: j.status,
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -1,0 +1,39 @@
+Created At: 2026-05-28T07:24:29Z
+Completed At: 2026-05-28T07:24:29Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 559
+Total Bytes: 25194
+Showing lines 190 to 220
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+190:       setData(rows);
+191:     } catch (err: any) {
+192:       console.error('Fetch Error:', err?.message || JSON.stringify(err), err?.details || '', err?.code || '');
+193:       toast.error('Gagal mengambil data invoice');
+194:     } finally {
+195:       setLoading(false);
+196:     }
+197:   }, [profile]);
+198: 
+199:   useEffect(() => {
+200:     fetchData();
+201:   }, [fetchData]);
+202: 
+203:   const handleRefresh = async () => {
+204:     setRefreshing(true);
+205:     await fetchData();
+206:     setRefreshing(false);
+207:   };
+208: 
+209:   const filteredData = useMemo(() => {
+210:     return data.filter(row => {
+211:       const matchesSearch = row.wo_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+212:         row.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+213:       const matchesTab = activeTab === 'all' || row.status === activeTab;
+214:       return matchesSearch && matchesTab;
+215:     });
+216:   }, [data, searchTerm, activeTab]);
+217: 
+218:   const stats = useMemo(() => {
+219:     const ready = data.filter(d => d.status === 'ready');
+220:     const sent = data.filter(d => d.status === 'sent');
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

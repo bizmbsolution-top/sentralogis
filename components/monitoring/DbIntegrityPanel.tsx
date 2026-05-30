@@ -9,7 +9,13 @@ const severityVariant: Record<string, 'danger' | 'warning' | 'default'> = {
   high: 'danger', medium: 'warning', low: 'default',
 };
 
-export default function DbIntegrityPanel({ issues }: { issues: DbIntegrityIssue[] }) {
+export default function DbIntegrityPanel({ 
+  issues,
+  onResolve 
+}: { 
+  issues: DbIntegrityIssue[],
+  onResolve?: (anomaly_type: string, table: string) => void
+}) {
   const total = issues.reduce((s, i) => s + i.count, 0);
   return (
     <Card>
@@ -34,6 +40,14 @@ export default function DbIntegrityPanel({ issues }: { issues: DbIntegrityIssue[
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-slate-700">{issue.count}</span>
                   <Badge variant={severityVariant[issue.severity]} className="text-[10px]">{issue.severity}</Badge>
+                  {issue.remediable && issue.anomaly_type && (
+                    <button
+                      onClick={() => onResolve?.(issue.anomaly_type!, issue.table)}
+                      className="ml-2 px-2 py-1 bg-slate-900 text-white rounded-md text-[10px] font-bold hover:bg-slate-800 transition-colors"
+                    >
+                      Resolve
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

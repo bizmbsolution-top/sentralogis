@@ -1,0 +1,39 @@
+Created At: 2026-05-28T07:23:56Z
+Completed At: 2026-05-28T07:23:56Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 533
+Total Bytes: 23836
+Showing lines 190 to 220
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+190: 
+191:   const stats = useMemo(() => {
+192:     const ready = data.filter(d => d.status === 'ready');
+193:     const sent = data.filter(d => d.status === 'sent');
+194:     const accepted = data.filter(d => d.status === 'accepted');
+195:     const paid = data.filter(d => d.status === 'paid');
+196:     return {
+197:       readyCount: ready.length,
+198:       readyTotal: ready.reduce((s, d) => s + d.total_billing, 0),
+199:       sentCount: sent.length,
+200:       sentTotal: sent.reduce((s, d) => s + d.grand_total, 0),
+201:       acceptedCount: accepted.length,
+202:       acceptedTotal: accepted.reduce((s, d) => s + d.grand_total, 0),
+203:       paidCount: paid.length,
+204:       paidTotal: paid.reduce((s, d) => s + d.grand_total, 0),
+205:       overdueCount: data.filter(d => (d.days_until_due ?? 0) < 0 && ['sent', 'accepted'].includes(d.status)).length,
+206:     };
+207:   }, [data]);
+208: 
+209:   const handleGenerateInvoice = async (row: InvoiceRow) => {
+210:     try {
+211:       const invNumber = `INV-${row.wo_number.replace('WO', '')}`;
+212:       const dueDate = new Date();
+213:       if (row.payment_terms) {
+214:         const days = parseInt(row.payment_terms.replace(/\D/g, '')) || 30;
+215:         dueDate.setDate(dueDate.getDate() + days);
+216:       } else {
+217:         dueDate.setDate(dueDate.getDate() + 30);
+218:       }
+219: 
+220:       const { error } = await supabase.from('invoices').insert({
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -307,6 +307,8 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
 
     onAdd({
       sbu_type: 'TRUCKING',
+      unit_price: formData.deal_price,
+      total_revenue: estRevenue,
       item_data: {
         ...formData,
         vehicle_type_name: vehicleType?.type_name,

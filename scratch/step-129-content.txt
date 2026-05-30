@@ -1,0 +1,121 @@
+Created At: 2026-05-28T07:20:36Z
+Completed At: 2026-05-28T07:20:36Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/owner/actions.ts`
+Total Lines: 444
+Total Bytes: 13751
+Showing lines 1 to 444
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 'use server'
+2: 
+3: import { createClient } from '@supabase/supabase-js'
+4: 
+5: const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+6: const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+7: 
+8: const getAdminClient = () => {
+9:   return createClient(supabaseUrl, serviceRoleKey)
+10: }
+11: 
+12: export async function fetchTenantsAdmin() {
+13:   const admin = getAdminClient()
+14:   
+15:   try {
+16:     // Fetch tenants
+17:     const { data: tenants, error: tError } = await admin
+18:       .from('tenants')
+19:       .select('*')
+20:       .order('created_at', { ascending: false })
+21: 
+22:     if (tError) throw tError
+23: 
+24:     // Fetch all profiles to join in memory
+25:     const { data: profiles, error: pError } = await admin
+26:       .from('profiles')
+27:       .select('id, email, full_name, whatsapp')
+28: 
+29:     if (pError) throw pError
+30: 
+31:     // Map profiles for quick lookup
+32:     const profileMap = (profiles || []).reduce((acc: any, p: any) => {
+33:       acc[p.id] = p
+34:       return acc
+35:     }, {})
+36: 
+37:     return { 
+38:       success: true, 
+39:       data: (tenants || []).map((t: any) => {
+40:         const profile = profileMap[t.user_id] || {}
+41:         return {
+42:           id: t.id,
+43:           tenant_code: t.tenant_code,
+44:           name: t.name,
+45:           subscription_tier: t.subscription_tier,
+46:           token_balance: t.token_balance,
+47:           user_id: t.user_id,
+48:           status: t.status || 'active',
+49:           admin_email: profile.
+<truncated 12313 bytes>
+)
+383:     return { success: false, data: [] }
+384:   }
+385: }
+386: 
+387: export async function updateTokenPrice(params: {
+388:   newPrice: number
+389:   reason?: string
+390:   userId?: string
+391: }) {
+392:   const admin = getAdminClient()
+393:   try {
+394:     // 1. Get current price
+395:     const { data: currentPrice } = await admin
+396:       .from('token_prices')
+397:       .select('price_per_token')
+398:       .order('effective_from', { ascending: false })
+399:       .limit(1)
+400:       .maybeSingle()
+401: 
+402:     const oldPrice = currentPrice?.price_per_token || 1000
+403: 
+404:     // 2. End current price record
+405:     await admin
+406:       .from('token_prices')
+407:       .update({ 
+408:         effective_to: new Date().toISOString(),
+409:         updated_at: new Date().toISOString()
+410:       })
+411:       .is('effective_to', null)
+412: 
+413:     // 3. Insert new price record
+414:     await admin
+415:       .from('token_prices')
+416:       .insert({
+417:         price_per_token: params.newPrice,
+418:         currency: 'IDR',
+419:         effective_from: new Date().toISOString(),
+420:         updated_by: params.userId || null,
+421:         notes: params.reason || 'Price updated'
+422:       })
+423: 
+424:     // 4. Log to history
+425:     await admin
+426:       .from('token_price_history')
+427:       .insert({
+428:         old_price: oldPrice,
+429:         new_price: params.newPrice,
+430:         changed_by: params.userId || null,
+431:         reason: params.reason || 'Price updated'
+432:       })
+433: 
+434:     return { 
+435:       success: true, 
+436:       message: `Harga token berhasil diubah dari Rp ${oldPrice.toLocaleString()} ke Rp ${params.newPrice.toLocaleString()}` 
+437:     }
+438:   } catch (error: any) {
+439:     console.error('updateTokenPrice error:', error)
+440:     return { success: false, message: error.message }
+441:   }
+442: }
+443: 
+444: 
+The above content shows the entire, complete file contents of the requested file.

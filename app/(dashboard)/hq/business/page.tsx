@@ -93,7 +93,7 @@ export default function HQBusinessDashboard() {
         .select(`
           id, base_price, purchase_price, status, created_at, completed_at,
           wo_item:wo_items!wo_item_id (
-            sbu_type,
+            sbu_type, unit_price,
             wo:work_orders!wo_id (
               customer_id,
               customer:md_entities!customer_id (name)
@@ -147,7 +147,7 @@ export default function HQBusinessDashboard() {
       }
 
       jos.forEach((jo: any) => {
-        const revenue = Number(jo.base_price) || 0;
+        const revenue = Number(jo.wo_item?.unit_price) || Number(jo.base_price) || 0;
         const cogs = Number(jo.purchase_price) || 0;
         const sbuType = (jo.wo_item?.sbu_type || "OTHER").toUpperCase();
         const customerName = jo.wo_item?.wo?.customer?.name || "Unknown";
@@ -196,7 +196,7 @@ export default function HQBusinessDashboard() {
       const apOutstanding = (vendorInvoices || []).reduce((sum, vi) => sum + (Number(vi.invoice_amount) || 0), 0);
 
       // Customer concentration (top 3 customer % of total revenue)
-      const totalRevenue = jos.reduce((sum, j) => sum + (Number(j.base_price) || 0), 0);
+      const totalRevenue = jos.reduce((sum, j) => sum + (Number(j.wo_item?.unit_price) || Number(j.base_price) || 0), 0);
       const top3Revenue = Array.from(customerMap.values())
         .sort((a, b) => b - a)
         .slice(0, 3)

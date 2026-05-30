@@ -1,21 +1,22 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Truck, 
-  User, 
-  MapPin, 
-  DollarSign, 
+import React, { useState, useEffect } from "react";
+import {
+  X,
+  Truck,
+  User,
+  MapPin,
+  DollarSign,
   MessageCircle,
   Loader2,
   ShieldCheck,
   Calendar,
-  AlertTriangle
-} from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { toast } from 'react-hot-toast';
+  AlertTriangle,
+} from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { mapTransportersForTenant } from "@/lib/domain/jo/assignment";
+import { toast } from "react-hot-toast";
 
 interface AssignmentModalProps {
   woItemId: string;
@@ -32,48 +33,50 @@ export default function AssignmentModal({
   customerName,
   executionDate,
   onClose,
-  onSuccess
+  onSuccess,
 }: AssignmentModalProps) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  
+
   // Data States
   const [dealPrice, setDealPrice] = useState(0);
   const [unitCount, setUnitCount] = useState(1);
-  const [vehicleType, setVehicleType] = useState('');
-  const [origin, setOrigin] = useState('');
-  const [destination, setDestination] = useState('');
+  const [vehicleType, setVehicleType] = useState("");
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
   const [assignedCount, setAssignedCount] = useState(0);
-  
+
   // Form States
   const [vendors, setVendors] = useState<any[]>([]);
   const [fleets, setFleets] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
-  
-  const [selectedTransporterId, setSelectedTransporterId] = useState('');
-  const [selectedTransporterType, setSelectedTransporterType] = useState<'OWN' | 'VENDOR' | ''>('');
-  const [selectedFleetId, setSelectedFleetId] = useState('');
-  const [selectedDriverId, setSelectedDriverId] = useState('');
-  const [driverPhone, setDriverPhone] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState<string>('');
-  const [driverShare, setDriverShare] = useState<string>('40');
+
+  const [selectedTransporterId, setSelectedTransporterId] = useState("");
+  const [selectedTransporterType, setSelectedTransporterType] = useState<
+    "OWN" | "VENDOR" | ""
+  >("");
+  const [selectedFleetId, setSelectedFleetId] = useState("");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [driverPhone, setDriverPhone] = useState("");
+  const [purchasePrice, setPurchasePrice] = useState<string>("");
+  const [driverShare, setDriverShare] = useState<string>("40");
 
   const formatRupiah = (value: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
     });
   };
 
@@ -81,69 +84,70 @@ export default function AssignmentModal({
     const initModal = async () => {
       try {
         setFetching(true);
-        
+
         // 1. Fetch WO Item Data from item_data
         const { data: item, error: itemError } = await supabase
-          .from('wo_items')
-          .select('id, item_code, sbu_type, item_data, status')
-          .eq('id', woItemId)
+          .from("wo_items")
+          .select("id, item_code, sbu_type, item_data, status")
+          .eq("id", woItemId)
           .single();
-        
+
         if (itemError) throw itemError;
-        
+
         if (item) {
           const itemData = item.item_data || {};
           // AMBIL deal_price dari item_data sesuai instruksi
           setDealPrice(Number(itemData.deal_price) || 0);
           setUnitCount(Number(itemData.unit_count) || 1);
-          setVehicleType(itemData.vehicle_type_name || '-');
-          setOrigin(itemData.origin_name || itemData.origin_location_name || '-');
-          setDestination(itemData.destination_name || itemData.destination_location_name || '-');
+          setVehicleType(itemData.vehicle_type_name || "-");
+          setOrigin(
+            itemData.origin_name || itemData.origin_location_name || "-",
+          );
+          setDestination(
+            itemData.destination_name ||
+              itemData.destination_location_name ||
+              "-",
+          );
         }
 
         // 2. Fetch Assigned Count
         const { count, error: countError } = await supabase
-          .from('job_orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('wo_item_id', woItemId)
-          .not('status', 'eq', 'cancelled');
-        
+          .from("job_orders")
+          .select("*", { count: "exact", head: true })
+          .eq("wo_item_id", woItemId)
+          .not("status", "eq", "cancelled");
+
         if (countError) throw countError;
         setAssignedCount(count || 0);
 
         // 3. Fetch Transporters (Vendors + Own)
         const { data: entityData, error: entityError } = await supabase
-          .from('md_entities')
-          .select('id, name, is_vendor, category')
-          .eq('tenant_id', profile?.tenant_id)
-          .eq('is_active', true);
-        
+          .from("md_entities")
+          .select("id, name, is_vendor, is_customer, vendor_type, category")
+          .eq("tenant_id", profile?.tenant_id)
+          .eq("is_active", true);
+
         if (entityError) {
-          console.error("Error fetching entities:", { code: entityError.code, message: entityError.message, details: entityError.details, hint: entityError.hint });
+          console.error("Error fetching entities:", {
+            code: entityError.code,
+            message: entityError.message,
+            details: entityError.details,
+            hint: entityError.hint,
+          });
         }
 
-        const tenantName = (profile?.tenants?.name || '').toUpperCase();
-        const tenantCode = (profile?.tenant_code || '').toUpperCase();
+        const tenantName = (profile?.tenants?.name || "").toUpperCase();
+        const tenantCode = (profile?.tenant_code || "").toUpperCase();
 
-        const trans = (entityData || [])
-          .filter(t => t.is_vendor || t.category === 'TRANSPORTER')
-          .map(t => {
-            const isActuallyOwn = !t.is_vendor || 
-                                 t.name.toUpperCase().includes(tenantName) || 
-                                 t.name.toUpperCase().includes(tenantCode) ||
-                                 t.name.toUpperCase().includes('INTERNAL') ||
-                                 t.name.toUpperCase().includes('(OWN)');
-            
-            return {
-              ...t,
-              is_own: isActuallyOwn
-            };
-          });
-        
+        const trans = mapTransportersForTenant(
+          entityData || [],
+          tenantName,
+          tenantCode,
+        );
+
         setVendors(trans);
-
       } catch (err: any) {
-        toast.error('Gagal memuat data: ' + err.message);
+        toast.error("Gagal memuat data: " + err.message);
       } finally {
         setFetching(false);
       }
@@ -154,68 +158,89 @@ export default function AssignmentModal({
 
   const handleTransporterChange = async (val: string) => {
     setSelectedTransporterId(val);
-    setSelectedFleetId('');
-    setSelectedDriverId('');
-    setDriverPhone('');
-    
+    setSelectedFleetId("");
+    setSelectedDriverId("");
+    setDriverPhone("");
+
     if (!val) {
-      setSelectedTransporterType('');
+      setSelectedTransporterType("");
       setFleets([]);
       setDrivers([]);
       return;
     }
 
-    const isOwn = val === 'own';
-    setSelectedTransporterType(isOwn ? 'OWN' : 'VENDOR');
+    const isOwn = val === "own";
+    setSelectedTransporterType(isOwn ? "OWN" : "VENDOR");
 
     try {
       // Fetch Fleets based on transporter
-      let fleetQuery = supabase.from('md_fleets').select(`
+      let fleetQuery = supabase
+        .from("md_fleets")
+        .select(
+          `
         id, 
         plate_number, 
         brand,
         md_fleet_types (type_name)
-      `)
-      .eq('tenant_id', profile?.tenant_id)
-      .eq('is_active', true);
+      `,
+        )
+        .eq("tenant_id", profile?.tenant_id)
+        .eq("is_active", true);
 
       if (isOwn) {
         // For internal, we want those with entity_id null OR the specific ID of the internal entity
-        const internalId = vendors.find(v => v.is_own)?.id;
+        const internalId = vendors.find((v) => v.is_own)?.id;
         if (internalId) {
-          fleetQuery = fleetQuery.or(`entity_id.is.null,entity_id.eq.${internalId}`);
+          fleetQuery = fleetQuery.or(
+            `entity_id.is.null,entity_id.eq.${internalId}`,
+          );
         } else {
-          fleetQuery = fleetQuery.is('entity_id', null);
+          fleetQuery = fleetQuery.is("entity_id", null);
         }
       } else {
-        fleetQuery = fleetQuery.eq('entity_id', val);
+        fleetQuery = fleetQuery.eq("entity_id", val);
       }
       const { data: fleetData, error: fError } = await fleetQuery;
-      if (fError) console.error("Error fetching fleets:", { code: fError.code, message: fError.message, details: fError.details, hint: fError.hint });
+      if (fError)
+        console.error("Error fetching fleets:", {
+          code: fError.code,
+          message: fError.message,
+          details: fError.details,
+          hint: fError.hint,
+        });
       setFleets(fleetData || []);
 
       // Fetch Drivers
-      let driverQuery = supabase.from('md_drivers').select('id, name, phone')
-        .eq('tenant_id', profile?.tenant_id)
-        .eq('is_active', true);
+      let driverQuery = supabase
+        .from("md_drivers")
+        .select("id, name, phone")
+        .eq("tenant_id", profile?.tenant_id)
+        .eq("is_active", true);
 
       if (isOwn) {
-        const internalId = vendors.find(v => v.is_own)?.id;
+        const internalId = vendors.find((v) => v.is_own)?.id;
         if (internalId) {
-          driverQuery = driverQuery.or(`entity_id.is.null,entity_id.eq.${internalId}`);
+          driverQuery = driverQuery.or(
+            `entity_id.is.null,entity_id.eq.${internalId}`,
+          );
         } else {
-          driverQuery = driverQuery.is('entity_id', null);
+          driverQuery = driverQuery.is("entity_id", null);
         }
       } else {
-        driverQuery = driverQuery.eq('entity_id', val);
+        driverQuery = driverQuery.eq("entity_id", val);
       }
       const { data: driverData, error: dError } = await driverQuery;
-      if (dError) console.error("Error fetching drivers:", { code: dError.code, message: dError.message, details: dError.details, hint: dError.hint });
+      if (dError)
+        console.error("Error fetching drivers:", {
+          code: dError.code,
+          message: dError.message,
+          details: dError.details,
+          hint: dError.hint,
+        });
       setDrivers(driverData || []);
-
     } catch (err: any) {
       console.error("Assignment Fetch Error:", err);
-      toast.error('Gagal mengambil data armada/driver');
+      toast.error("Gagal mengambil data armada/driver");
     }
   };
 
@@ -225,15 +250,15 @@ export default function AssignmentModal({
 
   const handleDriverChange = (val: string) => {
     setSelectedDriverId(val);
-    const driver = drivers.find(d => d.id === val);
+    const driver = drivers.find((d) => d.id === val);
     if (driver) {
-      setDriverPhone(driver.phone || '');
+      setDriverPhone(driver.phone || "");
     }
   };
 
   const handleAssign = async () => {
     if (!selectedFleetId || !selectedDriverId || !driverPhone) {
-      toast.error('Mohon lengkapi data armada dan driver');
+      toast.error("Mohon lengkapi data armada dan driver");
       return;
     }
 
@@ -241,20 +266,22 @@ export default function AssignmentModal({
     try {
       // 1. Create Job Order
       const { data: jo, error: joError } = await supabase
-        .from('job_orders')
+        .from("job_orders")
         .insert({
           wo_item_id: woItemId,
-          jo_number: `${woNumber}-${String(assignedCount + 1).padStart(2, '0')}`,
-          transporter_id: selectedTransporterId === 'own' ? null : selectedTransporterId,
+          jo_number: `${woNumber}-${String(assignedCount + 1).padStart(2, "0")}`,
+          transporter_id:
+            selectedTransporterId === "own" ? null : selectedTransporterId,
           fleet_id: selectedFleetId,
           driver_id: selectedDriverId,
           driver_phone: driverPhone,
           purchase_price: Number(purchasePrice) || 0,
           base_price: dealPrice,
-          driver_share_percentage: selectedTransporterId === 'own' ? Number(driverShare) : 0,
-          status: 'pending',
+          driver_share_percentage:
+            selectedTransporterId === "own" ? Number(driverShare) : 0,
+          status: "pending",
           tracking_token: crypto.randomUUID(),
-          driver_link_token: Math.random().toString(36).substring(2, 15)
+          driver_link_token: Math.random().toString(36).substring(2, 15),
         })
         .select()
         .single();
@@ -263,15 +290,15 @@ export default function AssignmentModal({
 
       // 2. Update wo_item status to in_progress if it was pending
       await supabase
-        .from('wo_items')
-        .update({ status: 'in_progress' })
-        .eq('id', woItemId)
-        .eq('status', 'pending');
+        .from("wo_items")
+        .update({ status: "in_progress" })
+        .eq("id", woItemId)
+        .eq("status", "pending");
 
-      toast.success('Assignment berhasil disimpan!');
+      toast.success("Assignment berhasil disimpan!");
       onSuccess();
     } catch (err: any) {
-      toast.error('Gagal menyimpan assignment: ' + err.message);
+      toast.error("Gagal menyimpan assignment: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -282,7 +309,9 @@ export default function AssignmentModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
         <div className="bg-white rounded-2xl p-8 flex flex-col items-center">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-          <p className="text-sm font-bold text-slate-600 animate-pulse uppercase tracking-widest">Memuat Console...</p>
+          <p className="text-sm font-bold text-slate-600 animate-pulse uppercase tracking-widest">
+            Memuat Console...
+          </p>
         </div>
       </div>
     );
@@ -291,16 +320,24 @@ export default function AssignmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col border border-white/20">
-        
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-slate-100 p-6 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Assignment Console</h2>
+            <h2 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">
+              Assignment Console
+            </h2>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-              {assignedCount} Assigned <span className="text-slate-200 mx-1">/</span> <span className="text-rose-500">{unitCount - assignedCount} Remaining</span>
+              {assignedCount} Assigned{" "}
+              <span className="text-slate-200 mx-1">/</span>{" "}
+              <span className="text-rose-500">
+                {unitCount - assignedCount} Remaining
+              </span>
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400"
+          >
             <X size={24} />
           </button>
         </div>
@@ -310,18 +347,29 @@ export default function AssignmentModal({
           <div className="bg-slate-50 rounded-3xl p-5 border border-slate-100">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
-                <p className="font-black text-sm text-slate-900 italic">{woNumber}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  WO Number
+                </p>
+                <p className="font-black text-sm text-slate-900 italic">
+                  {woNumber}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Units Needed</p>
-                <p className="font-black text-sm text-blue-600 italic">{unitCount} Fleet{unitCount > 1 ? 's' : ''}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  Units Needed
+                </p>
+                <p className="font-black text-sm text-blue-600 italic">
+                  {unitCount} Fleet{unitCount > 1 ? "s" : ""}
+                </p>
               </div>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-600 italic">
                 <MapPin size={14} className="text-emerald-500" />
-                <span>{origin} <span className="text-slate-300 mx-1">→</span> {destination}</span>
+                <span>
+                  {origin} <span className="text-slate-300 mx-1">→</span>{" "}
+                  {destination}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-600 italic">
                 <Truck size={14} className="text-blue-500" />
@@ -334,14 +382,22 @@ export default function AssignmentModal({
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Customer</p>
-                <p className="font-black text-sm text-slate-900 uppercase italic">{customerName}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  Customer
+                </p>
+                <p className="font-black text-sm text-slate-900 uppercase italic">
+                  {customerName}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Execution</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  Execution
+                </p>
                 <div className="flex items-center gap-2 justify-end">
-                   <Calendar size={14} className="text-rose-500" />
-                   <p className="text-sm font-black text-rose-600 italic">{formatDate(executionDate)}</p>
+                  <Calendar size={14} className="text-rose-500" />
+                  <p className="text-sm font-black text-rose-600 italic">
+                    {formatDate(executionDate)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -350,7 +406,7 @@ export default function AssignmentModal({
           {/* HARGA DEAL */}
           <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 shadow-sm relative overflow-hidden group">
             <div className="absolute right-[-10px] top-[-10px] opacity-10 group-hover:rotate-12 transition-transform">
-               <DollarSign size={80} className="text-emerald-900" />
+              <DollarSign size={80} className="text-emerald-900" />
             </div>
             <p className="text-[9px] text-emerald-600 font-black uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
               <DollarSign size={12} /> Harga Jual (DEALS)
@@ -359,7 +415,9 @@ export default function AssignmentModal({
               <span className="text-3xl font-black text-emerald-700 italic tracking-tighter">
                 {formatRupiah(dealPrice)}
               </span>
-              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">per unit</span>
+              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                per unit
+              </span>
             </div>
             {unitCount > 1 && (
               <p className="text-[10px] font-black text-emerald-600/60 mt-2 uppercase tracking-widest border-t border-emerald-200/50 pt-2">
@@ -379,52 +437,70 @@ export default function AssignmentModal({
                 onChange={(e) => handleTransporterChange(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black italic focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
               >
-                <option value="" className="not-italic">Pilih Transporter</option>
-                <option value="own" className="not-italic font-bold text-blue-600">(OWN) INTERNAL HQ</option>
-                {vendors.filter(v => v.is_vendor).map(v => (
-                  <option key={v.id} value={v.id} className="not-italic">PT {v.name}</option>
-                ))}
+                <option value="" className="not-italic">
+                  Pilih Transporter
+                </option>
+                <option
+                  value="own"
+                  className="not-italic font-bold text-blue-600"
+                >
+                  (OWN) INTERNAL HQ
+                </option>
+                {vendors
+                  .filter((v) => v.is_vendor)
+                  .map((v) => (
+                    <option key={v.id} value={v.id} className="not-italic">
+                      PT {v.name}
+                    </option>
+                  ))}
               </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                    FLEET / ARMADA *
-                  </label>
-                  <select
-                    value={selectedFleetId}
-                    onChange={(e) => handleFleetChange(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black italic focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all outline-none disabled:opacity-50"
-                    disabled={!selectedTransporterId}
-                  >
-                    <option value="" className="not-italic">Pilih Armada</option>
-                    {fleets.map(f => (
-                      <option key={f.id} value={f.id} className="not-italic">
-                        {f.plate_number} {f.md_fleet_types?.type_name ? `- ${f.md_fleet_types.type_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
-               </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  FLEET / ARMADA *
+                </label>
+                <select
+                  value={selectedFleetId}
+                  onChange={(e) => handleFleetChange(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black italic focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all outline-none disabled:opacity-50"
+                  disabled={!selectedTransporterId}
+                >
+                  <option value="" className="not-italic">
+                    Pilih Armada
+                  </option>
+                  {fleets.map((f) => (
+                    <option key={f.id} value={f.id} className="not-italic">
+                      {f.plate_number}{" "}
+                      {f.md_fleet_types?.type_name
+                        ? `- ${f.md_fleet_types.type_name}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-               <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                    DRIVER / SOPIR *
-                  </label>
-                  <select
-                    value={selectedDriverId}
-                    onChange={(e) => handleDriverChange(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black italic focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all outline-none disabled:opacity-50"
-                    disabled={!selectedTransporterId}
-                  >
-                    <option value="" className="not-italic">Pilih Driver</option>
-                    {drivers.map(d => (
-                      <option key={d.id} value={d.id} className="not-italic">
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-               </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  DRIVER / SOPIR *
+                </label>
+                <select
+                  value={selectedDriverId}
+                  onChange={(e) => handleDriverChange(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black italic focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all outline-none disabled:opacity-50"
+                  disabled={!selectedTransporterId}
+                >
+                  <option value="" className="not-italic">
+                    Pilih Driver
+                  </option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id} className="not-italic">
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>
@@ -432,16 +508,16 @@ export default function AssignmentModal({
                 WHATSAPP CONTACT
               </label>
               <div className="relative">
-                 <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <MessageCircle size={16} className="text-emerald-500" />
-                 </div>
-                 <input
-                   type="tel"
-                   value={driverPhone}
-                   onChange={(e) => setDriverPhone(e.target.value)}
-                   placeholder="6281234567890"
-                   className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
-                 />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                  <MessageCircle size={16} className="text-emerald-500" />
+                </div>
+                <input
+                  type="tel"
+                  value={driverPhone}
+                  onChange={(e) => setDriverPhone(e.target.value)}
+                  placeholder="6281234567890"
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                />
               </div>
               <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest italic ml-1">
                 Link tracking akan dikirim otomatis ke nomor ini.
@@ -450,13 +526,15 @@ export default function AssignmentModal({
           </div>
 
           {/* Purchase Price (hanya untuk VENDOR) */}
-          {selectedTransporterType === 'VENDOR' && (
+          {selectedTransporterType === "VENDOR" && (
             <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-sm space-y-4 animate-in slide-in-from-top-4 duration-300">
               <p className="text-[9px] text-amber-700 font-black uppercase tracking-[0.2em] flex items-center gap-2">
                 <DollarSign size={12} /> Harga Beli (Vendor Agreement)
               </p>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs">Rp</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs">
+                  Rp
+                </span>
                 <input
                   type="number"
                   value={purchasePrice}
@@ -468,17 +546,21 @@ export default function AssignmentModal({
               {Number(purchasePrice) > 0 && dealPrice > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center pt-3 border-t border-amber-200/50">
-                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Estimasi Margin</span>
-                    <span className={`text-sm font-black italic ${(dealPrice - Number(purchasePrice)) < 500000 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                      Estimasi Margin
+                    </span>
+                    <span
+                      className={`text-sm font-black italic ${dealPrice - Number(purchasePrice) < 500000 ? "text-rose-600" : "text-emerald-600"}`}
+                    >
                       {formatRupiah(dealPrice - Number(purchasePrice))}
                     </span>
                   </div>
-                  {(dealPrice - Number(purchasePrice)) < 500000 && (
+                  {dealPrice - Number(purchasePrice) < 500000 && (
                     <div className="flex items-center gap-2 p-3 bg-rose-100/50 rounded-xl border border-rose-200 animate-pulse">
-                       <AlertTriangle size={14} className="text-rose-600" />
-                       <p className="text-[9px] font-black text-rose-600 uppercase tracking-tight">
+                      <AlertTriangle size={14} className="text-rose-600" />
+                      <p className="text-[9px] font-black text-rose-600 uppercase tracking-tight">
                         Margin Tipis! Harap negosiasi lebih lanjut.
-                       </p>
+                      </p>
                     </div>
                   )}
                 </div>
@@ -486,7 +568,7 @@ export default function AssignmentModal({
             </div>
           )}
           {/* Driver Share (hanya untuk OWN) */}
-          {selectedTransporterType === 'OWN' && (
+          {selectedTransporterType === "OWN" && (
             <div className="bg-blue-50 border border-blue-200 rounded-3xl p-5 shadow-sm space-y-4 animate-in slide-in-from-top-4 duration-300">
               <p className="text-[9px] text-blue-700 font-black uppercase tracking-[0.2em] flex items-center gap-2">
                 <DollarSign size={12} /> Persentase Bagi Hasil Driver (%)
@@ -501,20 +583,28 @@ export default function AssignmentModal({
                   max="100"
                   min="0"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs">%</span>
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xs">
+                  %
+                </span>
               </div>
               {Number(driverShare) > 0 && dealPrice > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center pt-3 border-t border-blue-200/50">
-                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Estimasi Cair ke Driver</span>
+                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+                      Estimasi Cair ke Driver
+                    </span>
                     <span className="text-sm font-black italic text-blue-600">
                       {formatRupiah(dealPrice * (Number(driverShare) / 100))}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Estimasi Margin SBU</span>
+                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
+                      Estimasi Margin SBU
+                    </span>
                     <span className="text-sm font-black italic text-emerald-600">
-                      {formatRupiah(dealPrice * ((100 - Number(driverShare)) / 100))}
+                      {formatRupiah(
+                        dealPrice * ((100 - Number(driverShare)) / 100),
+                      )}
                     </span>
                   </div>
                 </div>
@@ -533,15 +623,19 @@ export default function AssignmentModal({
           </button>
           <button
             onClick={handleAssign}
-            disabled={loading || !selectedFleetId || !selectedDriverId || !driverPhone}
+            disabled={
+              loading || !selectedFleetId || !selectedDriverId || !driverPhone
+            }
             className="flex-1 px-6 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all active:scale-95 shadow-xl shadow-slate-900/20 disabled:opacity-50 disabled:grayscale"
           >
             {loading ? (
-               <div className="flex items-center justify-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Processing...</span>
-               </div>
-            ) : 'ASSIGN & KIRIM WA'}
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Processing...</span>
+              </div>
+            ) : (
+              "ASSIGN & KIRIM WA"
+            )}
           </button>
         </div>
       </div>

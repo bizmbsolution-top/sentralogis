@@ -56,28 +56,62 @@ export default function HQFinanceSummaryPage() {
     try {
       setLoading(true);
 
-      const { data: jos, error: joError } = await supabase
-        .from('job_orders')
-        .select(`
-            id, status, base_price, vendor_cost, created_at, completed_at, is_cost_finished,
-            wo_item:wo_items!wo_item_id (sbu_type)
-        `)
-        .eq('tenant_id', profile.tenant_id);
+      const [joResult, wiResult, ecResult] = await Promise.all([
+        supabase
+          .from('job_orders')
+          .select(`
+              id, status, base_price, purchase_price, driver_share_percentage, driver_payment_amount,
+              created_at, completed_at, is_cost_finished,
+              wo_item:wo_items!wo_item_id (sbu_type, total_revenue, unit_price)
+          `)
+          .eq('tenant_id', profile.tenant_id),
+        supabase
+          .from('wo_items')
+          .select('id, total_revenue, sbu_type')
+          .eq('tenant_id', profile.tenant_id),
+        supabase
+          .from('extra_costs')
+          .select('jo_id, amount')
+          .in('status', ['approved', 'paid']),
+      ]);
+
+      const jos = joResult.data || [];
+      const woItems = wiResult.data || [];
+      const extraCosts = ecResult.data || [];
+      const joError = joResult.error;
 
       if (joError) throw joError;
+
+      // Pre-index extra costs by jo_id for fast lookup
+      const extraCostsByJoId: Record<string, number> = {};
+      for (const ec of extraCosts) {
+        const joId = ec.jo_id;
+        if (joId) {
+          extraCostsByJoId[joId] = (extraCostsByJoId[joId] || 0) + (Number(ec.amount) || 0);
+        }
+      }
 
       const now = new Date();
       let rev = 0, cogs = 0, unbilled = 0;
       let auditTotal = 0, auditFinished = 0;
       const ar = { current: 0, overdue30: 0, overdue60: 0, critical: 0 };
 
+      // Revenue from WO Items (authoritative source)
+      rev = (woItems || []).reduce((sum, item) => sum + (Number(item.total_revenue) || 0), 0);
+
+      // Costs, audit, and AR aging from Job Orders
+      const countedWoForUnbilled = new Set<string>();
       (jos || []).forEach(jo => {
+          const cost = Number(jo.purchase_price) || 0;
+          const driverCost = Number(jo.driver_payment_amount) || 0;
+          // If no purchase_price (internal fleet), use driver cost
+          const effectiveCogs = cost > 0 ? cost : driverCost;
           const val = Number(jo.base_price) || 0;
-          const cost = Number(jo.vendor_cost) || 0;
           
-          // 1. Profitability
-          rev += val;
-          cogs += cost;
+          // 1. Profitability (COGS only — revenue already from wo_items)
+          cogs += effectiveCogs;
+          // Add approved extra costs for this JO
+          cogs += extraCostsByJoId[jo.id] || 0;
 
           // 2. Audit Status
           if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status)) {
@@ -85,19 +119,24 @@ export default function HQFinanceSummaryPage() {
               if (jo.is_cost_finished) auditFinished++;
           }
 
-          // 3. Cash Flow / AR Aging
-          if (jo.status === 'completed') {
-              unbilled += val;
-          }
+          // 3. Cash Flow / AR Aging (use wo_item revenue distribution)
+          const wiId = jo.wo_item?.id;
+          if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status)) {
+              if (jo.status === 'completed' && wiId && !countedWoForUnbilled.has(wiId)) {
+                  countedWoForUnbilled.add(wiId);
+                  unbilled += Number(jo.wo_item?.total_revenue) || val;
+              }
 
-          if (['invoiced', 'ready_for_billing'].includes(jo.status)) {
-              const compDate = jo.completed_at ? new Date(jo.completed_at) : new Date(jo.created_at);
-              const diffDays = Math.floor((now.getTime() - compDate.getTime()) / (1000 * 60 * 60 * 24));
-              
-              if (diffDays <= 30) ar.current += val;
-              else if (diffDays <= 60) ar.overdue30 += val;
-              else if (diffDays <= 90) ar.overdue60 += val;
-              else ar.critical += val;
+              if (['invoiced', 'ready_for_billing'].includes(jo.status)) {
+                  const compDate = jo.completed_at ? new Date(jo.completed_at) : new Date(jo.created_at);
+                  const diffDays = Math.floor((now.getTime() - compDate.getTime()) / (1000 * 60 * 60 * 24));
+                  const arVal = Number(jo.wo_item?.total_revenue) || val;
+                  
+                  if (diffDays <= 30) ar.current += arVal;
+                  else if (diffDays <= 60) ar.overdue30 += arVal;
+                  else if (diffDays <= 90) ar.overdue60 += arVal;
+                  else ar.critical += arVal;
+              }
           }
       });
 

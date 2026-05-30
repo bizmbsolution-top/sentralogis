@@ -260,6 +260,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             wo_id: woId,
             item_code: itemCode,
             sbu_type: item.sbu_type,
+            unit_price: item.unit_price || 0,
+            total_revenue: item.total_revenue || 0,
             item_data: item.item_data,
             status: status === 'draft' ? 'draft' : 'need_assignment'
           })
@@ -325,7 +327,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     }
   };
 
-  const totalRevenue = woItems.reduce((acc, curr) => acc + (curr.item_data?.est_revenue || 0), 0);
+  const totalRevenue = woItems.reduce((acc, curr) => acc + (Number(curr.total_revenue) || Number(curr.item_data?.est_revenue) || 0), 0);
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto">

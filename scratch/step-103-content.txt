@@ -1,0 +1,14 @@
+Created At: 2026-05-28T07:19:57Z
+Completed At: 2026-05-28T07:19:57Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/.env.local`
+Total Lines: 6
+Total Bytes: 672
+Showing lines 1 to 6
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: NEXT_PUBLIC_SUPABASE_URL=https://nsvkewvmzivudkcczhnk.supabase.co
+2: NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdmtld3Zteml2dWRrY2N6aG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3NzI3NjMsImV4cCI6MjA5MDM0ODc2M30.7zAR6x3qN6TcBKIQ2Ds3UlCxsAMRVmrroanxYXbpZ8g
+3: SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zdmtld3Zteml2dWRrY2N6aG5rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDc3Mjc2MywiZXhwIjoyMDkwMzQ4NzYzfQ.7ZDrwe28fRKFsbxZMzvpAqwDE39Iwk5ZZXWX_pLp8T8
+4: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCAXxHKtAylrY__mYPJzU2HyDWwq9ZiFRg
+5: NEXT_PUBLIC_BASE_URL=https://www.sentralogis.com
+6: 
+The above content shows the entire, complete file contents of the requested file.

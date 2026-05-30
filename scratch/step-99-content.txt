@@ -1,0 +1,32 @@
+Created At: 2026-05-28T07:19:53Z
+Completed At: 2026-05-28T07:19:53Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/apply_rls.js`
+Total Lines: 24
+Total Bytes: 986
+Showing lines 1 to 24
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: const fs = require('fs');
+2: const { createClient } = require('@supabase/supabase-js');
+3: const envFile = fs.readFileSync('.env.local', 'utf8');
+4: const env = {};
+5: envFile.split('\n').forEach(line => {
+6:   const match = line.match(/^([^=]+)=(.*)$/);
+7:   if(match) env[match[1].trim()] = match[2].trim();
+8: });
+9: const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+10: 
+11: async function applyMigration() {
+12:   const sqls = [
+13:     "CREATE POLICY \"driver_portal_jo_select\" ON public.job_orders FOR SELECT USING (auth.role() = 'anon');",
+14:     "CREATE POLICY \"driver_portal_routes_select\" ON public.job_routes FOR SELECT USING (auth.role() = 'anon');",
+15:     "CREATE POLICY \"driver_portal_wo_items_select\" ON public.wo_items FOR SELECT USING (auth.role() = 'anon');"
+16:   ];
+17:   for (const sql of sqls) {
+18:     console.log('Running:', sql);
+19:     const { error } = await supabase.rpc('exec_sql_manual', { sql_query: sql });
+20:     console.log('Error:', error);
+21:   }
+22: }
+23: applyMigration();
+24: 
+The above content shows the entire, complete file contents of the requested file.

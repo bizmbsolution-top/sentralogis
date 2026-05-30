@@ -47,6 +47,20 @@ const formatDate = (dateStr: string | null) => {
   });
 };
 
+const formatThousand = (val: number | string | null) => {
+  if (val === null || val === undefined || val === '') return '';
+  const clean = String(val).replace(/[^0-9.-]/g, '');
+  const parsed = parseFloat(clean);
+  if (isNaN(parsed)) return '';
+  return new Intl.NumberFormat('id-ID').format(parsed);
+};
+
+const parseThousand = (str: string): number => {
+  const clean = str.replace(/[^0-9.-]/g, '');
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : parsed;
+}; // [AI] helper functions to support thousand separators in input fields
+
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   draft: { label: "Draft", className: "bg-slate-100 text-slate-600" },
   sent: { label: "Sent", className: "bg-blue-50 text-blue-700" },
@@ -149,7 +163,7 @@ export default function InvoiceDetailPage() {
         const { data: wis } = await supabase
           .from("wo_items")
           .select(
-            `id, item_data, max_jo_count, job_orders(id, jo_number, status, base_price, fleet_id, driver_id, is_doc_finished, is_cost_finished)`,
+            `id, unit_price, total_revenue, item_data, max_jo_count, job_orders(id, jo_number, status, base_price, fleet_id, driver_id, is_doc_finished, is_cost_finished)`,
           )
           .eq("wo_id", wo.id);
 
@@ -390,10 +404,18 @@ export default function InvoiceDetailPage() {
     const title =
       invoice.invoice_number || `Invoice-${String(invoice.id).slice(0, 8)}`;
     document.title = title;
+
+    // [AI] temporarily enable print layout to ensure it's rendered in DOM during print
+    const wasPrintMode = new URLSearchParams(window.location.search).get('print') === '1';
+    setIsPrintMode(true);
+
     setTimeout(() => {
       window.print();
       setTimeout(() => {
         document.title = prevTitle;
+        if (!wasPrintMode) {
+          setIsPrintMode(false);
+        }
       }, 250);
     }, 150);
   };
@@ -582,6 +604,39 @@ export default function InvoiceDetailPage() {
           ) : (
             <p className="text-xs text-slate-700">{line.description}</p>
           )}
+          {canEditAmount && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-800 uppercase block mb-1">Qty</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={line.quantity}
+                  onChange={(e) =>
+                    updateLine(line.id, {
+                      quantity: Number(e.target.value) || 0, // [AI] enabled editing of quantity in compact view
+                    })
+                  }
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-800 uppercase block mb-1">Harga Satuan</label>
+                <input
+                  type="text"
+                  value={formatThousand(line.unit_amount)}
+                  onChange={(e) =>
+                    updateLine(line.id, {
+                      unit_amount: parseThousand(e.target.value), // [AI] enabled editing of unit price with thousand separators in compact view
+                    })
+                  }
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          )}
           <select
             value={line.coa_id || ""}
             disabled={!isDraft}
@@ -633,7 +688,7 @@ export default function InvoiceDetailPage() {
             {CHARGE_LABELS[line.charge_type]}
           </span>
         </td>
-        <td className="px-2 py-2 text-xs text-slate-700 min-w-[200px]">
+        <td className="px-2 py-2 text-xs text-slate-900 font-semibold min-w-[200px]">
           {canEditDesc ? (
             <input
               value={line.description}
@@ -663,14 +718,14 @@ export default function InvoiceDetailPage() {
             </select>
           )}
         </td>
-        <td className="px-2 py-2 text-xs whitespace-nowrap">
+        <td className="px-2 py-2 text-xs text-slate-900 font-semibold whitespace-nowrap">
           {line.fleet_plate || "-"}
         </td>
-        <td className="px-2 py-2 text-xs whitespace-nowrap">
+        <td className="px-2 py-2 text-xs text-slate-900 font-semibold whitespace-nowrap">
           {line.driver_name || "-"}
         </td>
         <td
-          className="px-2 py-2 text-xs max-w-[140px] truncate"
+          className="px-2 py-2 text-xs text-slate-900 font-semibold max-w-[140px] truncate"
           title={line.route}
         >
           {line.route || "-"}
@@ -680,25 +735,37 @@ export default function InvoiceDetailPage() {
             <input
               type="number"
               min={0}
-              value={line.unit_amount}
+              step="any"
+              value={line.quantity}
               onChange={(e) =>
                 updateLine(line.id, {
-                  unit_amount: Number(e.target.value) || 0,
-                  quantity: 1,
+                  quantity: Number(e.target.value) || 0, // [AI] enabled editing of quantity
                 })
               }
-              className="w-24 px-2 py-1 text-xs text-right border border-slate-200 rounded"
+              className="w-20 px-2 py-1 text-xs text-right border border-slate-200 rounded"
             />
           ) : (
-            <span className="text-xs">{line.quantity}</span>
+            <span className="text-xs text-slate-900 font-semibold">{line.quantity}</span>
           )}
         </td>
-        <td className="px-2 py-2 text-xs text-right whitespace-nowrap">
-          {canEditAmount
-            ? formatRupiah(line.unit_amount)
-            : formatRupiah(line.unit_amount)}
+        <td className="px-2 py-2 text-xs text-slate-900 font-semibold text-right whitespace-nowrap">
+          {canEditAmount ? (
+            <input
+              type="text"
+              value={formatThousand(line.unit_amount)}
+              onChange={(e) =>
+                updateLine(line.id, {
+                  unit_amount: parseThousand(e.target.value), // [AI] enabled editing of unit price with thousand separators
+                })
+              }
+              className="w-28 px-2 py-1 text-xs text-right border border-slate-200 rounded"
+              placeholder="0"
+            />
+          ) : (
+            formatRupiah(line.unit_amount)
+          )}
         </td>
-        <td className="px-2 py-2 text-xs font-semibold text-right whitespace-nowrap">
+        <td className="px-2 py-2 text-xs font-bold text-slate-950 text-right whitespace-nowrap">
           {formatRupiah(line.amount)}
         </td>
         <td className="px-2 py-2 w-8">
@@ -817,7 +884,8 @@ export default function InvoiceDetailPage() {
                 </Button>
               )}
               {isDraft && (
-                <Button onClick={handleAddManualLine} className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors">
+                <Button variant="secondary" onClick={handleAddManualLine} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                  {/* [AI] added variant="secondary" to prevent white-on-white color clash */}
                   <Plus size={15} /> Add Line
                 </Button>
               )}
@@ -837,12 +905,14 @@ export default function InvoiceDetailPage() {
                 </Button>
               )}
               {lines.length > 0 && (
-                <Button onClick={handlePrint} className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors">
+                <Button variant="secondary" onClick={handlePrint} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                  {/* [AI] added variant="secondary" to prevent white-on-white color clash */}
                   <Printer size={15} /> Print
                 </Button>
               )}
               {lines.length > 0 && (
-                <Button onClick={handleDownloadPdf} className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors">
+                <Button variant="secondary" onClick={handleDownloadPdf} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                  {/* [AI] added variant="secondary" to prevent white-on-white color clash */}
                   <FileText size={15} /> PDF
                 </Button>
               )}
@@ -852,22 +922,22 @@ export default function InvoiceDetailPage() {
           {/* Customer & Invoice Info */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Bill To</h2>
-              <p className="text-sm font-semibold text-slate-900">{customerName}</p>
-              {customerAddress && <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">{customerAddress}</p>}
-              {customerTaxId && <p className="text-xs text-slate-400 mt-1">NPWP: {customerTaxId}</p>}
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-3">Bill To</h2>
+              <p className="text-sm font-bold text-slate-950">{customerName}</p>
+              {customerAddress && <p className="text-xs text-slate-900 mt-1 font-medium whitespace-pre-wrap">{customerAddress}</p>}
+              {customerTaxId && <p className="text-xs text-slate-900 mt-1 font-medium">NPWP: {customerTaxId}</p>}
             </div>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase">Invoice Date</p>
-                <p className="text-sm text-slate-900 mt-0.5">{formatDate(invoice.invoice_date)}</p>
+                <p className="text-[10px] font-bold text-slate-800 uppercase">Invoice Date</p>
+                <p className="text-sm text-slate-900 font-semibold mt-0.5">{formatDate(invoice.invoice_date)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase">Due Date</p>
-                <p className="text-sm text-slate-900 mt-0.5">{formatDate(invoice.due_date)}</p>
+                <p className="text-[10px] font-bold text-slate-800 uppercase">Due Date</p>
+                <p className="text-sm text-slate-900 font-semibold mt-0.5">{formatDate(invoice.due_date)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase">Tax (PPN)</p>
+                <p className="text-[10px] font-bold text-slate-800 uppercase">Tax (PPN)</p>
                 <select
                   value={invoice.tax_id || ''}
                   disabled={!isDraft}
@@ -891,7 +961,7 @@ export default function InvoiceDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                  <tr className="bg-slate-100 text-[10px] font-bold text-slate-800 uppercase tracking-wide border-b border-slate-250">
                     <th className="px-3 py-3 text-left">COA</th>
                     <th className="px-3 py-3 text-left">Type</th>
                     <th className="px-3 py-3 text-left">Description</th>
@@ -925,28 +995,28 @@ export default function InvoiceDetailPage() {
           <div className="flex justify-end">
             <div className="w-full max-w-sm bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Subtotal</span>
-                <span className="font-medium text-slate-900">{formatRupiah(totals.subtotal)}</span>
+                <span className="text-slate-900 font-medium">Subtotal</span>
+                <span className="font-bold text-slate-950">{formatRupiah(totals.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">PPN ({taxRate}%)</span>
-                <span className="font-medium text-slate-900">{formatRupiah(totals.taxAmount)}</span>
+                <span className="text-slate-900 font-medium">PPN ({taxRate}%)</span>
+                <span className="font-bold text-slate-950">{formatRupiah(totals.taxAmount)}</span>
               </div>
-              <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
-                <span className="font-semibold text-slate-900">Grand Total</span>
-                <span className="font-bold text-slate-900">{formatRupiah(totals.grandTotal)}</span>
+              <div className="border-t border-slate-300 pt-3 flex justify-between text-base">
+                <span className="font-bold text-slate-900">Grand Total</span>
+                <span className="font-extrabold text-slate-950">{formatRupiah(totals.grandTotal)}</span>
               </div>
             </div>
           </div>
 
           {/* History / Audit */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">History</h2>
-            <div className="space-y-2 text-xs text-slate-600">
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-3">History</h2>
+            <div className="space-y-2 text-xs text-slate-900 font-medium">
               {invoice.sent_at && <p>Sent: {formatDate(invoice.sent_at)}</p>}
               {invoice.customer_accepted_invoice_at && <p>Accepted by customer: {formatDate(invoice.customer_accepted_invoice_at)}</p>}
               {invoice.paid_at && <p>Paid: {formatDate(invoice.paid_at)}</p>}
-              {!invoice.sent_at && <p className="text-slate-400">No activity yet</p>}
+              {!invoice.sent_at && <p className="text-slate-900 italic">No activity yet</p>}
             </div>
           </div>
         </div>
@@ -997,6 +1067,7 @@ export default function InvoiceDetailPage() {
                         fontSize: "16px",
                         fontWeight: "bold",
                         letterSpacing: "0.5px",
+                        color: "#000",
                       }}
                     >
                       {tenantInfo?.name || "SENTRALOGIS"}
@@ -1004,7 +1075,7 @@ export default function InvoiceDetailPage() {
                     <div
                       style={{
                         fontSize: "9px",
-                        color: "#333",
+                        color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                         marginTop: "2mm",
                       }}
                     >
@@ -1018,6 +1089,7 @@ export default function InvoiceDetailPage() {
                       fontSize: "11px",
                       fontWeight: "bold",
                       marginBottom: "2mm",
+                      color: "#000",
                     }}
                   >
                     INVOICE
@@ -1027,6 +1099,7 @@ export default function InvoiceDetailPage() {
                       fontSize: "13px",
                       fontWeight: "bold",
                       fontFamily: "monospace",
+                      color: "#000",
                     }}
                   >
                     {invoice.invoice_number || "-"}
@@ -1049,13 +1122,13 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "1mm",
                   }}
                 >
                   TANGGAL INVOICE
                 </div>
-                <div style={{ fontSize: "10px", fontWeight: "500" }}>
+                <div style={{ fontSize: "10px", fontWeight: "500", color: "#000" }}>
                   {formatDate(invoice.invoice_date)}
                 </div>
               </div>
@@ -1064,13 +1137,13 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "1mm",
                   }}
                 >
                   JATUH TEMPO
                 </div>
-                <div style={{ fontSize: "10px", fontWeight: "500" }}>
+                <div style={{ fontSize: "10px", fontWeight: "500", color: "#000" }}>
                   {formatDate(invoice.due_date)}
                 </div>
               </div>
@@ -1079,13 +1152,13 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "1mm",
                   }}
                 >
                   WORK ORDER
                 </div>
-                <div style={{ fontSize: "10px", fontFamily: "monospace" }}>
+                <div style={{ fontSize: "10px", fontFamily: "monospace", color: "#000" }}>
                   {workOrder?.wo_number || "-"}
                 </div>
               </div>
@@ -1094,13 +1167,13 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "1mm",
                   }}
                 >
                   STATUS
                 </div>
-                <div style={{ fontSize: "10px" }}>
+                <div style={{ fontSize: "10px", color: "#000" }}>
                   {invoice.status?.toUpperCase() || "-"}
                 </div>
               </div>
@@ -1111,7 +1184,7 @@ export default function InvoiceDetailPage() {
               style={{
                 marginBottom: "10mm",
                 paddingBottom: "8mm",
-                borderBottom: "1px solid #999",
+                borderBottom: "1px solid #000", // [AI] changed border color to dark for high contrast in print preview screen view
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "10mm",
@@ -1122,21 +1195,21 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "2mm",
                   }}
                 >
                   DITAGIHKAN KEPADA
                 </div>
-                <div style={{ fontSize: "10px", lineHeight: "1.4" }}>
-                  <div style={{ fontWeight: "bold", marginBottom: "1mm" }}>
+                <div style={{ fontSize: "10px", lineHeight: "1.4", color: "#000" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "1mm", color: "#000" }}>
                     {customerName}
                   </div>
                   {customerAddress && (
                     <div
                       style={{
                         fontSize: "9px",
-                        color: "#555",
+                        color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                         marginBottom: "1mm",
                         whiteSpace: "pre-wrap",
                       }}
@@ -1145,7 +1218,7 @@ export default function InvoiceDetailPage() {
                     </div>
                   )}
                   {customerTaxId && (
-                    <div style={{ fontSize: "9px", color: "#555" }}>
+                    <div style={{ fontSize: "9px", color: "#000" }}>
                       NPWP: {customerTaxId}
                     </div>
                   )}
@@ -1156,19 +1229,19 @@ export default function InvoiceDetailPage() {
                   style={{
                     fontSize: "8px",
                     fontWeight: "bold",
-                    color: "#333",
+                    color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                     marginBottom: "2mm",
                   }}
                 >
                   INFORMASI PAJAK
                 </div>
-                <div style={{ fontSize: "10px" }}>
-                  <div style={{ fontWeight: "bold" }}>PPN: {taxRate}%</div>
+                <div style={{ fontSize: "10px", color: "#000" }}>
+                  <div style={{ fontWeight: "bold", color: "#000" }}>PPN: {taxRate}%</div>
                   {selectedTax?.code && (
                     <div
                       style={{
                         fontSize: "9px",
-                        color: "#555",
+                        color: "#000", // [AI] changed text color to dark for high contrast in print preview screen view
                         marginTop: "1mm",
                       }}
                     >
@@ -1240,7 +1313,7 @@ export default function InvoiceDetailPage() {
                   {lines.map((line) => (
                     <tr
                       key={line.id}
-                      style={{ borderBottom: "1px solid #ddd" }}
+                      style={{ borderBottom: "1px solid #000" }} // [AI] changed border color to dark for high contrast in print preview screen view
                     >
                       <td
                         style={{ padding: "2.5mm 2mm", verticalAlign: "top" }}

@@ -1,0 +1,104 @@
+Created At: 2026-05-28T07:23:27Z
+Completed At: 2026-05-28T07:23:27Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 450 to 545
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+450:       }));
+451: 
+452:       if (isEditing) {
+453:         const { error } = await supabase.from('invoices').update({
+454:           total_billing: totalBilling,
+455:           tax_amount: totalTax,
+456:           status: 'sent',
+457:           due_date: dueDate.toISOString(),
+458:           sent_at: now,
+459:           line_items: lineItems,
+460:         }).eq('wo_id', generateRow.wo_id);
+461: 
+462:         if (error) throw error;
+463:         toast.success(`Invoice ${invNumber} updated & sent`);
+464:       } else {
+465:         const { error } = await supabase.from('invoices').insert({
+466:           wo_id: generateRow.wo_id,
+467:           invoice_number: invNumber,
+468:           total_billing: totalBilling,
+469:           tax_amount: totalTax,
+470:           status: 'sent',
+471:           due_date: dueDate.toISOString(),
+472:           invoiced_at: now,
+473:           sent_at: now,
+474:           line_items: lineItems,
+475:         });
+476: 
+477:         if (error) throw error;
+478:         toast.success(`Invoice ${invNumber} sent`);
+479:       }
+480: 
+481:       setShowGenerateModal(false);
+482:       setGenerateRow(null);
+483:       fetchData();
+484:     } catch (err: any) {
+485:       toast.error(`Gagal: ${err.message}`);
+486:     }
+487:   };
+488: 
+489:   const handleSaveDraft = async () => {
+490:     if (!generateRow || !profile?.tenant_id) return;
+491:     try {
+492:       const invNumber = `INV-${generateRow.wo_number.replace('WO', '')}`;
+493:       const dueDate = invoiceDueDate ? new D
+<truncated 127 bytes>
+ let totalTax = 0;
+496:       for (const item of generateItems) {
+497:         if (item.tax_rate > 0) {
+498:           totalTax += item.amount * (item.tax_rate / 100);
+499:         }
+500:       }
+501:       const lineItems = generateItems.map(i => ({
+502:         jo_id: i.jo_id,
+503:         jo_number: i.jo_number,
+504:         line_number: i.line_number,
+505:         description: i.description,
+506:         coa_id: i.coa_id,
+507:         coa_label: i.coa_label,
+508:         tax_id: i.tax_id,
+509:         tax_name: i.tax_name,
+510:         tax_rate: i.tax_rate,
+511:         qty: i.qty,
+512:         unit_price: i.unit_price,
+513:         amount: i.amount,
+514:         truck_type: i.truck_type,
+515:         route: i.route,
+516:         is_custom: i.is_custom,
+517:       }));
+518: 
+519:       if (isEditing) {
+520:         const { error } = await supabase.from('invoices').update({
+521:           total_billing: totalBilling,
+522:           tax_amount: totalTax,
+523:           status: 'draft',
+524:           due_date: dueDate.toISOString(),
+525:           line_items: lineItems,
+526:         }).eq('wo_id', generateRow.wo_id);
+527:         if (error) throw error;
+528:         toast.success(`Draft saved`);
+529:       } else {
+530:         const { error } = await supabase.from('invoices').insert({
+531:           wo_id: generateRow.wo_id,
+532:           invoice_number: invNumber,
+533:           total_billing: totalBilling,
+534:           tax_amount: totalTax,
+535:           status: 'draft',
+536:           due_date: dueDate.toISOString(),
+537:           invoiced_at: null,
+538:           sent_at: null,
+539:           line_items: lineItems,
+540:         });
+541:         if (error) throw error;
+542:         toast.success(`Draft saved`);
+543:       }
+544: 
+545:       setShowGenerateModal(false);
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

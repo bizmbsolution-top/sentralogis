@@ -45,6 +45,8 @@ const getDueBadge = (days: number | null) => {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  in_progress: { label: 'In Progress', color: 'text-amber-700', bg: 'bg-amber-50' },
+  ready: { label: 'Ready to Bill', color: 'text-blue-700', bg: 'bg-blue-50' },
   draft: { label: 'Draft', color: 'text-slate-600', bg: 'bg-slate-100' },
   sent: { label: 'Sent', color: 'text-blue-700', bg: 'bg-blue-50' },
   accepted: { label: 'Accepted', color: 'text-emerald-700', bg: 'bg-emerald-50' },
@@ -111,7 +113,7 @@ export default function HQInvoiceCustomerPage() {
           id, wo_number, customer_id, created_at,
           customer:md_entities!customer_id(name, legal_name),
           wo_items (
-            id,
+            id, unit_price, total_revenue,
             job_orders (
               id, jo_number, status, base_price, is_doc_finished, is_cost_finished
             )
@@ -152,12 +154,15 @@ export default function HQInvoiceCustomerPage() {
         const allCostDone = jos.every((j: any) => j.is_cost_finished);
         const readyForBilling = completedJo === jos.length && allDocDone && allCostDone;
 
-        const totalBilling = jos.reduce((sum: number, j: any) => sum + Number(j.base_price || 0), 0);
+        const totalBilling = (wo as any).wo_items?.reduce((sum: number, wi: any) => {
+          const wiRevenue = Number(wi.total_revenue) || (Number(wi.unit_price || 0) * (wi.job_orders?.length || 0));
+          return sum + wiRevenue;
+        }, 0) || 0;
         const inv = invoiceMap.get(wo.id);
 
         const customerName = (wo as any).customer?.legal_name || (wo as any).customer?.name || '';
 
-        let status = 'draft';
+        let status = 'in_progress';
         let dueDate: string | null = null;
         if (inv) {
           status = inv.status || 'draft';

@@ -54,7 +54,7 @@ export default function SBUTruckingDashboard() {
 
             const [josRes, itemsRes, driversRes, fleetsRes] = await Promise.all([
                 supabase.from('job_orders')
-                    .select('status, driver_response, base_price, purchase_price, created_at, completed_at, driver_id, fleet_id, wo_item_id, wo_item:wo_items!wo_item_id(sbu_type)')
+                    .select('status, driver_response, base_price, purchase_price, created_at, completed_at, driver_id, fleet_id, wo_item_id, wo_item:wo_items!wo_item_id(sbu_type, unit_price)')
                     .eq('tenant_id', tenantId),
                 supabase.from('wo_items')
                     .select('id, status, created_at')
@@ -109,10 +109,10 @@ export default function SBUTruckingDashboard() {
             const pending = items.filter(i => ['PENDING', 'NEED_ASSIGNMENT', 'NEED_ASSIGN'].includes(i.status?.toUpperCase())).length;
             const completed = jos.filter(j => DONE_STATUSES.includes(j.status?.toUpperCase())).length;
             
-            // Operation Revenue: realized sum of completed/verified/billing/paid jobs contract value
+            // Operation Revenue: from wo_item.unit_price (fallback to base_price)
             const revenue = jos
                 .filter(j => DONE_STATUSES.includes(j.status?.toUpperCase()))
-                .reduce((acc, curr) => acc + (Number(curr.base_price) || 0), 0);
+                .reduce((acc, curr) => acc + (Number(curr.wo_item?.unit_price) || Number(curr.base_price) || 0), 0);
 
             const pendingHandovers = items.filter(i => i.status?.toUpperCase() === 'HANDOVER_PENDING').length;
 

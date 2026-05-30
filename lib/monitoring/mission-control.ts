@@ -60,7 +60,7 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
     const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     const [
-      healthRes, auditRes, checkRes, joRes, woRes, activeUsersRes,
+      healthRes, auditRes, checkRes, joRes, woRes, activeUsersRes, invRes
     ] = await Promise.allSettled([
       runHealthCheck(),
       client.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(20),
@@ -68,6 +68,7 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
       client.from('job_orders').select('id, jo_number, status, driver_id, fleet_id, driver_accepted_at, created_at'),
       client.from('work_orders').select('id, wo_number, status').eq('status', 'DRAFT'),
       client.from('audit_logs').select('user_id', { count: 'exact', head: true }).not('user_id', 'is', null).gte('created_at', fifteenMinAgo),
+      client.from('wh_inventory').select('id, quantity, reserved_quantity').gt('reserved_quantity', 0)
     ]);
 
     // Health checks — live from runHealthCheck()
@@ -147,11 +148,44 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
       health.active_users = activeUsersRes.value.count ?? 0;
     }
 
-    // Integrity
-    db_integrity.push(
-      { type: 'duplicate', table: 'job_orders', count: 0, severity: 'low' },
-      { type: 'orphan', table: 'job_routes', count: 0, severity: 'medium' },
-    );
+    // Integrity - Real Anomalies
+    if (joRes.status === 'fulfilled') {
+      const jobs = joRes.value.data || [];
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      const stuckJOs = jobs.filter((j: any) => j.status === 'ASSIGNED' && !j.driver_accepted_at && new Date(j.created_at).getTime() < twoHoursAgo);
+      if (stuckJOs.length > 0) {
+        db_integrity.push({
+          type: 'Stuck Job Orders',
+          table: 'job_orders',
+          count: stuckJOs.length,
+          severity: 'high',
+          remediable: true,
+          anomaly_type: 'stuck_jo'
+        });
+      }
+    }
+
+    if (invRes.status === 'fulfilled') {
+      const inventory = invRes.value.data || [];
+      const overReserved = inventory.filter((i: any) => i.reserved_quantity > i.quantity);
+      if (overReserved.length > 0) {
+        db_integrity.push({
+          type: 'Over Reserved Stock',
+          table: 'wh_inventory',
+          count: overReserved.length,
+          severity: 'critical',
+          remediable: true,
+          anomaly_type: 'over_reserved'
+        });
+      }
+    }
+
+    if (db_integrity.length === 0) {
+      db_integrity.push(
+        { type: 'duplicate', table: 'job_orders', count: 0, severity: 'low' },
+        { type: 'orphan', table: 'job_routes', count: 0, severity: 'medium' }
+      );
+    }
 
     // Performance
     performance.push(

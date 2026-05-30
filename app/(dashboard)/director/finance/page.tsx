@@ -35,9 +35,12 @@ export default function DirectorFinanceDashboardPage() {
           id, 
           jo_number, 
           status, 
+          base_price,
           purchase_price,
+          driver_share_percentage,
+          driver_payment_amount,
           wo_item:wo_items(
-            item_data,
+            unit_price, item_data,
             wo:work_orders(
               customer:md_entities(name)
             )
@@ -70,17 +73,22 @@ export default function DirectorFinanceDashboardPage() {
     let totalCogs = 0;
     
     const joMetrics = data.map(group => {
+      const unitPrice = Number(group.wo_item?.unit_price || 0);
       const dealPrice = Number(group.wo_item?.item_data?.deal_price || 0);
+      const effectiveUnitPrice = unitPrice > 0 ? unitPrice : dealPrice;
       const approvedSurcharges = group.costs?.reduce((sum: number, c: any) => 
         sum + (c.status === 'approved' && c.charge_type === 'surcharge' ? Number(c.amount) : 0), 0
       ) || 0;
-      const revenue = dealPrice + approvedSurcharges;
+      const revenue = effectiveUnitPrice + approvedSurcharges;
 
       const purchasePrice = Number(group.purchase_price || 0);
+      const driverCost = Number(group.driver_payment_amount || 0);
+      // Internal fleet: use driver cost; Vendor fleet: use purchase_price
+      const effectiveDirectCost = purchasePrice > 0 ? purchasePrice : driverCost;
       const approvedExtraCosts = group.costs?.reduce((sum: number, c: any) => 
         sum + ((c.status === 'approved' || c.status === 'rejected_as_cogs') && (c.paid_by_sbu || c.charge_type === 'reimbursement') ? Number(c.amount) : 0), 0
       ) || 0;
-      const cogs = purchasePrice + approvedExtraCosts;
+      const cogs = effectiveDirectCost + approvedExtraCosts;
 
       const profit = revenue - cogs;
       const margin = revenue > 0 ? (profit / revenue) * 100 : 0;

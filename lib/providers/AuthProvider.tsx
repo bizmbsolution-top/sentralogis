@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { getDashboardRoute } from '@/lib/utils/dashboardRoute';
 
 interface Profile {
   id: string;
@@ -27,6 +28,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  profileLoading: boolean;
   login: (email: string, password: string) => Promise<{ data: any; error: any }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -37,34 +39,9 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
-const getDashboardRoute = (role: string) => {
-  // [AI] All director roles should land on the Executive Business Dashboard
-  if (role.startsWith('hq_director_')) {
-    return '/hq/business';
-  }
 
-  switch(role) {
-    case 'owner_sentralogis': return '/owner';
-    case 'tenant_superadmin': return '/tenant';
-    case 'hq_cs': return '/hq/work-orders';
-    case 'hq_ops': return '/hq/ops-dashboard';
-    case 'hq_finance': return '/hq/token';
-    case 'sbu_manager_tr': return '/sbu/trucking';
-    case 'sbu_ops_tr': return '/sbu/trucking/work-orders';
-    case 'sbu_fin_tr': return '/sbu/trucking/finances';
-    case 'sbu_manager_wh': return '/sbu/warehouse';
-    case 'sbu_ops_wh': return '/sbu/warehouse/inbound';
-    case 'sbu_admin_wh': return '/sbu/warehouse';
-    case 'sbu_fin_wh': return '/sbu/warehouse/finances';
-    case 'sbu_fin_fwd': return '/sbu/forwarding/finances';
-    case 'driver': return '/driver/jobs';
-    case 'tenant_admin': return '/tenant';
-    default:
-      if (role.startsWith('hq_')) return '/hq/sbu-activities';
-      if (role.startsWith('sbu_')) return '/sbu/trucking';
-      return '/tenant';
-  }
-};
+
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -72,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [showLoginToast, setShowLoginToast] = useState(false);
   const router = useRouter();
   const hasInitializedProfile = useRef(false);
@@ -261,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           hasInitializedProfile.current = true;
           isFetchingProfile.current = false;
           setLoading(false);
+          setProfileLoading(false);
 
           if (event === 'SIGNED_IN') {
             setShowLoginToast(true);
@@ -274,6 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('[Auth] Profile fetch exception:', fetchErr);
           isFetchingProfile.current = false;
           setLoading(false);
+          setProfileLoading(false);
         }
       } else {
         setUser(null);
@@ -281,6 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasInitializedProfile.current = false;
         isFetchingProfile.current = false;
         setLoading(false);
+        setProfileLoading(false);
       }
     });
 
@@ -293,12 +274,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasInitializedProfile.current = false;
       isFetchingProfile.current = false;
       setLoading(true);
+      setProfileLoading(true);
       
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
         toast.error(error.message);
         setLoading(false);
+        setProfileLoading(false);
         return { data: null, error };
       }
 
@@ -306,6 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Give it up to 20 seconds to complete
       const maxWait = 20000;
       const startTime = Date.now();
+      // profileLoading will be cleared when profile is set
       
       while (isFetchingProfile.current && (Date.now() - startTime) < maxWait) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -318,10 +302,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setLoading(false);
+      // profileLoading will be handled by auth state change
       return { data, error: null };
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');
       setLoading(false);
+      setProfileLoading(false);
       return { data: null, error: err };
     }
   };
@@ -368,6 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
+    profileLoading,
     login,
     logout,
     isAuthenticated: !!user,

@@ -57,6 +57,100 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
 
+  // [AI] States for operational context overlay
+  const [wojoContext, setWojoContext] = useState<any>(null);
+  const [loadingContext, setLoadingContext] = useState(false);
+  const [showContextOverlay, setShowContextOverlay] = useState(false);
+
+  // [AI] Fetch operational context for WO/JO channels
+  const fetchOperationalDetails = async (channelType: string, channelId: string) => {
+    setLoadingContext(true);
+    try {
+      if (channelType === 'work_order') {
+        const { data: wo } = await supabase
+          .from('work_orders')
+          .select(`
+            id, wo_number, order_date, execution_date,
+            customers:md_entities!customer_id (name, legal_name),
+            wo_items (
+              id, sbu_type, total_revenue, item_data,
+              job_orders (
+                id, jo_number, status, purchase_price, advance_amount,
+                fleets:fleet_id (plate_number, companies:md_entities (name))
+              )
+            )
+          `)
+          .eq('id', channelId)
+          .maybeSingle();
+
+        if (wo) {
+          const customerName = wo.customers?.legal_name || wo.customers?.name || "TBA";
+          const transporters = new Set<string>();
+          let totalQty = 0;
+          wo.wo_items?.forEach((item: any) => {
+            totalQty += Number(item.item_data?.unit_count || 1);
+            item.job_orders?.forEach((jo: any) => {
+              const transporter = jo.fleets?.companies?.name || "Internal";
+              transporters.add(transporter);
+            });
+          });
+          
+          setWojoContext({
+            number: wo.wo_number,
+            customer: customerName,
+            transporter: transporters.size > 0 ? Array.from(transporters).join(", ") : "Internal",
+            orderDate: wo.order_date || "TBA",
+            executionDate: wo.execution_date || "TBA",
+            quantity: `${totalQty} Units / Stops`
+          });
+        }
+      } else if (channelType === 'job_order') {
+        const { data: jo } = await supabase
+          .from('job_orders')
+          .select(`
+            id, jo_number, status, purchase_price, advance_amount,
+            fleets:fleet_id (plate_number, companies:md_entities (name)),
+            wo_item:wo_items!wo_item_id (
+              id, sbu_type, item_data,
+              work_orders (
+                id, wo_number, order_date, execution_date,
+                customers:md_entities!customer_id (name, legal_name)
+              )
+            )
+          `)
+          .eq('id', channelId)
+          .maybeSingle();
+
+        if (jo) {
+          const wo = jo.wo_item?.work_orders;
+          const customerName = wo?.customers?.legal_name || wo?.customers?.name || "TBA";
+          const transporter = jo.fleets?.companies?.name || "Internal";
+          setWojoContext({
+            number: jo.jo_number,
+            customer: customerName,
+            transporter: transporter,
+            orderDate: wo?.order_date || "TBA",
+            executionDate: wo?.execution_date || "TBA",
+            quantity: jo.wo_item?.item_data?.unit_count ? `${jo.wo_item.item_data.unit_count} Units` : "1 Unit"
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error loading operational context details:", err);
+    } finally {
+      setLoadingContext(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeChannel && (activeChannel.channel_type === 'work_order' || activeChannel.channel_type === 'job_order')) {
+      fetchOperationalDetails(activeChannel.channel_type, activeChannel.channel_id);
+    } else {
+      setWojoContext(null);
+      setShowContextOverlay(false);
+    }
+  }, [activeChannel]);
+
   useEffect(() => {
     if (isOpen && tenantId) {
       fetchStaff();
@@ -217,7 +311,7 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
   };
 
   const searchWOJO = useCallback(async (query: string, type: 'wo' | 'jo') => {
-    if (!tenantId || query.length < 2) {
+    if (!tenantId) {
       setWojoResults([]);
       return;
     }
@@ -225,13 +319,21 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
     try {
       const table = type === 'wo' ? 'work_orders' : 'job_orders';
       const numberCol = type === 'wo' ? 'wo_number' : 'jo_number';
-      const { data } = await supabase
+      
+      let dbQuery = supabase
         .from(table)
         .select(`id, ${numberCol}, status, tenant_id`)
-        .eq('tenant_id', tenantId)
-        .ilike(numberCol, `%${query}%`)
+        .eq('tenant_id', tenantId);
+
+      if (query.trim().length >= 2) {
+        dbQuery = dbQuery.ilike(numberCol, `%${query}%`);
+      }
+
+      const { data, error } = await dbQuery
         .order('created_at', { ascending: false })
         .limit(10);
+
+      if (error) throw error;
       setWojoResults(data || []);
     } catch (err) {
       console.error('[WOJO Search] Error:', err);
@@ -240,6 +342,12 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
       setWojoLoading(false);
     }
   }, [tenantId]);
+
+  useEffect(() => {
+    if (showLinkWOJO && tenantId) {
+      searchWOJO('', wojoTab);
+    }
+  }, [showLinkWOJO, wojoTab, tenantId, searchWOJO]);
 
   const handleLinkWOJO = async (item: any) => {
     const type = wojoTab === 'wo' ? 'work_order' : 'job_order';
@@ -491,7 +599,7 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
           {activeChannel ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-200 shadow-sm">
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-200 shadow-sm select-none">
                 <button
                   onClick={() => setShowMobileChat(false)}
                   className="md:hidden w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center"
@@ -505,18 +613,38 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                     <Users size={18} className="text-white" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-gray-900 text-sm font-semibold truncate">
-                    {activeChannel.channel_type === 'direct'
-                      ? activeChannel.participants?.find((p: any) => p.user_id !== userId)?.full_name || activeChannel.title || 'Chat'
-                      : activeChannel.title || activeChannel.group_name || 'Chat'}
-                  </p>
-                  <p className="text-gray-500 text-xs">
-                    {activeChannel.channel_type === 'group'
-                      ? `${activeChannel.participants?.length || 0} members`
-                      : activeChannel.participants?.find((p: any) => p.user_id !== userId)?.role?.replace('_', ' ') || 'Direct message'}
-                  </p>
-                </div>
+                {/* Make header interactive for WO/JO channels */}
+                {(activeChannel.channel_type === 'work_order' || activeChannel.channel_type === 'job_order') ? (
+                  <div 
+                    onClick={() => setShowContextOverlay(!showContextOverlay)}
+                    className="flex-1 min-w-0 cursor-pointer hover:bg-gray-100/80 p-1 rounded-xl transition-all duration-200 flex items-center justify-between group"
+                    title="Click to view operational details"
+                  >
+                    <div>
+                      <p className="text-gray-900 text-sm font-bold truncate group-hover:text-emerald-600 transition-colors">
+                        {activeChannel.title || activeChannel.group_name || 'Chat'}
+                      </p>
+                      <p className="text-emerald-600 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 mt-0.5 animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Click to view details
+                      </p>
+                    </div>
+                    {loadingContext && <Loader2 size={12} className="text-slate-400 animate-spin mr-4" />}
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-900 text-sm font-semibold truncate">
+                      {activeChannel.channel_type === 'direct'
+                        ? activeChannel.participants?.find((p: any) => p.user_id !== userId)?.full_name || activeChannel.title || 'Chat'
+                        : activeChannel.title || activeChannel.group_name || 'Chat'}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {activeChannel.channel_type === 'group'
+                        ? `${activeChannel.participants?.length || 0} members`
+                        : activeChannel.participants?.find((p: any) => p.user_id !== userId)?.role?.replace('_', ' ') || 'Direct message'}
+                    </p>
+                  </div>
+                )}
                 {activeChannel.channel_type === 'group' && (
                   <button
                     onClick={() => setShowGroupManagement(true)}
@@ -527,8 +655,61 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                 )}
               </div>
 
+              {/* [AI] Operational Context Overlay Card - Redesigned to be a crisp white page with solid black text as requested */}
+              {showContextOverlay && wojoContext && (
+                <div 
+                  className="bg-white border-b-2 border-black shadow-lg p-6 animate-in slide-in-from-top duration-300 relative z-40 text-black"
+                  onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the card
+                >
+                  <button 
+                    onClick={() => setShowContextOverlay(false)} 
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-black hover:text-red-600 transition-colors"
+                    aria-label="Close details"
+                  >
+                    <X size={20} className="stroke-[2.5]" />
+                  </button>
+                  <div className="max-w-2xl mx-auto space-y-4">
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-300">
+                      <div className="w-9 h-9 rounded-lg bg-black text-white flex items-center justify-center flex-shrink-0">
+                        {activeChannel.channel_type === 'work_order' ? <FileText size={18} /> : <Truck size={18} />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-widest text-black">
+                          {activeChannel.channel_type === 'work_order' ? 'Detail Work Order' : 'Detail Job Order'}
+                        </h4>
+                        <p className="text-sm font-black mt-0.5 text-black">{wojoContext.number}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6 text-xs text-black">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider block text-black">Pelanggan</span>
+                        <span className="font-bold text-sm block leading-snug text-black">{wojoContext.customer}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider block text-black">Transporter</span>
+                        <span className="font-bold text-sm block leading-snug text-black">{wojoContext.transporter}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider block text-black">Order / Eksekusi</span>
+                        <span className="font-bold text-sm block leading-snug text-black mt-0.5">
+                          {wojoContext.orderDate} &mdash; <span className="font-black underline">{wojoContext.executionDate}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider block text-black">Jumlah Pesanan</span>
+                        <span className="font-bold text-sm block text-black">{wojoContext.quantity}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto px-4 md:px-12 py-4 space-y-1" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23c8c1b8\' fill-opacity=\'0.08\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}>
+              <div 
+                className="flex-1 overflow-y-auto px-4 md:px-12 py-4 space-y-1" 
+                style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23c8c1b8\' fill-opacity=\'0.08\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}
+                onClick={() => setShowContextOverlay(false)} // Clicking inside the messages area will dismiss the overlay
+              >
                 {loadingMessages && (
                   <div className="flex justify-center py-8">
                     <Loader2 size={24} className="text-gray-300 animate-spin" />
@@ -844,13 +1025,13 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                         <ArrowLeft size={14} className="text-gray-300 rotate-180" />
                       </button>
                     ))
-                  ) : wojoSearch.length >= 2 ? (
+                  ) : wojoSearch.trim().length > 0 ? (
                     <div className="py-8 text-center text-gray-400 text-sm">
                       No {wojoTab === 'wo' ? 'Work Orders' : 'Job Orders'} found
                     </div>
                   ) : (
                     <div className="py-8 text-center text-gray-400 text-sm">
-                      Type at least 2 characters to search
+                      No recent {wojoTab === 'wo' ? 'Work Orders' : 'Job Orders'} found
                     </div>
                   )}
                 </div>

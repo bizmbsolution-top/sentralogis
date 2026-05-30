@@ -13,6 +13,7 @@ async function findJobOrder(supabase: any, token: string) {
     driver_link_token, driver_phone, completed_at, pod_photo_url, driver_response, 
     advance_amount, advance_status, advance_receipt_url, 
     driver_id, fleet_id, base_price, driver_share_percentage, driver_payment_amount,
+    purchase_price, transporter_id, vendor_id,
     accepted_at, started_at, rejection_note
   `;
 
@@ -428,7 +429,21 @@ export async function PATCH(
             }
           });
         } catch (e) {
-          console.error('[API] Auto-journaling failed:', e);
+          console.error('[API] Auto-journaling revenue failed:', e);
+        }
+      }
+
+      // AUTO-JOURNALING VENDOR COST ON COMPLETION
+      if (newStatus === 'completed' && Number(jo.purchase_price) > 0) {
+        try {
+          await createJournalEntry({
+            jobOrderId: jo.id,
+            amount: Number(jo.purchase_price),
+            description: `Vendor Cost for JO ${jo.jo_number}`,
+            sourceType: 'vendor_cost'
+          });
+        } catch (e) {
+          console.error('[API] Auto-journaling vendor cost failed:', e);
         }
       }
 

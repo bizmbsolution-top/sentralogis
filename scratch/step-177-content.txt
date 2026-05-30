@@ -1,0 +1,49 @@
+Created At: 2026-05-28T07:22:07Z
+Completed At: 2026-05-28T07:22:07Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/ORGANIZATION_HANDOVER.md`
+Total Lines: 41
+Total Bytes: 2460
+Showing lines 1 to 41
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: # Sentralogis Organization Handover - May 2, 2026
+2: 
+3: ## 1. Project Status Summary
+4: The Multi-SBU (Strategic Business Unit) organization management system is now **fully functional and stable**. 
+5: - **Tenant Superadmin** (admin@halu.com) can manage both HQ staff and SBU staff.
+6: - **Role Synchronization** between Auth, Profiles, and Organization tables is automated via database triggers and hardened RPC functions.
+7: 
+8: ## 2. Current Organization (PT HALU)
+9: | Name | Email | Role | Allocation |
+10: |------|-------|------|------------|
+11: | RAJA HALU | admin@halu.com | Tenant Superadmin | Central HQ |
+12: | ROBERT | robert@halu.com | HQ Director Ops | Central HQ |
+13: | fina | fin@halu.com | HQ Director Finance | Central HQ |
+14: | JONI | joni@halu.com | SBU Manager Trucking | Unit Trucking (TR-01) |
+15: | IWAN | iwan@halu.com | SBU Admin Trucking | Unit Trucking (TR-01) |
+16: 
+17: ## 3. Key Schema Reference
+18: - **`tenant_roles`**: Master list of all 20+ roles. 
+19:   - HQ Levels (1-3)
+20:   - SBU Levels (4-5): `sbu_[role]_[type]` (e.g., `sbu_admin_tr`)
+21: - **`tenant_sbus`**: Registered units for the tenant (Trucking, Warehouse, Clearance, Forwarding).
+22: - **`tenant_users`**: The source of truth for the Organization List. Joins `user_id` to `tenant_id` and `sbu_id`.
+23: 
+24: ## 4. Hardened Database Functions (DO NOT OVERWRITE WITHOUT CARE)
+25: - **`add_tenant_staff`**: Handles creating/updating users and forcing them into the organization table. Called via Server Action.
+26: - **`handle_new_user`**: Trigger on `auth.users` that creates the profile row with the correct role from metadata.
+27: - **`sync_user_role`**: Keeps `tenant_users` and `profiles` role_code in sync.
+28: 
+29: ## 5. Key UI Files
+30: - `app/(dashboard)/tenant/staff/page.tsx`: Main management UI with HQ/SBU tabs and stats.
+31: - `app/(dashboard)/tenant/staff/actions.ts`: Server-side logic using Service Role for Auth Admin operations.
+32: - `components/tenant/AddStaffModal.tsx`: Simplified 4-role selection for SBUs.
+33: 
+34: ## 6. Next Steps for Tomorrow
+35: - [ ] **SBU Token/Dashboard**: Implementation of SBU-specific views (e.g., Joni & Iwan login should see Trucking Dashboard).
+36: - [ ] **Staff Permissions**: Refining access control for `sbu_ops` and `sbu_fin` roles.
+37: - [ ] **Clean Up**: Remove debug info (amber box) from `staff/page.tsx` once everything is verified.
+38: 
+39: ---
+40: **Note to AI Assistant:** When resuming, check `admin@halu.com` as the primary tester for organization management. Everything in `tenant_users` is now strictly validated against `tenant_roles`.
+41: 
+The above content shows the entire, complete file contents of the requested file.

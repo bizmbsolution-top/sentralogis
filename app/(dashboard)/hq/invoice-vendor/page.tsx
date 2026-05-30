@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast, Toaster } from 'react-hot-toast';
+import { createJournalEntry } from '@/lib/finance/journaling';
 
 const supabase = createClient()!;
 
@@ -77,7 +78,7 @@ export default function HQInvoiceVendorPage() {
         .from('vendor_invoices')
         .select(`
           *,
-          vendor:md_entities!vendor_id(name, vendor_type, payment_terms),
+          vendor:md_entities!vendor_id(name, vendor_type),
           work_orders!wo_id(wo_number)
         `)
         .eq('tenant_id', profile.tenant_id)
@@ -177,6 +178,22 @@ export default function HQInvoiceVendorPage() {
       }).eq('id', row.id);
 
       if (error) throw error;
+
+      if (row.invoice_amount > 0) {
+        try {
+          await createJournalEntry({
+            jobOrderId: row.jo_ids?.[0],
+            amount: row.invoice_amount,
+            description: `Vendor Cost ${row.invoice_number} - ${row.vendor_name}`,
+            sourceType: 'vendor_cost',
+            woId: row.wo_id ?? undefined,
+            metadata: { vendor_invoice_id: row.id }
+          });
+        } catch (journalErr) {
+          console.error('Journal vendor_cost failed (non-blocking):', journalErr);
+        }
+      }
+
       toast.success('Invoice approved for payment');
       fetchData();
     } catch (err: any) {
@@ -199,6 +216,22 @@ export default function HQInvoiceVendorPage() {
       }).eq('id', selectedInvoice.id);
 
       if (error) throw error;
+
+      if (selectedInvoice.invoice_amount > 0) {
+        try {
+          await createJournalEntry({
+            jobOrderId: selectedInvoice.jo_ids?.[0],
+            amount: selectedInvoice.invoice_amount,
+            description: `Pembayaran ${selectedInvoice.invoice_number} - ${selectedInvoice.vendor_name}`,
+            sourceType: 'vendor_payment',
+            woId: selectedInvoice.wo_id ?? undefined,
+            metadata: { vendor_invoice_id: selectedInvoice.id }
+          });
+        } catch (journalErr) {
+          console.error('Journal vendor_payment failed (non-blocking):', journalErr);
+        }
+      }
+
       toast.success('Invoice marked as paid');
       setShowUploadModal(false);
       setSelectedInvoice(null);

@@ -1,0 +1,114 @@
+Created At: 2026-05-28T07:22:51Z
+Completed At: 2026-05-28T07:22:51Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/lib/providers/AuthProvider.tsx`
+Total Lines: 391
+Total Bytes: 13634
+Showing lines 1 to 391
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 'use client';
+2: 
+3: import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+4: import { supabase } from '@/lib/supabaseClient';
+5: import { User } from '@supabase/supabase-js';
+6: import { useRouter } from 'next/navigation';
+7: import toast from 'react-hot-toast';
+8: 
+9: interface Profile {
+10:   id: string;
+11:   email: string;
+12:   full_name: string;
+13:   role: string;
+14:   tenant_id?: string;
+15:   tenant_code?: string;
+16:   whatsapp?: string;
+17:   is_active: boolean;
+18:   created_at: string;
+19:   updated_at: string;
+20:   tenants?: {
+21:     tenant_code: string;
+22:     name: string;
+23:   };
+24: }
+25: 
+26: interface AuthContextType {
+27:   user: User | null;
+28:   profile: Profile | null;
+29:   loading: boolean;
+30:   login: (email: string, password: string) => Promise<{ data: any; error: any }>;
+31:   logout: () => Promise<void>;
+32:   isAuthenticated: boolean;
+33:   isOwner: boolean;
+34:   isSuperadmin: boolean;
+35:   isTenantAdmin: boolean;
+36:   isStaff: boolean;
+37:   refreshProfile: () => Promise<void>;
+38: }
+39: 
+40: const getDashboardRoute = (role: string) => {
+41:   // [AI] All director roles should land on the Executive Business Dashboard
+42:   if (role.startsWith('hq_director_')) {
+43:     return '/hq/business';
+44:   }
+45: 
+46:   switch(role) {
+47:     case 'owner_sentralogis': return '/owner';
+48:     case 'tenant_superadmin': return '/tenant';
+49:     case 'hq_cs': return '/hq/work-orders';
+50:     case 'hq_ops': return '/hq/ops-dashboard';
+51:     case 'h
+<truncated 11925 bytes>
+calStorage.clear();
+339:         sessionStorage.clear();
+340:         
+341:         const cookies = document.cookie.split(";");
+342:         for (let i = 0; i < cookies.length; i++) {
+343:           const cookie = cookies[i];
+344:           const eqPos = cookie.indexOf("=");
+345:           const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+346:           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+347:           document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+348:         }
+349:       }
+350: 
+351:       supabase.auth.signOut().catch(() => {});
+352:       
+353:       toast.success('Logout berhasil');
+354: 
+355:       if (typeof window !== 'undefined') {
+356:         setTimeout(() => {
+357:           window.location.replace('/login');
+358:         }, 100);
+359:       }
+360:     } catch (err) {
+361:       if (typeof window !== 'undefined') {
+362:         window.location.replace('/login');
+363:       }
+364:     }
+365:   };
+366: 
+367:   const value = {
+368:     user,
+369:     profile,
+370:     loading,
+371:     login,
+372:     logout,
+373:     isAuthenticated: !!user,
+374:     isOwner: profile?.role === 'owner_sentralogis',
+375:     isSuperadmin: profile?.role === 'tenant_superadmin',
+376:     isTenantAdmin: profile?.role === 'tenant_admin' || profile?.role === 'tenant_superadmin',
+377:     isStaff: !!profile?.role && profile?.role !== 'owner_sentralogis' && profile?.role !== 'tenant_superadmin',
+378:     refreshProfile
+379:   };
+380: 
+381:   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+382: }
+383: 
+384: export function useAuth() {
+385:   const context = useContext(AuthContext);
+386:   if (context === undefined) {
+387:     throw new Error('useAuth must be used within an AuthProvider');
+388:   }
+389:   return context;
+390: }
+391: 
+The above content shows the entire, complete file contents of the requested file.

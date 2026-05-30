@@ -1,4 +1,4 @@
-import { isJoBlockingAsset } from './status';
+import { isJoBlockingAsset } from "./status";
 
 export interface AssignmentSlot {
   id?: string;
@@ -10,6 +10,7 @@ export interface AssignmentSlot {
   base_price: number;
   driver_share_percentage: number;
   advance_amount: number;
+  cost_account_id?: string;
   status?: string;
   jo_number?: string;
   wa_token?: string;
@@ -52,7 +53,7 @@ export interface DriverAllowanceRow {
 
 export function parseItemData(raw: unknown): WoItemContext {
   if (!raw) return { unit_count: 1, deal_price: 0 };
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     try {
       return JSON.parse(raw) as WoItemContext;
     } catch {
@@ -71,7 +72,7 @@ export function computeMaxJoCount(item: WoItemContext): number {
 }
 
 export function generateTrackingToken(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
   return (
@@ -85,7 +86,7 @@ export function generateDriverLinkToken(): string {
 }
 
 export function buildJoNumber(woNumber: string, slotIndex: number): string {
-  return `${woNumber}-${String(slotIndex + 1).padStart(2, '0')}`;
+  return `${woNumber}-${String(slotIndex + 1).padStart(2, "0")}`;
 }
 
 export function isFilledAssignment(slot: AssignmentSlot): boolean {
@@ -99,7 +100,7 @@ export function isEmptySlot(slot: AssignmentSlot): boolean {
 export function validateVendorPurchasePrice(
   slot: AssignmentSlot,
   isVendor: boolean,
-  unitLabel: string
+  unitLabel: string,
 ): string | null {
   if (isVendor && (!slot.purchase_price || slot.purchase_price <= 0)) {
     return `Harga beli untuk unit ${unitLabel} harus diisi untuk vendor`;
@@ -109,12 +110,16 @@ export function validateVendorPurchasePrice(
 
 export function resolveIsVendor(
   transporter: TransporterOption | undefined,
-  driverEntityIsVendor: boolean | undefined
+  driverEntityIsVendor: boolean | undefined,
 ): boolean {
+  if (transporter?.is_own === true) return false;
   return transporter?.is_vendor === true || driverEntityIsVendor === true;
 }
 
-export function computeMargin(basePrice: number, purchasePrice: number): {
+export function computeMargin(
+  basePrice: number,
+  purchasePrice: number,
+): {
   margin: number;
   percent: number;
 } {
@@ -127,42 +132,47 @@ export function matchDriverAllowance(
   allowances: DriverAllowanceRow[],
   origin: string,
   destination: string,
-  fleetTypeId: string
+  fleetTypeId: string,
 ): DriverAllowanceRow | null {
   const o = origin.toUpperCase();
   const d = destination.toUpperCase();
   return (
     allowances.find((a) => {
-      const ac = (a.origin_city || '').toUpperCase();
-      const dc = (a.destination_city || '').toUpperCase();
-      const originMatch =
-        ac === o || o.includes(ac) || ac.includes(o);
-      const destMatch =
-        dc === d || d.includes(dc) || dc.includes(d);
+      const ac = (a.origin_city || "").toUpperCase();
+      const dc = (a.destination_city || "").toUpperCase();
+      const originMatch = ac === o || o.includes(ac) || ac.includes(o);
+      const destMatch = dc === d || d.includes(dc) || dc.includes(d);
       return originMatch && destMatch && a.fleet_type_id === fleetTypeId;
     }) || null
   );
 }
 
-export function getRouteOriginDest(item: WoItemContext): { origin: string; dest: string } {
+export function getRouteOriginDest(item: WoItemContext): {
+  origin: string;
+  dest: string;
+} {
   const origin = (
     item.origin_city ||
     item.origin_name ||
     item.origin_location_name ||
-    ''
+    ""
   ).toUpperCase();
   const dest = (
     item.destination_city ||
     item.destination_name ||
     item.destination_location_name ||
-    ''
+    ""
   ).toUpperCase();
   return { origin, dest };
 }
 
 /** Existing JOs on this WO item that still occupy fleet/driver */
 export function getActiveAssetIdsFromJos(
-  jos: { status?: string | null; fleet_id?: string | null; driver_id?: string | null }[]
+  jos: {
+    status?: string | null;
+    fleet_id?: string | null;
+    driver_id?: string | null;
+  }[],
 ): { activeFleetIds: string[]; activeDriverIds: string[] } {
   const active = jos.filter((j) => isJoBlockingAsset(j.status));
   return {
@@ -177,9 +187,11 @@ export function mapTransportersForTenant(
     name: string;
     is_vendor?: boolean | null;
     is_customer?: boolean | null;
+    is_own?: boolean | null;
+    vendor_type?: string | null;
   }[],
   tenantName: string,
-  tenantCode: string
+  tenantCode: string,
 ): TransporterOption[] {
   const tenantNameUp = tenantName.toUpperCase();
   const tenantCodeUp = tenantCode.toUpperCase();
@@ -187,17 +199,30 @@ export function mapTransportersForTenant(
   return entities
     .filter((t) => t.is_vendor || !t.is_customer)
     .map((t) => {
-      const isActuallyOwn =
+      const explicitOwn = typeof t.is_own === "boolean" ? t.is_own : undefined;
+      const explicitVendorType = (t.vendor_type || "").toUpperCase();
+      const explicitVendorTypeOwn =
+        explicitVendorType === "OWN" || explicitVendorType === "INTERNAL";
+      const explicitVendorTypeVendor = explicitVendorType === "VENDOR";
+      const inferredOwnByFallback =
         !t.is_vendor ||
         t.name.toUpperCase().includes(tenantNameUp) ||
         t.name.toUpperCase().includes(tenantCodeUp) ||
-        t.name.toUpperCase().includes('INTERNAL') ||
-        t.name.toUpperCase().includes('(OWN)');
+        t.name.toUpperCase().includes("INTERNAL") ||
+        t.name.toUpperCase().includes("(OWN)");
+
+      const isActuallyOwn =
+        explicitOwn ??
+        (explicitVendorTypeOwn
+          ? true
+          : explicitVendorTypeVendor
+            ? false
+            : inferredOwnByFallback);
 
       return {
         id: t.id,
         name:
-          isActuallyOwn && !t.name.includes('(OWN)')
+          isActuallyOwn && !t.name.includes("(OWN)")
             ? `(OWN) ${t.name}`
             : t.name,
         is_vendor: !isActuallyOwn,
@@ -214,7 +239,7 @@ export function buildInitialAssignmentSlots(
   existingJos: AssignmentSlot[],
   item: WoItemContext,
   dealPrice: number,
-  internalTransporterId: string
+  internalTransporterId: string,
 ): AssignmentSlot[] {
   const maxJOCount = computeMaxJoCount(item);
   const isHandoverApproved = item.handover_approved === true;
@@ -224,30 +249,33 @@ export function buildInitialAssignmentSlots(
     transporter_id: existing.transporter_id ?? null,
     fleet_id: existing.fleet_id ?? null,
     driver_id: existing.driver_id ?? null,
-    driver_phone: existing.driver_phone || '',
+    driver_phone: existing.driver_phone || "",
     purchase_price: Number(existing.purchase_price) || 0,
     base_price: Number(existing.base_price) || dealPrice,
-    driver_share_percentage: Number(existing.driver_share_percentage) || 40,
+    driver_share_percentage: Number(existing.driver_share_percentage ?? 0),
     advance_amount: Number(existing.advance_amount) || 0,
     jo_number: existing.jo_number,
     tracking_token: existing.tracking_token,
     wa_token: existing.wa_token,
-    status: existing.status || 'assigned',
+    status: existing.status || "assigned",
   }));
 
   const emptySlotsNeeded = isHandoverApproved
     ? 0
     : Math.max(0, maxJOCount - existingAssignments.length);
 
-  const emptySlots: AssignmentSlot[] = Array.from({ length: emptySlotsNeeded }).map(() => ({
+  const emptySlots: AssignmentSlot[] = Array.from({
+    length: emptySlotsNeeded,
+  }).map(() => ({
     transporter_id: internalTransporterId || null,
     fleet_id: null,
     driver_id: null,
-    driver_phone: '',
+    driver_phone: "",
     purchase_price: 0,
     base_price: dealPrice,
-    driver_share_percentage: 40,
-    status: 'draft',
+    driver_share_percentage: 0,
+    advance_amount: 0,
+    status: "draft",
   }));
 
   return [...existingAssignments, ...emptySlots];

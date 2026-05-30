@@ -96,6 +96,23 @@ export default function MissionControlDashboard() {
     }
   };
 
+  const handleResolve = async (anomaly_type: string, table: string) => {
+    const toastId = toast.loading(`Resolving ${anomaly_type}...`);
+    try {
+      const res = await fetch('/api/observability/remediate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: anomaly_type, table }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Resolution failed');
+      toast.success(`Successfully resolved ${json.resolvedCount || 0} issues`, { id: toastId });
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resolve', { id: toastId });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -189,7 +206,7 @@ export default function MissionControlDashboard() {
 
         {/* Section 6: DB Integrity + Performance + Investigation */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <DbIntegrityPanel issues={data.db_integrity} />
+          <DbIntegrityPanel issues={data.db_integrity} onResolve={handleResolve} />
           <PerformancePanel metrics={data.performance} />
           <InvestigationPanel />
         </div>

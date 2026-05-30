@@ -5,20 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast, Toaster } from 'react-hot-toast';
-import { Card } from '@/components/ui/Card';
-import { 
-  CheckCircle, Calendar, Phone, DollarSign, 
-  TrendingUp, FileText, 
-  ShieldCheck, Receipt, Search, Loader2,
-  Clock, Package, ArrowRight, Activity,
-  Image as ImageIcon, Plus, Archive, Database, 
-  ShieldAlert, Banknote, Coins, AlertCircle
-} from 'lucide-react';
-import Link from 'next/link';
+import { Search, Loader2, Activity, AlertCircle, Receipt, Eye, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 
 import SBUFinanceHybridModal from '@/components/sbu/SBUFinanceHybridModal';
+import JobDetailModal from './components/JobDetailModal';
 
 interface CompletedJob {
   id: string;
@@ -52,7 +43,9 @@ function DocumentsAndFinancesContent() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<CompletedJob[]>([]);
+  const [viMap, setViMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<CompletedJob | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('accepted');
   const [hybridFinanceJob, setHybridFinanceJob] = useState<any>(null);
@@ -92,17 +85,29 @@ function DocumentsAndFinancesContent() {
         const fleetIds = Array.from(new Set(jos.map(j => j.fleet_id).filter(Boolean)));
         const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
 
-        const [driversRes, fleetsRes, woItemsRes, costsRes] = await Promise.all([
+        const [driversRes, fleetsRes, woItemsRes, costsRes, viRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name').in('id', driverIds) : { data: [] },
           fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type_id, md_entities(name, is_vendor), md_fleet_types(type_name)').in('id', fleetIds) : { data: [] },
           woItemIds.length > 0 ? supabase.from('wo_items').select('id, wo_id, item_data').in('id', woItemIds) : { data: [] },
-          supabase.from('extra_costs').select('id, jo_id, status').in('jo_id', jos.map(j => j.id))
+          supabase.from('extra_costs').select('id, jo_id, status').in('jo_id', jos.map(j => j.id)),
+          supabase.from('vendor_invoices').select('id, invoice_number, status, jo_ids, invoice_amount')
         ]);
 
         const driversMap = Object.fromEntries((driversRes.data || []).map(d => [d.id, d]));
         const fleetsMap = Object.fromEntries((fleetsRes.data || []).map(f => [f.id, f]));
         const woItemsMap = Object.fromEntries((woItemsRes.data || []).map(i => [i.id, i]));
         const costsData = costsRes.data || [];
+        const viData = viRes.data || [];
+
+        // Build vendor invoice map: jo_id → vendor invoice
+        const invoiceByJoId: Record<string, any> = {};
+        for (const vi of viData) {
+          const joIdList: string[] = vi.jo_ids || [];
+          for (const joId of joIdList) {
+            if (!invoiceByJoId[joId]) invoiceByJoId[joId] = vi;
+          }
+        }
+        setViMap(invoiceByJoId);
 
         const woIds = Array.from(new Set(woItemsRes.data?.map(i => i.wo_id).filter(Boolean)));
         const { data: wosRes } = woIds.length > 0 ? 
@@ -181,15 +186,10 @@ function DocumentsAndFinancesContent() {
       }
       
       fetchCompletedJobs();
+      setSelectedJob(null);
     } catch (err: any) {
       toast.error('Gagal update status: ' + err.message);
     }
-  };
-
-  const formatRupiah = (value: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0
-    }).format(value);
   };
 
   const searchedJobs = useMemo(() => {
@@ -227,303 +227,176 @@ function DocumentsAndFinancesContent() {
 
   if (loading && jobs.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center">
-        <Loader2 className="w-12 h-12 text-slate-900 animate-spin mb-4" />
-        <p className="text-slate-900 font-black tracking-widest text-[10px] uppercase">Syncing Operational Ledger...</p>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center">
+        <Loader2 className="w-12 h-12 text-gray-900 animate-spin mb-4" />
+        <p className="text-gray-900 font-bold text-xs uppercase">Syncing Operational Ledger...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-12">
+    <div className="min-h-screen bg-white px-6 py-10">
       <Toaster position="top-right" />
       
-      {/* Header Section */}
-      <div className="max-w-[1600px] mx-auto mb-16">
-        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-10">
-          <div className="flex items-center gap-6">
-            <div className="w-20 h-20 bg-slate-900 text-white rounded-[2.5rem] flex items-center justify-center shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500">
-              <Receipt size={36} />
+      {/* Header */}
+      <div className="max-w-[1600px] mx-auto mb-12">
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gray-900 text-white flex items-center justify-center">
+              <Receipt size={28} />
             </div>
             <div>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="w-8 h-[2px] bg-blue-500 rounded-full"></span>
-                <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">Settlement & Documentation</p>
-              </div>
-              <h1 className="text-xl md:text-2xl font-semibold text-slate-900 italic uppercase tracking-tight leading-none">Documents & Finances</h1>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Settlement & Documentation</p>
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900">Documents & Finances</h1>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="relative group w-full md:w-96">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
               <input 
                 type="text" 
                 placeholder="Search by JO Number..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-16 pl-14 pr-6 bg-white border-2 border-transparent rounded-[2rem] text-sm font-black focus:border-blue-500/10 focus:ring-4 focus:ring-blue-500/5 transition-all outline-none shadow-sm"
+                className="w-full h-11 pl-11 pr-4 bg-white border border-gray-200 text-sm text-gray-900 placeholder-gray-500 outline-none focus:border-gray-400 transition-colors"
               />
             </div>
             <Button 
                 onClick={fetchCompletedJobs}
-                className="h-16 px-8 bg-slate-900 hover:bg-slate-800 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-xl active:scale-95 transition-all"
+                className="h-11 px-5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
             >
-                <Activity size={18} /> Refresh Data
+                <Activity size={16} /> Refresh
             </Button>
           </div>
         </div>
 
         {/* Filter Tabs */}
-        <div className="mt-8">
-          <div className="relative">
-            <div className="flex lg:flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide w-fit lg:w-auto max-w-full">
-              <style dangerouslySetInnerHTML={{ __html: `
-                .scrollbar-hide::-webkit-scrollbar { display: none; }
-                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-              `}} />
-              {[
-                { id: 'all', label: 'All', count: stats.total },
-                { id: 'accepted', label: 'Accepted', count: stats.accepted },
-                { id: 'on-road', label: 'On Road', count: stats.onRoad },
-                { id: 'done', label: 'Done', count: stats.jobDone },
-                { id: 'billing', label: 'Ready', count: stats.readyForBilling }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveFilter(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 lg:px-5 lg:py-2.5 rounded-xl text-[10px] lg:text-[9px] font-black uppercase tracking-wider lg:tracking-widest transition-all whitespace-nowrap flex-shrink-0 min-h-[44px] ${
-                    activeFilter === tab.id 
-                      ? 'bg-slate-900 text-white shadow-md scale-[1.02]' 
-                      : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  {tab.label}
-                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] lg:text-[9px] font-black ${
-                    activeFilter === tab.id 
-                      ? 'bg-white/20 text-white' 
-                      : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="mt-8 flex items-center gap-2">
+          {[
+            { id: 'all', label: 'All', count: stats.total },
+            { id: 'accepted', label: 'Accepted', count: stats.accepted },
+            { id: 'on-road', label: 'On Road', count: stats.onRoad },
+            { id: 'done', label: 'Done', count: stats.jobDone },
+            { id: 'billing', label: 'Ready', count: stats.readyForBilling }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveFilter(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                activeFilter === tab.id 
+                  ? 'bg-gray-900 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label}
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
+                activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+      {/* Compact Card Grid */}
+      <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {filteredJobs.length === 0 ? (
-          <div className="col-span-full p-32 text-center bg-white rounded-[3.5rem] shadow-sm border border-slate-100">
-            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8">
-                <AlertCircle size={48} className="text-slate-200" />
+          <div className="col-span-full py-24 text-center">
+            <div className="w-16 h-16 bg-gray-100 flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={32} className="text-gray-400" />
             </div>
-            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">No Records Found</h3>
-            <p className="text-slate-400 font-bold mt-2 uppercase tracking-widest text-[10px]">Your current filter contains no matching financial records.</p>
+            <h3 className="text-lg font-bold text-gray-900">No Records Found</h3>
+            <p className="text-sm text-gray-600 mt-1">Your current filter contains no matching records.</p>
           </div>
         ) : (
           filteredJobs.map((job) => (
-            <Card key={job.id} className="group relative overflow-hidden border-none shadow-sm hover:shadow-xl hover:shadow-slate-200/40 transition-all duration-500 rounded-[2rem] bg-white">
-               <div className="p-8 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-[0.03] rotate-12 group-hover:rotate-0 transition-transform duration-700">
-                     <Archive size={180} className="text-slate-900" />
+            <div
+              key={job.id}
+              className="border border-gray-200 bg-white hover:border-gray-400 cursor-pointer transition-colors"
+              onClick={() => setSelectedJob(job)}
+            >
+              <div className="p-4">
+                {/* Top: JO number + status */}
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-sm font-bold text-gray-900 leading-tight">{job.jo_number}</p>
+                  <span className={`shrink-0 ml-2 px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    (() => {
+                      const s = job.status?.toLowerCase() || '';
+                      if (['accepted', 'order diterima', 'diterima'].includes(s)) return job.md_fleets?.md_entities?.is_vendor ? 'text-orange-700 bg-orange-50' : 'text-blue-700 bg-blue-50';
+                      if (['in_progress', 'dalam perjalanan', 'start journey', 'picking_up', 'delivering', 'menunggu berangkat'].includes(s)) return 'text-blue-700 bg-blue-50';
+                      if (['completed', 'done', 'pekerjaan selesai'].includes(s) && !job.is_doc_finished) return 'text-red-700 bg-red-50';
+                      if (['awaiting_audit'].includes(s)) return 'text-amber-700 bg-amber-50';
+                      if (job.is_doc_finished && !['ready_for_billing', 'verified', 'VERIFIED'].includes(s)) return 'text-indigo-700 bg-indigo-50';
+                      if (['ready_for_billing', 'verified', 'VERIFIED'].includes(s)) return 'text-emerald-700 bg-emerald-50';
+                      return 'text-gray-600 bg-gray-100';
+                    })()
+                  }`}>
+                    {(s => {
+                      if (['accepted', 'order diterima', 'diterima'].includes(s)) return 'Accepted';
+                      if (['in_progress', 'dalam perjalanan', 'start journey', 'picking_up', 'delivering', 'menunggu berangkat'].includes(s)) return 'On Road';
+                      if (['completed', 'done', 'pekerjaan selesai'].includes(s) && !job.is_doc_finished) return 'POD Needed';
+                      if (['awaiting_audit'].includes(s)) return 'Audit';
+                      if (job.is_doc_finished && !['ready_for_billing', 'verified', 'VERIFIED'].includes(s)) return 'Docs Ready';
+                      if (['ready_for_billing', 'verified', 'VERIFIED'].includes(s)) return 'Billing';
+                      return job.status;
+                    })(job.status?.toLowerCase() || '')}
+                  </span>
+                </div>
+
+                {/* Entity: Vendor name or Internal */}
+                <div className="flex items-center gap-2 mb-3">
+                  {job.md_fleets?.md_entities?.is_vendor ? (
+                    <>
+                      <span className="shrink-0 px-1.5 py-0.5 text-[9px] font-bold uppercase text-orange-700 bg-orange-50">Vendor</span>
+                      <p className="text-xs text-gray-900 font-semibold truncate">{job.md_fleets?.md_entities?.name || 'Vendor'}</p>
+                    </>
+                  ) : (
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700 bg-blue-50">Internal</span>
+                  )}
+                </div>
+
+                {/* Driver & Fleet */}
+                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                  <div>
+                    <span className="text-gray-500">Driver</span>
+                    <p className="font-semibold text-gray-900 truncate">{job.md_drivers?.name || '-'}</p>
                   </div>
-
-                  <div className="flex items-center justify-between mb-10 relative z-10">
-                     <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl rotate-3 group-hover:rotate-0 transition-transform duration-500">
-                        <Database size={24} />
-                     </div>
-                     <div className="flex flex-col items-end gap-2">
-                        {/* Status Payout */}
-                        {(['accepted', 'order diterima', 'diterima'].includes(job.status?.toLowerCase() || '')) && job.advance_status !== 'paid' && (
-                            <Badge className={`border font-black text-[8px] px-3 py-1 uppercase tracking-widest italic animate-pulse ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                {job.md_fleets?.md_entities?.is_vendor ? 'AWAITING DP (VENDOR)' : 'AWAITING SETTLEMENT (INTERNAL)'}
-                            </Badge>
-                        )}
-                        
-                        {/* Status Live Mission */}
-                        {['in_progress', 'DALAM PERJALANAN', 'START JOURNEY', 'picking_up', 'delivering', 'MENUNGGU BERANGKAT'].includes(job.status?.toLowerCase()) && (
-                            <Badge className="bg-blue-50 text-blue-600 border border-blue-100 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic">LIVE MISSION (ON ROAD)</Badge>
-                        )}
-
-                        {/* Status Job Done & POD Collection */}
-                        {['completed', 'done', 'PEKERJAAN SELESAI', 'awaiting_audit'].includes(job.status?.toLowerCase()) && !job.is_doc_finished && (
-                            <Badge className="bg-rose-50 text-rose-500 border-2 border-rose-200 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic animate-bounce">KUMPULKAN POD!</Badge>
-                        )}
-
-                        {/* Status Cost Audit */}
-                        {job.has_pending_audit && (
-                            <Badge className="bg-amber-50 text-amber-700 border border-amber-200 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic animate-pulse">CS AUDIT PENDING</Badge>
-                        )}
-
-                        {/* Status Docs Ready (doc finished, awaiting cost) */}
-                        {job.is_doc_finished && !['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status?.toLowerCase()) && (
-                            <Badge className="bg-indigo-50 text-indigo-600 border border-indigo-100 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic">DOCS READY</Badge>
-                        )}
-
-                        {/* Status Ready to Invoice */}
-                        {['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status?.toLowerCase()) && (
-                            <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-100 font-black text-[8px] px-3 py-1 uppercase tracking-widest italic">READY TO INVOICE</Badge>
-                        )}
-                     </div>
+                  <div>
+                    <span className="text-gray-500">Fleet</span>
+                    <p className="font-semibold text-gray-900 truncate">{job.md_fleets?.plate_number || '-'}</p>
                   </div>
+                </div>
 
-                  <div className="space-y-3 mb-8 relative z-10">
-                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[8px] font-black uppercase tracking-widest">
-                           {job.jo_number}
-                        </span>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic truncate max-w-[200px]">
-                           {job.wo_items?.work_orders?.md_entities?.legal_name || job.wo_items?.work_orders?.md_entities?.name || 'Customer'}
-                        </span>
-                     </div>
-                     
-                     <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50 group hover:bg-white hover:border-orange-500/20 hover:shadow-lg transition-all duration-300 mt-2 mb-4">
-                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Scope</p>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate group-hover:whitespace-normal group-hover:overflow-visible transition-all">
-                           {job.wo_items?.item_data?.origin_name || job.wo_items?.item_data?.shipper_name || job.wo_items?.item_data?.shipper_city || 'Origin'} → {job.wo_items?.item_data?.destination_name || job.wo_items?.item_data?.recipient_name || job.wo_items?.item_data?.recipient_city || 'Dest'}
-                        </p>
-                        <div className="flex flex-col gap-1 mt-1 opacity-0 h-0 group-hover:opacity-100 group-hover:h-auto transition-all duration-300">
-                           <p className="text-[9px] text-slate-500 font-medium">
-                              <span className="font-bold text-slate-700">Origin:</span> {job.wo_items?.item_data?.shipper_name || 'N/A'} - {job.wo_items?.item_data?.shipper_address || 'No Address'}
-                           </p>
-                           <p className="text-[9px] text-slate-500 font-medium">
-                              <span className="font-bold text-slate-700">Dest:</span> {job.wo_items?.item_data?.recipient_name || 'N/A'} - {job.wo_items?.item_data?.recipient_address || 'No Address'}
-                           </p>
-                        </div>
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Bagi Hasil Driver</p>
-                        <div className="flex items-baseline gap-2">
-                           <p className="text-xl font-black text-emerald-600 tracking-tighter italic">
-                              {formatRupiah(job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : ((job.base_price || 0) * (job.driver_share_percentage || 0) / 100))}
-                           </p>
-                        </div>
-                        <div className="mt-1 space-y-0.5">
-                           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                              Advance: {formatRupiah(job.advance_amount || 0)}
-                           </p>
-                           {((job.driver_payment_amount || 0) > 0) && (
-                              <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest">
-                                 Pelunasan: {formatRupiah(job.driver_payment_amount || 0)}
-                              </p>
-                           )}
-                           <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest">
-                              Sisa: {formatRupiah(Math.max(0, 
-                                (job.md_fleets?.md_entities?.is_vendor ? (job.purchase_price || 0) : ((job.base_price || 0) * (job.driver_share_percentage || 0) / 100))
-                                - (job.advance_amount || 0) - (job.driver_payment_amount || 0)
-                              ))}
-                           </p>
-                        </div>
-                     </div>
-                     <h3 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter leading-none group-hover:text-blue-600 transition-colors">
-                        {job.md_drivers?.name || 'Assigned Driver'}
-                     </h3>
-                     <div className="flex items-center gap-2 text-slate-400">
-                        <Calendar size={12} />
-                        <p className="text-[9px] font-black uppercase tracking-widest italic">
-                           {job.completed_at ? 'Closed' : 'Started'} {new Date(job.completed_at || job.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                        </p>
-                     </div>
+                {/* Bottom: date + view */}
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <Clock size={12} />
+                    <span className="text-[11px]">{new Date(job.completed_at || job.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
                   </div>
-
-                  <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50 group-hover:bg-white group-hover:border-blue-500/20 transition-all duration-500 mb-8 relative z-10">
-                    <div className="flex justify-between items-center mb-3">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">Document Manifest</p>
-                       <p className={`text-[9px] font-black uppercase italic ${job.is_doc_finished ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {job.is_doc_finished ? 'VERIFIED' : (job.pod_status || 'WAITING')}
-                       </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <ShieldCheck size={12} className={job.is_doc_finished ? 'text-emerald-500' : 'text-slate-300'} />
-                       <div className="h-1 flex-1 bg-slate-200 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-1000 ${
-                                job.is_doc_finished ? 'w-full bg-emerald-500' : 
-                                (['completed', 'done', 'PEKERJAAN SELESAI'].includes(job.status) ? 'w-1/2 bg-amber-400' : 'w-0')
-                            }`}
-                          />
-                       </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-3 relative z-10">
-                     {/* CONSOLIDATED CLOSING HUB */}
-                     {['completed', 'done', 'PEKERJAAN SELESAI', 'awaiting_audit', 'ready_for_billing', 'verified', 'VERIFIED', 'in_progress', 'DALAM PERJALANAN', 'START JOURNEY', 'picking_up', 'delivering', 'MENUNGGU BERANGKAT'].includes(job.status) && (
-                        <div className="space-y-3">
-                           {/* Primary Unified Button */}
-                           <Button 
-                              variant="secondary"
-                              onClick={() => setHybridFinanceJob(job)}
-                              disabled={['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status)}
-                              className={`w-full h-16 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-sm transition-all ${
-                                 job.is_doc_finished && job.is_cost_finished
-                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                    : 'bg-white border-slate-200 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                           >
-                              <Banknote size={18} className={job.is_cost_finished ? 'text-emerald-500' : 'text-blue-500'} /> 
-                              {['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status) ? 'VIEW ARCHIVED DATA' : 'OPERATIONAL & FINANCE HUB'}
-                           </Button>
-
-                           {/* Final Settlement Gates (Only for Completed/Done) */}
-                           {['completed', 'done', 'PEKERJAAN SELESAI', 'awaiting_audit', 'ready_for_billing'].includes(job.status) && (
-                              <div className="grid grid-cols-2 gap-3 pt-2">
-                                 <button 
-                                    onClick={() => handleFinalizeGate(job.id, 'is_doc_finished', !job.is_doc_finished)}
-                                    disabled={['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status)}
-                                    className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest transition-all ${
-                                       job.is_doc_finished ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
-                                    }`}
-                                 >
-                                    {job.is_doc_finished ? <CheckCircle size={16} /> : <div className="w-4 h-4 border-2 border-slate-200 rounded-full" />}
-                                    Docs Finished
-                                 </button>
-                                 <button 
-                                    onClick={() => handleFinalizeGate(job.id, 'is_cost_finished', !job.is_cost_finished)}
-                                    disabled={['ready_for_billing', 'verified', 'VERIFIED'].includes(job.status)}
-                                    className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest transition-all ${
-                                       job.is_cost_finished ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
-                                    }`}
-                                 >
-                                    {job.is_cost_finished ? <CheckCircle size={16} /> : <div className="w-4 h-4 border-2 border-slate-200 rounded-full" />}
-                                    Cost Finished
-                                 </button>
-                              </div>
-                           )}
-                        </div>
-                     )}
-
-                     {/* INITIAL PAYOUT PHASE (For Accepted Only) */}
-                     {['accepted', 'order diterima', 'diterima'].includes(job.status?.toLowerCase() || '') && job.advance_status !== 'paid' && (
-                        <div className="space-y-3">
-                           <div className={`border rounded-2xl p-4 flex items-center justify-between ${job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-50 border-orange-100' : 'bg-blue-50 border-blue-100'}`}>
-                              <div>
-                                 <p className={`text-[9px] font-black uppercase tracking-widest ${job.md_fleets?.md_entities?.is_vendor ? 'text-orange-600' : 'text-blue-600'}`}>
-                                    {job.md_fleets?.md_entities?.is_vendor ? 'Vendor DP Amount' : 'Driver Advance (Bagi Hasil)'}
-                                 </p>
-                                 <p className="text-sm font-black text-slate-900">{formatRupiah(job.advance_amount || 0)}</p>
-                              </div>
-                              <Banknote className={job.md_fleets?.md_entities?.is_vendor ? 'text-orange-500' : 'text-blue-500'} size={24} />
-                           </div>
-                           <Button 
-                              onClick={() => setHybridFinanceJob(job)}
-                              className={`w-full h-16 text-white rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 cursor-pointer transition-all ${
-                                 job.md_fleets?.md_entities?.is_vendor ? 'bg-orange-600 hover:bg-orange-700 shadow-orange-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
-                              }`}
-                           >
-                              <Receipt size={18} /> {job.advance_receipt_url ? 'View Payout' : 'Confirm & Upload Proof'}
-                           </Button>
-                        </div>
-                     )}
-                  </div>
-               </div>
-            </Card>
+                  <span className="text-[11px] font-bold text-gray-900 uppercase flex items-center gap-1 group">
+                    <Eye size={13} className="text-gray-500 group-hover:text-gray-900 transition-colors" />
+                    Detail
+                  </span>
+                </div>
+              </div>
+            </div>
           ))
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedJob && (
+        <JobDetailModal
+          job={selectedJob}
+          viMap={viMap}
+          onClose={() => setSelectedJob(null)}
+          onFinalizeGate={handleFinalizeGate}
+          onAddCost={(j) => setHybridFinanceJob(j)}
+          onOpenFinanceHub={(j) => setHybridFinanceJob(j)}
+        />
+      )}
 
       {hybridFinanceJob && (
          <SBUFinanceHybridModal 
@@ -532,6 +405,7 @@ function DocumentsAndFinancesContent() {
             onSuccess={() => {
                setHybridFinanceJob(null);
                fetchCompletedJobs();
+               setSelectedJob(null);
             }}
          />
       )}
@@ -542,9 +416,9 @@ function DocumentsAndFinancesContent() {
 export default function DocumentsAndFinancesPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center">
-        <Loader2 className="w-12 h-12 text-slate-900 animate-spin mb-4" />
-        <p className="text-slate-900 font-black tracking-widest text-[10px] uppercase">Syncing Operational Ledger...</p>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center">
+        <Loader2 className="w-12 h-12 text-gray-900 animate-spin mb-4" />
+        <p className="text-gray-900 font-bold text-xs uppercase">Syncing Operational Ledger...</p>
       </div>
     }>
       <DocumentsAndFinancesContent />

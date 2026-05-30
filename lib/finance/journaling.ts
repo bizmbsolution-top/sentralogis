@@ -1,150 +1,145 @@
 import { supabase } from '@/lib/supabaseClient';
 
-export type JournalSource = 'surcharge' | 'reimbursement' | 'job_order_revenue' | 'cogs_adjustment';
+export type JournalSource =
+  | 'surcharge'
+  | 'reimbursement'
+  | 'job_order_revenue'
+  | 'cogs_adjustment'
+  | 'vendor_cost'
+  | 'driver_payment'
+  | 'vendor_payment';
 
 interface JournalParams {
-  jobOrderId: string;
+  jobOrderId?: string;
+  woId?: string;
   amount: number;
   description: string;
   sourceType: JournalSource;
   metadata?: Record<string, unknown>;
 }
 
+async function getCoaByCode(code: string) {
+  const { data } = await supabase
+    .from('finance_coa')
+    .select('id, account_number, account_name')
+    .eq('account_number', code)
+    .maybeSingle();
+  return data;
+}
+
 export async function createJournalEntry({
   jobOrderId,
+  woId,
   amount,
   description,
   sourceType,
   metadata
 }: JournalParams) {
   try {
-    // 1. Get CoA Mappings (In production, these should be configurable)
-    // For now we query by category/name from finance_coa
     const { data: coa } = await supabase.from('finance_coa').select('*');
     if (!coa) throw new Error('Chart of Accounts not found');
 
     const getAccount = (code: string) => coa.find(a => a.account_number === code);
 
-    // Mappings based on finance_schema.sql
-    const accPiutang = getAccount('1-10100'); // Piutang Usaha
-    const accPendapatan = getAccount('4-40010'); // Pendapatan Jasa Trucking
-    const accHutangDriver = getAccount('2-20110'); // Hutang Bagi Hasil Driver
-    const accBebanBagiHasil = getAccount('5-50010'); // HPP Bagi Hasil Driver
+    const accPiutang = getAccount('1-10100');
+    const accPendapatan = getAccount('4-40010');
+    const accHutangDriver = getAccount('2-20110');
+    const accBebanBagiHasil = getAccount('5-50010');
+    const accKasBank = getAccount('1-11010');
+    const accHutangVendor = getAccount('2-20100');
+    const accHppVendor = getAccount('5-50020');
+    const accHppOperasional = getAccount('5-50030');
 
-    if (!accPiutang || !accPendapatan || !accHutangDriver) {
-      throw new Error('Required CoA mappings (1-10100, 4-40010, 2-20110) not found');
-    }
+    const journalData: Record<string, unknown> = {
+      journal_date: new Date().toISOString().split('T')[0],
+      description,
+      status: 'posted'
+    };
+    if (jobOrderId) journalData.job_order_id = jobOrderId;
+    if (woId) journalData.wo_id = woId;
 
-    // 2. Create Header
     const { data: journal, error: jError } = await supabase
       .from('finance_journals')
-      .insert({
-        job_order_id: jobOrderId,
-        journal_date: new Date().toISOString().split('T')[0],
-        description: description,
-        status: 'draft'
-      })
+      .insert(journalData)
       .select()
       .single();
 
     if (jError) throw jError;
 
-    const entries = [];
+    const entries: Array<{
+      journal_id: string;
+      account_id: string;
+      description?: string;
+      debit: number;
+      credit: number;
+    }> = [];
 
     if (sourceType === 'surcharge') {
-      const driverSharePct = metadata?.driver_share_percentage || 40;
+      const driverSharePct = Number(metadata?.driver_share_percentage ?? 0);
       const driverAmount = (amount * driverSharePct) / 100;
 
-      // (D) Piutang Usaha
-      entries.push({
-        journal_id: journal.id,
-        account_id: accPiutang.id,
-        debit: amount,
-        credit: 0
-      });
-      // (K) Pendapatan
-      entries.push({
-        journal_id: journal.id,
-        account_id: accPendapatan.id,
-        debit: 0,
-        credit: amount
-      });
-      // (D) Beban Bagi Hasil
-      entries.push({
-        journal_id: journal.id,
-        account_id: accBebanBagiHasil?.id || accPendapatan.id,
-        debit: driverAmount,
-        credit: 0
-      });
-      // (K) Hutang Driver
-      entries.push({
-        journal_id: journal.id,
-        account_id: accHutangDriver.id,
-        debit: 0,
-        credit: driverAmount
-      });
+      if (accPiutang && accPendapatan) {
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount });
+      }
+      if (driverAmount > 0) {
+        const driverDebitAccount = metadata?.costAccountId
+          ? coa.find(a => a.id === metadata.costAccountId) || accBebanBagiHasil
+          : accBebanBagiHasil;
+        if (driverDebitAccount && accHutangDriver) {
+          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0 });
+          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount });
+        }
+      }
     } else if (sourceType === 'reimbursement') {
-      // (D) Piutang Usaha
-      entries.push({
-        journal_id: journal.id,
-        account_id: accPiutang.id,
-        debit: amount,
-        credit: 0
-      });
-      // (K) Hutang Driver (Pass-through)
-      entries.push({
-        journal_id: journal.id,
-        account_id: accHutangDriver.id,
-        debit: 0,
-        credit: amount
-      });
+      if (accPiutang && accHutangDriver) {
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount });
+      }
     } else if (sourceType === 'job_order_revenue') {
-      const driverSharePct = metadata?.driver_share_percentage || 40;
+      const driverSharePct = Number(metadata?.driver_share_percentage ?? 0);
       const driverAmount = (amount * driverSharePct) / 100;
 
-      // (D) Piutang Usaha
-      entries.push({
-        journal_id: journal.id,
-        account_id: accPiutang.id,
-        debit: amount,
-        credit: 0
-      });
-      // (K) Pendapatan Angkutan
-      entries.push({
-        journal_id: journal.id,
-        account_id: accPendapatan.id,
-        debit: 0,
-        credit: amount
-      });
-      // (D) Beban Bagi Hasil
-      entries.push({
-        journal_id: journal.id,
-        account_id: accBebanBagiHasil?.id || accPendapatan.id,
-        debit: driverAmount,
-        credit: 0
-      });
-      // (K) Hutang Driver
-      entries.push({
-        journal_id: journal.id,
-        account_id: accHutangDriver.id,
-        debit: 0,
-        credit: driverAmount
-      });
+      if (accPiutang && accPendapatan) {
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount });
+      }
+      if (driverAmount > 0) {
+        const driverDebitAccount = metadata?.costAccountId
+          ? coa.find(a => a.id === metadata.costAccountId) || accBebanBagiHasil
+          : accBebanBagiHasil;
+        if (driverDebitAccount && accHutangDriver) {
+          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0 });
+          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount });
+        }
+      }
     } else if (sourceType === 'cogs_adjustment') {
-      // (D) Beban / HPP (Adjustment)
-      entries.push({
-        journal_id: journal.id,
-        account_id: accBebanBagiHasil?.id || accPendapatan.id,
-        debit: amount,
-        credit: 0
-      });
-      // (K) Hutang Driver / Kas
-      entries.push({
-        journal_id: journal.id,
-        account_id: accHutangDriver.id,
-        debit: 0,
-        credit: amount
-      });
+      const targetAccount = accBebanBagiHasil || accPendapatan;
+      if (targetAccount && accHutangDriver) {
+        entries.push({ journal_id: journal.id, account_id: targetAccount.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount });
+      }
+    } else if (sourceType === 'vendor_cost') {
+      // (D) HPP Jasa Vendor (or custom costAccountId) / (K) Hutang Usaha Vendor
+      const vendorDebitAccount = metadata?.costAccountId
+        ? coa.find(a => a.id === metadata.costAccountId) || accHppVendor
+        : accHppVendor;
+      if (vendorDebitAccount && accHutangVendor) {
+        entries.push({ journal_id: journal.id, account_id: vendorDebitAccount.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: 0, credit: amount });
+      }
+    } else if (sourceType === 'driver_payment') {
+      // (D) Hutang Bagi Hasil Driver / (K) Kas Bank
+      if (accHutangDriver && accKasBank) {
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount });
+      }
+    } else if (sourceType === 'vendor_payment') {
+      // (D) Hutang Usaha Vendor / (K) Kas Bank
+      if (accHutangVendor && accKasBank) {
+        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: amount, credit: 0 });
+        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount });
+      }
     }
 
     if (entries.length > 0) {

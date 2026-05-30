@@ -1,0 +1,68 @@
+Created At: 2026-05-28T06:52:11Z
+Completed At: 2026-05-28T06:52:11Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1283
+Total Bytes: 61358
+Showing lines 800 to 1283
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+800:                           </span>
+801:                         </td>
+802:                         <td className="px-4 py-3">
+803:                           {row.due_date ? (
+804:                             <div>
+805:                               <div className="text-xs text-slate-700">{formatDate(row.due_date)}</div>
+806:                               <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-semibold ${dueBadge.className}`}>
+807:                                 {dueBadge.label}
+808:                               </span>
+809:                             </div>
+810:                           ) : (
+811:                             <span className="text-xs text-slate-500">-</span>
+812:                           )}
+813:                         </td>
+814:                         <td className="px-4 py-3">
+815:                           {row.payment_terms ? (
+816:                             <div className="text-xs text-slate-700">{row.payment_terms}</div>
+817:                           ) : (
+818:                             <span className="text-xs text-slate-500">-</span>
+819:                           )}
+820:                           {topDays !== null && row.status === 'accepted' && (
+821:                             <div className="text-[10px] text-slate-500 mt-0.5">{topDays} days TOP</div>
+822:                           )}
+823:                         </td>
+824:                         <td className="px-4 py-3 text-right no-print">
+825:                           <div className="fle
+<truncated 27849 bytes>
+1:                     .slice(0, 50)
+1252:                     .map(coa => (
+1253:                       <button
+1254:                         key={coa.id}
+1255:                         type="button"
+1256:                         onMouseDown={e => {
+1257:                           e.preventDefault();
+1258:                           e.stopPropagation();
+1259:                           updateGenerateItem(coaDropdownPos.itemId, 'coa_id', coa.id);
+1260:                           updateGenerateItem(coaDropdownPos.itemId, 'coa_label', `${coa.account_number} - ${coa.account_name}`);
+1261:                           setCoaActiveRowId(null);
+1262:                           setCoaSearchText('');
+1263:                           setCoaDropdownPos(null);
+1264:                         }}
+1265:                         className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-slate-50 last:border-0"
+1266:                       >
+1267:                         <span className="font-mono">{coa.account_number}</span> — {coa.account_name}
+1268:                       </button>
+1269:                     ))}
+1270:                   {coaList.filter(c => !coaSearchText || c.account_number.toLowerCase().includes(coaSearchText.toLowerCase()) || c.account_name.toLowerCase().includes(coaSearchText.toLowerCase())).length === 0 && (
+1271:                     <div className="px-3 py-2 text-xs text-slate-400">No COA found</div>
+1272:                   )}
+1273:                 </div>
+1274:                 <div className="fixed inset-0 z-[99]" onClick={() => { setCoaActiveRowId(null); setCoaDropdownPos(null); }} />
+1275:               </>
+1276:             )}
+1277:           </div>
+1278:         </div>
+1279:       )}
+1280:     </div>
+1281:   );
+1282: }
+1283: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

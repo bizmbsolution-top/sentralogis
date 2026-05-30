@@ -1,0 +1,90 @@
+Created At: 2026-05-28T07:19:18Z
+Completed At: 2026-05-28T07:19:18Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 1 to 400
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 'use client';
+2: 
+3: import React, { useState, useEffect, useCallback, useMemo } from 'react';
+4: import { Card } from '@/components/ui/Card';
+5: import { Button } from '@/components/ui/Button';
+6: import { Badge } from '@/components/ui/Badge';
+7: import {
+8:   FileText, Search, Loader2, Banknote,
+9:   ArrowRight, CheckCircle2, Clock, AlertCircle,
+10:   Send, Eye, Printer, RefreshCw, Calendar, DollarSign, X, Save
+11: } from 'lucide-react';
+12: import { createClient } from '@/lib/supabase/client';
+13: import { useAuth } from '@/lib/hooks/useAuth';
+14: import { toast, Toaster } from 'react-hot-toast';
+15: 
+16: const supabase = createClient()!;
+17: 
+18: const formatRupiah = (amount: number) => {
+19:   return new Intl.NumberFormat('id-ID', {
+20:     style: 'currency', currency: 'IDR', maximumFractionDigits: 0
+21:   }).format(amount);
+22: };
+23: 
+24: const formatDate = (dateStr: string | null) => {
+25:   if (!dateStr) return '-';
+26:   return new Date(dateStr).toLocaleDateString('id-ID', {
+27:     day: '2-digit', month: 'short', year: 'numeric'
+28:   });
+29: };
+30: 
+31: const getDaysUntilDue = (dueDate: string | null) => {
+32:   if (!dueDate) return null;
+33:   const now = new Date();
+34:   const due = new Date(dueDate);
+35:   return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+36: };
+37: 
+38: const getDueBadge = (days: number | null) => {
+39:   if (days === null) return { label: '-', className: 'bg-slate-100 text-slate-500' };
+40:   if (days < 0) return { label: `Overdue ${Math.abs(days
+<truncated 14391 bytes>
+id ? `${saved.jo_id}-${idx}` : `custom-${idx}`,
+361:           line_number: saved.line_number || idx + 1,
+362:           jo_id: saved.jo_id || null,
+363:           jo_number: saved.jo_number || null,
+364:           description: saved.description || '',
+365:           coa_id: saved.coa_id || null,
+366:           coa_label: saved.coa_label || '',
+367:           truck_type: truckType,
+368:           route,
+369:           tax_id: saved.tax_id || null,
+370:           tax_name: saved.tax_name || '',
+371:           tax_rate: saved.tax_rate || 0,
+372:           qty: saved.qty || 1,
+373:           unit_price: saved.unit_price || basePrice,
+374:           amount: (saved.qty || 1) * (saved.unit_price || basePrice),
+375:           is_custom: saved.is_custom || false,
+376:         };
+377:       });
+378:     } else {
+379:       items = row.job_orders.map((jo, idx) => {
+380:         const fleet = jo.fleet_id ? fleetData[jo.fleet_id] : null;
+381:         const truckType = fleet ? `${fleet.plate_number} / ${fleet.brand} ${fleet.model}` : '';
+382:         const routeData = routeMap[jo.id];
+383:         const route = routeData
+384:           ? (routeData.origin && routeData.dest ? `${routeData.origin} → ${routeData.dest}` : routeData.origin || routeData.dest || '')
+385:           : '';
+386:         return {
+387:           id: `${jo.id}-${idx}`,
+388:           line_number: idx + 1,
+389:           jo_id: jo.id,
+390:           jo_number: jo.jo_number,
+391:           description: `${row.wo_number} - ${jo.jo_number}${route ? ` | ${route}` : ''}`,
+392:           coa_id: null,
+393:           coa_label: '',
+394:           truck_type: truckType,
+395:           route,
+396:           tax_id: null,
+397:           tax_name: '',
+398:           tax_rate: 0,
+399:           qty: 1,
+400:           unit_price: jo.base_price,
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

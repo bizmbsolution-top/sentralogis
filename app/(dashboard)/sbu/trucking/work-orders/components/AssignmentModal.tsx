@@ -56,6 +56,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
   const [assignments, setAssignments] = useState<AssignmentSlot[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
+  const [coaList, setCoaList] = useState<any[]>([]);
 
   const itemData = parseItemData(item?.item_data);
   const dealPrice = Number(itemData.deal_price) || 0;
@@ -311,6 +312,17 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           if (allowances && !allowErr) setDriverAllowances(allowances);
         } catch(e) {
           // Table probably doesn't exist, ignore
+        }
+
+        // [AI] Fetch COA for cost account selection
+        try {
+          const { data: coa } = await supabase
+            .from('finance_coa')
+            .select('id, account_number, account_name')
+            .order('account_number');
+          if (coa) setCoaList(coa);
+        } catch(e) {
+          console.error('Failed to fetch COA:', e);
         }
 
       } catch (err: any) {
@@ -749,26 +761,42 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                               </div>
                            </div>
 
-                           {isVendor && (
-                              <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
-                                 <div className="flex items-center pb-1">
-                                    <label className="text-xs font-medium text-slate-500">Harga Jual (Customer)</label>
-                                 </div>
-                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">Rp</span>
-                                    <input
-                                      type="text"
-                                      value={formatNumber(assign.base_price)}
-                                      onChange={(e) => {
-                                        const raw = e.target.value.replace(/\D/g, '');
-                                        handleAssignmentChange(idx, 'base_price', raw ? parseInt(raw, 10) : 0);
-                                      }}
-                                      className="w-full h-10 pl-8 pr-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
-                                      placeholder="0"
-                                    />
-                                 </div>
-                              </div>
-                            )}
+                            {isVendor && (
+                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
+                                  <div className="flex items-center pb-1">
+                                     <label className="text-xs font-medium text-slate-500">Harga Jual (Customer)</label>
+                                  </div>
+                                  <div className="relative">
+                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">Rp</span>
+                                     <input
+                                       type="text"
+                                       value={formatNumber(assign.base_price)}
+                                       onChange={(e) => {
+                                         const raw = e.target.value.replace(/\D/g, '');
+                                         handleAssignmentChange(idx, 'base_price', raw ? parseInt(raw, 10) : 0);
+                                       }}
+                                       className="w-full h-10 pl-8 pr-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
+                                       placeholder="0"
+                                     />
+                                  </div>
+                               </div>
+                             )}
+
+                            {isVendor && (
+                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
+                                  <label className="text-xs font-medium text-slate-500">Akun Biaya (Cost COA)</label>
+                                  <select
+                                    value={assign.cost_account_id || ''}
+                                    onChange={(e) => handleAssignmentChange(idx, 'cost_account_id', e.target.value || null)}
+                                    className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
+                                  >
+                                    <option value="">HPP Jasa Vendor (Default)</option>
+                                    {coaList.filter(c => c.account_number.startsWith('5-')).map(c => (
+                                      <option key={c.id} value={c.id}>{c.account_number} - {c.account_name}</option>
+                                    ))}
+                                  </select>
+                               </div>
+                             )}
 
                             {isOwn && (
                               <>
@@ -791,25 +819,39 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                   </div>
                                </div>
 
-                               <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300 flex flex-col justify-end">
-                                  <div className="h-10 flex items-center">
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                      <div className="relative flex items-center justify-center">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={assign.save_to_master || false}
-                                          onChange={(e) => handleAssignmentChange(idx, 'save_to_master', e.target.checked)}
-                                          className="peer appearance-none w-4 h-4 border border-slate-300 rounded checked:border-indigo-500 checked:bg-indigo-500 transition-all cursor-pointer"
-                                        />
-                                        <CheckCircle size={12} className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">Simpan Master</span>
-                                        <span className="text-[10px] text-slate-500">Simpan tarif ini ke master data</span>
-                                      </div>
-                                    </label>
-                                  </div>
-                               </div>
+                                <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300 flex flex-col justify-end">
+                                   <div className="h-10 flex items-center">
+                                     <label className="flex items-center gap-2 cursor-pointer group">
+                                       <div className="relative flex items-center justify-center">
+                                         <input 
+                                           type="checkbox" 
+                                           checked={assign.save_to_master || false}
+                                           onChange={(e) => handleAssignmentChange(idx, 'save_to_master', e.target.checked)}
+                                           className="peer appearance-none w-4 h-4 border border-slate-300 rounded checked:border-indigo-500 checked:bg-indigo-500 transition-all cursor-pointer"
+                                         />
+                                         <CheckCircle size={12} className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                                       </div>
+                                       <div className="flex flex-col">
+                                         <span className="text-xs font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">Simpan Master</span>
+                                         <span className="text-[10px] text-slate-500">Simpan tarif ini ke master data</span>
+                                       </div>
+                                     </label>
+                                   </div>
+                                </div>
+
+                                <div className="flex-1 min-w-[200px] space-y-1 animate-in slide-in-from-top-2 duration-300">
+                                   <label className="text-xs font-medium text-slate-500">Akun Biaya (Cost COA)</label>
+                                   <select
+                                     value={assign.cost_account_id || ''}
+                                     onChange={(e) => handleAssignmentChange(idx, 'cost_account_id', e.target.value || null)}
+                                     className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none"
+                                   >
+                                     <option value="">Beban Bagi Hasil Driver (Default)</option>
+                                     {coaList.filter(c => c.account_number.startsWith('5-')).map(c => (
+                                       <option key={c.id} value={c.id}>{c.account_number} - {c.account_name}</option>
+                                     ))}
+                                   </select>
+                                </div>
                               </>
                             )}
 

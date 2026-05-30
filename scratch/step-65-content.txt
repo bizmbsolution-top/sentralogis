@@ -1,0 +1,75 @@
+Created At: 2026-05-28T07:15:05Z
+Completed At: 2026-05-28T07:15:05Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 489 to 555
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+489:   const handleSaveDraft = async () => {
+490:     if (!generateRow || !profile?.tenant_id) return;
+491:     try {
+492:       const invNumber = `INV-${generateRow.wo_number.replace('WO', '')}`;
+493:       const dueDate = invoiceDueDate ? new Date(invoiceDueDate) : new Date();
+494:       const totalBilling = generateItems.reduce((s, i) => s + i.amount, 0);
+495:       let totalTax = 0;
+496:       for (const item of generateItems) {
+497:         if (item.tax_rate > 0) {
+498:           totalTax += item.amount * (item.tax_rate / 100);
+499:         }
+500:       }
+501:       const lineItems = generateItems.map(i => ({
+502:         jo_id: i.jo_id,
+503:         jo_number: i.jo_number,
+504:         line_number: i.line_number,
+505:         description: i.description,
+506:         coa_id: i.coa_id,
+507:         coa_label: i.coa_label,
+508:         tax_id: i.tax_id,
+509:         tax_name: i.tax_name,
+510:         tax_rate: i.tax_rate,
+511:         qty: i.qty,
+512:         unit_price: i.unit_price,
+513:         amount: i.amount,
+514:         truck_type: i.truck_type,
+515:         route: i.route,
+516:         is_custom: i.is_custom,
+517:       }));
+518: 
+519:       if (isEditing) {
+520:         const { error } = await supabase.from('invoices').update({
+521:           total_billing: totalBilling,
+522:           tax_amount: totalTax,
+523:           status: 'draft',
+524:           due_date: dueDate.toISOString(),
+525:           line_items: lineItems,
+526:         }).eq('wo_id', generateRow.wo_id);
+527:         if (error) throw error;
+528:         toast.success(`Draft saved`);
+529:       } else {
+530:         const { error } = await supabase.from('invoices').insert({
+531:           wo_id: generateRow.wo_id,
+532:           invoice_number: invNumber,
+533:           total_billing: totalBilling,
+534:           tax_amount: totalTax,
+535:           status: 'draft',
+536:           due_date: dueDate.toISOString(),
+537:           invoiced_at: null,
+538:           sent_at: null,
+539:           line_items: lineItems,
+540:         });
+541:         if (error) throw error;
+542:         toast.success(`Draft saved`);
+543:       }
+544: 
+545:       setShowGenerateModal(false);
+546:       setGenerateRow(null);
+547:       fetchData();
+548:     } catch (err: any) {
+549:       toast.error(`Gagal: ${err.message}`);
+550:     }
+551:   };
+552: 
+553:   const updateGenerateItem = (itemId: string, field: keyof GenerateLineItem, value: any) => {
+554:     setGenerateItems(prev => prev.map(item => {
+555:       if (item.id !== itemId) return item;
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

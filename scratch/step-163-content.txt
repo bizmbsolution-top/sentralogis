@@ -1,0 +1,31 @@
+Created At: 2026-05-28T07:21:49Z
+Completed At: 2026-05-28T07:21:49Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/test_anon.js`
+Total Lines: 23
+Total Bytes: 698
+Showing lines 1 to 23
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 
+2: const fs = require('fs');
+3: const { createClient } = require('@supabase/supabase-js');
+4: const envFile = fs.readFileSync('.env.local', 'utf8');
+5: const env = {};
+6: envFile.split('\n').forEach(line => {
+7:   const match = line.match(/^([^=]+)=(.*)$/);
+8:   if(match) env[match[1].trim()] = match[2].trim();
+9: });
+10: const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+11: 
+12: async function checkJo() {
+13:   const { data, error } = await supabase
+14:       .from('job_orders')
+15:       .select('id')
+16:       .eq('driver_id', '69eb4c45-a2e8-46aa-a221-5e5a6efd7a58');
+17:       
+18:   console.log('Query error:', error);
+19:   console.log('Query result length:', data ? data.length : null);
+20: }
+21: checkJo();
+22: 
+23: 
+The above content shows the entire, complete file contents of the requested file.

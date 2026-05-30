@@ -1,0 +1,67 @@
+Created At: 2026-05-28T07:20:23Z
+Completed At: 2026-05-28T07:20:23Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/lib/supabase/client.ts`
+Total Lines: 59
+Total Bytes: 1550
+Showing lines 1 to 59
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+2: import type { Database } from './types'
+3: 
+4: let clientInstance: ReturnType<typeof createSupabaseClient<Database>> | null = null;
+5: 
+6: export function createClient() {
+7:   if (typeof window === 'undefined') return createSupabaseClient<Database>(
+8:     (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim(),
+9:     (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
+10:   );
+11: 
+12:   if (clientInstance) return clientInstance;
+13: 
+14:   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
+15:   const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
+16: 
+17:   if (!url || !key) {
+18:     console.warn("Supabase keys are missing in the browser environment.");
+19:   }
+20: 
+21:   clientInstance = createSupabaseClient<Database>(url, key, {
+22:     auth: {
+23:       persistSession: true,
+24:       autoRefreshToken: true,
+25:       detectSessionInUrl: true,
+26:       storageKey: 'sentralogis-auth',
+27:       flowType: 'hash',
+28:       storage: {
+29:         getItem: (key) => {
+30:           try {
+31:             return localStorage.getItem(key)
+32:           } catch {
+33:             return null
+34:           }
+35:         },
+36:         setItem: (key, value) => {
+37:           try {
+38:             localStorage.setItem(key, value)
+39:           } catch {}
+40:         },
+41:         removeItem: (key) => {
+42:           try {
+43:             localStorage.removeItem(key)
+44:           } catch {}
+45:         }
+46:       }
+47:     },
+48:     global: {
+49:       headers: {
+50:         'x-application-name': 'sentralogis'
+51:       }
+52:     }
+53:   });
+54:   
+55:   return clientInstance;
+56: }
+57: 
+58: export const supabase = createClient();
+59: 
+The above content shows the entire, complete file contents of the requested file.

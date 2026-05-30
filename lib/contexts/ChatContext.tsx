@@ -180,9 +180,25 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [resolvedTenantId, setResolvedTenantId] = useState<string | undefined>(propTenantId);
+  const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelSubRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const globalSubRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch current user profile
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setCurrentUserProfile({ id: data.id, full_name: data.full_name, role: data.role, avatar_url: null });
+        }
+      });
+  }, [userId]);
 
   // Resolve tenantId from tenant_users if not provided
   useEffect(() => {
@@ -277,6 +293,28 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
             .single();
           groupInfo = gi;
         }
+        // [AI] Check if work_order or job_order is paid or doesn't exist, and auto-archive it to hide it from the active inbox
+        let isWOJOArchived = false;
+        if (chan.channel_type === 'work_order') {
+          const { data: wo } = await supabase
+            .from('work_orders')
+            .select('status')
+            .eq('id', chan.channel_id)
+            .maybeSingle();
+          if (!wo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(wo.status)) {
+            isWOJOArchived = true;
+          }
+        } else if (chan.channel_type === 'job_order') {
+          const { data: jo } = await supabase
+            .from('job_orders')
+            .select('status')
+            .eq('id', chan.channel_id)
+            .maybeSingle();
+          if (!jo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(jo.status)) {
+            isWOJOArchived = true;
+          }
+        }
+
         const [unreadCount, lastMessage, participants] = await Promise.all([
           fetchUnreadCount(chan.id, row.last_read_at),
           fetchLastMessage(chan.id),
@@ -293,7 +331,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
           unread_count: unreadCount,
           group_id: chan.group_id,
           group_name: groupInfo?.name || null,
-          is_archived: chan.is_archived || false,
+          is_archived: chan.is_archived || isWOJOArchived || false,
         };
       })
     );
@@ -337,14 +375,27 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
           }
         }
       )
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        const { userId: typingUserId, isTyping, userName } = payload;
+        if (typingUserId === userId) return;
+        setTypingUsers((prev) => {
+          if (isTyping) {
+            return prev.includes(userName) ? prev : [...prev, userName];
+          } else {
+            return prev.filter((u) => u !== userName);
+          }
+        });
+      })
       .subscribe();
 
     channelSubRef.current = msgSub;
-  }, []);
+  }, [userId]);
 
   // ── Select channel ──
   const selectChannel = useCallback(async (channel: Channel) => {
     dispatch({ type: 'SET_ACTIVE_CHANNEL', payload: channel });
+    dispatch({ type: 'SET_MESSAGES', payload: [] });
+    setTypingUsers([]);
     dispatch({ type: 'SET_LOADING_MESSAGES', payload: true });
 
     const { data, error } = await supabase
@@ -484,9 +535,10 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     // Manually add current user as participant (bypass broken trigger)
     await supabase
       .from('chat_participants')
-      .insert({ channel_id: newChannel.id, user_id: userId, role: 'member' })
-      .onConflict('channel_id, user_id')
-      .ignore();
+      .upsert(
+        { channel_id: newChannel.id, user_id: userId, role: 'member' },
+        { onConflict: 'channel_id,user_id', ignoreDuplicates: true }
+      );
 
     await fetchChannels();
     return {
@@ -576,10 +628,10 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     console.log('[Chat] Channel created:', newChannel.id);
 
     // Add participants
-    await supabase.from('chat_participants').insert([
+    await supabase.from('chat_participants').upsert([
       { channel_id: newChannel.id, user_id: userId, role: 'member' },
       { channel_id: newChannel.id, user_id: otherUserId, role: 'member' },
-    ]);
+    ], { onConflict: 'channel_id,user_id', ignoreDuplicates: true });
 
     // Jangan fetchChannels() - terlalu berat
     // Return channel langsung, sidebar akan update via realtime subscription
@@ -757,19 +809,33 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     dispatch({ type: 'RESET_UNREAD', payload: state.activeChannel.id });
   }, [state.activeChannel, userId]);
 
+  const broadcastTyping = useCallback((isTyping: boolean) => {
+    if (channelSubRef.current && state.activeChannel) {
+      channelSubRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          userId,
+          userName: currentUserProfile?.full_name || 'Someone',
+          isTyping
+        }
+      });
+    }
+  }, [userId, currentUserProfile, state.activeChannel]);
+
   // ── Typing indicators ──
   const startTyping = useCallback(() => {
-    setTypingUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+    broadcastTyping(true);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      setTypingUsers((prev) => prev.filter((u) => u !== userId));
+      broadcastTyping(false);
     }, 3000);
-  }, [userId]);
+  }, [broadcastTyping]);
 
   const stopTyping = useCallback(() => {
-    setTypingUsers((prev) => prev.filter((u) => u !== userId));
+    broadcastTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-  }, [userId]);
+  }, [broadcastTyping]);
 
   // ── Total unread ──
   const totalUnread = state.channels.reduce((sum, ch) => sum + (ch.unread_count || 0), 0);

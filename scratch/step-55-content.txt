@@ -1,0 +1,31 @@
+Created At: 2026-05-28T07:11:59Z
+Completed At: 2026-05-28T07:11:59Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1366
+Total Bytes: 66242
+Showing lines 453 to 475
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+453:         const { error } = await supabase.from('invoices').update({
+454:           total_billing: totalBilling,
+455:           tax_amount: totalTax,
+456:           grand_total: totalBilling + totalTax,
+457:           status: 'sent',
+458:           due_date: dueDate.toISOString(),
+459:           sent_at: now,
+460:           line_items: lineItems,
+461:         }).eq('wo_id', generateRow.wo_id);
+462: 
+463:         if (error) throw error;
+464:         toast.success(`Invoice ${invNumber} updated & sent`);
+465:       } else {
+466:         const { error } = await supabase.from('invoices').insert({
+467:           wo_id: generateRow.wo_id,
+468:           invoice_number: invNumber,
+469:           total_billing: totalBilling,
+470:           tax_amount: totalTax,
+471:           grand_total: totalBilling + totalTax,
+472:           status: 'sent',
+473:           due_date: dueDate.toISOString(),
+474:           invoiced_at: now,
+475:           sent_at: now,
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

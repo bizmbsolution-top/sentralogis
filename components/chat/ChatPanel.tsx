@@ -14,7 +14,7 @@ interface ChatPanelProps {
   onChannelReady?: (channel: Channel) => void;
 }
 
-export default function ChatPanel({ entityId, channelType, channel: initialChannel, onChannelReady }: ChatPanelProps) {
+export default function ChatPanel({ entityId, channelType, channel: initialChannel, onChannelReady, userId, tenantId }: ChatPanelProps) {
   const {
     activeChannel,
     messages,
@@ -30,16 +30,20 @@ export default function ChatPanel({ entityId, channelType, channel: initialChann
   } = useChat();
 
   const [input, setInput] = useState('');
-  const [initialized, setInitialized] = useState(false);
+  const lastTargetRef = useRef<{ entityId: string; channelType: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!initialized) {
-      setInitialized(true);
+    const hasTargetChanged = !lastTargetRef.current || 
+                            lastTargetRef.current.entityId !== entityId || 
+                            lastTargetRef.current.channelType !== channelType;
+    
+    if (hasTargetChanged) {
+      lastTargetRef.current = { entityId, channelType };
       if (initialChannel) {
         selectChannel(initialChannel);
         onChannelReady?.(initialChannel);
-      } else {
+      } else if (entityId && channelType) {
         getOrCreateChannel(channelType as any, entityId).then((ch) => {
           if (ch) {
             selectChannel(ch);
@@ -48,7 +52,7 @@ export default function ChatPanel({ entityId, channelType, channel: initialChann
         });
       }
     }
-  }, [initialized, channelType, entityId, initialChannel, getOrCreateChannel, selectChannel, onChannelReady]);
+  }, [entityId, channelType, initialChannel, getOrCreateChannel, selectChannel, onChannelReady]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

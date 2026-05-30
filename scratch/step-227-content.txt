@@ -1,0 +1,103 @@
+Created At: 2026-05-28T07:24:12Z
+Completed At: 2026-05-28T07:24:12Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 533
+Total Bytes: 23836
+Showing lines 1 to 300
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: 'use client';
+2: 
+3: import React, { useState, useEffect, useCallback, useMemo } from 'react';
+4: import { Card } from '@/components/ui/Card';
+5: import { Button } from '@/components/ui/Button';
+6: import { Badge } from '@/components/ui/Badge';
+7: import {
+8:   FileText, Search, Loader2, Banknote,
+9:   ArrowRight, CheckCircle2, Clock, AlertCircle,
+10:   Send, Eye, Printer, RefreshCw, Calendar, DollarSign
+11: } from 'lucide-react';
+12: import { createClient } from '@/lib/supabase/client';
+13: import { useAuth } from '@/lib/hooks/useAuth';
+14: import { toast, Toaster } from 'react-hot-toast';
+15: 
+16: const supabase = createClient()!;
+17: 
+18: const formatRupiah = (amount: number) => {
+19:   return new Intl.NumberFormat('id-ID', {
+20:     style: 'currency', currency: 'IDR', maximumFractionDigits: 0
+21:   }).format(amount);
+22: };
+23: 
+24: const formatDate = (dateStr: string | null) => {
+25:   if (!dateStr) return '-';
+26:   return new Date(dateStr).toLocaleDateString('id-ID', {
+27:     day: '2-digit', month: 'short', year: 'numeric'
+28:   });
+29: };
+30: 
+31: const getDaysUntilDue = (dueDate: string | null) => {
+32:   if (!dueDate) return null;
+33:   const now = new Date();
+34:   const due = new Date(dueDate);
+35:   return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+36: };
+37: 
+38: const getDueBadge = (days: number | null) => {
+39:   if (days === null) return { label: '-', className: 'bg-slate-100 text-slate-500' };
+40:   if (days < 0) return { label: `Overdue ${Math.abs(days)}d`, clas
+<truncated 8650 bytes>
+w error;
+248:       toast.success('Invoice sent to customer');
+249:       fetchData();
+250:     } catch (err: any) {
+251:       toast.error(`Gagal: ${err.message}`);
+252:     }
+253:   };
+254: 
+255:   const handleAcceptInvoice = async (row: InvoiceRow) => {
+256:     try {
+257:       const { error } = await supabase.from('invoices').update({
+258:         status: 'accepted',
+259:         customer_accepted_invoice_at: new Date().toISOString(),
+260:       }).eq('id', row.id);
+261: 
+262:       if (error) throw error;
+263:       toast.success('Invoice marked as accepted');
+264:       fetchData();
+265:     } catch (err: any) {
+266:       toast.error(`Gagal: ${err.message}`);
+267:     }
+268:   };
+269: 
+270:   const handlePaidInvoice = async (row: InvoiceRow) => {
+271:     try {
+272:       const { error } = await supabase.from('invoices').update({
+273:         status: 'paid',
+274:         customer_paid_at: new Date().toISOString(),
+275:       }).eq('id', row.id);
+276: 
+277:       if (error) throw error;
+278:       toast.success('Invoice marked as paid');
+279:       fetchData();
+280:     } catch (err: any) {
+281:       toast.error(`Gagal: ${err.message}`);
+282:     }
+283:   };
+284: 
+285:   const tabs = [
+286:     { key: 'all', label: 'All' },
+287:     { key: 'ready', label: 'Ready Invoice' },
+288:     { key: 'draft', label: 'Draft' },
+289:     { key: 'sent', label: 'Sent' },
+290:     { key: 'accepted', label: 'Accepted' },
+291:     { key: 'paid', label: 'Paid' },
+292:   ] as const;
+293: 
+294:   return (
+295:     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+296:       <Toaster position="top-right" />
+297: 
+298:       {/* Header */}
+299:       <div className="max-w-7xl mx-auto mb-8">
+300:         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -1,0 +1,64 @@
+Created At: 2026-05-28T07:20:20Z
+Completed At: 2026-05-28T07:20:20Z
+File Path: `file:///c:/Users/sonad/projectQ/sentralogis/app/%28dashboard%29/hq/invoice-customer/page.tsx`
+Total Lines: 1362
+Total Bytes: 66046
+Showing lines 1050 to 1120
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1050:               {/* Totals — same style as Audit Invoice */}
+1051:               <div className="flex justify-end pt-4 border-t-2 border-slate-200">
+1052:                 <div className="w-64 space-y-2">
+1053:                   <div className="flex justify-between text-sm">
+1054:                     <span className="text-slate-600">Subtotal</span>
+1055:                     <span className="font-medium text-slate-900">{formatRupiah(printRow.total_billing || 0)}</span>
+1056:                   </div>
+1057:                   {(printRow.tax_amount || 0) > 0 && (
+1058:                     <div className="flex justify-between text-sm">
+1059:                       <span className="text-slate-600">PPN</span>
+1060:                       <span className="font-medium text-slate-900">{formatRupiah(printRow.tax_amount || 0)}</span>
+1061:                     </div>
+1062:                   )}
+1063:                   <div className="flex justify-between text-base font-bold text-slate-900 pt-2 border-t-2 border-slate-300">
+1064:                     <span>Grand Total</span>
+1065:                     <span>{formatRupiah(printRow.grand_total || 0)}</span>
+1066:                   </div>
+1067:                 </div>
+1068:               </div>
+1069: 
+1070:               {/* Payment Info */}
+1071:               <div className="mt-8 p-4 bg-slate-50 border border-slate-200 text-xs">
+1072:                 <p className="font-semibold text-slate-700 uppercase tracking-wider text-[11px] mb-2">Informasi Pembayaran</p>
+1073:                 <p cl
+<truncated 1210 bytes>
+}>
+1091:             {/* Top action bar */}
+1092:             <div className="flex items-center justify-between px-8 py-3 border-b border-slate-200 bg-slate-50 sticky top-0 z-20">
+1093:               <div className="flex items-center gap-3">
+1094:                 <h2 className="text-sm font-semibold text-slate-800">{isEditing ? 'Audit Invoice' : 'Generate Invoice'}</h2>
+1095:                 <span className="text-[11px] text-slate-400">|</span>
+1096:                 <span className="text-xs text-slate-500">{generateRow.wo_number}</span>
+1097:               </div>
+1098:               <div className="flex items-center gap-2">
+1099:                 <button
+1100:                   onClick={handleSaveDraft}
+1101:                   className="px-4 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-medium flex items-center gap-1.5 hover:bg-slate-50"
+1102:                   style={{ borderRadius: 0 }}
+1103:                 >
+1104:                   <Save size={12} /> Save Draft
+1105:                 </button>
+1106:                 <button
+1107:                   onClick={handleGenerateConfirm}
+1108:                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium flex items-center gap-1.5"
+1109:                   style={{ borderRadius: 0 }}
+1110:                 >
+1111:                   <Send size={12} /> Send Invoice
+1112:                 </button>
+1113:                 <button onClick={() => setShowGenerateModal(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100" style={{ borderRadius: 0 }}>
+1114:                   Cancel
+1115:                 </button>
+1116:               </div>
+1117:             </div>
+1118: 
+1119:             {/* Invoice Document */}
+1120:             <div className="p-8 md:p-10 bg-white">
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

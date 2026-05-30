@@ -63,7 +63,7 @@ export default function TruckingFinanceCockpit() {
         const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
         const { data: items, error: itemError } = await supabase
           .from('wo_items')
-          .select('id, wo:work_orders(wo_number, customer:md_entities!customer_id(name))')
+          .select('id, unit_price, wo:work_orders(wo_number, customer:md_entities!customer_id(name))')
           .in('id', woItemIds);
         
         if (itemError) console.error('Item Fetch Error:', itemError);
@@ -114,12 +114,14 @@ export default function TruckingFinanceCockpit() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
   };
 
+  const joUnitPrice = (jo: any) => Number(jo.wo_item?.unit_price) || Number(jo.base_price) || 0;
+
   const stats = useMemo(() => ({
     unbilledCount: jobOrders.filter(j => j.status === 'completed' || j.status === 'ready_for_billing').length,
     auditCount: jobOrders.filter(j => j.status === 'awaiting_audit' || j.status === 'need_approval').length,
-    totalRevenue: jobOrders.reduce((acc, j) => acc + (j.base_price || 0), 0),
-    unbilledAmount: jobOrders.filter(j => j.status === 'completed' || j.status === 'ready_for_billing').reduce((acc, j) => acc + (j.base_price || 0), 0),
-    auditAmount: jobOrders.filter(j => j.status === 'awaiting_audit' || j.status === 'need_approval').reduce((acc, j) => acc + (j.base_price || 0), 0),
+    totalRevenue: jobOrders.reduce((acc, j) => acc + joUnitPrice(j), 0),
+    unbilledAmount: jobOrders.filter(j => j.status === 'completed' || j.status === 'ready_for_billing').reduce((acc, j) => acc + joUnitPrice(j), 0),
+    auditAmount: jobOrders.filter(j => j.status === 'awaiting_audit' || j.status === 'need_approval').reduce((acc, j) => acc + joUnitPrice(j), 0),
   }), [jobOrders]);
 
   if (loading && jobOrders.length === 0) {
@@ -262,9 +264,9 @@ export default function TruckingFinanceCockpit() {
                         <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[8px] font-black uppercase tracking-widest">
                            {jo.jo_number}
                         </span>
-                        <span className="text-[12px] font-black text-emerald-600 italic tracking-tighter">
-                           {formatRupiah(jo.base_price || 0)}
-                        </span>
+                         <span className="text-[12px] font-black text-emerald-600 italic tracking-tighter">
+                            {formatRupiah(joUnitPrice(jo))}
+                         </span>
                      </div>
                      <h3 className="text-lg font-black text-slate-900 italic uppercase tracking-tighter leading-none group-hover:text-blue-600 transition-colors">
                         {jo.wo_item?.wo?.customer?.name || 'Private Logistics'}
