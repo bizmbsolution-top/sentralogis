@@ -5,137 +5,185 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface MouseStar {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  opacity: number;
-}
 
-interface WalkingGlasses {
-  id: number;
-  x: number;
-  y: number;
-  speed: number;
-  direction: number;
-  size: number;
-  glowIntensity: number;
-  trail: { x: number; y: number; opacity: number }[];
-}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
   const [cardGlowAngle, setCardGlowAngle] = useState(0);
   const { login, user, logout: signOut, loading: authLoading } = useAuth();
-
-  const mouseStarsRef = useRef<MouseStar[]>([]);
-  const walkingGlassesRef = useRef<WalkingGlasses[]>([]);
-  const [renderStars, setRenderStars] = useState<MouseStar[]>([]);
-  const [renderGlasses, setRenderGlasses] = useState<WalkingGlasses[]>([]);
-  const animFrameRef = useRef<number>(0);
-  const starIdRef = useRef(0);
-  const glassesIdRef = useRef(0);
-  const lastMouseRef = useRef({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Interactive Mouse Particles Canvas Loop
   useEffect(() => {
-    const glasses: WalkingGlasses[] = [];
-    for (let i = 0; i < 3; i++) {
-      glasses.push({
-        id: glassesIdRef.current++,
-        x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920),
-        y: 100 + Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080) * 0.8,
-        speed: 0.3 + Math.random() * 0.5,
-        direction: Math.random() > 0.5 ? 1 : -1,
-        size: 20 + Math.random() * 15,
-        glowIntensity: 0.5 + Math.random() * 0.5,
-        trail: [],
+    const canvas = document.getElementById("cosmic-canvas") as HTMLCanvasElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let particles: Array<{
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      size: number;
+      color: string;
+      alpha: number;
+      baseAlpha: number;
+    }> = [];
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // Spawn many stars for a rich galaxy feel (hilir mudik)
+    const particleCount = Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
+    const colors = ["#00E5FF", "#FF7043", "#00E676", "#818CF8", "#F8FAFC", "#E879F9", "#FBBF24", "#FB7185", "#34D399", "#60A5FA"];
+
+    for (let i = 0; i < particleCount; i++) {
+      const isBright = Math.random() < 0.15;
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        // Faster initial velocity for active movement
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5,
+        size: isBright ? Math.random() * 2.5 + 1.2 : Math.random() * 1.4 + 0.3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: isBright ? Math.random() * 0.8 + 0.2 : Math.random() * 0.5 + 0.1,
+        baseAlpha: isBright ? Math.random() * 0.8 + 0.2 : Math.random() * 0.5 + 0.1,
       });
     }
-    walkingGlassesRef.current = glasses;
-  }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
+    let mouse = { x: -1000, y: -1000 };
 
-    const animate = () => {
-      mouseStarsRef.current = mouseStarsRef.current
-        .map(star => ({
-          ...star,
-          x: star.x + star.vx,
-          y: star.y + star.vy,
-          vy: star.vy + 0.02,
-          life: star.life - 1,
-          opacity: Math.max(0, star.life / star.maxLife),
-        }))
-        .filter(star => star.life > 0);
-
-      const w = typeof window !== 'undefined' ? window.innerWidth : 1920;
-      const h = typeof window !== 'undefined' ? window.innerHeight : 1080;
-      walkingGlassesRef.current = walkingGlassesRef.current.map(g => {
-        const newX = g.x + g.speed * g.direction;
-        const newY = g.y + Math.sin(Date.now() * 0.002 + g.id) * 0.3;
-        const newTrail = [...g.trail, { x: g.x, y: g.y, opacity: 0.6 }].slice(-8);
-        const wrappedX = g.direction > 0 ? (newX > w + 50 ? -50 : newX) : (newX < -50 ? w + 50 : newX);
-        return {
-          ...g,
-          x: wrappedX,
-          y: Math.max(50, Math.min(h - 50, newY)),
-          trail: newTrail,
-          glowIntensity: 0.5 + Math.sin(Date.now() * 0.003 + g.id * 2) * 0.3,
-        };
-      });
-
-      setRenderStars([...mouseStarsRef.current]);
-      setRenderGlasses([...walkingGlassesRef.current]);
-      animFrameRef.current = requestAnimationFrame(animate);
+    const handleMouseMove = (e: MouseEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
     };
 
-    animFrameRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [mounted]);
+    const handleMouseLeave = () => {
+      mouse.x = -1000;
+      mouse.y = -1000;
+    };
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const dx = e.clientX - lastMouseRef.current.x;
-      const dy = e.clientY - lastMouseRef.current.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+    window.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseleave", handleMouseLeave);
 
-      if (dist > 5) {
-        const count = Math.min(Math.floor(dist / 8), 5);
-        for (let i = 0; i < count; i++) {
-          const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 1.5;
-          const speed = 1 + Math.random() * 3;
-          mouseStarsRef.current.push({
-            id: starIdRef.current++,
-            x: e.clientX + (Math.random() - 0.5) * 20,
-            y: e.clientY + (Math.random() - 0.5) * 20,
-            size: 1 + Math.random() * 2.5,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 1,
-            life: 40 + Math.random() * 40,
-            maxLife: 80,
-            opacity: 1,
-          });
-        }
-        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Render vivid cosmic spotlight glow around the cursor
+      if (mouse.x > -500) {
+        const grad = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 400);
+        grad.addColorStop(0, "rgba(139, 92, 246, 0.18)");
+        grad.addColorStop(0.25, "rgba(6, 182, 212, 0.10)");
+        grad.addColorStop(0.5, "rgba(236, 72, 153, 0.06)");
+        grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      setMousePos({ x: e.clientX, y: e.clientY });
+      // Draw connection lines between nearby particles for constellation effect
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 100) {
+            ctx.save();
+            ctx.globalAlpha = (1 - dist / 100) * 0.08;
+            ctx.strokeStyle = "#818CF8";
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+
+      // Render drifting and magnetic particles
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Bounce actively on boundaries to keep them "hilir mudik"
+        if (p.x < 0 || p.x > canvas.width) {
+          p.vx *= -1;
+          p.x = Math.max(0, Math.min(canvas.width, p.x));
+        }
+        if (p.y < 0 || p.y > canvas.height) {
+          p.vy *= -1;
+          p.y = Math.max(0, Math.min(canvas.height, p.y));
+        }
+
+        // Strong magnetic attraction to cursor
+        if (mouse.x > -500) {
+          const dx = mouse.x - p.x;
+          const dy = mouse.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 350) {
+            const force = (350 - dist) / 350;
+            p.vx += (dx / dist) * force * 0.08;
+            p.vy += (dy / dist) * force * 0.08;
+            p.alpha = Math.min(1, p.baseAlpha + force * 0.7);
+          } else {
+            p.alpha += (p.baseAlpha - p.alpha) * 0.02;
+          }
+        } else {
+          p.alpha += (p.baseAlpha - p.alpha) * 0.02;
+        }
+
+        // Maintain constant active speed
+        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (speed > 2.5) {
+          // Clamp max speed
+          p.vx = (p.vx / speed) * 2.5;
+          p.vy = (p.vy / speed) * 2.5;
+        } else if (speed < 0.5) {
+          // Give them a kick if they slow down too much
+          p.vx += (Math.random() - 0.5) * 0.5;
+          p.vy += (Math.random() - 0.5) * 0.5;
+        }
+
+        // Add some random walk jitter for chaotic space feel
+        p.vx += (Math.random() - 0.5) * 0.05;
+        p.vy += (Math.random() - 0.5) * 0.05;
+
+        // Draw the star with glow
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = p.size > 1.2 ? 15 : 6;
+        ctx.shadowColor = p.color;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      animationFrameId = requestAnimationFrame(draw);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    draw();
+
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, []);
 
   useEffect(() => {
@@ -192,118 +240,22 @@ export default function LoginPage() {
         </a>
       </div>
 
-      {/* Deep Space Background */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#050816] via-[#0a0e27] to-[#0d1b3e]" />
-
-        <div
-          className="absolute w-[600px] h-[600px] rounded-full opacity-20 blur-[100px] transition-all duration-[2000ms] ease-out pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle, #6366f1 0%, #8b5cf6 30%, transparent 70%)',
-            left: mousePos.x * 0.03 - 300,
-            top: mousePos.y * 0.03 - 300,
-          }}
-        />
-        <div
-          className="absolute w-[400px] h-[400px] rounded-full opacity-15 blur-[80px] transition-all duration-[2500ms] ease-out pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle, #3b82f6 0%, #06b6d4 40%, transparent 70%)',
-            right: mousePos.x * 0.02 - 200,
-            bottom: mousePos.y * 0.02 - 200,
-          }}
-        />
-        <div
-          className="absolute w-[300px] h-[300px] rounded-full opacity-10 blur-[60px] pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle, #ec4899 0%, #f43f5e 40%, transparent 70%)',
-            left: '60%',
-            top: '20%',
-          }}
-        />
-
-        <div className="absolute inset-0">
-          {mounted && Array.from({ length: 150 }).map((_, i) => (
-            <div
-              key={`bg-${i}`}
-              className="absolute rounded-full bg-white"
-              style={{
-                width: Math.random() * 1.5 + 0.5,
-                height: Math.random() * 1.5 + 0.5,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                opacity: Math.random() * 0.4 + 0.1,
-                animation: `twinkle ${3 + Math.random() * 4}s ease-in-out ${Math.random() * 5}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-
-        {renderStars.map(star => (
-          <div
-            key={star.id}
-            className="absolute rounded-full pointer-events-none"
-            style={{
-              width: star.size,
-              height: star.size,
-              left: star.x,
-              top: star.y,
-              opacity: star.opacity,
-              background: `radial-gradient(circle, rgba(255,255,255,${star.opacity}) 0%, rgba(139,92,246,${star.opacity * 0.5}) 50%, transparent 100%)`,
-              boxShadow: `0 0 ${star.size * 3}px rgba(139,92,246,${star.opacity * 0.5})`,
-            }}
-          />
-        ))}
-
-        {renderGlasses.map(g => (
-          <div key={g.id} className="absolute pointer-events-none" style={{ left: g.x, top: g.y }}>
-            {g.trail.map((t, i) => (
-              <div
-                key={i}
-                className="absolute rounded-full"
-                style={{
-                  width: g.size * 0.3,
-                  height: g.size * 0.3,
-                  left: (t.x - g.x),
-                  top: (t.y - g.y),
-                  opacity: t.opacity * (i / g.trail.length) * 0.3,
-                  background: 'radial-gradient(circle, #60a5fa 0%, transparent 70%)',
-                  filter: 'blur(2px)',
-                }}
-              />
-            ))}
-            <div
-              className="relative"
-              style={{
-                transform: `scaleX(${g.direction})`,
-                filter: `drop-shadow(0 0 ${8 + g.glowIntensity * 12}px rgba(96,165,250,${g.glowIntensity})) drop-shadow(0 0 ${15 + g.glowIntensity * 20}px rgba(139,92,246,${g.glowIntensity * 0.5}))`,
-              }}
-            >
-              <svg width={g.size} height={g.size * 0.6} viewBox="0 0 40 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="url(#glassesGrad)" strokeWidth="1.5" fill="rgba(96,165,250,0.1)" />
-                <circle cx="28" cy="12" r="9" stroke="url(#glassesGrad)" strokeWidth="1.5" fill="rgba(96,165,250,0.1)" />
-                <path d="M19 12 Q20 10 21 12" stroke="url(#glassesGrad)" strokeWidth="1.5" fill="none" />
-                <path d="M3 12 L0 10" stroke="url(#glassesGrad)" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M37 12 L40 10" stroke="url(#glassesGrad)" strokeWidth="1.5" strokeLinecap="round" />
-                <defs>
-                  <linearGradient id="glassesGrad" x1="0" y1="0" x2="40" y2="24">
-                    <stop offset="0%" stopColor="#60a5fa" />
-                    <stop offset="50%" stopColor="#a78bfa" />
-                    <stop offset="100%" stopColor="#60a5fa" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-          </div>
-        ))}
-
-        <div
-          className="absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-            backgroundSize: '80px 80px',
-          }}
-        />
+      {/* 1. FIXED FULL-COLOR GALAXY BACKGROUND */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        {/* Deep space base gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0118] via-[#050d1a] to-[#030712]" />
+        
+        {/* Massive colorful nebula clouds */}
+        <div className="absolute top-[-15%] left-[-10%] w-[55%] h-[55%] rounded-full bg-purple-700/20 blur-[180px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute top-[10%] right-[-15%] w-[50%] h-[50%] rounded-full bg-blue-600/15 blur-[160px] animate-pulse" style={{ animationDuration: '10s' }} />
+        <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[45%] rounded-full bg-pink-600/12 blur-[200px] animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute bottom-[10%] right-[5%] w-[40%] h-[40%] rounded-full bg-cyan-500/10 blur-[150px] animate-pulse" style={{ animationDuration: '7s' }} />
+        <div className="absolute top-[40%] left-[30%] w-[35%] h-[30%] rounded-full bg-amber-500/8 blur-[140px] animate-pulse" style={{ animationDuration: '9s' }} />
+        <div className="absolute top-[5%] left-[50%] w-[25%] h-[25%] rounded-full bg-emerald-500/8 blur-[120px] animate-pulse" style={{ animationDuration: '11s' }} />
       </div>
+      
+      {/* Interactive star canvas on top of galaxy */}
+      <canvas id="cosmic-canvas" className="absolute inset-0 pointer-events-none z-[1]" />
 
       {/* Login Form */}
       <div className="w-full flex items-center justify-center p-6 sm:p-8 lg:p-12 relative z-10">
