@@ -1,60 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
-import { RefreshCw, Loader2, Activity } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertTriangle, Database, Activity, Wrench, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import toast from 'react-hot-toast';
 
-import HealthCards from '@/components/monitoring/HealthCards';
-import AlertTable from '@/components/monitoring/AlertTable';
-import { TruckingPanel, WmsPanel, ForwardingPanel } from '@/components/monitoring/OperationalMetrics';
-import WorkflowTimeline from '@/components/monitoring/WorkflowTimeline';
-import ErrorCenter from '@/components/monitoring/ErrorCenter';
-import AuditViewer from '@/components/monitoring/AuditViewer';
-import CronStatus from '@/components/monitoring/CronStatus';
-import DbIntegrityPanel from '@/components/monitoring/DbIntegrityPanel';
-import InvestigationPanel from '@/components/monitoring/InvestigationPanel';
-import PerformancePanel from '@/components/monitoring/PerformancePanel';
-
-import type { MonitoringData } from '@/components/monitoring/types';
-
-const defaultData: MonitoringData = {
-  health: { api: 'online', database: 'healthy', supabase: 'connected', active_users: 0, error_rate: 0, queue_status: 'healthy' },
-  alerts: [],
-  trucking: { active_jo: 0, pending_driver_accept: 0, delivering: 0, delayed_delivery: 0, failed_wa: 0, unassigned_wo: 0 },
-  wms: { low_stock: 0, negative_stock: 0, pending_picking: 0, pending_putaway: 0, inbound_today: 0, outbound_today: 0 },
-  forwarding: { active_shipment: 0, delayed_shipment: 0, missing_documents: 0, customs_pending: 0, container_tracking_lost: 0 },
-  workflows: [
-    { step: 'WO Created', status: 'completed', count: 0 },
-    { step: 'JO Created', status: 'completed', count: 0 },
-    { step: 'WA Sent', status: 'completed', count: 0 },
-    { step: 'Driver Accept', status: 'in_progress', count: 0 },
-    { step: 'Pickup', status: 'pending', count: 0 },
-    { step: 'Delivered', status: 'pending', count: 0 },
-  ],
-  errors: [],
-  audit_logs: [],
-  crons: [],
-  db_integrity: [],
-  user_activity: [],
-  performance: [],
-};
-
-const CHECK_TYPES = [
-  { key: 'health', label: 'Health Check' },
-  { key: 'trucking', label: 'Trucking Check' },
-  { key: 'wms', label: 'WMS Check' },
-  { key: 'forwarding', label: 'Forwarding Check' },
-];
+import type { MonitoringData, DbIntegrityIssue, CriticalAlert } from '@/components/monitoring/types';
 
 export default function MissionControlDashboard() {
   const { user } = useAuth();
-  const [data, setData] = useState<MonitoringData>(defaultData);
+  const [data, setData] = useState<MonitoringData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [runningChecks, setRunningChecks] = useState<Record<string, boolean>>({});
+  const [resolving, setResolving] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -77,27 +36,10 @@ export default function MissionControlDashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const runCheck = async (type: string) => {
-    setRunningChecks((prev) => ({ ...prev, [type]: true }));
-    try {
-      const res = await fetch('/api/observability/run-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Check failed');
-      toast.success(`${type} check completed`);
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Check failed');
-    } finally {
-      setRunningChecks((prev) => ({ ...prev, [type]: false }));
-    }
-  };
-
-  const handleResolve = async (anomaly_type: string, table: string) => {
-    const toastId = toast.loading(`Resolving ${anomaly_type}...`);
+  const handleResolve = async (anomaly_type: string, table: string, issueId: string) => {
+    if (resolving) return;
+    setResolving(issueId);
+    const toastId = toast.loading(`Resolving issue...`);
     try {
       const res = await fetch('/api/observability/remediate', {
         method: 'POST',
@@ -106,110 +48,197 @@ export default function MissionControlDashboard() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Resolution failed');
-      toast.success(`Successfully resolved ${json.resolvedCount || 0} issues`, { id: toastId });
+      toast.success(`Berhasil menyelesaikan ${json.resolvedCount || 0} anomali`, { id: toastId });
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to resolve', { id: toastId });
+      toast.error(err instanceof Error ? err.message : 'Gagal mengeksekusi Auto-Fix', { id: toastId });
+    } finally {
+      setResolving(null);
     }
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[80vh]">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-medium text-slate-500 animate-pulse">Loading Mission Control...</p>
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm font-medium text-slate-500 animate-pulse">Memindai Anomali Sistem...</p>
         </div>
       </div>
     );
   }
 
-  const criticalCount = data.alerts.filter((a) => a.severity === 'critical' || a.severity === 'high').length;
+  // 1. Extract and normalize all issues
+  const actionableIssues: Array<{
+    id: string;
+    title: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    icon: any;
+    remediable: boolean;
+    anomaly_type?: string;
+    table?: string;
+    count?: number;
+  }> = [];
+
+  if (data) {
+    // Check Health
+    if (data.health.database !== 'healthy' || data.health.api !== 'online') {
+      actionableIssues.push({
+        id: 'sys-health',
+        title: 'Koneksi Sistem Terputus',
+        description: `API: ${data.health.api} | Database: ${data.health.supabase}. Harap hubungi tim infrastruktur segera.`,
+        severity: 'critical',
+        icon: Activity,
+        remediable: false
+      });
+    }
+
+    // Check Integrity (Filter out the 0 counts from mock data)
+    const realAnomalies = (data.db_integrity || []).filter(i => i.count > 0);
+    realAnomalies.forEach((issue, idx) => {
+      actionableIssues.push({
+        id: `anomaly-${idx}`,
+        title: issue.type,
+        description: `Terdapat ${issue.count} baris data bermasalah di tabel '${issue.table}'.`,
+        severity: issue.severity,
+        icon: Database,
+        remediable: !!issue.remediable,
+        anomaly_type: issue.anomaly_type,
+        table: issue.table,
+        count: issue.count
+      });
+    });
+
+    // Check Alerts
+    (data.alerts || []).forEach(alert => {
+      actionableIssues.push({
+        id: alert.id,
+        title: alert.title,
+        description: alert.message,
+        severity: alert.severity,
+        icon: ShieldAlert,
+        remediable: true,
+        anomaly_type: 'clear_alert',
+        table: 'monitoring_checks'
+      });
+    });
+  }
+
+  const isAllClear = actionableIssues.length === 0 && !error;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Activity className="w-7 h-7 text-slate-900" />
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Mission Control</h1>
-              <p className="text-xs text-slate-500">
-                Last updated: {lastRefresh.toLocaleTimeString()} | Auto-refresh 30s
-                {criticalCount > 0 && <span className="text-red-500 font-bold ml-2">🔴 {criticalCount} critical alerts</span>}
-              </p>
-            </div>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mission Control</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Pusat Kendali Auto-Fix & Anomali | Diperbarui: {lastRefresh.toLocaleTimeString()}
+            </p>
           </div>
-          <button onClick={() => { setLoading(true); fetchData(); }}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
-            <RefreshCw className="w-4 h-4" /> Refresh
+          <button 
+            type="button"
+            onClick={() => { setLoading(true); fetchData(); }}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <span className="text-sm text-red-700">{error}</span>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <span className="text-sm font-medium text-red-800">{error}</span>
           </div>
         )}
 
-        {/* Section 1: System Health */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">System Health</h2>
-          </div>
-          <HealthCards health={data.health} />
-        </div>
-
-        {/* Section 2: Run Checks */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Run Checks</span>
-              <div className="flex gap-2">
-                {CHECK_TYPES.map((check) => (
-                  <button key={check.key} onClick={() => runCheck(check.key)} disabled={runningChecks[check.key]}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    {runningChecks[check.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                    {check.label}
-                  </button>
-                ))}
-              </div>
+        {/* State 1: All Clear */}
+        {isAllClear && (
+          <div className="bg-white border border-emerald-100 rounded-3xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[400px]">
+            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-6">
+              <CheckCircle2 className="w-10 h-10 text-emerald-500" />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Critical Alerts */}
-        <div className="mb-6">
-          <AlertTable alerts={data.alerts} />
-        </div>
-
-        {/* Section 4: Operational Metrics */}
-        <div className="mb-6">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Live Operational Metrics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <TruckingPanel data={data.trucking} />
-            <WmsPanel data={data.wms} />
-            <ForwardingPanel data={data.forwarding} />
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Semua Sistem Berjalan Normal</h2>
+            <p className="text-slate-500 max-w-md mx-auto">
+              Tidak ada anomali atau *error* yang terdeteksi di seluruh operasional *tenant* saat ini. Anda bisa bernapas lega.
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* Section 5: Workflow + Errors + Audit + Crons */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <WorkflowTimeline workflows={data.workflows} />
-          <ErrorCenter errors={data.errors} />
-        </div>
+        {/* State 2: Issues Detected */}
+        {!isAllClear && actionableIssues.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-6 px-2">
+              <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-700">
+                {actionableIssues.length} Anomali Terdeteksi
+              </h2>
+            </div>
+            
+            {actionableIssues.map((issue) => {
+              const Icon = issue.icon;
+              const isResolving = resolving === issue.id;
+              
+              return (
+                <div 
+                  key={issue.id} 
+                  className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-xl flex-shrink-0 ${
+                      issue.severity === 'critical' ? 'bg-red-50 text-red-600' :
+                      issue.severity === 'high' ? 'bg-orange-50 text-orange-600' :
+                      'bg-amber-50 text-amber-600'
+                    }`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-slate-900 text-lg">{issue.title}</h3>
+                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                          issue.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                          issue.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {issue.severity}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 text-sm leading-relaxed max-w-xl">
+                        {issue.description}
+                      </p>
+                    </div>
+                  </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <AuditViewer logs={data.audit_logs} />
-          <CronStatus crons={data.crons} onRun={runCheck} />
-        </div>
+                  {issue.remediable ? (
+                    <button
+                      type="button"
+                      onClick={() => handleResolve(issue.anomaly_type!, issue.table!, issue.id)}
+                      disabled={isResolving}
+                      className="w-full md:w-auto flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    >
+                      {isResolving ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Wrench className="w-4 h-4" />
+                      )}
+                      {issue.anomaly_type === 'clear_alert' ? 'Dismiss Alert' : 'Auto-Fix Sekarang'}
+                    </button>
+                  ) : (
+                    <div className="flex-shrink-0 px-4 py-2 bg-slate-50 text-slate-400 rounded-lg text-xs font-medium border border-dashed border-slate-200 text-center">
+                      Manual Action Required
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Section 6: DB Integrity + Performance + Investigation */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <DbIntegrityPanel issues={data.db_integrity} onResolve={handleResolve} />
-          <PerformancePanel metrics={data.performance} />
-          <InvestigationPanel />
-        </div>
       </div>
     </div>
   );

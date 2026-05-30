@@ -71,15 +71,22 @@ export async function POST(req: Request) {
       }
     }
     
+    // SCENARIO 3: Clear historical alerts
+    // Action: mark monitoring_checks as pass or delete them
+    else if (type === 'clear_alert') {
+      const { data, error } = await client
+        .from('monitoring_checks')
+        .update({ status: 'pass', message: 'Dismissed by Admin' })
+        .eq('status', 'fail')
+        .select('id');
+        
+      if (error) throw error;
+      resolvedCount = data?.length || 0;
+      logger.info('observability', 'ALERTS_CLEARED', { resolvedCount });
+    }
+    
     // Log the remediation action
-    await client.from('audit_logs').insert({
-      entity_type: 'system',
-      entity_id: 'auto_fix',
-      operation: 'UPDATE',
-      new_data: { type, table, resolvedCount },
-      performed_by: 'system',
-      performed_at: new Date().toISOString()
-    });
+    logger.info('observability', 'AUTO_FIX_COMPLETED', { payload: { type, table, resolvedCount } });
 
     return NextResponse.json({ success: true, resolvedCount });
   } catch (err: unknown) {
