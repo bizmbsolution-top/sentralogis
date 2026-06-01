@@ -1,0 +1,147 @@
+Berikut adalah dokumen komprehensif yang mencakup **PRD (Product Requirement Document)**, **User Flow**, **Implementation Plan**, dan **Business Model** untuk modul SBU Warehouse / WMS di platform multi-tenant **mbs-connect**.
+
+---
+
+# 1. Product Requirement Document (PRD)
+
+### 📌 Document Control
+
+* **Product Name:** mbs-connect (WMS Module Expansion)
+* **Feature Phase:** MVP (Minimum Viable Product) v2.0
+* **Target Release:** Q3 2026
+* **Author:** Aspiring Business Owner & Gemini AI Collaborator
+
+### 1.1 Product Overview & Objectives
+
+Menambahkan Unit Bisnis Strategis (SBU) *Warehouse Management System* (WMS) ke dalam platform multi-tenant *mbs-connect* yang sudah memiliki SBU Trucking. WMS ini dirancang untuk mengelola multi-lokasi gudang, mendukung operasi oleh tim internal maupun vendor (*outsourcing*), melayani segala jenis komoditi dengan panduan SLA khusus, serta mengoptimalkan pergerakan stok (FIFO/FEFO, Transfer DC-Store, dan Stock Opname).
+
+### 1.2 Key Features & Scope (MVP)
+
+1. **Multi-Tenant & Multi-Org Architecture:** Isolasi data ketat antar-tenant, dan pembatasan hak akses berbasis lokasi gudang untuk vendor pihak ketiga.
+2. **Dynamic Work Order (WO) System:** Pembuatan satu pintu oleh CS-HQ yang otomatis pecah menjadi Job Order (JO) lintas SBU.
+3. **Inventory Hierarchy Management:** Pengaturan Zona (`BULK`, `PICKING`, `QUARANTINE`, `OPEN_YARD`) dan Kode Penyimpanan (*Bin Location*).
+4. **Offline-First Tally Portal:** Aplikasi web (PWA) untuk operator lapangan yang berfungsi tanpa internet di dalam gudang (sinkronisasi otomatis saat kembali online).
+5. **Smart Movement & Audit:** Otomatisasi *Replenishment* berbasis FEFO/FIFO, pelacakan status *In-Transit* untuk transfer antar-gudang, dan fitur *Blind Count* untuk Stock Opname.
+6. **Customer Commodity SLA:** Panduan penanganan instruksi khusus (*pop-up alert*) berbasis kontrak pelanggan dan jenis barang.
+
+### 1.3 Non-Functional Requirements
+
+* **Offline Storage:** Menggunakan `IndexedDB` atau `LocalStorage` pada *browser* ponsel untuk menampung data scan hingga 500 baris transaksi tanpa *crash*.
+* **Barcode Compatibility:** Mendukung pemindaian QR Code dan Barcode 1D menggunakan kamera ponsel standar (resolusi minimal 8MP).
+* **Data Isolation (RLS):** Supabase Row Level Security (RLS) wajib aktif di setiap tabel menggunakan `tenant_id` dan `warehouse_id`.
+
+---
+
+# 2. User Flow Diagram & Logika Perjalanan Pengguna
+
+User flow ini menggambarkan bagaimana data bergerak dari pembuatan order di kantor pusat hingga eksekusi pemindaian di dalam gudang.
+
+```
+[ CS-HQ DASHBOARD ]
+  │
+  ▼
+1. Buat WO Baru ──► Input Pelanggan, Tgl Order & Eksekusi
+  │
+  ▼
+2. Pilih SBU Layanan ──► Centang [Trucking] & [Warehouse]
+  │
+  ├─► [Form Trucking] ──► Input Rute, Tipe Truk, Ritase, Tarif
+  │
+  └─► [Form Warehouse] ──► Pilih Lokasi Gudang, Jenis Layanan (e.g., Inbound/VAS),
+                           Input Master Barang (SKU, Qty), Kunci Tarif SLA
+  │
+  ▼
+3. SUBMIT WORK ORDER
+  │
+  ├───► Otomatis Generate: JO Trucking ──► Masuk ke Antrean Driver (WA System)
+  │
+  └───► Otomatis Generate: JO Warehouse ──► Masuk ke Antrean Gudang Tujuan
+                                              │
+                                              ▼
+                                    [ PORTAL TALLY / OPERATOR ]
+                                              │
+                                              ▼
+                                    4. Login di Kantor Admin (Kondisi Online)
+                                       └──► Sync & Download Daftar JO Hari Ini
+                                              │
+                                              ▼
+                                    5. Masuk ke Area Gudang (Kondisi Offline)
+                                       ├──► Eksekusi Picking/Putaway/Opname
+                                       ├──► Scan QR Rak & Scan Barcode Produk
+                                       └──► Simpan Data Transaksi di Memori HP
+                                              │
+                                              ▼
+                                    6. Kembali ke Kantor Admin (Deteksi Sinyal)
+                                       └──► Auto-Sync Data ke Supabase Cloud
+                                              │
+                                              ▼
+                                    [ DASHBOARD WAREHOUSE MANAGER ]
+                                              │
+                                              ▼
+                                    7. Review Hasil Kerja Tally / Validasi Selisih
+                                       └──► Click [Approve Adjustment] ──► Stok Terupdate
+
+```
+
+---
+
+# 3. Implementation Plan (Rencana Eksekusi)
+
+Rencana implementasi dibagi menjadi 4 tahapan (*Sprint*) menggunakan metode pengembangan tangkas (*Agile*) memanfaatkan akselerasi **Cursor AI**.
+
+### Tahap 1: Database Setup & Master Data (Minggu 1-2)
+
+* Eksekusi skema database SQL WMS di Supabase (Tabel Gudang, Zona, Lokasi, Produk, dan Tabel SLA).
+* Konfigurasi Supabase RLS (Row Level Security) untuk memastikan keamanan data multi-tenant.
+* Membuat halaman CRUD Master Data untuk **Warehouse Manager** di Next.js: Input denah gudang dan input kontrak SLA pelanggan.
+
+### Tahap 2: Dynamic Form WO oleh CS-HQ (Minggu 3-4)
+
+* Membangun komponen *Stepper Form* di Next.js untuk pembuatan Work Order utama.
+* Implementasi logika *SBU Selector*: Menampilkan Form Trucking dan Form Warehouse secara dinamis berdasarkan *checkbox*.
+* Membuat API Route / Trigger Database yang otomatis menyalin data WO Items menjadi baris dokumen JO Trucking dan JO Warehouse secara simultan.
+
+### Tahap 3: Portal Lapangan Tally & Fitur Scanner (Minggu 5-6)
+
+* Membuat layout khusus *Mobile-Responsive* (PWA) untuk portal operator lapangan.
+* Integrasi *library* `@zxing/library` atau `html5-qrcode` pada Next.js untuk mengaktifkan kamera scan HP.
+* Membangun logika penyimpanan lokal (`LocalStorage`) untuk mengakomodir status *Offline-First* dan membuat fungsi sinkronisasi otomatis saat mendeteksi status internet `navigator.onLine`.
+* Implementasi logika *Blind Count* untuk modul Stock Opname dan *Pop-up Alert* instruksi penanganan produk berdasarkan data SLA yang di-download.
+
+### Tahap 4: Pengujian Lapangan & Deployment (Minggu 7-8)
+
+* **Uji Coba Offline:** Simulasi mematikan paket data/Wi-Fi pada HP di dalam gudang, melakukan scan 20 barang, lalu menyalakannya kembali di kantor admin untuk melihat akurasi data di Supabase.
+* *Uji Coba Multi-Org:* Memastikan akun Tally milik Vendor A tidak bisa melihat order atau struktur lokasi milik Gudang Vendor B.
+* *Go-Live:* Deployment aplikasi ke Vercel dan produksi database Supabase.
+
+---
+
+# 4. Business Models (Model Bisnis & Monetisasi)
+
+Sebagai platform multi-tenant SaaS (*Software as a Service*), *mbs-connect* dapat memonetisasi SBU WMS ini menggunakan beberapa skema pendapatan yang sangat menarik bagi ekosistem logistik:
+
+### 4.1 B2B SaaS Subscription (Berbasis Skala Bisnis Tenant)
+
+Tenant (Perusahaan Logistik/Pemilik Aplikasi) membayar biaya langganan bulanan berdasarkan volume infrastruktur yang mereka daftarkan di sistem:
+
+* **Paket Starter:** Rp 1.500.000 / bulan (Maksimal 1 Lokasi Gudang, 2 Ruang Zona, Operator Internal saja).
+* **Paket Enterprise (Multi-Gudang):** Rp 5.000.000 / bulan (Multi-Lokasi Gudang tanpa batas, mendukung integrasi Vendor Outsourcing, Akses Fitur Auto-Replenishment & Blind Count Opname).
+
+### 4.2 Pay-per-Transaction / Pay-per-JO (Skema Berbasis Pemakaian)
+
+Jika tenant keberatan dengan biaya bulanan yang flat, Anda bisa menerapkan skema biaya per pemakaian (*usage-based pricing*):
+
+* Tenant dikenakan biaya sebesar **Rp 2.000 - Rp 5.000 untuk setiap Job Order Warehouse yang berhasil diselesaikan (Status COMPLETED)** oleh operator di lapangan.
+* Skema ini sangat disukai oleh perusahaan logistik berskala menengah karena biaya aplikasi mereka akan linear dengan naik-turunnya volume bisnis mereka (*Pay as you grow*).
+
+### 4.3 Add-on Vendor Portal Fee (Sistem Bagi Hasil dengan Outsourcing)
+
+Karena platform Anda mampu menjembatani tenant dengan perusahaan penyedia tenaga kerja/vendor pengelola gudang:
+
+* Anda bisa mengenakan biaya tambahan (*Add-on lisensi*) sebesar Rp 250.000 / bulan untuk setiap akun eksternal Perusahaan Vendor Gudang yang ikut masuk ke dalam sistem untuk mengelola kuota staf mereka sendiri.
+
+---
+
+Cetak biru (*blueprint*) ini telah mencakup seluruh spektrum, mulai dari dokumen kebutuhan produk, peta alur pengguna, tahapan koding di Cursor AI, hingga strategi menghasilkan uang dari fitur ini.
+
+Langkah pertama dari *Implementation Plan* kita adalah membangun struktur database di Supabase. Apakah Anda ingin kita mulai menulis query SQL migrasinya sekarang?

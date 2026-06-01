@@ -7,12 +7,13 @@ export async function GET() {
       .from('work_orders')
       .select(`
         *,
-        customers (*),
-        work_order_items (
+        customers:md_entities!fk_work_orders_customer (*),
+        wo_work_order_items (
           *,
           origin_location:origin_location_id (*),
           destination_location:destination_location_id (*)
-        )
+        ),
+        wo_items (*)
       `)
       .order('created_at', { ascending: false })
 
@@ -54,23 +55,55 @@ export async function PUT(req: Request) {
     if (woError) throw woError;
 
     // 2. Handling Items (Sync approach)
-    await supabaseAdmin.from('work_order_items').delete().eq('work_order_id', id);
+    await supabaseAdmin.from('wo_items').delete().eq('wo_id', id);
 
     if (items && items.length > 0) {
-      const { error: itemsError } = await supabaseAdmin
-        .from('work_order_items')
-        .insert(items.map((item: any) => ({
-          work_order_id: id,
-          truck_type: item.truck_type || "N/A",
-          origin_location_id: item.origin_location_id || null,
-          destination_location_id: item.destination_location_id || null,
-          quantity: item.quantity || 1,
-          deal_price: item.deal_price || 0,
+      const { data: insertedItems, error: itemsError } = await supabaseAdmin
+        .from('wo_items')
+        .insert(items.map((item: any, index: number) => ({
+          wo_id: id,
+          tenant_id: item.tenant_id,
+          max_jo_count: item.quantity || 1,
+          item_code: item.item_code || `WO-ITEM-${String(index + 1).padStart(2, '0')}`,
           sbu_type: item.sbu_type || sbu_type || 'trucking',
-          sbu_metadata: item.sbu_metadata || {}
-        })));
+          unit_price: item.deal_price || item.item_data?.deal_price || 0,
+          total_revenue: (item.deal_price || item.item_data?.deal_price || 0) * (item.quantity || 1),
+          item_data: {
+            ...(item.item_data || {}),
+            truck_type: item.truck_type,
+            origin_location_id: item.origin_location_id,
+            destination_location_id: item.destination_location_id,
+            deal_price: item.deal_price,
+            notes: item.notes
+          }
+        })))
+        .select();
       
       if (itemsError) throw itemsError;
+
+      // Process Manifests if any
+      const manifestPayloads: any[] = [];
+      insertedItems.forEach((insertedItem, index) => {
+        const originalItem = items[index];
+        if (originalItem.manifests && Array.isArray(originalItem.manifests)) {
+          originalItem.manifests.forEach((m: any) => {
+            manifestPayloads.push({
+              wo_item_id: insertedItem.id,
+              tenant_id: item.tenant_id,
+              product_sku_id: m.product_sku_id,
+              quantity: m.quantity || 1,
+              unit_weight_kg: m.unit_weight_kg || 0,
+              unit_volume_m3: m.unit_volume_m3 || 0,
+              notes: m.notes || null
+            });
+          });
+        }
+      });
+
+      if (manifestPayloads.length > 0) {
+        const { error: manifestError } = await supabaseAdmin.from('wo_item_manifests').insert(manifestPayloads);
+        if (manifestError) console.error('Error inserting manifests:', manifestError);
+      }
     }
 
     return NextResponse.json({ success: true });
@@ -93,25 +126,33 @@ export async function POST(request: NextRequest) {
 
     const required_units = items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0)
 
-    const today = new Date()
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-    const { count } = await supabaseAdmin.from('work_orders').select('*', { count: 'exact', head: true })
-    const woNumber = `WO/${dateStr}/${String((count || 0) + 1).padStart(4, '0')}`
+    const today = new Date();
+    const mmyy = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getFullYear()).slice(-2)}`;
+    
+    // Get Customer Code
+    let customerCode = 'CUS';
+    const { data: customerData } = await supabaseAdmin.from('md_entities').select('entity_code, name').eq('id', customer_id).single();
+    if (customerData) customerCode = customerData.entity_code || customerData.name?.substring(0, 3).toUpperCase() || 'CUS';
+    
+    // Get sequence
+    const { count } = await supabaseAdmin.from('work_orders').select('*', { count: 'exact', head: true });
+    const sequenceStr = String((count || 0) + 1).padStart(2, '0');
+    
+    // Tenant Code - fallback to HALU
+    const tenantCode = 'HALU'; 
+    
+    const woNumber = `${tenantCode}-${customerCode}-${mmyy}-${sequenceStr}`;
 
     const { data: woData, error: woError } = await supabaseAdmin
       .from('work_orders')
       .insert({
         wo_number: woNumber,
         customer_id,
-        customer_phone: customer_phone || null,
+        tenant_id: tenant_id,
         order_date: order_date || null,
         execution_date: execution_date || null,
         notes: notes || null,
-        required_units,
-        status: status || 'draft', 
-        source: source || 'admin_cs',
-        created_by: created_by || 'Admin',
-        sbu_type: sbu_type || 'trucking',
+        status: status || 'draft',
         organization_id: organization_id || null
       })
       .select().single()
@@ -119,20 +160,83 @@ export async function POST(request: NextRequest) {
     if (woError) throw woError
 
     if (items && items.length > 0) {
-      const { error: itemsError } = await supabaseAdmin
-        .from('work_order_items')
-        .insert(items.map((item: any) => ({
-          work_order_id: woData.id,
-          truck_type: item.truck_type || "N/A",
-          origin_location_id: item.origin_location_id || null,
-          destination_location_id: item.destination_location_id || null,
-          quantity: item.quantity || 1,
-          deal_price: item.deal_price || 0,
-          sbu_type: item.sbu_type || sbu_type || 'trucking',
-          sbu_metadata: item.sbu_metadata || {}
-        })))
+      const { data: insertedItems, error: itemsError } = await supabaseAdmin
+        .from('wo_items')
+        .insert(items.map((item: any, index: number) => {
+          const itemSbuType = (item.sbu_type || sbu_type || 'trucking').toUpperCase();
+          const sbuCode = itemSbuType === 'WAREHOUSE' ? 'WH' : 'TR';
+          const qtyString = String(item.quantity || 1).padStart(2, '0');
+          const finalItemCode = item.item_code || `${woNumber}-${sbuCode}${qtyString}`;
+          
+          return {
+            wo_id: woData.id,
+            tenant_id: tenant_id,
+            max_jo_count: item.quantity || 1,
+            item_code: finalItemCode,
+            sbu_type: itemSbuType,
+            unit_price: item.deal_price || item.item_data?.deal_price || 0,
+            total_revenue: (item.deal_price || item.item_data?.deal_price || 0) * (item.quantity || 1),
+            item_data: {
+              ...(item.item_data || {}),
+              truck_type: item.truck_type,
+              origin_location_id: item.origin_location_id,
+              destination_location_id: item.destination_location_id,
+              deal_price: item.deal_price,
+              notes: item.notes
+            }
+          };
+        }))
+        .select();
       
-      if (itemsError) throw itemsError
+      if (itemsError) throw itemsError;
+      
+      // Process Manifests if any
+      const manifestPayloads: any[] = [];
+      insertedItems.forEach((insertedItem, index) => {
+        const originalItem = items[index];
+        if (originalItem.manifests && Array.isArray(originalItem.manifests)) {
+          originalItem.manifests.forEach((m: any) => {
+            manifestPayloads.push({
+              wo_item_id: insertedItem.id,
+              tenant_id: tenant_id,
+              product_sku_id: m.product_sku_id,
+              quantity: m.quantity || 1,
+              unit_weight_kg: m.unit_weight_kg || 0,
+              unit_volume_m3: m.unit_volume_m3 || 0,
+              notes: m.notes || null
+            });
+          });
+        }
+      });
+
+      if (manifestPayloads.length > 0) {
+        const { error: manifestError } = await supabaseAdmin.from('wo_item_manifests').insert(manifestPayloads);
+        if (manifestError) console.error('Error inserting manifests:', manifestError);
+      }
+      
+      // Generate JOs for non-draft
+      if (status !== 'draft' && insertedItems && insertedItems.length > 0) {
+        const newJobOrders: any[] = [];
+        
+        for (const woItem of insertedItems) {
+          const itemSbuType = (woItem.sbu_type || '').toUpperCase();
+          const qty = woItem.max_jo_count || 1;
+          
+          for (let i = 1; i <= qty; i++) {
+            newJobOrders.push({
+              tenant_id: woData.tenant_id,
+              wo_item_id: woItem.id,
+              jo_number: `${woItem.item_code}-${String(i).padStart(2, '0')}`,
+              status: 'pending'
+            });
+          }
+        }
+        
+        if (newJobOrders.length > 0) {
+          const { error: joError } = await supabaseAdmin.from('job_orders').insert(newJobOrders);
+          if (joError) console.error('Error auto-generating Job Orders:', joError);
+        }
+      }
     }
 
     return NextResponse.json({ success: true, wo_number: woNumber, id: woData.id })

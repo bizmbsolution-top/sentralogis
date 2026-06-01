@@ -13,9 +13,14 @@ type GoogleMapsContextType = {
 const GoogleMapsContext = createContext<GoogleMapsContextType>({ isLoaded: false });
 
 export function GoogleMapsProvider({ children }: { children: ReactNode }) {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+        throw new Error('Missing Google Maps API key in .env.local');
+    }
+
     const { isLoaded } = useJsApiLoader({
         id: "google-map-script",
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+        googleMapsApiKey: apiKey,
         libraries: MAPS_LIBRARIES,
         language: "id",
     });

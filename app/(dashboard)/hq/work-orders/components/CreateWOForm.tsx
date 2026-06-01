@@ -5,10 +5,9 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
-  ArrowLeft, Plus, Trash2, Edit2, Truck, 
-  MapPin, Calendar, MessageSquare, Save, Send, Loader2,
-  ChevronRight, Building2, Warehouse, Globe, ShieldCheck, DollarSign,
-  User, Activity, FileText, Layers, ArrowRight
+  Plus, Trash2, ArrowLeft, Loader2, Send, Save, Edit2, 
+  MapPin, Truck, ChevronRight, User, ShieldCheck,
+  Building2, Calendar, MessageSquare, Package, Globe, Warehouse
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -74,13 +73,32 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         console.log('[CreateWOForm] WO header loaded:', wo.wo_number);
 
-        // STEP 2: Ambil WO Items
-        const { data: items, error: itemsError } = await supabase
+        // STEP 2: Ambil WO Items (gabungan tabel baru dan tabel lama untuk kompatibilitas)
+        const { data: newItems, error: newItemsError } = await supabase
           .from('wo_items')
           .select('*')
           .eq('wo_id', editId);
 
-        if (itemsError) throw itemsError;
+        if (newItemsError) throw newItemsError;
+
+        const { data: oldItems, error: oldItemsError } = await supabase
+          .from('wo_work_order_items')
+          .select('*')
+          .eq('work_order_id', editId);
+
+        if (oldItemsError) {
+          console.warn('[CreateWOForm] Could not fetch from old table (might not exist):', oldItemsError);
+        }
+        
+        // Normalize oldItems to new items shape
+        const normalizedOldItems = (oldItems || []).map(old => ({
+          ...old,
+          item_data: old.sbu_metadata || { unit_count: old.quantity, deal_price: old.deal_price },
+          sbu_type: old.sbu_type || 'TRUCKING',
+          total_revenue: (old.quantity || 1) * (old.deal_price || 0)
+        }));
+
+        const items = [...(newItems || []), ...normalizedOldItems];
 
         // STEP 3: Untuk setiap WO Item, ambil Job Orders (jika ada)
         const woItemsWithJobs = await Promise.all(
@@ -204,8 +222,6 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       let woNumber = '';
       let woId = editId;
 
-      // Generate WO Number: HALU-TPS-0526-001
-      // Tenant name from profile.tenants.name, customer initial from md_entities.name
       const tenantInitial = (profile?.tenants as any)?.name || profile?.tenant_code || 'HQ';
 
       if (editId) {
@@ -238,10 +254,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         woId = wo?.id;
       }
 
-      // Refresh items logic: delete and re-insert
       await supabase.from('wo_items').delete().eq('wo_id', woId);
 
-      // Track SBU counts for suffix numbering (TR01, TR02, etc)
       const sbuCounts: Record<string, number> = {};
 
       for (const [index, item] of woItems.entries()) {
@@ -260,6 +274,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             wo_id: woId,
             item_code: itemCode,
             sbu_type: item.sbu_type,
+            max_jo_count: item.quantity || item.item_data?.unit_count || 1,
             unit_price: item.unit_price || 0,
             total_revenue: item.total_revenue || 0,
             item_data: item.item_data,
@@ -267,13 +282,26 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           })
           .select()
           .single();
-        
         if (itemError) throw itemError;
+
+        // INSERT MANIFESTS IF ANY
+        if (item.manifests && Array.isArray(item.manifests) && item.manifests.length > 0) {
+          const manifestPayloads = item.manifests.map((m: any) => ({
+            wo_item_id: woItem.id,
+            tenant_id: profile.tenant_id,
+            product_sku_id: m.product_sku_id,
+            quantity: m.quantity || 1,
+            unit_weight_kg: m.unit_weight_kg || 0,
+            unit_volume_m3: m.unit_volume_m3 || 0,
+            notes: m.notes || null
+          }));
+          const { error: manifestError } = await supabase.from('wo_item_manifests').insert(manifestPayloads);
+          if (manifestError) console.error('Error inserting manifests:', manifestError);
+        }
 
         if (item.sbu_type === 'TRUCKING' && item.item_data.stops) {
           const unitCount = item.item_data.unit_count || 1;
           for (let i = 1; i <= unitCount; i++) {
-            // Simple JO format: WO-Seq (e.g. HALU-TAM-0526-001-01)
             const joNumber = `${woNumber}-${i.toString().padStart(2, '0')}`;
             
             const { data: jobOrder, error: joError } = await supabase
@@ -284,7 +312,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                 wo_item_id: woItem.id,
                 total_stops: item.item_data.stops.length,
                 status: status === 'draft' ? 'draft' : 'pending',
-                tracking_token: crypto.randomUUID()
+                tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
               })
               .select()
               .single();
@@ -308,11 +336,28 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
             if (routePayloads.length > 0) {
               const { error: routesError } = await supabase.from('job_routes').insert(routePayloads);
-              if (routesError) {
-                console.error('Routes Insert Error:', routesError);
-                throw routesError;
-              }
+              if (routesError) throw routesError;
             }
+          }
+        }
+
+        // AUTO-SPLIT JOB ORDERS FOR WAREHOUSE
+        if (item.sbu_type === 'WAREHOUSE') {
+          const unitCount = item.item_data.unit_count || 1;
+          for (let i = 1; i <= unitCount; i++) {
+            const joNumber = `${itemCode}-${i.toString().padStart(2, '0')}`;
+            
+            const { error: joError } = await supabase
+              .from('job_orders')
+              .insert({
+                tenant_id: profile.tenant_id,
+                jo_number: joNumber,
+                wo_item_id: woItem.id,
+                status: status === 'draft' ? 'draft' : 'pending',
+                tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+              });
+
+            if (joError) console.error('Error creating WH Job Order:', joError);
           }
         }
       }
@@ -331,7 +376,6 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto">
-      {/* Loading Overlay */}
       {isLoadingEdit && (
         <div className="fixed inset-0 z-[110] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
@@ -352,7 +396,6 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            {/* Header Info */}
             <Card className="p-8 border-slate-200 shadow-none !rounded-[2.5rem] space-y-8">
               <div className="space-y-6">
                 <div className="space-y-3">
@@ -433,7 +476,6 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
               </div>
             </Card>
 
-            {/* SBU Selection Cards */}
             <div className="space-y-4">
                <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] ml-2 italic">Select SBU Modules</h3>
                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -441,7 +483,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                      <button 
                        key={sbu.id}
                        disabled={isReadOnly}
-                       onClick={() => !isReadOnly && (sbu.id === 'TRUCKING' || sbu.id === 'WAREHOUSE') && setActiveSBUModal(sbu.id)}
+                       onClick={() => !isReadOnly && ['TRUCKING', 'WAREHOUSE'].includes(sbu.id) && setActiveSBUModal(sbu.id)}
                        className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 text-center ${['TRUCKING', 'WAREHOUSE'].includes(sbu.id) && !isReadOnly ? 'bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-600/5' : 'bg-slate-50 border-transparent opacity-50 cursor-not-allowed'}`}
                      >
                         <div className={`p-4 rounded-2xl ${sbu.bg} ${sbu.color} transition-transform group-hover:scale-110`}>
@@ -453,7 +495,6 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                </div>
             </div>
 
-            {/* Item List */}
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] italic">Work Order Manifest</h3>
@@ -472,86 +513,48 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                   <Card key={item.id} className="p-6 border-slate-200 shadow-none !rounded-[2rem] hover:border-slate-400 transition-all group relative overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 bg-slate-900 text-white rounded-[1rem] flex items-center justify-center shrink-0 shadow-lg shadow-slate-900/10">
-                          <Truck size={24} />
+                        <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 shadow-lg ${item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600 text-white shadow-amber-600/20' : 'bg-blue-600 text-white shadow-blue-600/20'}`}>
+                          {item.sbu_type === 'WAREHOUSE' ? <Package size={24} /> : <Truck size={24} />}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[9px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-[0.2em]">{item.sbu_type}</span>
-                            <span className="text-xs font-black text-slate-900 uppercase tracking-wider">{item.item_data?.unit_count || 0} Units Deployment — {item.item_data?.vehicle_type_name || 'N/A'}</span>
+                            <span className={`text-[9px] font-black text-white px-2 py-0.5 rounded uppercase tracking-[0.2em] ${item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600' : 'bg-blue-600'}`}>{item.sbu_type}</span>
+                            <span className="text-xs font-black text-slate-900 uppercase tracking-wider">{item.item_data?.unit_count || 1} Units</span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 text-sm font-black text-slate-900">
-                            {item.item_data?.stops?.map((stop: any, idx: number) => (
-                              <div key={stop.id || `stop-${idx}`} className="flex items-center gap-2">
-                                <span>{stop.location_name}</span>
-                                {idx < item.item_data.stops.length - 1 && <ChevronRight size={14} className="text-slate-300 shrink-0" />}
-                              </div>
-                            )) || (
-                              <>
-                                {item.item_data?.shipper_name || 'Unknown'} <ChevronRight size={14} className="text-slate-300" /> {item.item_data?.recipient_name || 'Unknown'}
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                             <MapPin size={12} className="text-rose-500" /> {item.item_data?.shipper_address || 'No address provided'}
-                          </div>
-
-                          {/* JO Assignments Display */}
-                          {item.job_orders && item.job_orders.length > 0 && (
-                            <div className="mt-4 space-y-2 border-t border-slate-50 pt-4">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Assignments</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {item.job_orders.map((jo: any) => (
-                                  <div key={jo.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                                      <Truck size={14} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[10px] font-black text-slate-900 truncate">
-                                          {jo.transporter?.name || 'INTERNAL HQ'}
-                                        </span>
-                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
-                                          {jo.fleets?.plate_number || 'No Plate'}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <User size={10} className="text-slate-400" />
-                                        <span className="text-[10px] font-medium text-slate-500 truncate">
-                                          {jo.drivers?.name || jo.external_driver_name || 'No Driver'}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                          
+                          {item.sbu_type === 'WAREHOUSE' ? (
+                            <div className="mt-2 text-sm font-bold text-slate-900">
+                               {item.item_data?.operation_type || 'Warehouse Task'} | {item.item_data?.est_volume_cbm || 0} CBM
+                            </div>
+                          ) : (
+                            <div className="text-sm font-bold text-slate-900 mt-1">
+                               {item.item_data?.vehicle_type_name || 'Generic Fleet'}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 pr-4 border-l border-slate-100 pl-6">
-                         <div className="text-right min-w-[120px]">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Item Revenue</p>
-                            <p className="text-sm font-black text-slate-900 italic font-mono">IDR {item.item_data?.est_revenue?.toLocaleString('id-ID') || 0}</p>
+                      <div className="flex items-center gap-4 border-l border-slate-100 pl-6">
+                         <div className="text-right">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue</p>
+                            <p className="text-sm font-black text-slate-900 italic font-mono">IDR {Number(item.total_revenue).toLocaleString('id-ID')}</p>
                          </div>
                          <div className="flex items-center gap-2">
                             <button 
                               disabled={isReadOnly}
                               onClick={() => {
-                                if (isReadOnly) return;
                                 setEditingItem(item);
                                 setActiveSBUModal(item.sbu_type);
                               }}
-                              className={`p-3 rounded-xl transition-all ${isReadOnly ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:text-blue-600 hover:bg-blue-50'}`}
+                              className={`p-3 rounded-xl transition-all ${isReadOnly ? 'text-slate-200' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                             >
-                              <Edit2 size={18} />
+                              <Edit2 size={16} />
                             </button>
                             <button 
                               disabled={isReadOnly}
-                              onClick={() => !isReadOnly && removeItem(item.id)} 
-                              className={`p-3 rounded-xl transition-all ${isReadOnly ? 'text-slate-200 cursor-not-allowed' : 'text-slate-300 hover:text-rose-600 hover:bg-rose-50'}`}
+                              onClick={() => removeItem(item.id)} 
+                              className={`p-3 rounded-xl transition-all ${isReadOnly ? 'text-slate-200' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}
                             >
-                              <Trash2 size={18} />
+                              <Trash2 size={16} />
                             </button>
                          </div>
                       </div>
@@ -562,68 +565,30 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             </div>
           </div>
 
-          {/* Sidebar Summary */}
           <div className="space-y-6">
             <Card className="p-8 bg-white text-slate-900 !rounded-[3rem] shadow-xl shadow-slate-200/60 space-y-8 sticky top-8 border border-slate-100">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic border-b border-slate-50 pb-6">Manifest Summary</h3>
-              
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total SBU Modules</span>
-                  <span className="text-sm font-black italic text-slate-900">{woItems.length} Modules</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Unit Deploy</span>
-                  <span className="text-sm font-black italic text-slate-900">{woItems.reduce((acc, curr) => acc + (Number(curr.item_data?.unit_count) || 0), 0)} Units</span>
-                </div>
-                
-                <div className="pt-6 border-t border-slate-50">
+              <div className="pt-6 border-t border-slate-50">
                    <div className="flex flex-col gap-1">
                       <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Total Estimated Revenue</span>
                       <span className="text-3xl font-black italic tracking-tighter text-emerald-600">
                          IDR {totalRevenue.toLocaleString('id-ID')}
                       </span>
                    </div>
-                </div>
               </div>
-
               <div className="space-y-3 pt-4">
-                {isReadOnly ? (
-                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-center space-y-2">
-                     <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Work Order Finalized</p>
-                     <p className="text-[11px] font-bold text-rose-800 italic">This order is in a final state ({woStatus?.replace('_', ' ')}) and cannot be modified.</p>
-                  </div>
-                ) : (
+                {!isReadOnly && (
                   <>
-                    <button 
-                      onClick={() => handleSubmit('need_assignment')}
-                      disabled={!!submitting || woItems.length === 0}
-                      className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-500 shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                    >
-                      {submitting === 'submit' ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                      SUBMIT TO SBU
+                    <button onClick={() => handleSubmit('need_assignment')} className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-500 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                       {submitting === 'submit' ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} SUBMIT TO SBU
                     </button>
-                    <button 
-                      onClick={() => handleSubmit('draft')}
-                      disabled={!!submitting || woItems.length === 0}
-                      className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 hover:border-slate-900 hover:text-slate-900 transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      {submitting === 'draft' ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      SAVE AS DRAFT
+                    <button onClick={() => handleSubmit('draft')} className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 transition-all flex items-center justify-center gap-3">
+                       {submitting === 'draft' ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} SAVE AS DRAFT
                     </button>
                   </>
                 )}
               </div>
             </Card>
-            
-            <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-6 flex gap-4">
-              <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl shrink-0 h-fit">
-                <ShieldCheck size={20} />
-              </div>
-              <p className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-widest">
-                Submitting to SBU will freeze the manifest for operational assignment. Revenue estimates are for internal tracking.
-              </p>
-            </div>
           </div>
         </div>
 
@@ -633,14 +598,11 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
              customerId={formData.customer_id}
              defaultExecutionDate={formData.execution_date}
              defaultExecutionTime={formData.execution_time}
-             onClose={() => {
-               setActiveSBUModal(null);
-               setEditingItem(null);
-             }} 
+             onClose={() => { setActiveSBUModal(null); setEditingItem(null); }} 
              onAdd={handleAddItem} 
            />
         )}
-
+        
         {activeSBUModal === 'WAREHOUSE' && (
            <AddWarehouseItemModal 
              initialData={editingItem}

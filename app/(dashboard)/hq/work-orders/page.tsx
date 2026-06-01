@@ -257,7 +257,14 @@ export default function HQWorkOrdersPage() {
       return <Badge className="!bg-amber-100 !text-amber-700 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic border-2 !border-amber-200">DRAFT MANIFEST</Badge>;
     }
 
-    return <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">NEED ASSIGN UNITS</Badge>;
+    const hasOnlyWarehouse = allItems.length > 0 && allItems.every((i: any) => i.sbu_type === 'WAREHOUSE');
+    const hasWarehouseAndTrucking = allItems.some((i: any) => i.sbu_type === 'WAREHOUSE') && allItems.some((i: any) => i.sbu_type === 'TRUCKING');
+
+    let defaultBadgeText = 'NEED ASSIGN UNITS';
+    if (hasOnlyWarehouse) defaultBadgeText = 'MENUNGGU WMS EKSEKUSI';
+    else if (hasWarehouseAndTrucking) defaultBadgeText = 'MENUNGGU PROSES SBU';
+
+    return <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">{defaultBadgeText}</Badge>;
   };
 
   const handleEdit = (id: string) => {

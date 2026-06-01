@@ -14,6 +14,7 @@ export async function createStaffAdmin(payload: {
   roleCode: string;
   tenantCode: string;
   sbuCode?: string | null;
+  warehouseId?: string | null;
   whatsapp?: string;
 }) {
   try {
@@ -65,6 +66,18 @@ export async function createStaffAdmin(payload: {
     // Safety check on RPC response
     if (rpcResponse && rpcResponse.success === false) {
        throw new Error(rpcResponse.message || 'Database sync failed');
+    }
+
+    // 3. Assign to Specific Warehouse if provided
+    if (payload.warehouseId) {
+       const { error: whError } = await supabaseAdmin
+         .from('tenant_users')
+         .update({ warehouse_id: payload.warehouseId })
+         .eq('user_id', userId);
+       
+       if (whError) {
+         console.error('[createStaffAdmin] Failed to bind warehouse:', whError);
+       }
     }
 
     console.log('[createStaffAdmin] Success for:', payload.email);

@@ -14,6 +14,7 @@ interface Profile {
   role: string;
   tenant_id?: string;
   tenant_code?: string;
+  warehouse_id?: string;
   whatsapp?: string;
   is_active: boolean;
   created_at: string;
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Promise.race([
           supabase
             .from('tenant_users')
-            .select('tenant_id, role_code, full_name')
+            .select('tenant_id, role_code, full_name, warehouse_id')
             .eq('user_id', userId)
             .maybeSingle(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))
@@ -116,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!tenantError && tenantData) {
         finalProfile.tenant_id = tenantData.tenant_id;
         finalProfile.tenant_code = tenantData.tenant_id;
+        finalProfile.warehouse_id = tenantData.warehouse_id;
       }
 
       // Fetch tenant name in background (non-blocking)

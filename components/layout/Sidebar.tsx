@@ -81,6 +81,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/tenant/warehouse/locations' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
@@ -114,6 +116,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
@@ -153,6 +157,9 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
+        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
@@ -191,6 +198,9 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
+        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
@@ -233,6 +243,9 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
+        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
@@ -260,6 +273,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
@@ -288,6 +303,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
@@ -316,6 +333,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
@@ -344,6 +363,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
@@ -473,6 +494,8 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'SBU Warehouse', icon: '🏭', href: '#',
       submenu: [
+        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/tenant/warehouse/locations' },
       ]
     },

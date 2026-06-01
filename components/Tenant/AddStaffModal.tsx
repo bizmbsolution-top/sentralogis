@@ -48,10 +48,11 @@ const sbuRolesMap: any = {
   ],
 };
 
-export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus }: any) {
+export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, warehouses }: any) {
   const [loading, setLoading] = useState(false);
   const [staffType, setStaffType] = useState<'hq' | 'sbu'>('hq');
   const [selectedSbu, setSelectedSbu] = useState<any>(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [successData, setSuccessData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -80,6 +81,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus }: any)
         fullName: formData.fullName,
         roleCode: formData.roleCode,
         sbuCode: staffType === 'sbu' ? selectedSbu?.sbu_code : null,
+        warehouseId: staffType === 'sbu' && selectedWarehouseId ? selectedWarehouseId : null,
         whatsapp: formData.whatsapp,
         password: formData.password
       });
@@ -230,24 +232,43 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus }: any)
               )}
 
               {staffType === 'sbu' && selectedSbu && (
-                <div className="space-y-1.5 md:col-span-2">
-                   <label className="text-sm font-bold text-slate-700 ml-1">SBU Position for {selectedSbu.sbu_name}</label>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {sbuRolesMap[selectedSbu.sbu_type]?.map((r: any) => (
-                        <button
-                          key={r.code}
-                          type="button"
-                          onClick={() => setFormData({...formData, roleCode: r.code})}
-                          className={`p-4 rounded-2xl border text-left transition-all ${
-                            formData.roleCode === r.code ? 'border-blue-500 bg-blue-50/50 shadow-inner' : 'border-slate-100 bg-slate-50 hover:border-slate-200'
-                          }`}
-                        >
-                          <p className={`text-xs font-black uppercase tracking-widest ${formData.roleCode === r.code ? 'text-blue-700' : 'text-slate-500'}`}>{r.name}</p>
-                          <p className="text-[10px] text-slate-400 font-medium italic mt-1">Code: {r.code}</p>
-                        </button>
-                      ))}
-                   </div>
-                </div>
+                <>
+                  <div className="space-y-1.5 md:col-span-2">
+                     <label className="text-sm font-bold text-slate-700 ml-1">SBU Position for {selectedSbu.sbu_name}</label>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {sbuRolesMap[selectedSbu.sbu_type]?.map((r: any) => (
+                          <button
+                            key={r.code}
+                            type="button"
+                            onClick={() => setFormData({...formData, roleCode: r.code})}
+                            className={`p-4 rounded-2xl border text-left transition-all ${
+                              formData.roleCode === r.code ? 'border-blue-500 bg-blue-50/50 shadow-inner' : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                            }`}
+                          >
+                            <p className={`text-xs font-black uppercase tracking-widest ${formData.roleCode === r.code ? 'text-blue-700' : 'text-slate-500'}`}>{r.name}</p>
+                            <p className="text-[10px] text-slate-400 font-medium italic mt-1">Code: {r.code}</p>
+                          </button>
+                        ))}
+                     </div>
+                  </div>
+                  
+                  {warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
+                    <div className="space-y-1.5 md:col-span-2 mt-2">
+                       <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
+                       <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>
+                       <select 
+                         className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                         value={selectedWarehouseId}
+                         onChange={e => setSelectedWarehouseId(e.target.value)}
+                       >
+                         <option value="">-- All SBU Warehouses --</option>
+                         {warehouses.filter((w: any) => w.sbu_id === selectedSbu.id).map((w: any) => (
+                           <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                         ))}
+                       </select>
+                    </div>
+                  )}
+                </>
               )}
            </div>
 

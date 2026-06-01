@@ -301,10 +301,12 @@ export default function JobOrderManagementPage() {
         .order('created_at', { ascending: false });
 
       if (baseError) throw baseError;
-      
       const rawJOs = baseData || [];
+      // [AI] Strictly filter for TRUCKING SBU to prevent Warehouse JOs from leaking into Trucking Dashboard
+      const truckingJOs = rawJOs.filter((jo: any) => jo.wo_item?.sbu_type === 'TRUCKING');
+      
       // [AI] Include rejected JOs even if they have no driver/fleet — they still need to be visible
-      const baseJOs = Array.from(new Map(rawJOs.map(jo => [jo.id, jo])).values())
+      const baseJOs = Array.from(new Map(truckingJOs.map(jo => [jo.id, jo])).values())
         .filter(jo => jo.driver_id && jo.fleet_id || ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'].includes(jo.status?.toUpperCase()));
 
       if (baseJOs.length > 0) {

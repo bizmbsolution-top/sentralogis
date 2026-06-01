@@ -22,6 +22,7 @@ export default function TenantOrganizationPage() {
   const { user, profile } = useAuth();
   const [staff, setStaff] = useState<any[]>([]);
   const [sbus, setSbus] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'hq' | 'sbu' | 'manage_sbu'>('all');
@@ -49,11 +50,12 @@ export default function TenantOrganizationPage() {
       }
 
       // 2. Fetch Raw Data (Decoupled to prevent join failures)
-      const [staffRes, sbuRes, roleRes, profileRes] = await Promise.all([
+      const [staffRes, sbuRes, roleRes, profileRes, whRes] = await Promise.all([
         supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
         supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
         supabase.from('tenant_roles').select('*'),
-        supabase.from('profiles').select('id, email, full_name, role')
+        supabase.from('profiles').select('id, email, full_name, role'),
+        supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id)
       ]);
 
       if (staffRes.error) throw staffRes.error;
@@ -62,16 +64,19 @@ export default function TenantOrganizationPage() {
       const sbuMap = (sbuRes.data || []).reduce((acc: any, s: any) => ({ ...acc, [s.id]: s }), {});
       const roleMap = (roleRes.data || []).reduce((acc: any, r: any) => ({ ...acc, [r.role_code]: r }), {});
       const profileMap = (profileRes.data || []).reduce((acc: any, p: any) => ({ ...acc, [p.id]: p }), {});
+      const whMap = (whRes.data || []).reduce((acc: any, w: any) => ({ ...acc, [w.id]: w }), {});
 
       const enrichedStaff = (staffRes.data || []).map((s: any) => ({
         ...s,
         tenant_roles: roleMap[s.role_code] || { role_name: s.role_code },
         tenant_sbus: sbuMap[s.sbu_id] || null,
-        profiles: profileMap[s.user_id] || { email: 'N/A', full_name: s.full_name }
+        profiles: profileMap[s.user_id] || { email: 'N/A', full_name: s.full_name },
+        warehouse: s.warehouse_id ? whMap[s.warehouse_id] : null
       }));
 
       setStaff(enrichedStaff);
       setSbus(sbuRes.data || []);
+      setWarehouses(whRes.data || []);
       
       console.log('[OrganizationPage] Loaded:', enrichedStaff.length, 'staff members');
     } catch (err: any) {
@@ -227,9 +232,14 @@ export default function TenantOrganizationPage() {
                     </TableCell>
                     <TableCell>
                       {s.tenant_sbus ? (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5">
                            <span className="text-[10px] font-black text-blue-600 uppercase italic tracking-tighter">{s.tenant_sbus.sbu_name}</span>
                            <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest">{s.tenant_sbus.sbu_code}</span>
+                           {s.warehouse && (
+                             <span className="inline-block mt-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[8px] font-black uppercase tracking-widest rounded border border-indigo-100 max-w-max">
+                               📍 WH: {s.warehouse.code}
+                             </span>
+                           )}
                         </div>
                       ) : (
                         <span className="text-[10px] font-black text-slate-600 uppercase italic tracking-widest">Central HQ</span>
@@ -280,6 +290,7 @@ export default function TenantOrganizationPage() {
         onClose={() => setIsAddModalOpen(false)} 
         onSuccess={fetchData}
         sbus={sbus}
+        warehouses={warehouses}
       />
 
       {selectedStaff && (
@@ -290,6 +301,7 @@ export default function TenantOrganizationPage() {
             onClose={() => { setIsEditModalOpen(false); setSelectedStaff(null); }}
             onSuccess={fetchData}
             sbus={sbus}
+            warehouses={warehouses}
           />
           <ResetPasswordModal
             isOpen={isResetModalOpen}

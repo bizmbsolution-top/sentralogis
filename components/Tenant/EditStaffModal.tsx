@@ -6,12 +6,13 @@ import { X, Shield, RefreshCcw, Power, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
-export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus }: any) {
+export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus, warehouses }: any) {
   const [loading, setLoading] = useState(false);
   const [isActive, setIsActive] = useState(staff.is_active);
   const [fullName, setFullName] = useState(staff.full_name);
   const [roleCode, setRoleCode] = useState(staff.role_code);
   const [sbuId, setSbuId] = useState(staff.sbu_id || '');
+  const [warehouseId, setWarehouseId] = useState(staff.warehouse_id || '');
 
   if (!isOpen) return null;
 
@@ -25,6 +26,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
           full_name: fullName,
           role_code: roleCode,
           sbu_id: sbuId || null,
+          warehouse_id: warehouseId || null,
           is_active: isActive,
           updated_at: new Date().toISOString()
         })
@@ -90,7 +92,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Allocation</label>
                     <select 
                       value={sbuId}
-                      onChange={e => setSbuId(e.target.value)}
+                      onChange={e => { setSbuId(e.target.value); setWarehouseId(''); }}
                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
                     >
                        <option value="">Central HQ</option>
@@ -110,6 +112,22 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
                     />
                  </div>
               </div>
+
+              {sbuId && warehouses?.filter((w: any) => w.sbu_id === sbuId).length > 0 && (
+                <div className="space-y-1.5">
+                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Warehouse Assignment</label>
+                   <select 
+                     value={warehouseId}
+                     onChange={e => setWarehouseId(e.target.value)}
+                     className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                   >
+                     <option value="">-- All SBU Warehouses --</option>
+                     {warehouses.filter((w: any) => w.sbu_id === sbuId).map((w: any) => (
+                       <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                     ))}
+                   </select>
+                </div>
+              )}
 
               <button 
                 type="button"

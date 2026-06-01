@@ -39,6 +39,7 @@ VALUES
 
 -- ============================================
 -- 3. ZONES
+-- Added dummy area and zone for testing uncategorized data
 -- ============================================
 DO $$
 DECLARE
@@ -65,6 +66,46 @@ BEGIN
     (gen_random_uuid(), v_cold_f_id, v_tenant_id, 'CFZ-A',   'Cold Freezer A',   'ACTIVE', v_user_id),
     (gen_random_uuid(), v_cold_f_id, v_tenant_id, 'CFZ-B',   'Cold Freezer B',   'ACTIVE', v_user_id),
     (gen_random_uuid(), v_cold_c_id, v_tenant_id, 'CHL-A',   'Cold Chiller A',   'ACTIVE', v_user_id);
+END $$;
+
+-- ============================================
+-- 5. DUMMY AREA (Uncategorized)
+-- ============================================
+INSERT INTO md_warehouse_areas (id, warehouse_id, tenant_id, area_code, area_name, area_type, area_category, storage_type, total_capacity, uom_capacity, temperature_min, temperature_max, humidity_max, is_active, created_by)
+VALUES (gen_random_uuid(), '9f82b2f9-d6ea-4eac-91d0-332b0fd07559', '78846049-fb63-45a9-93da-3af3fea5b587',
+        'AREA-UNCAT', 'Uncategorized Area', 'UNCAT', 'MISC', 'MISC_STORAGE', 200, 'SQM', NULL, NULL, NULL, true, '191edf81-400c-4551-8c19-2bcb8a511835');
+
+-- ============================================
+-- 6. DUMMY ZONE (Uncategorized)
+-- ============================================
+DO $$
+DECLARE
+  v_warehouse_id UUID := '9f82b2f9-d6ea-4eac-91d0-332b0fd07559';
+  v_tenant_id    UUID := '78846049-fb63-45a9-93da-3af3fea5b587';
+  v_user_id      UUID := '191edf81-400c-4551-8c19-2bcb8a511835';
+  v_uncat_area   UUID;
+BEGIN
+  SELECT id INTO v_uncat_area FROM md_warehouse_areas WHERE area_code = 'AREA-UNCAT';
+  INSERT INTO md_warehouse_zones (id, area_id, tenant_id, zone_code, zone_name, zone_status, created_by)
+  VALUES (gen_random_uuid(), v_uncat_area, v_tenant_id, 'UNCAT-Z1', 'Uncategorized Zone 1', 'ACTIVE', v_user_id);
+END $$;
+
+-- ============================================
+-- 7. DUMMY LOCATIONS (Uncategorized)
+-- ============================================
+DO $$
+DECLARE
+  v_wh_id UUID := '9f82b2f9-d6ea-4eac-91d0-332b0fd07559';
+  v_ten_id UUID := '78846049-fb63-45a9-93da-3af3fea5b587';
+  v_zone_id UUID;
+BEGIN
+  SELECT id INTO v_zone_id FROM md_warehouse_zones WHERE zone_code = 'UNCAT-Z1';
+  INSERT INTO md_warehouse_locations (id, warehouse_id, tenant_id, code, zone_id,
+    bin_type, aisle, bay, level, position, location_type,
+    max_weight_kg, max_volume_m3, bin_status, is_active)
+  VALUES (gen_random_uuid(), v_wh_id, v_ten_id, 'UNCAT-Z1-LOC-001', v_zone_id,
+    'UNCAT', 'A', '01', '0', 'A',
+    'STORAGE', 500, 5.0, 'EMPTY', true);
 END $$;
 
 -- ============================================
