@@ -12,6 +12,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { fetchTenantById } from '@/lib/actions/tenantActions';
 
 export default function TenantProfilePage() {
   const { user, profile } = useAuth();
@@ -26,8 +27,8 @@ export default function TenantProfilePage() {
 
   useEffect(() => {
     if (profile?.tenant_id) {
-      supabase.from('tenants').select('logo_url, name').eq('id', profile.tenant_id).single()
-        .then(({data}) => {
+      fetchTenantById(profile.tenant_id)
+        .then((data) => {
           if (data?.logo_url) setLogoUrl(data.logo_url);
           if (data?.name) setTenantName(data.name);
         });

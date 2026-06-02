@@ -416,3 +416,18 @@ export async function grantTokenToTenant(tenantCode: string, amount: number, not
     return { success: false, message: error.message || "Gagal memproses transaksi" };
   }
 }
+
+export async function fetchTenantById(tenantId: string): Promise<any> {
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from('tenants')
+    .select('*')
+    .eq('id', tenantId)
+    .single();
+
+  if (error) {
+    console.error('[FETCH_TENANT_BY_ID] Error:', error.message);
+    return null;
+  }
+  return data;
+}

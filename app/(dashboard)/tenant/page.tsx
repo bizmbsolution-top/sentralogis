@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { fetchTenantById } from '@/lib/actions/tenantActions';
 import { 
   Coins, Lock, Loader2, 
   ShieldCheck, Mail, Info, LayoutGrid,
@@ -28,10 +29,9 @@ export default function TenantDashboard() {
     if (!user) return;
     setLoading(true);
     try {
-      // [AI] Use profile.tenant_id to query tenants by primary key (id), not user_id column
       const tid = profile?.tenant_id;
       if (tid) {
-        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid).single();
+        const tData = await fetchTenantById(tid);
         setTenant(tData);
       }
       setEditName(profile?.full_name || '');

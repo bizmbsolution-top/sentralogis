@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
 
 import { getTokenPrice } from '@/lib/actions/tokenPriceActions';
+import { fetchTenantById } from '@/lib/actions/tenantActions';
 
 const DEFAULT_PRICE_PER_TOKEN = 1000;
 
@@ -47,13 +48,13 @@ export default function TenantTopupPage() {
     try {
       const tid = profile?.tenant_id;
       if (tid) {
-        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid);
-        if (tData && tData.length > 0) {
-          setTenant(tData[0]);
+        const tData = await fetchTenantById(tid);
+        if (tData) {
+          setTenant(tData);
           const { data: rData } = await supabase
             .from('topup_requests')
             .select('*')
-            .eq('tenant_code', tData[0].tenant_code)
+            .eq('tenant_code', tData.tenant_code)
             .eq('status', 'pending')
             .order('created_at', { ascending: false });
           setRequests(rData || []);

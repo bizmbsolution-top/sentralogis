@@ -17,6 +17,7 @@ import EditStaffModal from '@/components/Tenant/EditStaffModal';
 import ResetPasswordModal from '@/components/Tenant/ResetPasswordModal';
 import SBUManager from '@/components/Tenant/SBUManager';
 import toast, { Toaster } from 'react-hot-toast';
+import { fetchTenantById } from '@/lib/actions/tenantActions';
 
 export default function TenantOrganizationPage() {
   const { user, profile } = useAuth();
@@ -40,10 +41,9 @@ export default function TenantOrganizationPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // [AI] Use profile.tenant_id to query tenants by primary key (id), not user_id column
       const tid = profile?.tenant_id;
       if (!tid) { setLoading(false); return; }
-      const { data: tenant, error: tError } = await supabase.from('tenants').select('id, name, tenant_code').eq('id', tid).single();
+      const tenant = await fetchTenantById(tid);
       
       if (!tenant) {
         console.warn('[OrganizationPage] No tenant found');

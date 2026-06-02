@@ -16,6 +16,7 @@ import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@
 import toast, { Toaster } from 'react-hot-toast';
 
 import { fetchTenantHistory, getLedgerStartingBalance } from '@/app/(dashboard)/owner/actions';
+import { fetchTenantById } from '@/lib/actions/tenantActions';
 
 export default function TokenStatementPage() {
   const { user, profile } = useAuth();
@@ -41,7 +42,7 @@ export default function TokenStatementPage() {
     try {
       const tid = profile?.tenant_id;
       if (tid) {
-        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid).single();
+        const tData = await fetchTenantById(tid);
         setTenant(tData);
         if (tData) {
           await generateStatement(tData.tenant_code);
