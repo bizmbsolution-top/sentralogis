@@ -135,30 +135,28 @@ export default function HQDriversPage() {
     if (!tenantId) return 'DRI/001';
     
     try {
-      console.log('Generating driver code for tenant:', tenantId);
+      // [AI] Query ALL tenants' codes to avoid global unique constraint collision
       const { data, error } = await supabase
         .from('md_drivers')
         .select('driver_code')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .like('driver_code', 'DRI/%');
       
       if (error) {
-        console.error('Error fetching last driver code:', error);
+        console.error('Error fetching driver codes:', error);
         return `DRI/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
       }
       
       if (!data || data.length === 0) return 'DRI/001';
       
-      const lastCode = data[0].driver_code;
-      if (!lastCode || !lastCode.includes('/')) return 'DRI/001';
+      const numbers = data
+        .map((r) => {
+          const parts = r.driver_code.split('/');
+          return parts.length > 1 ? parseInt(parts[parts.length - 1]) : NaN;
+        })
+        .filter((n) => !isNaN(n));
       
-      const parts = lastCode.split('/');
-      const lastNumber = parseInt(parts[parts.length - 1]);
-      
-      if (isNaN(lastNumber)) return 'DRI/001';
-      
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `DRI/${newNumber}`;
     } catch (err) {
       console.error('Crash in generateDriverCode:', err);

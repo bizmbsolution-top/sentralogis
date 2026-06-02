@@ -104,21 +104,19 @@ export default function DriversPage() {
   }, [tenantId, fetchData, loadingAuth]);
 
   const generateDriverCode = async () => {
-    if (!tenantId) return 'DRI/001';
-    
+    // [AI] Query ALL tenants' codes to avoid global unique constraint collision
     try {
       const { data } = await supabase
         .from('md_drivers')
         .select('driver_code')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (!data || data.length === 0) return 'DRI/001';
-      
-      const lastCode = data[0].driver_code;
-      const lastNumber = parseInt(lastCode.split('/')[1]);
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+        .like('driver_code', 'DRI/%');
+
+      const numbers = (data || [])
+        .map((r) => parseInt(r.driver_code.split('/')[1]))
+        .filter((n) => !isNaN(n));
+
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `DRI/${newNumber}`;
     } catch (err) {
       return `DRI/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;

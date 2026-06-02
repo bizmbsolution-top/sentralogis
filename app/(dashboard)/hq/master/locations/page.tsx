@@ -93,17 +93,12 @@ export default function HQLocationsPage() {
   const generateLocationCode = async () => {
     if (!tenantId) return 'LOC/001';
 
-    console.log('[Locations] Generating code for tenant:', tenantId);
     try {
-      console.log('[Locations] Querying last code...');
+      // [AI] Query ALL tenants' codes to avoid global unique constraint collision
       const { data, error } = await supabase
         .from('md_locations')
         .select('location_code')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      console.log('[Locations] Query result:', { data, error });
+        .like('location_code', '%/LOC/%');
       
       if (error) {
         console.error('[Locations] Error generating code:', error);
@@ -112,12 +107,15 @@ export default function HQLocationsPage() {
       
       if (!data || data.length === 0) return `${tenantCode}/LOC/001`;
       
-      const lastCode = data[0].location_code;
-      const parts = lastCode.split('/');
-      const lastNumber = parseInt(parts[parts.length - 1]);
-      if (isNaN(lastNumber)) return `${tenantCode}/LOC/001`;
+      const numbers = data
+        .map((r) => {
+          const parts = r.location_code.split('/');
+          return parts.length > 0 ? parseInt(parts[parts.length - 1]) : NaN;
+        })
+        .filter((n) => !isNaN(n));
       
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `${tenantCode}/LOC/${newNumber}`;
     } catch (err) {
       console.error('[Locations] Critical error in generateLocationCode:', err);

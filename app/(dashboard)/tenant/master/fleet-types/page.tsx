@@ -75,20 +75,20 @@ export default function FleetTypesPage() {
     if (!tenantId) return 'FTP/001';
     
     try {
+      // [AI] Query ALL tenants' codes (no tenant filter) to avoid global unique constraint collision
       const { data, error } = await supabase
         .from('md_fleet_types')
         .select('type_code')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .like('type_code', 'FTP/%');
       
       if (error || !data || data.length === 0) return 'FTP/001';
       
-      const lastCode = data[0].type_code;
-      const lastNumber = parseInt(lastCode.split('/')[1]);
-      if (isNaN(lastNumber)) return 'FTP/001';
+      const numbers = data
+        .map((r) => parseInt(r.type_code.split('/')[1]))
+        .filter((n) => !isNaN(n));
       
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `FTP/${newNumber}`;
     } catch (err) {
       return `FTP/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
@@ -120,19 +120,34 @@ export default function FleetTypesPage() {
         toast.success('Jenis armada berhasil diupdate');
       } else {
         // Insert
-        const code = await generateTypeCode();
-        const { error } = await supabase
-          .from('md_fleet_types')
-          .insert({
-            tenant_id: tenantId,
-            type_code: code,
-            type_name: formData.type_name,
-            capacity_ton: formData.capacity_ton,
-            capacity_cbm: formData.capacity_cbm,
-            is_active: formData.is_active,
-          });
+        // [AI] Retry loop: if insert hits a unique constraint on type_code, regenerate and retry
+        let insertError: any = null;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const code = await generateTypeCode();
+          const { error } = await supabase
+            .from('md_fleet_types')
+            .insert({
+              tenant_id: tenantId,
+              type_code: code,
+              type_name: formData.type_name,
+              capacity_ton: formData.capacity_ton,
+              capacity_cbm: formData.capacity_cbm,
+              is_active: formData.is_active,
+            });
 
-        if (error) throw error;
+          if (!error) {
+            insertError = null;
+            break;
+          }
+          // 23505 = unique_violation in PostgreSQL
+          if (error.code !== '23505') {
+            insertError = error;
+            break;
+          }
+          insertError = error;
+        }
+
+        if (insertError) throw insertError;
         toast.success('Jenis armada berhasil ditambahkan');
       }
 

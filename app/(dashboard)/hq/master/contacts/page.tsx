@@ -162,32 +162,60 @@ export default function HQContactsPage() {
     else if (formData.is_broker) prefix = 'BRO';
 
     try {
+      // [AI] Query ALL tenants' codes to avoid global unique constraint collision
       const { data, error } = await supabase
         .from('md_entities')
         .select('entity_code')
-        .eq('tenant_id', tenantId)
-        .ilike('entity_code', `${prefix}/%`)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .ilike('entity_code', `${prefix}/%`);
       
       if (error) throw error;
       
       if (!data || data.length === 0) return `${prefix}/001`;
       
-      const lastCode = data[0].entity_code;
-      const parts = lastCode.split('/');
-      if (parts.length < 2) return `${prefix}/001`;
+      const numbers = data
+        .map((r) => {
+          const parts = r.entity_code.split('/');
+          return parts.length > 1 ? parseInt(parts[1]) : NaN;
+        })
+        .filter((n) => !isNaN(n));
       
-      const lastNumber = parseInt(parts[1]);
-      if (isNaN(lastNumber)) return `${prefix}/001`;
-      
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `${prefix}/${newNumber}`;
     } catch (err) {
       console.error('[HQContacts] generateEntityCode Error:', err);
-      // Fail-safe random code to prevent hanging
       return `${prefix}/RND-${Math.floor(Math.random() * 10000)}`;
     }
+  };
+
+  // [AI] Defensive insert: if PGRST204 (column not found), strip optional fields and retry
+  const safeUpsert = async (table: string, payload: Record<string, any>, options: { onConflict?: string } = {}) => {
+    const OPTIONAL_COLUMNS = ['payment_terms', 'created_by', 'updated_at', 'parent_id', 'logo_url'];
+    
+    let attemptPayload = { ...payload };
+    
+    for (let attempt = 0; attempt <= OPTIONAL_COLUMNS.length; attempt++) {
+      const { data, error } = await supabase
+        .from(table)
+        .upsert(attemptPayload, { onConflict: options.onConflict })
+        .select('id');
+
+      if (!error) return { data, error: null };
+
+      // PGRST204 = column not found in schema cache
+      if (error.code === 'PGRST204' && attempt < OPTIONAL_COLUMNS.length) {
+        const missingCol = OPTIONAL_COLUMNS[attempt];
+        if (missingCol in attemptPayload) {
+          const { [missingCol]: _, ...rest } = attemptPayload;
+          attemptPayload = rest;
+          continue;
+        }
+      }
+
+      return { data: null, error };
+    }
+
+    return { data: null, error: new Error('Failed after all retries') };
   };
 
   const handleSubmit = async () => {
@@ -233,7 +261,7 @@ export default function HQContactsPage() {
         billing_longitude: Number(formData.billing_longitude) || 0,
         billing_directions: formData.billing_directions,
         billing_method: formData.billing_method,
-        payment_terms: formData.payment_terms,
+        payment_terms: formData.payment_terms || undefined,
         notes: formData.notes,
         is_active: formData.is_active,
         parent_id: formData.parent_id || null,

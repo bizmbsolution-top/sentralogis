@@ -195,7 +195,7 @@ export default function HQReportingPage() {
       console.error("[AI] Sync error: ", err);
       toast.error("Sync Failed");
     } finally { setLoading(false); }
-  }, [startDate, endDate, sbuFilter, statusFilter, customerFilter, vendorFilter, truckTypeFilter, routeFilter, transporterFilter, clearanceTypeFilter]);
+  }, [tenantId, startDate, endDate, sbuFilter, statusFilter, customerFilter, vendorFilter, truckTypeFilter, routeFilter, transporterFilter, clearanceTypeFilter]);
 
   const handleExportExcel = async () => {
     if (data.length === 0) return toast.error("No data");

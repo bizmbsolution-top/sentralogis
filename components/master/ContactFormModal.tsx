@@ -74,26 +74,29 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId }: Conta
   }, [tenantId]);
 
   const generateEntityCode = async () => {
+    // [AI] Query ALL tenants' codes to avoid global unique constraint collision
     let prefix = 'ENT';
     if (formData.is_customer) prefix = 'CUS';
     else if (formData.is_supplier) prefix = 'SPP';
     else if (formData.is_vendor) prefix = 'VND';
     else if (formData.is_broker) prefix = 'BRO';
 
-    const { data } = await supabase
-      .from('md_entities')
-      .select('entity_code')
-      .eq('tenant_id', tenantId)
-      .ilike('entity_code', `${prefix}/%`)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
-    if (!data || data.length === 0) return `${prefix}/001`;
-    const lastCode = data[0].entity_code;
-    const parts = lastCode.split('/');
-    const lastNumber = parts.length > 1 ? parseInt(parts[1]) : 0;
-    const newNumber = (isNaN(lastNumber) ? 1 : lastNumber + 1).toString().padStart(3, '0');
-    return `${prefix}/${newNumber}`;
+    try {
+      const { data } = await supabase
+        .from('md_entities')
+        .select('entity_code')
+        .ilike('entity_code', `${prefix}/%`);
+
+      const numbers = (data || [])
+        .map((r) => parseInt(r.entity_code.split('/')[1]))
+        .filter((n) => !isNaN(n));
+
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
+      return `${prefix}/${newNumber}`;
+    } catch (err) {
+      return `${prefix}/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    }
   };
 
   const handleSubmit = async () => {

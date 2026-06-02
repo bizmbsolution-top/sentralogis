@@ -220,74 +220,79 @@ export default function HQOpsDashboardPage() {
       const localSlaData: any[] = [];
       const localBreaches: any[] = [];
 
-      // Jika ada data aktual, hitung persentase SLA secara real. Jika kosong (tenant baru), tampilkan dummy proporsional.
-      const baseWO = totalWO > 0 ? totalWO : 120;
+      // [AI] Only show real data — no mock/hardcoded values for empty tenants
+      if (totalWO === 0) {
+        // Empty state: all SLA at 0%
+        for (let i = 1; i <= 6; i++) {
+          localSlaData.push({
+            sla_stage: `SLA ${i}`,
+            compliance_pct: 0,
+            total_count: 0,
+            pass_count: 0,
+            fail_count: 0
+          });
+        }
+      } else {
+        // SLA 1: WO Draft -> Submit
+        const passSla1 = workOrders.filter(wo => wo.status !== 'DRAFT').length;
+        localSlaData.push({
+          sla_stage: 'SLA 1',
+          compliance_pct: Math.round((passSla1 / totalWO) * 100),
+          total_count: totalWO,
+          pass_count: passSla1,
+          fail_count: Math.max(0, totalWO - passSla1)
+        });
 
-      // SLA 1: WO Draft -> Submit
-      const passSla1 = totalWO > 0 ? workOrders.filter(wo => wo.status !== 'DRAFT').length : 114;
-      const failSla1 = Math.max(0, baseWO - passSla1);
-      localSlaData.push({
-        sla_stage: 'SLA 1',
-        compliance_pct: Math.round((passSla1 / baseWO) * 100),
-        total_count: baseWO,
-        pass_count: passSla1,
-        fail_count: failSla1
-      });
+        // SLA 2: Submit -> SBU Assigned
+        const passSla2 = workOrders.filter(wo => !['DRAFT','PENDING_APPROVAL'].includes(wo.status)).length;
+        localSlaData.push({
+          sla_stage: 'SLA 2',
+          compliance_pct: Math.round((passSla2 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla2,
+          fail_count: Math.max(0, totalWO - passSla2)
+        });
 
-      // SLA 2: Submit -> SBU Assigned
-      const passSla2 = totalWO > 0 ? workOrders.filter(wo => !['DRAFT','PENDING_APPROVAL'].includes(wo.status)).length : 97;
-      const failSla2 = Math.max(0, (totalWO > 0 ? totalWO : 110) - passSla2);
-      localSlaData.push({
-        sla_stage: 'SLA 2',
-        compliance_pct: Math.round((passSla2 / (totalWO > 0 ? totalWO : 110)) * 100) || 0,
-        total_count: totalWO > 0 ? totalWO : 110,
-        pass_count: passSla2,
-        fail_count: failSla2
-      });
+        // SLA 3: Done -> Ready Billing
+        const passSla3 = workOrders.filter(wo => ['COMPLETED','PAID'].includes(wo.status)).length;
+        localSlaData.push({
+          sla_stage: 'SLA 3',
+          compliance_pct: Math.round((passSla3 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla3,
+          fail_count: Math.max(0, totalWO - passSla3)
+        });
 
-      // SLA 3: Done -> Ready Billing
-      const passSla3 = totalWO > 0 ? workOrders.filter(wo => ['COMPLETED','PAID'].includes(wo.status)).length : 74;
-      const failSla3 = Math.max(0, (totalWO > 0 ? totalWO : 80) - passSla3);
-      localSlaData.push({
-        sla_stage: 'SLA 3',
-        compliance_pct: Math.round((passSla3 / (totalWO > 0 ? totalWO : 80)) * 100) || 0,
-        total_count: totalWO > 0 ? totalWO : 80,
-        pass_count: passSla3,
-        fail_count: failSla3
-      });
+        // SLA 4: Ready -> Invoiced
+        const passSla4 = workOrders.filter(wo => wo.status === 'PAID').length;
+        localSlaData.push({
+          sla_stage: 'SLA 4',
+          compliance_pct: Math.round((passSla4 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla4,
+          fail_count: Math.max(0, totalWO - passSla4)
+        });
 
-      // SLA 4: Ready -> Invoiced
-      const passSla4 = totalWO > 0 ? workOrders.filter(wo => wo.status === 'PAID').length : 45;
-      const failSla4 = Math.max(0, (totalWO > 0 ? totalWO : 60) - passSla4);
-      localSlaData.push({
-        sla_stage: 'SLA 4',
-        compliance_pct: Math.round((passSla4 / (totalWO > 0 ? totalWO : 60)) * 100) || 0,
-        total_count: totalWO > 0 ? totalWO : 60,
-        pass_count: passSla4,
-        fail_count: failSla4
-      });
+        // SLA 5: Accepted -> Paid
+        const passSla5 = workOrders.filter(wo => wo.status === 'PAID').length;
+        localSlaData.push({
+          sla_stage: 'SLA 5',
+          compliance_pct: Math.round((passSla5 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla5,
+          fail_count: Math.max(0, totalWO - passSla5)
+        });
 
-      // SLA 5: Accepted -> Paid
-      const passSla5 = totalWO > 0 ? workOrders.filter(wo => wo.status === 'PAID').length : 33;
-      const failSla5 = Math.max(0, (totalWO > 0 ? totalWO : 40) - passSla5);
-      localSlaData.push({
-        sla_stage: 'SLA 5',
-        compliance_pct: Math.round((passSla5 / (totalWO > 0 ? totalWO : 40)) * 100) || 0,
-        total_count: totalWO > 0 ? totalWO : 40,
-        pass_count: passSla5,
-        fail_count: failSla5
-      });
-
-      // SLA 6: Vendor Invoice -> Paid
-      const passSla6 = totalWO > 0 ? workOrders.filter(wo => wo.status === 'PAID').length : 29;
-      const failSla6 = Math.max(0, (totalWO > 0 ? totalWO : 30) - passSla6);
-      localSlaData.push({
-        sla_stage: 'SLA 6',
-        compliance_pct: Math.round((passSla6 / (totalWO > 0 ? totalWO : 30)) * 100) || 0,
-        total_count: totalWO > 0 ? totalWO : 30,
-        pass_count: passSla6,
-        fail_count: failSla6
-      });
+        // SLA 6: Vendor Invoice -> Paid
+        const passSla6 = workOrders.filter(wo => wo.status === 'PAID').length;
+        localSlaData.push({
+          sla_stage: 'SLA 6',
+          compliance_pct: Math.round((passSla6 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla6,
+          fail_count: Math.max(0, totalWO - passSla6)
+        });
+      }
 
       setSlaData(localSlaData);
 
@@ -307,24 +312,9 @@ export default function HQOpsDashboardPage() {
         }
       });
 
-      // If no actual breaches found, populate realistic mock breaches if totalWO is 0
+      // If no actual breaches found, show empty state (no mock data)
       if (localBreaches.length === 0 && totalWO === 0) {
-        localBreaches.push({
-          stage: 'SLA 4',
-          wo_number: 'WO-HALU-0012',
-          overdue_minutes: 1440,
-          customer_name: 'PT Contoh Makmur',
-          details: 'Invoice tertunda lebih dari 1 hari',
-          breach_type: 'SLA 4'
-        });
-        localBreaches.push({
-          stage: 'SLA 2',
-          wo_number: 'WO-HALU-0015',
-          overdue_minutes: 120,
-          customer_name: 'CV Berkah',
-          details: 'SBU belum di-assign melebihi 60 menit',
-          breach_type: 'SLA 2'
-        });
+        // No breaches — all clear
       }
 
       setBreaches(localBreaches.sort((a, b) => b.overdue_minutes - a.overdue_minutes).slice(0, 10));
@@ -382,23 +372,32 @@ export default function HQOpsDashboardPage() {
         setWoAlerts(alerts.slice(0, 10));
       }
 
-      // 4. AR due alerts (customer invoices)
+      // 4. AR due alerts (customer invoices) — scoped to tenant via work_orders join
       const { data: arInvoices } = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_billing, status, due_date, wo_id')
+        .select(`
+          id, invoice_number, total_billing, status, due_date, wo_id,
+          work_orders!wo_id(tenant_id)
+        `)
         .in('status', ['sent', 'accepted'])
         .order('due_date', { ascending: true })
-        .limit(10);
+        .limit(50);
 
-      if (arInvoices && arInvoices.length > 0) {
-        const woIds = arInvoices.map(i => i.wo_id).filter(Boolean);
+      // Filter to only this tenant's invoices
+      const tenantArInvoices = (arInvoices || []).filter(
+        (inv: any) => inv.work_orders?.tenant_id === profile.tenant_id
+      ).slice(0, 10);
+
+      if (tenantArInvoices.length > 0) {
+        const woIds = tenantArInvoices.map(i => i.wo_id).filter(Boolean);
         const { data: workOrders } = await supabase
           .from('work_orders')
           .select('id, customer_id')
+          .eq('tenant_id', profile.tenant_id)
           .in('id', woIds);
 
         const woMap = new Map((workOrders || []).map(wo => [wo.id, wo.customer_id]));
-        const arResult = arInvoices.map(inv => ({
+        const arResult = tenantArInvoices.map(inv => ({
           ...inv,
           wo: woMap.has(inv.wo_id) ? { customer_id: woMap.get(inv.wo_id) } : null,
         }));
@@ -425,10 +424,11 @@ export default function HQOpsDashboardPage() {
         setArDueAlerts(arAlerts);
       }
 
-      // 5. AP due alerts (vendor invoices)
+      // 5. AP due alerts (vendor invoices) — scoped to tenant
       const { data: apInvoices } = await supabase
         .from('vendor_invoices')
         .select('id, invoice_number, invoice_amount, status, received_at, vendor_id')
+        .eq('tenant_id', profile.tenant_id)
         .in('status', ['verified', 'submitted'])
         .order('received_at', { ascending: true })
         .limit(10);
@@ -438,6 +438,7 @@ export default function HQOpsDashboardPage() {
         const { data: vendors } = await supabase
           .from('md_entities')
           .select('id, name')
+          .eq('tenant_id', profile.tenant_id)
           .in('id', vendorIds);
 
         const vendorMap = new Map((vendors || []).map(v => [v.id, v.name]));

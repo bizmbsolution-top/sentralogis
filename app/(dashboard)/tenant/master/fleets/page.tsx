@@ -115,21 +115,19 @@ export default function FleetsPage() {
   }, [tenantId, fetchData, loadingAuth]);
 
   const generateFleetCode = async () => {
-    if (!tenantId) return 'FLT/001';
-    
+    // [AI] Query ALL tenants' codes to avoid global unique constraint collision
     try {
       const { data } = await supabase
         .from('md_fleets')
         .select('fleet_code')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (!data || data.length === 0) return 'FLT/001';
-      
-      const lastCode = data[0].fleet_code;
-      const lastNumber = parseInt(lastCode.split('/')[1]);
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
+        .like('fleet_code', 'FLT/%');
+
+      const numbers = (data || [])
+        .map((r) => parseInt(r.fleet_code.split('/')[1]))
+        .filter((n) => !isNaN(n));
+
+      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNumber = (maxNum + 1).toString().padStart(3, '0');
       return `FLT/${newNumber}`;
     } catch (err) {
       return `FLT/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
