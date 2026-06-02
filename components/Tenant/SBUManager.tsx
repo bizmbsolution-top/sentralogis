@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { 
   Building2, Plus, Box, Truck, 
   FileCheck, Globe, Loader2, Trash2, Power
@@ -20,6 +21,7 @@ const sbuTypes = [
 ];
 
 export default function SBUManager({ sbus, onUpdate }: any) {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSbu, setNewSbu] = useState({
@@ -32,17 +34,17 @@ export default function SBUManager({ sbus, onUpdate }: any) {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user?.id).single();
-      
+      const tid = profile?.tenant_id;
+      if (!tid) throw new Error('Tenant not found');
+
       const { error } = await supabase
         .from('tenant_sbus')
         .insert({
-          tenant_id: tenant?.id,
+          tenant_id: tid,
           sbu_type: newSbu.type,
           sbu_code: newSbu.code.toUpperCase(),
           sbu_name: newSbu.name,
-          created_by: user?.id
+          created_by: profile?.id
         });
 
       if (error) throw error;

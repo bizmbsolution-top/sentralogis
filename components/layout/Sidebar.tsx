@@ -520,6 +520,7 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
   const { profile, loading } = useAuth();
   const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Master Data']);
   const [tenantLogo, setTenantLogo] = useState('');
+  const [activeSbus, setActiveSbus] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (profile?.tenant_id) {
@@ -527,11 +528,44 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
         .then(({data, error}) => {
            if (!error && data?.logo_url) setTenantLogo(data.logo_url);
         });
+      // [AI] Fetch active SBU types for this tenant
+      supabase.from('tenant_sbus').select('sbu_type').eq('tenant_id', profile.tenant_id).eq('status', 'active')
+        .then(({data, error}) => {
+           if (!error && data) setActiveSbus(new Set(data.map((s: any) => s.sbu_type)));
+        });
     }
   }, [profile?.tenant_id]);
 
   const role = profile?.role || 'tenant_admin';
-  const menuItems = MENU_CONFIG[role] || MENU_CONFIG.tenant_admin;
+
+  // [AI] Filter menu items based on active SBU status
+  const filterBySbu = (items: MenuItem[]): MenuItem[] => {
+    // Only filter for tenant roles — HQ/owner/SBU/driver roles keep all menus
+    if (role !== 'tenant_superadmin' && role !== 'tenant_admin') return items;
+
+    return items.reduce<MenuItem[]>((acc, item) => {
+      // SBU Trucking → requires 'tr'
+      if (item.label === 'SBU Trucking' && !activeSbus.has('tr')) return acc;
+      // Warehouse / SBU Warehouse → requires 'wh'
+      if ((item.label === 'Warehouse' || item.label === 'SBU Warehouse') && !activeSbus.has('wh')) return acc;
+      // Forwarding → requires 'fwd'
+      if (item.label === 'Forwarding' && !activeSbus.has('fwd')) return acc;
+      // Clearance → requires 'ink'
+      if (item.label === 'Clearance' && !activeSbus.has('ink')) return acc;
+
+      // Recurse into submenu
+      if (item.submenu) {
+        const filteredSubs = filterBySbu(item.submenu);
+        if (filteredSubs.length === 0 && item.href === '#') return acc;
+        acc.push({ ...item, submenu: filteredSubs.length > 0 ? filteredSubs : undefined });
+      } else {
+        acc.push(item);
+      }
+      return acc;
+    }, []);
+  };
+
+  const menuItems = filterBySbu(MENU_CONFIG[role] || MENU_CONFIG.tenant_admin);
 
   const toggleSubmenu = (label: string) => {
     setOpenSubmenus(prev => 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { SBU_MAP, type SBUType } from '@/lib/utils/sbuMapping';
 import { toast } from 'react-hot-toast';
 import { 
   Plus, Trash2, ArrowLeft, Loader2, Send, Save, Edit2, 
@@ -21,13 +22,7 @@ interface CreateWOFormProps {
   editId?: string | null;
 }
 
-const SBU_OPTIONS = [
-  { id: 'TRUCKING', label: 'Trucking', icon: Truck, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { id: 'WAREHOUSE', label: 'Warehouse', icon: Warehouse, color: 'text-amber-600', bg: 'bg-amber-50' },
-  { id: 'CLEARANCE', label: 'Clearance', icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { id: 'FORWARDING', label: 'Forwarding', icon: Globe, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-];
-
+// [AI] Dynamic SBU options — replaced hardcoded list with DB-driven data
 export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState<'draft' | 'submit' | null>(null);
@@ -35,6 +30,20 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const [activeSBUModal, setActiveSBUModal] = useState<string | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
+  
+  // [AI] Build SBU options from active tenant_sbus records
+  const SBU_OPTIONS = useMemo(() => {
+    return Object.entries(SBU_MAP)
+      .filter(([key]) => activeSbuTypes.has(key))
+      .map(([key, info]) => ({
+        id: info.woType,
+        sbuType: key,
+        label: info.label,
+        color: `text-${info.color}-600`,
+        bg: `bg-${info.color}-50`,
+      }));
+  }, [activeSbuTypes]);
   
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -48,6 +57,19 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
   const [woItems, setWoItems] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+
+  // [AI] Fetch active SBU types from tenant_sbus
+  useEffect(() => {
+    if (!profile?.tenant_id) return;
+    supabase
+      .from('tenant_sbus')
+      .select('sbu_type')
+      .eq('tenant_id', profile.tenant_id)
+      .eq('status', 'active')
+      .then(({ data }) => {
+        if (data) setActiveSbuTypes(new Set(data.map((s: any) => s.sbu_type)));
+      });
+  }, [profile?.tenant_id]);
 
   // Load data for editing
   useEffect(() => {
@@ -478,21 +500,28 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
             <div className="space-y-4">
                <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] ml-2 italic">Select SBU Modules</h3>
-               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {SBU_OPTIONS.map((sbu) => (
-                     <button 
-                       key={sbu.id}
-                       disabled={isReadOnly}
-                       onClick={() => !isReadOnly && ['TRUCKING', 'WAREHOUSE'].includes(sbu.id) && setActiveSBUModal(sbu.id)}
-                       className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 text-center ${['TRUCKING', 'WAREHOUSE'].includes(sbu.id) && !isReadOnly ? 'bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-600/5' : 'bg-slate-50 border-transparent opacity-50 cursor-not-allowed'}`}
-                     >
-                        <div className={`p-4 rounded-2xl ${sbu.bg} ${sbu.color} transition-transform group-hover:scale-110`}>
-                           <sbu.icon size={24} />
-                        </div>
-                        <span className="text-xs font-black uppercase tracking-widest text-slate-900">{sbu.label}</span>
-                     </button>
-                  ))}
-               </div>
+               {SBU_OPTIONS.length === 0 ? (
+                 <p className="text-xs text-slate-400 font-medium ml-2">No active SBU modules. Ask admin to activate SBUs first.</p>
+               ) : (
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {SBU_OPTIONS.map((sbu) => (
+                      <button 
+                        key={sbu.id}
+                        disabled={isReadOnly}
+                        onClick={() => !isReadOnly && setActiveSBUModal(sbu.id)}
+                        className={`group p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-3 text-center bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-600/5`}
+                      >
+                         <div className={`p-4 rounded-2xl ${sbu.bg} ${sbu.color} transition-transform group-hover:scale-110`}>
+                            {sbu.id === 'TRUCKING' && <Truck size={24} />}
+                            {sbu.id === 'WAREHOUSE' && <Warehouse size={24} />}
+                            {sbu.id === 'CLEARANCE' && <ShieldCheck size={24} />}
+                            {sbu.id === 'FORWARDING' && <Globe size={24} />}
+                         </div>
+                         <span className="text-xs font-black uppercase tracking-widest text-slate-900">{sbu.label}</span>
+                      </button>
+                    ))}
+                 </div>
+               )}
             </div>
 
             <div className="space-y-4">
