@@ -29,6 +29,17 @@ import usePlacesAutocomplete, {
   getLatLng,
 } from "use-places-autocomplete";
 
+const getPrefix = (code: string) => {
+  if (!code) return 'OTHER';
+  const parts = code.split('-');
+  if (parts.length > 1) {
+    return parts.slice(0, -1).join('-');
+  }
+  const match = code.match(/^([A-Za-z]+)/);
+  if (match) return match[1];
+  return 'OTHER';
+};
+
 function AddressAutocomplete({
   onAddressSelect,
 }: {
@@ -367,6 +378,33 @@ export default function MasterWarehousePage() {
     setShowLocModal(true);
   };
 
+  const openGroupModal = (prefix: string, locs: any[], whId: string, zoneId: string) => {
+    setActiveZoneForLoc({ whId, zoneId });
+    const sortedLocs = [...locs].sort((a, b) => a.code.localeCompare(b.code));
+    setBulkLocForm(sortedLocs);
+    setShowLocModal(true);
+  };
+
+  const handleDeleteLoc = async (id: string | number, code: string, index: number) => {
+    if (typeof id === "number" || !String(id).includes("-")) {
+      setBulkLocForm((prev) => prev.filter((_, i) => i !== index));
+      return;
+    }
+    if (!confirm(`Hapus kode penyimpanan ${code}?`)) return;
+    try {
+      const { error } = await supabase
+        .from("md_warehouse_locations")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      toast.success(`Lokasi ${code} dihapus.`);
+      setBulkLocForm((prev) => prev.filter((_, i) => i !== index));
+      fetchData();
+    } catch (err: any) {
+      toast.error("Gagal menghapus: " + err.message);
+    }
+  };
+
   const updateLocRow = (index: number, field: string, value: any) => {
     const newData = [...bulkLocForm];
     newData[index][field] = value;
@@ -413,26 +451,32 @@ export default function MasterWarehousePage() {
 
     setSubmitting(true);
     try {
-      const payloads = bulkLocForm.map((row) => ({
-        tenant_id: profile.tenant_id,
-        warehouse_id: activeZoneForLoc.whId,
-        area_id: activeZoneForLoc.zoneId, // area_id stores the zone ID mapping
-        code: row.code.toUpperCase(),
-        rack: row.rack.toUpperCase(),
-        shelf: row.shelf.toUpperCase(),
-        bin: row.bin.toUpperCase(),
-        location_type: row.location_type,
-        storage_method: row.storage_method,
-        length_m: row.length_m,
-        width_m: row.width_m,
-        height_m: row.height_m,
-        max_volume_m3: row.length_m * row.width_m * row.height_m,
-        max_weight_kg: row.max_weight_kg,
-      }));
+      const payloads = bulkLocForm.map((row) => {
+        const p: any = {
+          tenant_id: profile.tenant_id,
+          warehouse_id: activeZoneForLoc.whId,
+          area_id: activeZoneForLoc.zoneId,
+          code: row.code.toUpperCase(),
+          rack: row.rack.toUpperCase(),
+          shelf: row.shelf.toUpperCase(),
+          bin: row.bin.toUpperCase(),
+          location_type: row.location_type,
+          storage_method: row.storage_method,
+          length_m: row.length_m,
+          width_m: row.width_m,
+          height_m: row.height_m,
+          max_volume_m3: row.length_m * row.width_m * row.height_m,
+          max_weight_kg: row.max_weight_kg,
+        };
+        if (typeof row.id === "string" && row.id.includes("-")) {
+          p.id = row.id;
+        }
+        return p;
+      });
 
       const { error } = await supabase
         .from("md_warehouse_locations")
-        .insert(payloads);
+        .upsert(payloads);
       if (error) throw error;
 
       toast.success(
@@ -758,7 +802,7 @@ export default function MasterWarehousePage() {
                                     }}
                                     className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-600 hover:text-white rounded-lg text-sm font-bold transition-all flex items-center gap-1 opacity-0 group-hover/zone:opacity-100"
                                   >
-                                    <Plus className="w-3 h-3" /> Tambah Lokasi
+                                    <Plus className="w-3 h-3" /> Tambah Kelompok Baru
                                   </button>
                                   <button
                                     onClick={(e) => {
@@ -806,93 +850,96 @@ export default function MasterWarehousePage() {
                                     </div>
                                   ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                      {zoneLocs.map((loc) => {
-                                        const locCap = locationCapacities.find(
-                                          (c) => c.location_id === loc.id,
-                                        );
-                                        const maxVol =
-                                          locCap?.max_volume_m3 ||
-                                          loc.max_volume_m3 ||
-                                          0;
-                                        const usedVol =
-                                          locCap?.used_volume_m3 || 0;
-                                        const volPercent =
-                                          maxVol > 0
-                                            ? (usedVol / maxVol) * 100
-                                            : 0;
-                                        const maxWgt =
-                                          locCap?.max_weight_kg ||
-                                          loc.max_weight_kg ||
-                                          0;
-                                        const usedWgt =
-                                          locCap?.used_weight_kg || 0;
+                                      {Object.entries(
+                                        zoneLocs.reduce((acc, loc) => {
+                                          const prefix = getPrefix(loc.code);
+                                          if (!acc[prefix]) acc[prefix] = [];
+                                          acc[prefix].push(loc);
+                                          return acc;
+                                        }, {} as Record<string, any[]>)
+                                      ).map(([prefix, locs]) => {
+                                        const totalGroupMaxVol = locs.reduce((sum, l) => {
+                                          const cap = locationCapacities.find((c) => c.location_id === l.id);
+                                          return sum + (cap?.max_volume_m3 || l.max_volume_m3 || 0);
+                                        }, 0);
+                                        const totalGroupUsedVol = locs.reduce((sum, l) => {
+                                          const cap = locationCapacities.find((c) => c.location_id === l.id);
+                                          return sum + (cap?.used_volume_m3 || 0);
+                                        }, 0);
+                                        const volPercent = totalGroupMaxVol > 0 ? (totalGroupUsedVol / totalGroupMaxVol) * 100 : 0;
+                                        
+                                        const totalGroupMaxWgt = locs.reduce((sum, l) => {
+                                          const cap = locationCapacities.find((c) => c.location_id === l.id);
+                                          return sum + (cap?.max_weight_kg || l.max_weight_kg || 0);
+                                        }, 0);
+                                        const totalGroupUsedWgt = locs.reduce((sum, l) => {
+                                          const cap = locationCapacities.find((c) => c.location_id === l.id);
+                                          return sum + (cap?.used_weight_kg || 0);
+                                        }, 0);
 
                                         return (
                                           <div
-                                            key={loc.id}
-                                            className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col justify-between group/loc hover:border-indigo-300 transition-colors shadow-sm"
+                                            key={prefix}
+                                            onClick={() => openGroupModal(prefix, locs, wh.id, zone.id)}
+                                            className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col justify-between group/loc hover:border-indigo-400 hover:shadow-md transition-all shadow-sm cursor-pointer"
                                           >
-                                            <div className="flex justify-between items-start mb-2">
-                                              <div>
-                                                <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-sm font-black tracking-widest uppercase mb-1 border border-indigo-100">
-                                                  {loc.code}
-                                                </span>
-                                                <p className="text-xs font-bold text-slate-500 uppercase">
-                                                  R: {loc.rack || "-"} | S:{" "}
-                                                  {loc.shelf || "-"} | B:{" "}
-                                                  {loc.bin || "-"}
-                                                </p>
+                                            <div className="flex justify-between items-start mb-3">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+                                                  <Layers className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                                                    Kelompok: {prefix}
+                                                  </h4>
+                                                  <p className="text-xs font-bold text-slate-500">
+                                                    {locs.length} Baris Lokasi
+                                                  </p>
+                                                </div>
                                               </div>
-                                              <div className="flex gap-1 opacity-0 group-hover/loc:opacity-100 transition-opacity">
-                                                <button
-                                                  onClick={() => {
-                                                    setEditingLocId(loc.id);
-                                                    setEditLocForm(loc);
-                                                    setShowEditLocModal(true);
-                                                  }}
-                                                  className="p-1 text-indigo-400 hover:text-indigo-600"
-                                                >
-                                                  <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                  onClick={() =>
-                                                    handleDelete(
-                                                      "md_warehouse_locations",
-                                                      loc.id,
-                                                      loc.code,
-                                                    )
-                                                  }
-                                                  className="p-1 text-rose-300 hover:text-rose-500"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                            </div>
+                                            
+                                            <div className="space-y-2 mb-3">
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {locs.slice(0, 5).map(l => (
+                                                  <span key={l.id} className="text-[10px] font-black uppercase px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200">
+                                                    {l.code}
+                                                  </span>
+                                                ))}
+                                                {locs.length > 5 && (
+                                                  <span className="text-[10px] font-black uppercase px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200">
+                                                    +{locs.length - 5}
+                                                  </span>
+                                                )}
                                               </div>
                                             </div>
 
-                                            <div className="space-y-2 mt-2">
+                                            <div className="space-y-2 mt-auto">
                                               <div>
                                                 <div className="flex justify-between items-center mb-1">
-                                                  <span className="text-xs font-bold text-slate-500 uppercase">
+                                                  <span className="text-[10px] font-bold text-slate-500 uppercase">
                                                     Volume (m³)
                                                   </span>
-                                                  <span className="text-xs font-black text-slate-700">
-                                                    {usedVol.toFixed(1)} /{" "}
-                                                    {maxVol}
+                                                  <span className="text-[10px] font-black text-slate-700">
+                                                    {totalGroupUsedVol.toFixed(1)} / {totalGroupMaxVol.toFixed(1)}
                                                   </span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                                   <div
                                                     className={`h-full transition-all duration-500 ${volPercent > 95 ? "bg-rose-500" : volPercent > 70 ? "bg-amber-500" : "bg-emerald-500"}`}
-                                                    style={{
-                                                      width: `${Math.min(100, volPercent)}%`,
-                                                    }}
+                                                    style={{ width: `${Math.min(100, volPercent)}%` }}
                                                   ></div>
                                                 </div>
                                               </div>
-                                              <p className="text-xs font-bold text-slate-400 uppercase text-right">
-                                                Berat: {usedWgt.toFixed(1)} /{" "}
-                                                {maxWgt} kg
+                                              <p className="text-[10px] font-bold text-slate-400 uppercase text-right">
+                                                Berat: {totalGroupUsedWgt.toFixed(1)} / {totalGroupMaxWgt.toFixed(1)} kg
                                               </p>
+                                            </div>
+                                            
+                                            <div className="mt-3 pt-3 border-t border-slate-100">
+                                              <button className="w-full py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs font-bold group-hover/loc:bg-indigo-600 group-hover/loc:text-white transition-colors">
+                                                Kelola / Tambah Lokasi
+                                              </button>
                                             </div>
                                           </div>
                                         );
@@ -1167,10 +1214,10 @@ export default function MasterWarehousePage() {
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  Tambah Kode Penyimpanan (Storage Bins)
+                  Kelola Kode Penyimpanan (Storage Bins)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Atur rak dan baris di dalam zona yang dipilih
+                  Tambah atau ubah baris lokasi di dalam kelompok ini
                 </p>
               </div>
               <button
@@ -1191,6 +1238,7 @@ export default function MasterWarehousePage() {
                     </th>
                     <th className="pb-3 w-40">Tipe Ops & Storage</th>
                     <th className="pb-3 w-48">Dimensi (P x L x T) m</th>
+                    <th className="pb-3 w-28">Volume (m³)</th>
                     <th className="pb-3 w-32">Max Load (Kg)</th>
                     <th className="pb-3 w-20 text-center">Action</th>
                   </tr>
@@ -1328,6 +1376,11 @@ export default function MasterWarehousePage() {
                           />
                         </div>
                       </td>
+                      <td className="p-2 text-center">
+                        <div className="w-full px-3 py-2 bg-slate-100/80 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 truncate cursor-not-allowed" title="Terhitung otomatis">
+                          {((row.length_m || 0) * (row.width_m || 0) * (row.height_m || 0)).toFixed(2)}
+                        </div>
+                      </td>
                       <td className="p-2">
                         <input
                           type="number"
@@ -1373,9 +1426,7 @@ export default function MasterWarehousePage() {
                                 toast.error("Minimal 1 baris");
                                 return;
                               }
-                              setBulkLocForm(
-                                bulkLocForm.filter((_, i) => i !== index),
-                              );
+                              handleDeleteLoc(row.id, row.code, index);
                             }}
                             className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                             title="Remove Row"

@@ -429,6 +429,7 @@ function AllocationEditorModal({
   jo,
   locations,
   zones,
+  dbAssignments = [],
   profile,
   onClose,
   onRefresh,
@@ -469,29 +470,29 @@ function AllocationEditorModal({
   useEffect(() => {
     if (jo.jo_warehouse_assignments) {
       setRows(
-        jo.jo_warehouse_assignments.map((a: any) => ({
-          id: a.id,
-          warehouse_location_id: a.warehouse_location_id,
-          selectedZone: "",
-          manifest_id:
-            a.manifest_id ||
-            a.wo_item_manifest_id ||
-            a.job_order_manifest_id ||
-            "",
-          product_sku_id: a.product_sku_id || "",
-          sku_code: a.sku_code || "",
-          product_name: a.product_name || "",
-          jo_quantity: a.jo_quantity || "",
-          unit: a.unit || "",
-          unit_weight_kg: a.unit_weight_kg ?? 0,
-          unit_volume_m3: a.unit_volume_m3 ?? 0,
-          quantity: a.quantity || "",
-          allocated_kg: a.allocated_kg,
-          allocated_cbm: a.allocated_cbm,
-        })),
+        jo.jo_warehouse_assignments.map((a: any) => {
+          const targetManifestId = a.wo_item_manifest_id || a.manifest_id || a.job_order_manifest_id || "";
+          const manifest = manifestItems.find((m: any) => m.id === targetManifestId);
+          return {
+            id: a.id,
+            warehouse_location_id: a.warehouse_location_id,
+            selectedZone: a.md_warehouse_locations?.area?.area_code || "",
+            manifest_id: targetManifestId,
+            product_sku_id: manifest?.product_sku_id ?? "",
+            sku_code: manifest?.md_product_skus?.sku_code ?? "",
+            product_name: manifest?.md_product_skus?.name ?? "",
+            jo_quantity: manifest?.quantity ?? "",
+            unit: manifest?.md_product_skus?.unit ?? "",
+            unit_weight_kg: manifest?.unit_weight_kg || manifest?.md_product_skus?.weight_kg || 0,
+            unit_volume_m3: manifest?.unit_volume_m3 || manifest?.md_product_skus?.volume_m3 || 0,
+            quantity: a.quantity || "",
+            allocated_kg: a.allocated_kg,
+            allocated_cbm: a.allocated_cbm,
+          };
+        }),
       );
     }
-  }, [jo.jo_warehouse_assignments]);
+  }, [jo.jo_warehouse_assignments, manifestItems]);
 
   const addRow = () => {
     setRows([
@@ -549,20 +550,21 @@ function AllocationEditorModal({
   };
 
   const computeRowKg = (row: any) => {
-    if (row.manifest_id && Number(row.quantity) > 0) {
+    if (row.manifest_id) {
       return (Number(row.quantity) || 0) * (Number(row.unit_weight_kg) || 0);
     }
     return Number(row.allocated_kg) || 0;
   };
   const computeRowCbm = (row: any) => {
-    if (row.manifest_id && Number(row.quantity) > 0) {
+    if (row.manifest_id) {
       return (Number(row.quantity) || 0) * (Number(row.unit_volume_m3) || 0);
     }
     return Number(row.allocated_cbm) || 0;
   };
 
   const getAllocatedForLocation = (locationId: string, skipIndex = -1) => {
-    return rows.reduce(
+    // 1. Sum up in-memory allocations in the CURRENT modal for this location
+    const currentAlloc = rows.reduce(
       (acc, row, rowIndex) => {
         if (rowIndex === skipIndex) return acc;
         if (row.warehouse_location_id === locationId) {
@@ -573,6 +575,23 @@ function AllocationEditorModal({
       },
       { allocated_kg: 0, allocated_cbm: 0 },
     );
+
+    // 2. Sum up database allocations from OTHER job orders
+    const otherJOsAlloc = dbAssignments.reduce(
+      (acc: any, assign: any) => {
+        if (assign.warehouse_location_id === locationId && assign.job_order_id !== jo.id) {
+          acc.allocated_kg += Number(assign.allocated_kg) || 0;
+          acc.allocated_cbm += Number(assign.allocated_cbm) || 0;
+        }
+        return acc;
+      },
+      { allocated_kg: 0, allocated_cbm: 0 }
+    );
+
+    return {
+      allocated_kg: currentAlloc.allocated_kg + otherJOsAlloc.allocated_kg,
+      allocated_cbm: currentAlloc.allocated_cbm + otherJOsAlloc.allocated_cbm,
+    };
   };
 
   const handleSave = async () => {
@@ -601,6 +620,8 @@ function AllocationEditorModal({
           tenant_id: profile?.tenant_id,
           job_order_id: jo.id,
           warehouse_location_id: r.warehouse_location_id,
+          wo_item_manifest_id: r.manifest_id,
+          quantity: Number(r.quantity),
           allocated_kg: computeRowKg(r),
           allocated_cbm: computeRowCbm(r),
         }));
@@ -627,7 +648,8 @@ function AllocationEditorModal({
   const totalCbmClass = totalCbm ? "text-slate-900" : "text-slate-400";
 
   const skuSummaries = manifestItems.map((m: any) => {
-    const allocated = rows.reduce(
+    // 1. Sum up in-memory allocations in the CURRENT modal for this manifestItem
+    const currentAlloc = rows.reduce(
       (acc, row) => {
         if (row.manifest_id === m.id) {
           acc.allocated_kg += computeRowKg(row);
@@ -637,6 +659,24 @@ function AllocationEditorModal({
       },
       { allocated_kg: 0, allocated_cbm: 0 },
     );
+
+    // 2. Sum up database allocations from OTHER Job Orders for this same SKU
+    const otherJOsAlloc = dbAssignments.reduce(
+      (acc: any, assign: any) => {
+        if (assign.job_order_id !== jo.id) {
+          const assignSkuId = assign.wo_item_manifests?.product_sku_id;
+          if (assignSkuId === m.product_sku_id) {
+            acc.allocated_kg += Number(assign.allocated_kg) || 0;
+            acc.allocated_cbm += Number(assign.allocated_cbm) || 0;
+          }
+        }
+        return acc;
+      },
+      { allocated_kg: 0, allocated_cbm: 0 }
+    );
+
+    const totalAllocatedKg = currentAlloc.allocated_kg + otherJOsAlloc.allocated_kg;
+    const totalAllocatedCbm = currentAlloc.allocated_cbm + otherJOsAlloc.allocated_cbm;
 
     const totalKgPerSku =
       (Number(m.quantity) || 0) *
@@ -652,10 +692,10 @@ function AllocationEditorModal({
       quantity: Number(m.quantity) || 0,
       totalKg: totalKgPerSku,
       totalCbm: totalCbmPerSku,
-      allocatedKg: allocated.allocated_kg,
-      allocatedCbm: allocated.allocated_cbm,
-      remainingKg: totalKgPerSku - allocated.allocated_kg,
-      remainingCbm: totalCbmPerSku - allocated.allocated_cbm,
+      allocatedKg: totalAllocatedKg,
+      allocatedCbm: totalAllocatedCbm,
+      remainingKg: totalKgPerSku - totalAllocatedKg,
+      remainingCbm: totalCbmPerSku - totalAllocatedCbm,
     };
   });
 
@@ -665,7 +705,7 @@ function AllocationEditorModal({
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
       ></div>
-      <div className="relative w-full max-w-4xl bg-slate-50 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-6xl bg-slate-50 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
         <div className="p-6 bg-white border-b border-slate-200 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
@@ -752,268 +792,213 @@ function AllocationEditorModal({
               ))}
             </div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">
-                Daftar Lokasi
-              </h3>
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                  Daftar Lokasi Penugasan
+                </h3>
+              </div>
               <button
                 onClick={addRow}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-colors"
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all hover:scale-102 shadow-md shadow-emerald-600/10"
               >
                 <Plus size={14} /> Tambah Lokasi
               </button>
             </div>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="p-4 w-12 text-center">#</th>
-                  <th className="p-4">Zona / Lokasi</th>
-                  <th className="p-4">SKU / Produk</th>
-                  <th className="p-4 w-24 text-right">Qty</th>
-                  <th className="p-4 w-32 text-right">CBM</th>
-                  <th className="p-4 w-32 text-right">KG</th>
-                  <th className="p-4">Remaining</th>
-                  <th className="p-4 w-16 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-400">
-                        <Warehouse size={48} className="mb-4 opacity-20" />
-                        <p className="text-xs font-bold uppercase tracking-widest">
-                          Belum Ada Lokasi
-                        </p>
-                        <p className="text-[10px] mt-1">
-                          Klik Tambah Lokasi untuk menentukan area penyimpanan.
-                        </p>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-slate-50/70 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-6 py-4 w-14 text-center">#</th>
+                    <th className="px-6 py-4 w-3/12">Zona / Lokasi</th>
+                    <th className="px-6 py-4 w-4/12">SKU / Produk</th>
+                    <th className="px-4 py-4 w-60 text-right">Qty</th>
+                    <th className="px-6 py-4 w-40 text-right">Total CBM & KG</th>
+                    <th className="px-6 py-4 w-16 text-center">Aksi</th>
                   </tr>
-                ) : (
-                  rows.map((r, idx) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group"
-                    >
-                      <td className="p-4 text-center text-xs font-bold text-slate-400">
-                        <GripVertical
-                          size={14}
-                          className="mx-auto text-slate-300"
-                        />
-                      </td>
-                      <td className="p-4">
-                        {/* Zone dropdown */}
-                        <select
-                          value={r.selectedZone || ""}
-                          onChange={(e) =>
-                            updateRow(idx, "selectedZone", e.target.value)
-                          }
-                          className="w-full mb-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        >
-                          <option value="">-- Pilih Zona --</option>
-                          {zones.map((z: any) => (
-                            <option key={z.area_code} value={z.area_code}>
-                              {z.area_name}
-                            </option>
-                          ))}
-                        </select>
-                        {/* Location dropdown filtered by selected zone */}
-                        <select
-                          value={r.warehouse_location_id}
-                          onChange={(e) =>
-                            updateRow(
-                              idx,
-                              "warehouse_location_id",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        >
-                          <option value="">-- Pilih Lokasi --</option>
-                          {locations
-                            .filter((loc: any) => {
-                              if (!r.selectedZone) return true;
-                              return (
-                                loc.area &&
-                                loc.area.area_code === r.selectedZone
-                              );
-                            })
-                            .map((loc: any) => {
-                              const maxW = Number(loc.max_weight_kg || 0);
-                              const maxV = Number(loc.max_volume_m3 || 0);
-                              const allocatedOther = getAllocatedForLocation(
-                                loc.id,
-                                idx,
-                              );
-                              const availableW = Math.max(
-                                0,
-                                maxW - allocatedOther.allocated_kg,
-                              );
-                              const availableV = Math.max(
-                                0,
-                                maxV - allocatedOther.allocated_cbm,
-                              );
-                              return (
-                                <option key={loc.id} value={loc.id}>
-                                  {loc.code} — Avail {availableW.toFixed(2)}kg /{" "}
-                                  {availableV.toFixed(3)}cbm
-                                </option>
-                              );
-                            })}
-                        </select>
-                        <div className="rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600">
-                          {r.warehouse_location_id
-                            ? (() => {
-                                const loc = locations.find(
-                                  (l: any) => l.id === r.warehouse_location_id,
-                                );
-                                const maxW = Number(loc?.max_weight_kg || 0);
-                                const maxV = Number(loc?.max_volume_m3 || 0);
-                                const allocatedOther = getAllocatedForLocation(
-                                  r.warehouse_location_id,
-                                  idx,
-                                );
-                                const availableW = Math.max(
-                                  0,
-                                  maxW - allocatedOther.allocated_kg,
-                                );
-                                const availableV = Math.max(
-                                  0,
-                                  maxV - allocatedOther.allocated_cbm,
-                                );
-                                return `Available: ${availableW.toFixed(2)} KG / ${availableV.toFixed(3)} CBM`;
-                              })()
-                            : "Pilih lokasi untuk melihat sisa kapasitas"}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <select
-                          value={r.manifest_id || ""}
-                          onChange={(e) =>
-                            updateRow(idx, "manifest_id", e.target.value)
-                          }
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        >
-                          <option value="">-- Pilih Produk JO --</option>
-                          {manifestItems.map((m: any) => (
-                            <option key={m.id} value={m.id}>
-                              {m.md_product_skus?.sku_code || "-"} |{" "}
-                              {m.md_product_skus?.name || "-"} | Qty{" "}
-                              {m.quantity}
-                            </option>
-                          ))}
-                        </select>
-                        {r.sku_code && (
-                          <p className="text-[11px] text-slate-500 mt-2">
-                            SKU: {r.sku_code} | {r.product_name || "-"} | JO
-                            Qty: {r.jo_quantity || "-"} {r.unit || ""}
-                          </p>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={r.quantity}
-                          onChange={(e) =>
-                            updateRow(idx, "quantity", e.target.value)
-                          }
-                          placeholder="Qty"
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-right outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="px-4 py-3 rounded-xl bg-slate-50 text-sm font-black text-slate-900">
-                          {computeRowCbm(r).toFixed(3)}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="px-4 py-3 rounded-xl bg-slate-50 text-sm font-black text-slate-900">
-                          {computeRowKg(r).toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        {r.warehouse_location_id ? (
-                          (() => {
-                            const loc = locations.find(
-                              (l: any) => l.id === r.warehouse_location_id,
-                            );
-                            const maxW = Number(loc?.max_weight_kg || 0);
-                            const maxV = Number(loc?.max_volume_m3 || 0);
-                            const allocatedOther = getAllocatedForLocation(
-                              r.warehouse_location_id,
-                              idx,
-                            );
-                            const rowKg = computeRowKg(r);
-                            const rowCbm = computeRowCbm(r);
-                            const remAfterKg =
-                              maxW - allocatedOther.allocated_kg - rowKg;
-                            const remAfterCbm =
-                              maxV - allocatedOther.allocated_cbm - rowCbm;
-                            const over = remAfterKg < 0 || remAfterCbm < 0;
-                            return (
-                              <div className="rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600">
-                                <div
-                                  className={`font-black ${over ? "text-rose-600" : "text-slate-900"}`}
-                                >
-                                  {over
-                                    ? "Over capacity"
-                                    : "Remaining after this allocation"}
-                                </div>
-                                <div className="mt-1 text-sm font-black">
-                                  {remAfterKg.toFixed(2)} KG /{" "}
-                                  {remAfterCbm.toFixed(3)} CBM
-                                </div>
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          <div className="rounded-xl bg-slate-50 p-3 text-[11px] text-slate-500">
-                            Pilih lokasi untuk melihat sisa kapasitas
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-16 text-center">
+                        <div className="flex flex-col items-center justify-center text-slate-400">
+                          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                            <Warehouse size={28} className="opacity-40 text-emerald-600" />
                           </div>
-                        )}
-                      </td>
-                      <td className="p-4 text-center">
-                        <button
-                          onClick={() => removeRow(idx)}
-                          className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-600">
+                            Belum Ada Lokasi Dialokasikan
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-1 max-w-sm">
+                            Klik tombol "Tambah Lokasi" di kanan atas untuk menentukan area penyimpanan barang.
+                          </p>
+                        </div>
                       </td>
                     </tr>
-                  ))
+                  ) : (
+                    rows.map((r, idx) => {
+                      const computedCbm = computeRowCbm(r);
+                      const computedKg = computeRowKg(r);
+
+                      return (
+                        <tr
+                          key={r.id}
+                          className="hover:bg-slate-50/50 transition-colors group"
+                        >
+                          <td className="px-6 py-5 text-center text-xs font-bold text-slate-400">
+                            <div className="flex flex-col items-center gap-1">
+                              <GripVertical
+                                size={14}
+                                className="text-slate-300 group-hover:text-slate-400 transition-colors cursor-grab"
+                              />
+                              <span>{idx + 1}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 space-y-2">
+                            {/* Zone dropdown */}
+                            <select
+                              value={r.selectedZone || ""}
+                              onChange={(e) =>
+                                updateRow(idx, "selectedZone", e.target.value)
+                              }
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                            >
+                              <option value="">-- Pilih Zona --</option>
+                              {zones.map((z: any) => (
+                                <option key={z.area_code} value={z.area_code}>
+                                  {z.area_name}
+                                </option>
+                              ))}
+                            </select>
+                            {/* Location dropdown filtered by selected zone */}
+                            <select
+                              value={r.warehouse_location_id}
+                              onChange={(e) =>
+                                updateRow(
+                                  idx,
+                                  "warehouse_location_id",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                            >
+                              <option value="">-- Pilih Lokasi --</option>
+                              {locations
+                                .filter((loc: any) => {
+                                  if (!r.selectedZone) return true;
+                                  return (
+                                    loc.area &&
+                                    loc.area.area_code === r.selectedZone
+                                  );
+                                })
+                                .map((loc: any) => {
+                                  const maxW = Number(loc.max_weight_kg || 0);
+                                  const maxV = Number(loc.max_volume_m3 || 0);
+                                  const allocatedOther = getAllocatedForLocation(
+                                    loc.id,
+                                    idx,
+                                  );
+                                  const availableW = Math.max(
+                                    0,
+                                    maxW - allocatedOther.allocated_kg,
+                                  );
+                                  const availableV = Math.max(
+                                    0,
+                                    maxV - allocatedOther.allocated_cbm,
+                                  );
+                                  return (
+                                    <option key={loc.id} value={loc.id}>
+                                      {loc.code} (Avail: {availableW.toFixed(1)}kg / {availableV.toFixed(2)}m³)
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                          </td>
+                          <td className="px-6 py-5">
+                            <select
+                              value={r.manifest_id || ""}
+                              onChange={(e) =>
+                                updateRow(idx, "manifest_id", e.target.value)
+                              }
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                            >
+                              <option value="">-- Pilih Produk JO --</option>
+                              {manifestItems.map((m: any) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.md_product_skus?.sku_code || "-"} — {m.md_product_skus?.name || "-"}
+                                </option>
+                              ))}
+                            </select>
+                            {r.sku_code && (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-[9px] font-black uppercase text-slate-500">
+                                  JO Qty: {r.jo_quantity || "-"} {r.unit || ""}
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-[9px] font-black uppercase text-slate-500">
+                                  {r.unit_weight_kg} kg/u
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-5 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={r.quantity}
+                              onChange={(e) =>
+                                updateRow(idx, "quantity", e.target.value)
+                              }
+                              placeholder="Qty"
+                              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-right outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                            />
+                          </td>
+                          <td className="px-6 py-5 text-right font-black">
+                            <div className="text-xs text-slate-700">
+                              {computedCbm.toFixed(3)}{" "}
+                              <span className="text-[9px] text-slate-400 font-bold uppercase">CBM</span>
+                            </div>
+                            <div className="text-xs text-slate-500 font-bold mt-1">
+                              {computedKg.toFixed(1)}{" "}
+                              <span className="text-[9px] text-slate-400 font-bold uppercase">KG</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <button
+                              onClick={() => removeRow(idx)}
+                              className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {rows.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-emerald-50/20 border-t-2 border-emerald-100 text-xs font-black text-slate-800">
+                      <td
+                        colSpan={3}
+                        className="px-6 py-4 text-right text-[10px] uppercase tracking-widest text-emerald-800"
+                      >
+                        Total Alokasi
+                      </td>
+                      <td className="px-6 py-4 text-right text-emerald-950 font-black">
+                        {rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 text-right font-black text-emerald-950">
+                        <div className="text-xs font-black">{totalCbmDisplay}</div>
+                        <div className="text-[10px] text-emerald-800/80 mt-0.5">{totalKgDisplay}</div>
+                      </td>
+                      <td className="px-6 py-4"></td>
+                    </tr>
+                  </tfoot>
                 )}
-              </tbody>
-              {rows.length > 0 && (
-                <tfoot>
-                  <tr className="bg-emerald-50/30 border-t-2 border-emerald-100">
-                    <td
-                      colSpan={3}
-                      className="p-4 text-right text-[10px] font-black text-emerald-800 uppercase tracking-widest"
-                    >
-                      Total Alokasi
-                    </td>
-                    <td
-                      className={`p-4 text-right text-sm font-black ${totalCbmClass}`}
-                    >
-                      {totalCbmDisplay}
-                    </td>
-                    <td
-                      className={`p-4 text-right text-sm font-black ${totalKgClass}`}
-                    >
-                      {totalKgDisplay}
-                    </td>
-                    <td className="p-4"></td>
-                    <td className="p-4"></td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1049,6 +1034,7 @@ function JOCard({
   warehouseId,
   locations,
   zones,
+  dbAssignments = [],
   profile,
   onRefresh,
 }: any) {
@@ -1070,14 +1056,17 @@ function JOCard({
   // Compute allocation totals
   const assignments = jo.jo_warehouse_assignments || [];
   const totalAllocLocations = assignments.length;
-  const totalAllocKg = assignments.reduce(
-    (s: number, a: any) => s + (a.allocated_kg || 0),
-    0,
-  );
-  const totalAllocCbm = assignments.reduce(
-    (s: number, a: any) => s + (a.allocated_cbm || 0),
-    0,
-  );
+  const totalAllocKg = assignments.reduce((s: number, a: any) => {
+    const m = manifests.find((m: any) => m.id === a.wo_item_manifest_id);
+    const unitWeight = m?.unit_weight_kg || m?.md_product_skus?.weight_kg || 0;
+    return s + (Number(a.quantity) || 0) * unitWeight;
+  }, 0);
+  
+  const totalAllocCbm = assignments.reduce((s: number, a: any) => {
+    const m = manifests.find((m: any) => m.id === a.wo_item_manifest_id);
+    const unitVol = m?.unit_volume_m3 || m?.md_product_skus?.volume_m3 || 0;
+    return s + (Number(a.quantity) || 0) * unitVol;
+  }, 0);
 
   return (
     <Card className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
@@ -1206,6 +1195,7 @@ function JOCard({
           jo={jo}
           locations={locations}
           zones={zones}
+          dbAssignments={dbAssignments}
           profile={profile}
           onClose={() => setShowAllocationEditor(false)}
           onRefresh={onRefresh}
@@ -1227,6 +1217,7 @@ export default function WarehouseExecutionPage() {
   const [jos, setJos] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
+  const [dbAssignments, setDbAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -1294,6 +1285,21 @@ export default function WarehouseExecutionPage() {
 
         setLocations(locData || []);
         setZones(areaData || []);
+
+        // Query occupied capacity of these locations across other JOs in the warehouse
+        const locIds = locData?.map((l: any) => l.id) || [];
+        if (locIds.length > 0) {
+          const { data: assignData } = await supabase
+            .from("jo_warehouse_assignments")
+            .select(`
+              warehouse_location_id, allocated_kg, allocated_cbm, job_order_id, wo_item_manifest_id, quantity,
+              wo_item_manifests!wo_item_manifest_id ( product_sku_id )
+            `)
+            .in("warehouse_location_id", locIds);
+          setDbAssignments(assignData || []);
+        } else {
+          setDbAssignments([]);
+        }
       }
     } catch (e) {
       toast.error("Gagal memuat detail tugas");
@@ -1489,6 +1495,7 @@ export default function WarehouseExecutionPage() {
                 warehouseId={woItemData.item_data?.warehouse_id}
                 locations={locations}
                 zones={zones}
+                dbAssignments={dbAssignments}
                 profile={profile}
                 onRefresh={fetchData}
               />

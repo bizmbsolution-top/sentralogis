@@ -489,7 +489,10 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
     </div>
   );
 
-  const renderDimensions = () => (
+  const renderDimensions = () => {
+    const volM3 = (Number(formData.length_cm || 0) * Number(formData.width_cm || 0) * Number(formData.height_cm || 0)) / 1000000;
+    
+    return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
       <div>
          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Physical Dimensions (Base Unit)</h4>
@@ -509,6 +512,17 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
             <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">Height (cm)</label>
               <input type="number" value={formData.height_cm || ''} onChange={e => setFormData({...formData, height_cm: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold" />
+            </div>
+         </div>
+         
+         <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between">
+            <div>
+               <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Base Unit Volume</p>
+               <p className="text-[9px] text-emerald-600 mt-0.5">Calculated from L x W x H</p>
+            </div>
+            <div className="text-right">
+               <span className="text-xl font-black text-emerald-700">{volM3.toFixed(6)}</span>
+               <span className="text-[10px] font-bold text-emerald-600 ml-1 uppercase">CBM (m³)</span>
             </div>
          </div>
       </div>
@@ -593,7 +607,8 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
          </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderStorage = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">

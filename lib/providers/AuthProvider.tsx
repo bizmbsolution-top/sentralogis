@@ -74,28 +74,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isFetchingProfile = useRef(false);
   const profileCache = useRef<Profile | null>(null);
 
-  // [AI] Fetch full profile with 5s timeout (not 30s)
   const fetchFullProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      const TIMEOUT_MS = 5000;
+      const TIMEOUT_MS = 10000;
+
+      const fetchWithTimeout = async (query: any) => {
+        let timeoutId: NodeJS.Timeout;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
+        });
+
+        try {
+          const result = await Promise.race([query, timeoutPromise]);
+          return result;
+        } finally {
+          clearTimeout(timeoutId!);
+        }
+      };
 
       const [profileResult, tenantResult] = await Promise.all([
-        Promise.race([
+        fetchWithTimeout(
           supabase
             .from('profiles')
             .select('id, email, full_name, role, whatsapp, is_active, created_at, updated_at')
             .eq('id', userId)
-            .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS))
-        ]),
-        Promise.race([
+            .maybeSingle()
+        ),
+        fetchWithTimeout(
           supabase
             .from('tenant_users')
             .select('tenant_id, role_code, full_name, warehouse_id')
             .eq('user_id', userId)
-            .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS))
-        ])
+            .maybeSingle()
+        )
       ]);
 
       const profileData = (profileResult as any)?.data;
@@ -130,16 +141,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalProfile.warehouse_id = tenantData.warehouse_id;
       }
 
-      // Fetch tenant name in background (non-blocking, 3s timeout)
       if (finalProfile.tenant_id) {
+        let bgTimeoutId: NodeJS.Timeout;
+        const bgTimeoutPromise = new Promise((_, reject) => {
+          bgTimeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
+        });
+
         Promise.race([
           supabase
             .from('tenants')
             .select('tenant_code, name')
             .eq('id', finalProfile.tenant_id)
             .maybeSingle(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+          bgTimeoutPromise
         ]).then((result: any) => {
+          clearTimeout(bgTimeoutId);
           if (result?.data) {
             // [AI] Update profile in-place — this is safe because the profile object was already returned
             finalProfile.tenant_code = result.data.tenant_code;
