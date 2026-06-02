@@ -18,7 +18,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { fetchTenantHistory, getLedgerStartingBalance } from '@/app/(dashboard)/owner/actions';
 
 export default function TokenStatementPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [tenant, setTenant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState(() => {
@@ -31,18 +31,21 @@ export default function TokenStatementPage() {
   const [startingBalance, setStartingBalance] = useState(0);
 
   useEffect(() => {
-    if (user) {
+    if (user && profile?.tenant_id) {
       fetchTenantAndHistory();
     }
-  }, [user]);
+  }, [user, profile?.tenant_id]);
 
   const fetchTenantAndHistory = async () => {
     setLoading(true);
     try {
-      const { data: tData } = await supabase.from('tenants').select('*').eq('user_id', user?.id).single();
-      setTenant(tData);
-      if (tData) {
-        await generateStatement(tData.tenant_code);
+      const tid = profile?.tenant_id;
+      if (tid) {
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid).single();
+        setTenant(tData);
+        if (tData) {
+          await generateStatement(tData.tenant_code);
+        }
       }
     } catch (err) {
       console.error(err);

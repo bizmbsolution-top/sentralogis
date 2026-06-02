@@ -28,9 +28,13 @@ export default function TenantDashboard() {
     if (!user) return;
     setLoading(true);
     try {
-      const { data: tData } = await supabase.from('tenants').select('*').eq('user_id', user.id).single();
-      setTenant(tData);
-      setEditName(profile?.full_name || tData?.admin_full_name || '');
+      // [AI] Use profile.tenant_id to query tenants by primary key (id), not user_id column
+      const tid = profile?.tenant_id;
+      if (tid) {
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid).single();
+        setTenant(tData);
+      }
+      setEditName(profile?.full_name || '');
       setEditWhatsApp(profile?.whatsapp || '');
     } catch (err) {
       console.error('Sync Error:', err);
@@ -39,7 +43,7 @@ export default function TenantDashboard() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [user, profile]);
+  useEffect(() => { fetchData(); }, [user, profile?.tenant_id]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();

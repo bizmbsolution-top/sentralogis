@@ -45,16 +45,19 @@ export default function TenantTopupPage() {
   const fetchData = async () => {
     if (!user) return;
     try {
-      const { data: tData } = await supabase.from('tenants').select('*').eq('user_id', user.id);
-      if (tData && tData.length > 0) {
-        setTenant(tData[0]);
-        const { data: rData } = await supabase
-          .from('topup_requests')
-          .select('*')
-          .eq('tenant_code', tData[0].tenant_code)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false });
-        setRequests(rData || []);
+      const tid = profile?.tenant_id;
+      if (tid) {
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tid);
+        if (tData && tData.length > 0) {
+          setTenant(tData[0]);
+          const { data: rData } = await supabase
+            .from('topup_requests')
+            .select('*')
+            .eq('tenant_code', tData[0].tenant_code)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+          setRequests(rData || []);
+        }
       }
       if (profile) setWhatsapp(profile.whatsapp || '');
     } catch (err) {
@@ -64,7 +67,7 @@ export default function TenantTopupPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [user, profile]);
+  useEffect(() => { fetchData(); }, [user, profile?.tenant_id]);
 
   const handleUploadAndNotify = async () => {
     if (!whatsapp || whatsapp.length < 10) return toast.error('Valid WhatsApp identity required');

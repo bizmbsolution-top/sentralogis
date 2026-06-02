@@ -40,8 +40,10 @@ export default function TenantOrganizationPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Get Tenant ID
-      const { data: tenant, error: tError } = await supabase.from('tenants').select('id, name, tenant_code').eq('user_id', user.id).single();
+      // [AI] Use profile.tenant_id to query tenants by primary key (id), not user_id column
+      const tid = profile?.tenant_id;
+      if (!tid) { setLoading(false); return; }
+      const { data: tenant, error: tError } = await supabase.from('tenants').select('id, name, tenant_code').eq('id', tid).single();
       
       if (!tenant) {
         console.warn('[OrganizationPage] No tenant found');
@@ -87,7 +89,7 @@ export default function TenantOrganizationPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [user, profile]);
+  useEffect(() => { fetchData(); }, [user, profile?.tenant_id]);
 
   if (!isSuperadmin) {
     return (

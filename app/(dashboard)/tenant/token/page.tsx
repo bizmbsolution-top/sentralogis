@@ -57,19 +57,22 @@ export default function TenantTokenPage() {
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: tData } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('user_id', user.id);
-      if (tData && tData.length > 0) {
-        setTenant(tData[0]);
-        const { data: rData } = await supabase
-          .from('topup_requests')
+      const tid = profile?.tenant_id;
+      if (tid) {
+        const { data: tData } = await supabase
+          .from('tenants')
           .select('*')
-          .eq('tenant_code', tData[0].tenant_code)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        setRequests(rData || []);
+          .eq('id', tid);
+        if (tData && tData.length > 0) {
+          setTenant(tData[0]);
+          const { data: rData } = await supabase
+            .from('topup_requests')
+            .select('*')
+            .eq('tenant_code', tData[0].tenant_code)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          setRequests(rData || []);
+        }
       }
       if (profile) setWhatsapp(profile.whatsapp || '');
     } catch (err) {
@@ -78,7 +81,7 @@ export default function TenantTokenPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, profile]);
+  }, [user, profile?.tenant_id]);
 
   useEffect(() => {
     fetchData();
