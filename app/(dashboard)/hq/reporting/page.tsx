@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/hooks/useAuth";
 import { toast, Toaster } from "react-hot-toast";
 import {
   FileText, ChevronLeft, Check, Search, BarChart3, Loader2, Inbox, RefreshCw,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 
 export default function HQReportingPage() {
+  const { profile } = useAuth();
+  const tenantId = profile?.tenant_id;
   const [loading, setLoading] = useState(false);
   const [reportMode, setReportMode] = useState<"operation" | "financial">("operation");
   const [data, setData] = useState<any[]>([]);
@@ -71,12 +74,13 @@ export default function HQReportingPage() {
 
   // [AI] Fetch master data from md_entities (customers and vendors) and md_locations to resolve non-existent tables
   const fetchMasterData = async () => {
+    if (!tenantId) return;
     try {
       const [{ data: ct }, { data: lt }, { data: vt }, { data: tt }] = await Promise.all([
-        supabase.from('md_entities').select('id, name, legal_name').eq('is_customer', true).order('name'),
-        supabase.from('md_locations').select('id, name').eq('is_active', true).order('name'),
-        supabase.from('md_entities').select('id, name, legal_name').eq('is_vendor', true).order('name'),
-        supabase.from('wo_items').select('item_data').eq('sbu_type', 'TRUCKING')
+        supabase.from('md_entities').select('id, name, legal_name').eq('is_customer', true).eq('tenant_id', tenantId).order('name'),
+        supabase.from('md_locations').select('id, name').eq('is_active', true).eq('tenant_id', tenantId).order('name'),
+        supabase.from('md_entities').select('id, name, legal_name').eq('is_vendor', true).eq('tenant_id', tenantId).order('name'),
+        supabase.from('wo_items').select('item_data').eq('sbu_type', 'TRUCKING').eq('tenant_id', tenantId)
       ]);
       setCustomers(ct || []); setLocations(lt || []); setVendors(vt || []);
       const types = (tt || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
@@ -86,11 +90,13 @@ export default function HQReportingPage() {
 
   // [AI] Fetch reporting data using exact aliased joins matching the database relations (customer_id -> md_entities, fleet_id -> md_fleets -> md_entities)
   const fetchReportData = useCallback(async () => {
+    if (!tenantId) return;
     setLoading(true);
     try {
       const { data: woData, error } = await supabase
         .from('work_orders')
         .select(`*, customers:md_entities!customer_id (id, name, legal_name), wo_items (*, job_orders (*, fleets:fleet_id (id, plate_number, companies:md_entities (id, name))))`)
+        .eq('tenant_id', tenantId)
         .gte('order_date', startDate).lte('order_date', endDate).order('order_date', { ascending: false });
 
       if (error) throw error;
@@ -229,7 +235,7 @@ export default function HQReportingPage() {
     } catch (err: unknown) { toast.error(`PDF Error: ${(err as Error).message}`, { id: tid }); }
   };
 
-  useEffect(() => { fetchMasterData(); fetchReportData(); }, [fetchReportData, reportMode]);
+  useEffect(() => { if (tenantId) { fetchMasterData(); fetchReportData(); } }, [fetchReportData, reportMode, tenantId]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowStatusDropdown(false); };
