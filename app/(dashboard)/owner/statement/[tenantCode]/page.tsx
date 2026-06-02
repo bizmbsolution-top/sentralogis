@@ -12,7 +12,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
-import { fetchTenantHistory, getLedgerStartingBalance } from '@/app/(dashboard)/owner/actions';
+import { fetchTenantHistory } from '@/app/(dashboard)/owner/actions';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function OwnerTenantStatementPage() {
@@ -53,12 +53,11 @@ export default function OwnerTenantStatementPage() {
   const generateStatement = async (tCode: string) => {
     setLoading(true);
     try {
-      // 1. Calculate Starting Balance (Optimized)
-      const balRes = await getLedgerStartingBalance(tCode, startDate);
-      const startBal = balRes.balance || 0;
-      setStartingBalance(startBal);
+      // [AI] Fetch current balance from tenants.token_balance (source of truth)
+      const { data: tData2 } = await supabase.from('tenants').select('token_balance').eq('tenant_code', tCode).single();
+      const currentBal = tData2?.token_balance || 0;
 
-      // 2. Fetch Period Transactions (Optimized)
+      // 1. Fetch Period Transactions
       const res = await fetchTenantHistory(tCode);
       if (!res.success) throw new Error(res.message);
       
@@ -66,10 +65,17 @@ export default function OwnerTenantStatementPage() {
         tx.created_at >= startDate + 'T00:00:00Z' && tx.created_at <= endDate + 'T23:59:59Z'
       ).sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
 
-      let currentBal = startBal;
+      // [AI] Compute opening balance as current balance minus period transactions
+      // This ensures the statement ending balance matches tenants.token_balance
+      const totalIn = periodTx.filter((tx: any) => tx.amount > 0).reduce((acc: number, tx: any) => acc + tx.amount, 0);
+      const totalOut = periodTx.filter((tx: any) => tx.amount < 0).reduce((acc: number, tx: any) => acc + Math.abs(tx.amount), 0);
+      const startBal = currentBal - totalIn + totalOut;
+      setStartingBalance(startBal);
+
+      let currentRunningBal = startBal;
       const mapped = periodTx.map((tx: any) => {
-        currentBal += tx.amount;
-        return { ...tx, running_balance: currentBal };
+        currentRunningBal += tx.amount;
+        return { ...tx, running_balance: currentRunningBal };
       });
 
       setTransactions(mapped);
@@ -82,7 +88,10 @@ export default function OwnerTenantStatementPage() {
 
   const totalIn = transactions.filter(tx => tx.amount > 0).reduce((acc, tx) => acc + tx.amount, 0);
   const totalOut = transactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + tx.amount, 0);
-  const endingBalance = startingBalance + totalIn + totalOut;
+  // [AI] Use tenants.token_balance as source of truth for current balance
+  // instead of computing from token_transactions which may drift
+  const currentBalance = tenant?.token_balance || 0;
+  const endingBalance = currentBalance;
 
   return (
     <div className="space-y-10 animate-slide-up pb-20 print:p-0 print:space-y-6">
