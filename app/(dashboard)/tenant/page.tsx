@@ -30,7 +30,7 @@ export default function TenantDashboard() {
     try {
       const { data: tData } = await supabase.from('tenants').select('*').eq('user_id', user.id).single();
       setTenant(tData);
-      setEditName(tData?.admin_full_name || '');
+      setEditName(profile?.full_name || tData?.admin_full_name || '');
       setEditWhatsApp(profile?.whatsapp || '');
     } catch (err) {
       console.error('Sync Error:', err);
@@ -45,19 +45,13 @@ export default function TenantDashboard() {
     e.preventDefault();
     setUpdating(true);
     try {
-      // Update profile table
+      // [AI] Only update profiles table — tenants table has no admin_full_name column
       const { error: pError } = await supabase
         .from('profiles')
-        .update({ full_name: editName, whatsapp: editWhatsApp })
+        .update({ full_name: editName, whatsapp: editWhatsApp || null })
         .eq('id', user?.id);
       
       if (pError) throw pError;
-
-      // Update tenant table if needed (redundancy)
-      await supabase
-        .from('tenants')
-        .update({ admin_full_name: editName })
-        .eq('user_id', user?.id);
 
       toast.success('Identity Updated Successfully');
       fetchData();

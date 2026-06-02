@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Promise.race([
           supabase
             .from('profiles')
-            .select('id, full_name, role, is_active, created_at, updated_at')
+            .select('id, email, full_name, role, whatsapp, is_active, created_at, updated_at')
             .eq('id', userId)
             .maybeSingle(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000))
@@ -106,9 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const sourceData = profileData || tenantData;
       const finalProfile: Profile = {
         id: profileData?.id || tenantData?.user_id || userId,
-        email: '',
+        email: profileData?.email || '',
         full_name: profileData?.full_name || tenantData?.full_name || 'User',
         role: finalRole,
+        whatsapp: profileData?.whatsapp || '',
         is_active: profileData?.is_active ?? true, // Default to true if not found
         created_at: profileData?.created_at || '',
         updated_at: profileData?.updated_at || ''
