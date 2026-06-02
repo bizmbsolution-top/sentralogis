@@ -41,12 +41,12 @@ export async function fetchTenantsAdmin() {
       return acc
     }, {})
 
-    // [AI] Map tenant_id → active SBU types
-    const sbuMap: Record<string, string[]> = {}
+    // [AI] Map tenant_id → active SBU types (deduplicated)
+    const sbuMap: Record<string, Set<string>> = {}
     ;(sbus || []).forEach((s: any) => {
       if (s.status === 'active') {
-        if (!sbuMap[s.tenant_id]) sbuMap[s.tenant_id] = []
-        sbuMap[s.tenant_id].push(s.sbu_type)
+        if (!sbuMap[s.tenant_id]) sbuMap[s.tenant_id] = new Set()
+        sbuMap[s.tenant_id].add(s.sbu_type)
       }
     })
 
@@ -66,7 +66,7 @@ export async function fetchTenantsAdmin() {
           admin_email: profile.email || t.email || 'N/A',
           admin_name: profile.full_name || 'N/A',
           whatsapp: (profile.whatsapp && !profile.whatsapp.includes('@')) ? profile.whatsapp : 'N/A',
-          active_sbus: sbuMap[t.id] || [],
+          active_sbus: sbuMap[t.id] ? Array.from(sbuMap[t.id]) : [],
           created_at: t.created_at
         }
       })
