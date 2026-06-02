@@ -28,11 +28,27 @@ export async function fetchTenantsAdmin() {
 
     if (pError) throw pError
 
+    // [AI] Fetch tenant_sbus to show which SBUs each tenant has activated
+    const { data: sbus, error: sbuError } = await admin
+      .from('tenant_sbus')
+      .select('tenant_id, sbu_type, status')
+
+    if (sbuError) throw sbuError
+
     // Map profiles for quick lookup
     const profileMap = (profiles || []).reduce((acc: any, p: any) => {
       acc[p.id] = p
       return acc
     }, {})
+
+    // [AI] Map tenant_id → active SBU types
+    const sbuMap: Record<string, string[]> = {}
+    ;(sbus || []).forEach((s: any) => {
+      if (s.status === 'active') {
+        if (!sbuMap[s.tenant_id]) sbuMap[s.tenant_id] = []
+        sbuMap[s.tenant_id].push(s.sbu_type)
+      }
+    })
 
     return { 
       success: true, 
@@ -50,6 +66,7 @@ export async function fetchTenantsAdmin() {
           admin_email: profile.email || t.email || 'N/A',
           admin_name: profile.full_name || 'N/A',
           whatsapp: (profile.whatsapp && !profile.whatsapp.includes('@')) ? profile.whatsapp : 'N/A',
+          active_sbus: sbuMap[t.id] || [],
           created_at: t.created_at
         }
       })

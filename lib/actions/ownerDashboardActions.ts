@@ -176,28 +176,25 @@ export async function getTokenUsageByTenant(period: 'weekly' | 'monthly' | 'quar
       consumedByTenant[tid] = (consumedByTenant[tid] || 0) + 1
     })
 
-    // 2. Get current balance from token_transactions (SUM amount per tenant)
+    // [AI] Use tenants.token_balance as single source of truth instead of SUM(token_transactions)
+    // This matches what fetchTenantsAdmin() and the tenant dashboard display
     const tenantIds = Object.keys(consumedByTenant)
     let balances: Record<string, number> = {}
     let tenantNames: Record<string, string> = {}
 
     if (tenantIds.length > 0) {
-      // Get balances
-      const { data: txData, error: txError } = await admin
-        .from('token_transactions')
-        .select('tenant_id, amount')
-        .in('tenant_id', tenantIds)
+      // Get balances from tenants.token_balance (single source of truth)
+      const { data: tenants, error: tError } = await admin
+        .from('tenants')
+        .select('id, name, tenant_code, token_balance')
+        .in('id', tenantIds)
 
-      if (!txError && txData) {
-        txData.forEach(tx => {
-          const tid = tx.tenant_id
-          balances[tid] = (balances[tid] || 0) + (Number(tx.amount) || 0)
+      if (!tError && tenants) {
+        tenants.forEach(t => {
+          balances[t.id] = Number(t.token_balance) || 0
+          tenantNames[t.id] = t.name || t.tenant_code
         })
       }
-
-      // Get tenant names
-      const { data: tenants } = await admin.from('tenants').select('id, name, tenant_code').in('id', tenantIds)
-      tenants?.forEach(t => { tenantNames[t.id] = t.name || t.tenant_code })
     }
 
     const result = tenantIds.map(id => {

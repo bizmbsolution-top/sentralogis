@@ -26,8 +26,17 @@ interface Tenant {
   admin_email: string
   admin_name: string
   whatsapp: string
+  active_sbus: string[]
   created_at: string
 }
+
+// [AI] SBU display config — matches SBU_MAP in sbuMapping.ts
+const SBU_BADGE: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  tr:  { label: 'TRK', bg: 'bg-blue-50',   text: 'text-blue-600',   border: 'border-blue-100' },
+  wh:  { label: 'WH',  bg: 'bg-amber-50',  text: 'text-amber-600',  border: 'border-amber-100' },
+  ink: { label: 'CL',  bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+  fwd: { label: 'FWD', bg: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-100' },
+};
 
 // [AI] Confirmation modal for activate/deactivate tenant
 function ToggleStatusModal({ tenant, onClose, onConfirm, isSubmitting }: {
@@ -294,6 +303,23 @@ export default function OwnerTenantsPage() {
                     <div className="flex items-center gap-2 text-sm text-slate-600"><UserIcon size={14} className="text-slate-400" /><span>{tenant.admin_name}</span></div>
                   </div>
 
+                  {/* [AI] SBU Activation Badges */}
+                  {tenant.active_sbus && tenant.active_sbus.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Active SBU</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tenant.active_sbus.map((sbu) => {
+                          const cfg = SBU_BADGE[sbu] || { label: sbu.toUpperCase(), bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
+                          return (
+                            <span key={sbu} className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                              {cfg.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Toggle Status Button */}
                   <button
                     onClick={() => { setSelectedTenant(tenant); setIsToggleModalOpen(true); }}
@@ -320,6 +346,7 @@ export default function OwnerTenantsPage() {
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tenant Code</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Tenant</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Active SBU</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">WhatsApp</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Admin Email</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
@@ -332,6 +359,21 @@ export default function OwnerTenantsPage() {
                     <td className="px-6 py-4 font-mono text-xs font-medium">{tenant.tenant_code}</td>
                     <td className="px-6 py-4 font-medium text-slate-900">{tenant.name || 'Unnamed'}</td>
                     <td className="px-6 py-4 font-bold text-slate-900">{tenant.token_balance.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(tenant.active_sbus || []).map((sbu) => {
+                          const cfg = SBU_BADGE[sbu] || { label: sbu.toUpperCase(), bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
+                          return (
+                            <span key={sbu} className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                              {cfg.label}
+                            </span>
+                          );
+                        })}
+                        {(!tenant.active_sbus || tenant.active_sbus.length === 0) && (
+                          <span className="text-[10px] text-slate-400 font-medium">None</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4"><div className="flex items-center gap-1.5 text-emerald-600 font-bold"><Phone size={14} />{tenant.whatsapp}</div></td>
                     <td className="px-6 py-4 text-slate-500 text-sm">{tenant.admin_email}</td>
                     <td className="px-6 py-4 text-right">
