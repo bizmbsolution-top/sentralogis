@@ -17,19 +17,15 @@ export default function DashboardLayout({
   const { user, profile, loading, isAuthenticated } = useAuth()
   const router = useRouter()
 
-  // [AI] Auth guard with timeout fallback - show content after 5s even if profile still loading
-  const [showTimeout, setShowTimeout] = useState(false);
-  
+  // [AI] Redirect to login when auth is resolved and user is not authenticated
   useEffect(() => {
-    if (loading) {
-      const timer = setTimeout(() => setShowTimeout(true), 5000);
-      return () => clearTimeout(timer);
-    } else {
-      setShowTimeout(false);
+    if (!loading && !isAuthenticated) {
+      window.location.replace('/login');
     }
-  }, [loading]);
+  }, [loading, isAuthenticated]);
 
-  if (loading && !showTimeout) {
+  // [AI] Show spinner only while auth is loading — no timeout fallback
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
@@ -40,11 +36,7 @@ export default function DashboardLayout({
     )
   }
 
-  if (!isAuthenticated && !loading) {
-    // [AI] Use window.location.replace for a clean redirect to avoid stale state
-    if (typeof window !== 'undefined') {
-      window.location.replace('/login')
-    }
+  if (!isAuthenticated) {
     return null
   }
 
@@ -59,7 +51,7 @@ export default function DashboardLayout({
         <Sidebar 
           isOpen={sidebarOpen} 
           onClose={() => setSidebarOpen(false)} 
-          onLinkClick={() => {}} // [AI] Removed redundant router.refresh() on link click to keep transitions smooth
+          onLinkClick={() => {}}
         />
         
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
