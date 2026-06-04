@@ -5,15 +5,76 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
-import { Building } from 'lucide-react';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Building, ChevronDown, ChevronRight, X } from 'lucide-react';
 
 interface MenuItem {
   label: string;
   icon: string;
   href: string;
   submenu?: MenuItem[];
+  requiresSbu?: string; // e.g. 'tr', 'wh', 'ink', 'fwd'
 }
+
+// ============================================
+// MODULAR MENU BLOCKS (DEDUPLICATION)
+// ============================================
+
+const MOD_FINANCE_MATRIX: MenuItem = {
+  label: 'Finance Matrix', icon: '💰', href: '#',
+  submenu: [
+    { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
+    { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
+    { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+  ]
+};
+
+const MOD_WAREHOUSE_HQ: MenuItem = {
+  label: 'Warehouse', icon: '🏭', href: '#', requiresSbu: 'wh',
+  submenu: [
+    { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
+    { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
+    { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
+    { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
+    { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
+    { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
+    { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
+    { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+    { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
+    { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
+  ]
+};
+
+const MOD_MASTER_DATA_HQ: MenuItem = {
+  label: 'Master Data', icon: '🗂️', href: '#',
+  submenu: [
+    { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
+    { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
+    { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types', requiresSbu: 'tr' },
+    { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets', requiresSbu: 'tr' },
+    { label: 'Drivers', icon: '👤', href: '/hq/master/drivers', requiresSbu: 'tr' },
+  ]
+};
+
+const MOD_TRUCKING_HQ: MenuItem[] = [
+  { label: 'Work Order', icon: '📋', href: '/hq/work-orders', requiresSbu: 'tr' },
+  { label: 'Job Order', icon: '🚛', href: '/hq/job-orders', requiresSbu: 'tr' },
+  { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities', requiresSbu: 'tr' },
+  { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance', requiresSbu: 'tr' },
+  { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance', requiresSbu: 'tr' },
+];
+
+const MOD_DIRECTOR_HQ: MenuItem[] = [
+  { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
+  { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
+  MOD_FINANCE_MATRIX,
+  { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities', requiresSbu: 'tr' },
+  { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance', requiresSbu: 'tr' },
+  { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance', requiresSbu: 'tr' },
+  { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management', requiresSbu: 'tr' },
+  MOD_WAREHOUSE_HQ,
+  { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  { label: 'Organization', icon: '👥', href: '/tenant/staff' },
+];
 
 // ============================================
 // MENU DEFINITIONS BY ROLE
@@ -58,7 +119,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     {
-      label: 'SBU Trucking', icon: '🚛', href: '#',
+      label: 'SBU Trucking', icon: '🚛', href: '#', requiresSbu: 'tr',
       submenu: [
         { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
         { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
@@ -71,15 +132,13 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     {
       label: 'Finance Matrix', icon: '💰', href: '#',
       submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
+        ...MOD_FINANCE_MATRIX.submenu!,
         { label: 'Master COA', icon: '📖', href: '/hq/finance/coa' },
         { label: 'Master Pajak', icon: '💵', href: '/hq/finance/tax-management' },
       ]
     },
     {
-      label: 'Warehouse', icon: '🏭', href: '#',
+      label: 'Warehouse', icon: '🏭', href: '#', requiresSbu: 'wh',
       submenu: [
         { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
         { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
@@ -96,285 +155,41 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 
-  // HQ Staff (CS - Ops - Finances)
+  // HQ Staff (CS - Ops - Finances) - Unifying the duplicates
   hq_cs: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
     { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
-    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
-    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
-      ]
-    },
-    {
-      label: 'Master Data', icon: '🗂️', href: '#',
-      submenu: [
-        { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
-        { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
-        { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types' },
-        { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets' },
-        { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
-      ]
-    },
+    ...MOD_TRUCKING_HQ,
+    MOD_FINANCE_MATRIX,
+    MOD_WAREHOUSE_HQ,
+    MOD_MASTER_DATA_HQ,
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
   hq_ops: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
     { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
-    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
-    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-      ]
-    },
-    {
-      label: 'Master Data', icon: '🗂️', href: '#',
-      submenu: [
-        { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
-        { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
-        { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types' },
-        { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets' },
-        { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
-      ]
-    },
+    ...MOD_TRUCKING_HQ,
+    MOD_FINANCE_MATRIX,
+    MOD_WAREHOUSE_HQ,
+    MOD_MASTER_DATA_HQ,
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
   hq_finance: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
     { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
-    { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
-    { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
-    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Locations & Zones', icon: '🗺️', href: '/hq/warehouse/locations' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
-      ]
-    },
-    {
-      label: 'Master Data', icon: '🗂️', href: '#',
-      submenu: [
-        { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
-        { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
-        { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types' },
-        { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets' },
-        { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
-      ]
-    },
+    ...MOD_TRUCKING_HQ,
+    MOD_FINANCE_MATRIX,
+    MOD_WAREHOUSE_HQ,
+    MOD_MASTER_DATA_HQ,
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
 
-  // ============================================
-  // EXECUTIVE COMMAND SUITE (Shared by all Directors)
-  // ============================================
-  hq_director_ops: [
-    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
-    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Master UOM', icon: '⚖️', href: '/hq/master-data/uoms' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-      ]
-    },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
-    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
-  ],
-  hq_director_fin: [
-    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
-    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
-      ]
-    },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
-    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
-  ],
-  hq_director_cs: [
-    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
-    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
-      ]
-    },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
-    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
-  ],
-  hq_director_comm: [
-    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
-    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
-      ]
-    },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
-    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
-  ],
-  hq_director_bizdev: [
-    { label: 'Executive Suite', icon: '💎', href: '/hq/business' },
-    { label: 'Ops Command', icon: '🏠', href: '/hq/ops-dashboard' },
-    {
-      label: 'Finance Matrix', icon: '💰', href: '#',
-      submenu: [
-        { label: 'Finance Summary', icon: '📊', href: '/hq/finance/summary' },
-        { label: 'AR = Invoicing', icon: '🧾', href: '/hq/invoice-customer' },
-        { label: 'AP = Purchase', icon: '💳', href: '/hq/finance/cost-audit' },
-      ]
-    },
-    { label: 'Mission Radar', icon: '📍', href: '/hq/sbu-activities' },
-    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
-    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
-    { label: 'Fleet Readiness', icon: '🚛', href: '/hq/fleet-management' },
-    {
-      label: 'Warehouse', icon: '🏭', href: '#',
-      submenu: [
-        { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
-        { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
-        { label: 'Overview', icon: '📊', href: '/hq/warehouse' },
-        { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
-        { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
-        { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
-        { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
-      ]
-    },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
-    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
-  ],
+  // Executive Directors - Using the unified MOD_DIRECTOR_HQ
+  hq_director_ops: MOD_DIRECTOR_HQ,
+  hq_director_fin: MOD_DIRECTOR_HQ,
+  hq_director_cs: MOD_DIRECTOR_HQ,
+  hq_director_comm: MOD_DIRECTOR_HQ,
+  hq_director_bizdev: MOD_DIRECTOR_HQ,
 
   // SBU Roles (Manager, Ops, Admin, Finances)
   sbu_manager_tr: [
@@ -438,6 +253,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
     { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
     { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
   ],
   sbu_ops_wh: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
@@ -446,6 +262,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
     { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
     { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
   ],
   sbu_admin_wh: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
@@ -456,6 +273,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
     { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
     { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
   ],
 
   // SBU Finance Warehouse
@@ -492,7 +310,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     {
-      label: 'SBU Warehouse', icon: '🏭', href: '#',
+      label: 'SBU Warehouse', icon: '🏭', href: '#', requiresSbu: 'wh',
       submenu: [
         { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
         { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
@@ -500,7 +318,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     {
-      label: 'SBU Trucking', icon: '🚛', href: '#',
+      label: 'SBU Trucking', icon: '🚛', href: '#', requiresSbu: 'tr',
       submenu: [
         { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
         { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
@@ -528,7 +346,7 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
         .then(({data, error}) => {
            if (!error && data?.logo_url) setTenantLogo(data.logo_url);
         });
-      // [AI] Fetch active SBU types for this tenant
+      // Fetch active SBU types for this tenant
       supabase.from('tenant_sbus').select('sbu_type').eq('tenant_id', profile.tenant_id).eq('status', 'active')
         .then(({data, error}) => {
            if (!error && data) setActiveSbus(new Set(data.map((s: any) => s.sbu_type)));
@@ -538,29 +356,30 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
 
   const role = profile?.role || 'tenant_admin';
 
-  // [AI] Filter menu items based on active SBU status
+  // [AI] Universal recursive filter based on active SBU status
   const filterBySbu = (items: MenuItem[]): MenuItem[] => {
-    // Only filter for tenant roles — HQ/owner/SBU/driver roles keep all menus
-    if (role !== 'tenant_superadmin' && role !== 'tenant_admin') return items;
+    // Only bypass for non-tenant entities (owner & driver)
+    // ALL tenant users (superadmin, admin, hq, sbu) MUST respect the tenant's active SBUs
+    if (role === 'owner_sentralogis' || role === 'driver') return items;
 
     return items.reduce<MenuItem[]>((acc, item) => {
-      // SBU Trucking → requires 'tr'
-      if (item.label === 'SBU Trucking' && !activeSbus.has('tr')) return acc;
-      // Warehouse / SBU Warehouse → requires 'wh'
-      if ((item.label === 'Warehouse' || item.label === 'SBU Warehouse') && !activeSbus.has('wh')) return acc;
-      // Forwarding → requires 'fwd'
-      if (item.label === 'Forwarding' && !activeSbus.has('fwd')) return acc;
-      // Clearance → requires 'ink'
-      if (item.label === 'Clearance' && !activeSbus.has('ink')) return acc;
+      // If item requires a specific SBU and it's not active, hide it entirely
+      if (item.requiresSbu && !activeSbus.has(item.requiresSbu)) {
+        return acc;
+      }
 
-      // Recurse into submenu
+      // If item has submenu, filter the submenu recursively
       if (item.submenu) {
         const filteredSubs = filterBySbu(item.submenu);
-        if (filteredSubs.length === 0 && item.href === '#') return acc;
+        // If submenu becomes empty after filtering, and this is just a folder (href '#'), hide the folder
+        if (filteredSubs.length === 0 && item.href === '#') {
+          return acc;
+        }
         acc.push({ ...item, submenu: filteredSubs.length > 0 ? filteredSubs : undefined });
       } else {
         acc.push(item);
       }
+      
       return acc;
     }, []);
   };
@@ -649,7 +468,6 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
                     href={item.href}
                     onClick={() => {
                       if (window.innerWidth < 1024) onClose();
-                      // [AI] Removed router.refresh() to allow smooth Next.js client-side transition
                       if (onLinkClick) onLinkClick();
                     }}
                     className={`
@@ -675,7 +493,6 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
                           href={sub.href}
                           onClick={() => {
                             if (window.innerWidth < 1024) onClose();
-                            // [AI] Removed router.refresh() to allow smooth Next.js client-side transition
                             if (onLinkClick) onLinkClick();
                           }}
                           className={`

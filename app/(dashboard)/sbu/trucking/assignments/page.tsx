@@ -25,6 +25,7 @@ import { sendNotification } from '@/lib/supabase/notifications';
 import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewModal';
 // [AI] Import printCashAdvanceSlip utility to print cash advance slips for internal drivers directly from assignments list
 import { printCashAdvanceSlip } from '../utils';
+import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status';
 
 // ---------------------------------------------------------
 // DELIVERY NOTE MODAL (Surat Jalan)
@@ -366,29 +367,7 @@ export default function JobOrderManagementPage() {
     }
   };
 
-  // --- STANDARDIZED STATUS LOGIC ---
-  const DONE_STATUSES = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE', 'INVOICED', 'PAID'];
-  const ACTIVE_STATUSES = [
-    'IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY',
-    'ORDER DITERIMA', 'ACCEPTED', 'TIBA DI ASAL', 'MENUJU ASAL',
-    'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT',
-    'STARTED', 'LOADING', 'UNLOADING', 'DITERIMA', 'SELESAI'
-  ];
-  const REJECTED_STATUSES = ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'];
-
-  const getJobCategory = useCallback((jo: any) => {
-    const s = jo.status?.toUpperCase() || '';
-    const dr = jo.driver_response?.toLowerCase() || '';
-
-    // [AI] Rejected JOs get their own category — must come before 'assigned' check
-    if (REJECTED_STATUSES.includes(s)) return 'rejected';
-    if (DONE_STATUSES.includes(s)) return 'completed';
-    if (ACTIVE_STATUSES.includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU')) return 'active';
-    // ASSIGNED: has driver/fleet, properly deployed via Complete Assignment flow
-    if (jo.driver_id && jo.fleet_id && !DONE_STATUSES.includes(s) && !ACTIVE_STATUSES.includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
-    // NEW: no driver/fleet yet
-    return 'awaiting';
-  }, [ACTIVE_STATUSES, DONE_STATUSES, REJECTED_STATUSES]);
+  // [AI] getJobCategory is now imported from @/lib/domain/jo/status
 
   const stats = useMemo(() => {
     const categories = jobOrders.map(jo => getJobCategory(jo));
@@ -400,7 +379,7 @@ export default function JobOrderManagementPage() {
       jobDone: categories.filter(c => c === 'completed').length,
       rejected: categories.filter(c => c === 'rejected').length
     };
-  }, [jobOrders, getJobCategory]);
+  }, [jobOrders]);
 
   const filteredJobs = useMemo(() => {
     return jobOrders.filter(jo => {
@@ -419,7 +398,7 @@ export default function JobOrderManagementPage() {
       if (selectedStatus === 'rejected') return category === 'rejected';
       return category === selectedStatus;
     });
-  }, [jobOrders, searchTerm, selectedStatus, getJobCategory]);
+  }, [jobOrders, searchTerm, selectedStatus]);
 
   const getStatusBadge = (jo: any) => {
     const category = getJobCategory(jo);

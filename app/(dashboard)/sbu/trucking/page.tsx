@@ -11,6 +11,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import Link from "next/link";
 import { formatThousand } from "./utils";
+import { JO_DONE_STATUSES, JO_REJECTED_STATUSES } from "@/lib/domain/jo/status";
 
 export default function SBUTruckingDashboard() {
     const supabase = createClient();
@@ -80,8 +81,6 @@ export default function SBUTruckingDashboard() {
             const drivers = driversRes.data || [];
             const fleets = fleetsRes.data || [];
 
-            const DONE_STATUSES = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE', 'INVOICED', 'PAID'];
-            const REJECTED_STATUSES = ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'];
             const ACTIVE_TRANSIT_STATUSES = ['IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY', 'TIBA DI ASAL', 'MENUJU ASAL', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'STARTED', 'LOADING', 'UNLOADING'];
 
             const ACTIVE_TRACKING_STATUSES = ['IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY', 'MENUJU ASAL', 'TIBA DI ASAL', 'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT', 'STARTED', 'LOADING', 'UNLOADING', 'DITERIMA', 'SELESAI'];
@@ -97,7 +96,7 @@ export default function SBUTruckingDashboard() {
 
             const moving = jos.filter(j => {
                 const s = j.status?.toUpperCase() || '';
-                if (DONE_STATUSES.includes(s) || REJECTED_STATUSES.includes(s)) return false;
+                if ((JO_DONE_STATUSES as readonly string[]).includes(s) || (JO_REJECTED_STATUSES as readonly string[]).includes(s)) return false;
                 return (
                     j.driver_response === 'accepted' || 
                     ACTIVE_TRANSIT_STATUSES.includes(s) ||
@@ -107,11 +106,11 @@ export default function SBUTruckingDashboard() {
             }).length;
 
             const pending = items.filter(i => ['PENDING', 'NEED_ASSIGNMENT', 'NEED_ASSIGN'].includes(i.status?.toUpperCase())).length;
-            const completed = jos.filter(j => DONE_STATUSES.includes(j.status?.toUpperCase())).length;
+            const completed = jos.filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase())).length;
             
             // Operation Revenue: from wo_item.unit_price (fallback to base_price)
             const revenue = jos
-                .filter(j => DONE_STATUSES.includes(j.status?.toUpperCase()))
+                .filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()))
                 .reduce((acc, curr) => acc + (Number(curr.wo_item?.unit_price) || Number(curr.base_price) || 0), 0);
 
             const pendingHandovers = items.filter(i => i.status?.toUpperCase() === 'HANDOVER_PENDING').length;
@@ -120,8 +119,8 @@ export default function SBUTruckingDashboard() {
             const activeDriverIds = new Set(
                 jos
                     .filter(j => 
-                        !DONE_STATUSES.includes(j.status?.toUpperCase()) && 
-                        !REJECTED_STATUSES.includes(j.status?.toUpperCase())
+                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()) && 
+                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
                     )
                     .map(j => j.driver_id)
                     .filter(Boolean)
@@ -132,8 +131,8 @@ export default function SBUTruckingDashboard() {
             const activeFleetIds = new Set(
                 jos
                     .filter(j => 
-                        !DONE_STATUSES.includes(j.status?.toUpperCase()) && 
-                        !REJECTED_STATUSES.includes(j.status?.toUpperCase())
+                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()) && 
+                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
                     )
                     .map(j => j.fleet_id)
                     .filter(Boolean)
@@ -159,13 +158,13 @@ export default function SBUTruckingDashboard() {
                 
                 const dayFulfilled = dayItems.filter(item => {
                     // Check if wo_item status is completed/fulfilled
-                    const isItemCompleted = DONE_STATUSES.includes(item.status?.toUpperCase());
+                    const isItemCompleted = (JO_DONE_STATUSES as readonly string[]).includes(item.status?.toUpperCase());
                     if (isItemCompleted) return true;
                     
                     // Or check if there is any completed job order associated with this wo_item
                     const hasCompletedJO = jos.some(j => 
                         j.wo_item_id === item.id && 
-                        DONE_STATUSES.includes(j.status?.toUpperCase())
+                        (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
                     );
                     return hasCompletedJO;
                 }).length;

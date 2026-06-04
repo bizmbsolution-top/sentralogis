@@ -109,22 +109,31 @@ export default function WarehouseWorkOrdersPage() {
     item.wo?.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const pendingCount = items.filter(i => ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
-  const inProgressCount = items.filter(i => ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(i.status?.toLowerCase() || '')).length;
-  const completedCount = items.filter(i => ['completed', 'done', 'selesai'].includes(i.status?.toLowerCase() || '')).length;
-  const docFinancesCount = items.filter(i => i.status?.toLowerCase() === 'doc_finances').length;
-  const readyBillingCount = items.filter(i => i.status?.toLowerCase() === 'ready_billing').length;
-  const billingCount = items.filter(i => i.status?.toLowerCase() === 'billing').length;
+  const isItemCompleted = (item: WOItem) => {
+    if (['completed', 'done', 'selesai'].includes(item.status?.toLowerCase() || '')) return true;
+    const totalUnits = item.item_data?.unit_count || 1;
+    const jos = item.job_orders || [];
+    return jos.length > 0 && jos.length >= totalUnits && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
+  };
+
+  const pendingCount = items.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
+  const inProgressCount = items.filter(i => !isItemCompleted(i) && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(i.status?.toLowerCase() || '')).length;
+  const completedCount = items.filter(i => isItemCompleted(i)).length;
+  const docFinancesCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'doc_finances').length;
+  const readyBillingCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'ready_billing').length;
+  const billingCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'billing').length;
 
   const displayItems = filteredItems.filter(item => {
      if (statusFilter === 'ALL') return true;
      const s = item.status?.toLowerCase() || '';
-     if (statusFilter === 'PENDING') return ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s);
-     if (statusFilter === 'IN_PROGRESS') return ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(s);
-     if (statusFilter === 'COMPLETED') return ['completed', 'done', 'selesai'].includes(s);
-     if (statusFilter === 'DOC_FINANCES') return s === 'doc_finances';
-     if (statusFilter === 'READY_BILLING') return s === 'ready_billing';
-     if (statusFilter === 'BILLING') return s === 'billing';
+     const completed = isItemCompleted(item);
+     
+     if (statusFilter === 'PENDING') return !completed && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s);
+     if (statusFilter === 'IN_PROGRESS') return !completed && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(s);
+     if (statusFilter === 'COMPLETED') return completed;
+     if (statusFilter === 'DOC_FINANCES') return !completed && s === 'doc_finances';
+     if (statusFilter === 'READY_BILLING') return !completed && s === 'ready_billing';
+     if (statusFilter === 'BILLING') return !completed && s === 'billing';
      return true;
   });
 

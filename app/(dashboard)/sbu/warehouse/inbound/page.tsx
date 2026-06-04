@@ -6,8 +6,10 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
   DownloadCloud, Search, Plus, Loader2, ArrowRight, Truck, ClipboardCheck,
-  PackageCheck, CheckCircle2, PackageX, AlertTriangle, User, MapPin
+  PackageCheck, CheckCircle2, PackageX, AlertTriangle, User, MapPin,
+  MessageSquare
 } from 'lucide-react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import ReceiptDetailModal from './components/ReceiptDetailModal';
 
@@ -31,9 +33,8 @@ interface InboundReceipt {
 
 export default function InboundReceivingPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const [warehouseName, setWarehouseName] = useState<string>('Warehouse Utama');
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   
   const [receipts, setReceipts] = useState<InboundReceipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,27 +50,23 @@ export default function InboundReceivingPage() {
     }
   }, [profile]);
 
-  // Fetch Warehouses
   useEffect(() => {
-    const fetchWarehouses = async () => {
-      if (!tenantId) return;
+    const fetchWarehouseName = async () => {
+      if (!profile?.warehouse_id) return;
       const { data } = await supabase
         .from('md_warehouses')
-        .select('id, name, code')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .order('name');
-        
-      if (data && data.length > 0) {
-        setWarehouses(data);
-        setSelectedWarehouseId(data[0].id); // Auto select first
+        .select('name, code')
+        .eq('id', profile.warehouse_id)
+        .single();
+      if (data) {
+        setWarehouseName(`[${data.code}] ${data.name}`);
       }
     };
-    fetchWarehouses();
-  }, [tenantId]);
+    fetchWarehouseName();
+  }, [profile?.warehouse_id]);
 
   const fetchReceipts = useCallback(async () => {
-    if (!tenantId || !selectedWarehouseId) return;
+    if (!tenantId || !profile?.warehouse_id) return;
     setLoading(true);
 
     try {
@@ -82,7 +79,7 @@ export default function InboundReceivingPage() {
           driver:driver_id(name)
         `)
         .eq('tenant_id', tenantId)
-        .eq('warehouse_id', selectedWarehouseId)
+        .eq('warehouse_id', profile.warehouse_id)
         .order('created_at', { ascending: false });
 
       if (activeTab !== 'ALL') {
@@ -107,7 +104,7 @@ export default function InboundReceivingPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, selectedWarehouseId, activeTab]);
+  }, [tenantId, profile?.warehouse_id, activeTab]);
 
   useEffect(() => {
     fetchReceipts();
@@ -119,6 +116,7 @@ export default function InboundReceivingPage() {
       'TRUCK_ARRIVED': { bg: 'bg-indigo-100', text: 'text-indigo-700', icon: Truck, label: 'Arrived' },
       'UNLOADING': { bg: 'bg-amber-100', text: 'text-amber-700', icon: Loader2, label: 'Unloading' },
       'CHECKING': { bg: 'bg-blue-100', text: 'text-blue-700', icon: ClipboardCheck, label: 'Checking' },
+      'CHECKING_DONE': { bg: 'bg-teal-100', text: 'text-teal-700', icon: ClipboardCheck, label: 'Review' },
       'PUTAWAY_IN_PROGRESS': { bg: 'bg-purple-100', text: 'text-purple-700', icon: PackageCheck, label: 'Putaway' },
       'COMPLETED': { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle2, label: 'Completed' },
     };
@@ -150,19 +148,17 @@ export default function InboundReceivingPage() {
         </div>
         
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-slate-600">
             <MapPin size={16} className="text-slate-400" />
-            <select 
-              value={selectedWarehouseId}
-              onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              className="text-sm font-bold text-slate-900 bg-transparent outline-none cursor-pointer"
-            >
-              {warehouses.map(w => (
-                <option key={w.id} value={w.id}>[{w.code}] {w.name}</option>
-              ))}
-              {warehouses.length === 0 && <option value="">No Warehouse Found</option>}
-            </select>
+            <span className="text-sm font-bold">{warehouseName}</span>
           </div>
+          <Link
+            href="/sbu/warehouse/inbound/notifications"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-bold text-sm shadow-sm shadow-emerald-600/20 active:scale-95"
+          >
+            <MessageSquare size={18} />
+            WA Notif
+          </Link>
           <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium text-sm shadow-sm shadow-blue-600/20 active:scale-95">
             <Plus size={18} />
             Create Receipt
@@ -174,7 +170,7 @@ export default function InboundReceivingPage() {
       <Card className="p-2 border-slate-200 shadow-none overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl overflow-x-auto no-scrollbar">
-            {['ALL', 'EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].map(tab => (
+            {['ALL', 'EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}

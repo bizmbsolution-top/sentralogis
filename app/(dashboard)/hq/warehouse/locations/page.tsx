@@ -474,10 +474,22 @@ export default function MasterWarehousePage() {
         return p;
       });
 
-      const { error } = await supabase
-        .from("md_warehouse_locations")
-        .upsert(payloads);
-      if (error) throw error;
+      const newPayloads = payloads.filter(p => !p.id);
+      const updatePayloads = payloads.filter(p => p.id);
+
+      if (newPayloads.length > 0) {
+        const { error: insertErr } = await supabase
+          .from("md_warehouse_locations")
+          .insert(newPayloads);
+        if (insertErr) throw insertErr;
+      }
+
+      if (updatePayloads.length > 0) {
+        const { error: updateErr } = await supabase
+          .from("md_warehouse_locations")
+          .upsert(updatePayloads);
+        if (updateErr) throw updateErr;
+      }
 
       toast.success(
         `${payloads.length} Kode Penyimpanan berhasil ditambahkan.`,

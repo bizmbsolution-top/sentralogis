@@ -18,6 +18,7 @@ import {
   Loader2,
   Save,
   X,
+  MessageCircle,
   Plus,
   Trash2,
   ShieldAlert,
@@ -1232,7 +1233,7 @@ export default function WarehouseExecutionPage() {
           *,
           wo:work_orders!wo_id (
             id, wo_number, order_date, execution_date, customer_id,
-            customer:md_entities!customer_id ( name, legal_name )
+            customer:md_entities!customer_id ( name, legal_name, phone )
           )
         `,
         )
@@ -1424,6 +1425,23 @@ export default function WarehouseExecutionPage() {
               <p className="text-xs font-semibold text-amber-100">
                 {woItemData.wo?.customer?.legal_name}
               </p>
+              
+              {woItemData.wo?.customer?.phone && (
+                <button
+                  onClick={() => {
+                    const phone = woItemData.wo.customer.phone;
+                    let formattedPhone = phone.replace(/\D/g, '');
+                    if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.substring(1);
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const link = `${origin}/track/warehouse/${woItemData.wo.id}`;
+                    const msg = `Yth. Pelanggan ${woItemData.wo.customer.name},\n\nPesanan gudang Anda dengan referensi *${woItemData.wo.wo_number}* dapat dipantau secara real-time (live tracking) melalui tautan berikut:\n\n${link}\n\nTerima kasih.`;
+                    window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                  }}
+                  className="mt-4 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl flex items-center gap-2 w-fit transition-colors shadow-sm"
+                >
+                  <MessageCircle size={14} /> Kirim Resi via WA
+                </button>
+              )}
             </div>
             <div className="pt-4 border-t border-amber-400/30">
               <p className="text-[10px] font-black text-amber-200 uppercase tracking-widest mb-1">

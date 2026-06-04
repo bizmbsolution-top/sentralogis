@@ -1,7 +1,18 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Truck, Warehouse, Ship, LayoutGrid } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+
+// [AI] SBU visual indicators
+const SBU_BADGE_CONFIG: Record<string, {
+  label: string; icon: React.ElementType;
+  bg: string; text: string; border: string;
+}> = {
+  TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  WAREHOUSE:  { label: 'Warehouse',  icon: Warehouse,   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  CLEARANCE:  { label: 'Clearance',  icon: LayoutGrid,  bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  FORWARDING: { label: 'Forwarding', icon: Ship,        bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200' },
+};
 import { Button } from "@/components/ui/Button";
 import {
   formatRupiah,
@@ -20,6 +31,11 @@ export default function WoListCard({ group, paymentMap, onSelect }: WoListCardPr
   const tone = getGroupTone(group);
   const transportLabel = resolveTransportLabel(group.jo_list);
   const IconComponent = tone.icon;
+
+  // [AI] Extract unique SBU types
+  const sbuTypes = Array.from(new Set(
+    group.jo_list?.map((joGroup: any) => joGroup.jo?.wo_item?.sbu_type?.toUpperCase()).filter(Boolean)
+  )) as string[];
 
   const pendingCount = group.costs.filter(
     (item: any) => item.status === "need_approval"
@@ -80,6 +96,22 @@ export default function WoListCard({ group, paymentMap, onSelect }: WoListCardPr
                 >
                   {transportLabel}
                 </Badge>
+                
+                {/* [AI] SBU Badges */}
+                {sbuTypes.map(sbu => {
+                  const config = SBU_BADGE_CONFIG[sbu];
+                  if (!config) return null;
+                  const Icon = config.icon;
+                  return (
+                    <Badge
+                      key={sbu}
+                      className={`${config.bg} ${config.text} ${config.border} border text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 flex items-center gap-1`}
+                    >
+                      <Icon size={10} />
+                      {config.label}
+                    </Badge>
+                  );
+                })}
               </div>
               <p className="text-xs font-medium text-slate-700 truncate">
                 {group.wo?.customer?.legal_name ||

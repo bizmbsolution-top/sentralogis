@@ -1,9 +1,20 @@
 "use client";
 
 import React from "react";
-import { Loader2, ShieldCheck, Search, RefreshCw } from "lucide-react";
+import { Loader2, ShieldCheck, Search, RefreshCw, Truck, Warehouse, Ship, LayoutGrid, Layers } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+
+// [AI] SBU visual indicators for Cost Audit cards
+const SBU_BADGE_CONFIG: Record<string, {
+  label: string; icon: React.ElementType;
+  bg: string; text: string; border: string;
+}> = {
+  TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  WAREHOUSE:  { label: 'Warehouse',  icon: Warehouse,   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  CLEARANCE:  { label: 'Clearance',  icon: LayoutGrid,  bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  FORWARDING: { label: 'Forwarding', icon: Ship,        bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200' },
+};
 import { useCostAuditData } from "./hooks/useCostAuditData";
 import StatWidgets from "./components/StatWidgets";
 import WoListCard from "./components/WoListCard";
@@ -17,6 +28,8 @@ export default function CostAuditPage() {
     setSearchTerm,
     statusFilter,
     setStatusFilter,
+    sbuFilter,
+    handleSbuFilterChange,
     selectedWo,
     setSelectedWoId,
     groupedData,
@@ -118,6 +131,32 @@ export default function CostAuditPage() {
               </span>
             </button>
           ))}
+        </div>
+
+        {/* [AI] Desktop SBU Type Filter */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
+          {[
+            { id: 'all', label: 'All SBU', icon: Layers },
+            ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+          ].map(item => {
+            const isActive = sbuFilter === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleSbuFilterChange(item.id)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                <Icon size={12} />
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ─── Queue / List View ─────────────────────────── */}

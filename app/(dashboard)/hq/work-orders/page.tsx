@@ -10,8 +10,10 @@ import {
   Plus, Search, FileText, Loader2, Calendar,
   CheckCircle2,
   Truck, Activity, ShieldCheck, TrendingUp,
-  ArrowRight, Users, Layers, ExternalLink, X
+  ArrowRight, Users, Layers, ExternalLink, X,
+  Warehouse, Ship, LayoutGrid
 } from 'lucide-react';
+import { SBU_MAP } from '@/lib/utils/sbuMapping';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -45,6 +47,17 @@ const TABS = [
   { id: 'completed', label: 'Done', icon: CheckCircle2 },
 ];
 
+// [AI] SBU visual indicators for WO cards — colors aligned with SBU_MAP from sbuMapping.ts
+const SBU_BADGE_CONFIG: Record<string, {
+  label: string; icon: React.ElementType;
+  bg: string; text: string; border: string;
+}> = {
+  TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  WAREHOUSE:  { label: 'Warehouse',  icon: Warehouse,   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  CLEARANCE:  { label: 'Clearance',  icon: LayoutGrid,  bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  FORWARDING: { label: 'Forwarding', icon: Ship,        bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200' },
+};
+
 export default function HQWorkOrdersPage() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get('status') || 'all';
@@ -62,6 +75,8 @@ export default function HQWorkOrdersPage() {
   const [selectedWOForRejected, setSelectedWOForRejected] = useState<WorkOrder | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // [AI] SBU filter state — synced with URL ?sbu= param
+  const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -69,7 +84,23 @@ export default function HQWorkOrdersPage() {
 
     const q = searchParams.get('q');
     if (q) setSearchTerm(q);
+
+    // [AI] reading sbu filter from URL
+    const sbu = searchParams.get('sbu');
+    if (sbu) setSbuFilter(sbu);
   }, [searchParams]);
+
+  // [AI] Sync sbuFilter to URL without page reload
+  const handleSbuFilterChange = (value: string) => {
+    setSbuFilter(value);
+    const url = new URL(window.location.href);
+    if (value === 'all') {
+      url.searchParams.delete('sbu');
+    } else {
+      url.searchParams.set('sbu', value);
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
 
   useEffect(() => {
     const itemId = searchParams.get('itemId');
@@ -148,10 +179,26 @@ export default function HQWorkOrdersPage() {
     }
   }, [loadingAuth, profile?.tenant_id, fetchData]);
 
+  // [AI] Extract unique SBU types from a WO's items
+  const getWoSbuTypes = (wo: WorkOrder): string[] => {
+    const types = new Set<string>();
+    wo.wo_items?.forEach((item: any) => {
+      if (item.sbu_type) types.add(item.sbu_type.toUpperCase());
+    });
+    return Array.from(types);
+  };
+
   const filteredWorkOrders = useMemo(() => {
     return workOrders.filter(wo => {
       const matchesSearch = wo.wo_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         wo.md_entities?.name.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // [AI] SBU type filter
+      let matchesSbu = true;
+      if (sbuFilter !== 'all') {
+        const woSbuTypes = getWoSbuTypes(wo);
+        matchesSbu = woSbuTypes.includes(sbuFilter);
+      }
 
       let matchesStatus = true;
       if (statusFilter !== 'all') {
@@ -167,21 +214,24 @@ export default function HQWorkOrdersPage() {
         );
         const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
 
-        const anyMoving = !isCompleted && !hasHandoverPending && !hasHandoverRejected && allJobs.some(j =>
-          j.status?.toUpperCase().startsWith('MENUJU') ||
-          j.status?.toUpperCase().startsWith('TIBA') ||
-          ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+        const anyMoving = !isCompleted && !hasHandoverPending && !hasHandoverRejected && (
+          allJobs.some(j =>
+            j.status?.toUpperCase().startsWith('MENUJU') ||
+            j.status?.toUpperCase().startsWith('TIBA') ||
+            ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+          ) ||
+          allItems.some((i: any) => i.sbu_type === 'WAREHOUSE' && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(i.status?.toLowerCase() || ''))
         );
 
         const anyAssigned = !isCompleted && !hasHandoverPending && !hasHandoverRejected && !anyMoving && allJobs.some(j => j.fleet_id && j.driver_id);
         const isDraft = s === 'DRAFT' && !hasHandoverPending && !hasHandoverRejected;
         const isPending = (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !hasHandoverPending && !hasHandoverRejected && !anyAssigned && !anyMoving && !isCompleted;
 
-        if (statusFilter === 'draft') return matchesSearch && isDraft;
-        if (statusFilter === 'pending') return matchesSearch && isPending;
-        if (statusFilter === 'assigned_units') return matchesSearch && anyAssigned;
-        if (statusFilter === 'on_road') return matchesSearch && anyMoving;
-        if (statusFilter === 'completed') return matchesSearch && isCompleted;
+        if (statusFilter === 'draft') return matchesSearch && matchesSbu && isDraft;
+        if (statusFilter === 'pending') return matchesSearch && matchesSbu && isPending;
+        if (statusFilter === 'assigned_units') return matchesSearch && matchesSbu && anyAssigned;
+        if (statusFilter === 'on_road') return matchesSearch && matchesSbu && anyMoving;
+        if (statusFilter === 'completed') return matchesSearch && matchesSbu && isCompleted;
 
         if (statusFilter === 'need_audit') {
           matchesStatus = wo.hasPendingCosts === true;
@@ -194,9 +244,9 @@ export default function HQWorkOrdersPage() {
         }
       }
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesSbu;
     });
-  }, [workOrders, searchTerm, statusFilter]);
+  }, [workOrders, searchTerm, statusFilter, sbuFilter]);
 
   const getStatusBadge = (wo: WorkOrder) => {
     const s = wo.status?.toUpperCase() || '';
@@ -378,7 +428,7 @@ export default function HQWorkOrdersPage() {
         </div>
 
         {/* Mobile Tab Bar — horizontal scroll */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {TABS.map(tab => {
               const Icon = tab.icon;
@@ -403,6 +453,33 @@ export default function HQWorkOrdersPage() {
                       {count}
                     </span>
                   )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* [AI] Mobile SBU Type Filter */}
+        <div className="px-4 pb-3">
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {[
+              { id: 'all', label: 'All SBU', icon: Layers },
+              ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+            ].map(item => {
+              const isActive = sbuFilter === item.id;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleSbuFilterChange(item.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex-shrink-0 ${
+                    isActive
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'bg-white text-slate-400 border border-slate-200'
+                  }`}
+                >
+                  <Icon size={12} />
+                  <span>{item.label}</span>
                 </button>
               );
             })}
@@ -466,6 +543,32 @@ export default function HQWorkOrdersPage() {
             );
           })}
         </div>
+
+        {/* [AI] Desktop SBU Type Filter */}
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
+          {[
+            { id: 'all', label: 'All SBU', icon: Layers },
+            ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+          ].map(item => {
+            const isActive = sbuFilter === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleSbuFilterChange(item.id)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                <Icon size={12} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ===== MAIN CONTENT ===== */}
@@ -504,11 +607,21 @@ export default function HQWorkOrdersPage() {
               >
                 <div className="p-4 lg:p-6 relative">
                   <div className="flex items-center justify-between mb-4 lg:mb-8">
-                    <div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-sm transition-all rotate-3 group-hover:rotate-0 ${
-                      wo.status === 'completed' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      <Activity size={18} />
-                    </div>
+                    {/* [AI] Dynamic card icon based on dominant SBU type */}
+                    {(() => {
+                      const sbuTypes = getWoSbuTypes(wo);
+                      const primarySbu = sbuTypes[0] || 'TRUCKING';
+                      const config = SBU_BADGE_CONFIG[primarySbu] || SBU_BADGE_CONFIG.TRUCKING;
+                      const SbuIcon = config.icon;
+                      const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(wo.status);
+                      return (
+                        <div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-sm transition-all rotate-3 group-hover:rotate-0 ${
+                          isCompleted ? 'bg-indigo-100 text-indigo-700' : `${config.bg} ${config.text}`
+                        }`}>
+                          <SbuIcon size={18} />
+                        </div>
+                      );
+                    })()}
                     <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap justify-end">
                       {wo.hasPendingCosts && (
                         <Badge className="!bg-amber-100 !text-amber-600 !border-amber-200 font-black text-[9px] px-2 lg:px-3 py-1 uppercase tracking-widest italic animate-pulse">AUDIT BIAYA</Badge>
@@ -525,6 +638,29 @@ export default function HQWorkOrdersPage() {
                       <Users size={12} className="text-sky-500" />
                       <p className="text-[9px] font-black text-sky-700 uppercase tracking-widest truncate">{wo.md_entities?.legal_name || wo.md_entities?.name}</p>
                     </div>
+                    {/* [AI] SBU Type Badges */}
+                    {(() => {
+                      const sbuTypes = getWoSbuTypes(wo);
+                      if (sbuTypes.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {sbuTypes.map(type => {
+                            const config = SBU_BADGE_CONFIG[type];
+                            if (!config) return null;
+                            const SbuIcon = config.icon;
+                            return (
+                              <span
+                                key={type}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}
+                              >
+                                <SbuIcon size={10} />
+                                {config.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 lg:gap-3 mb-4 lg:mb-8">

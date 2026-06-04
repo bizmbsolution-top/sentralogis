@@ -139,6 +139,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalProfile.tenant_id = tenantData.tenant_id;
         finalProfile.tenant_code = tenantData.tenant_id;
         finalProfile.warehouse_id = tenantData.warehouse_id;
+      } else if (finalRole === 'tenant_superadmin' || finalRole === 'tenant_admin') {
+        // [AI] Fallback: Tenant Owners might not be in tenant_users, so check the tenants table
+        try {
+          const { data: ownerData } = await supabase
+            .from('tenants')
+            .select('id, tenant_code')
+            .eq('user_id', userId)
+            .maybeSingle();
+            
+          if (ownerData) {
+            finalProfile.tenant_id = ownerData.id;
+            finalProfile.tenant_code = ownerData.tenant_code || ownerData.id;
+          }
+        } catch (e) {
+          console.error('[Auth] Failed to fetch owner tenant_id', e);
+        }
       }
 
       if (finalProfile.tenant_id) {

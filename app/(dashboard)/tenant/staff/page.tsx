@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { 
   Users, Building2, Briefcase, Search, 
   Plus, Filter, MoreVertical, Shield,
-  CheckCircle2, Loader2
+  CheckCircle2, Loader2, HardHat
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -22,11 +22,12 @@ import { fetchTenantById } from '@/lib/actions/tenantActions';
 export default function TenantOrganizationPage() {
   const { user, profile } = useAuth();
   const [staff, setStaff] = useState<any[]>([]);
+  const [fieldStaff, setFieldStaff] = useState<any[]>([]);
   const [sbus, setSbus] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'hq' | 'sbu' | 'manage_sbu'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'hq' | 'sbu' | 'manage_sbu' | 'field_ops'>('all');
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -52,12 +53,13 @@ export default function TenantOrganizationPage() {
       }
 
       // 2. Fetch Raw Data (Decoupled to prevent join failures)
-      const [staffRes, sbuRes, roleRes, profileRes, whRes] = await Promise.all([
+      const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes] = await Promise.all([
         supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
         supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
         supabase.from('tenant_roles').select('*'),
         supabase.from('profiles').select('id, email, full_name, role'),
-        supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id)
+        supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id),
+        supabase.from('md_warehouse_staff').select('*, md_warehouses(name)').eq('tenant_id', tenant.id)
       ]);
 
       if (staffRes.error) throw staffRes.error;
@@ -77,6 +79,7 @@ export default function TenantOrganizationPage() {
       }));
 
       setStaff(enrichedStaff);
+      setFieldStaff(fieldStaffRes.data || []);
       setSbus(sbuRes.data || []);
       setWarehouses(whRes.data || []);
       
@@ -174,6 +177,7 @@ export default function TenantOrganizationPage() {
           { id: 'all', label: 'All Staff', icon: <Users size={16}/> },
           { id: 'hq', label: 'HQ Team', icon: <Building2 size={16}/> },
           { id: 'sbu', label: 'SBU Teams', icon: <Briefcase size={16}/> },
+          { id: 'field_ops', label: 'Ground Staff', icon: <HardHat size={16}/> },
           { id: 'manage_sbu', label: 'Manage Units (SBU)', icon: <Filter size={16}/> }
         ].map(tab => (
           <button
@@ -192,6 +196,57 @@ export default function TenantOrganizationPage() {
 
       {activeTab === 'manage_sbu' ? (
         <SBUManager sbus={sbus} onUpdate={fetchData} />
+      ) : activeTab === 'field_ops' ? (
+        <div className="space-y-6">
+           <Card className="overflow-hidden border-slate-100 shadow-xl shadow-slate-200/50">
+             <Table>
+               <TableHeader className="bg-slate-50/50">
+                 <TableRow>
+                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Full Name / WA</TableHead>
+                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Role</TableHead>
+                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Warehouse Assignment</TableHead>
+                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Status</TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {loading ? (
+                   <TableRow><TableCell colSpan={4} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-slate-300" size={32}/></TableCell></TableRow>
+                 ) : fieldStaff.length > 0 ? fieldStaff.map((fs) => (
+                   <TableRow key={fs.id} className="hover:bg-slate-50/50 transition-colors">
+                     <TableCell>
+                       <div>
+                         <p className="font-bold text-slate-900 tracking-tight">{fs.name}</p>
+                         <p className="text-[10px] text-slate-500 font-bold italic">{fs.whatsapp}</p>
+                       </div>
+                     </TableCell>
+                     <TableCell>
+                        <Badge variant="default" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
+                         {fs.role}
+                       </Badge>
+                     </TableCell>
+                     <TableCell>
+                        <span className="text-[10px] font-black text-blue-600 uppercase italic tracking-tighter">{fs.md_warehouses?.name || 'All Warehouses'}</span>
+                     </TableCell>
+                     <TableCell>
+                       <div className="flex items-center gap-2">
+                         <div className={`w-1.5 h-1.5 rounded-full ${fs.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                         <span className={`text-[10px] font-black uppercase tracking-widest ${fs.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                           {fs.is_active ? 'Active' : 'Offline'}
+                         </span>
+                       </div>
+                     </TableCell>
+                   </TableRow>
+                 )) : (
+                   <TableRow>
+                     <TableCell colSpan={4} className="py-20 text-center">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">No field staff detected</p>
+                     </TableCell>
+                   </TableRow>
+                 )}
+               </TableBody>
+             </Table>
+           </Card>
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="relative max-w-md">

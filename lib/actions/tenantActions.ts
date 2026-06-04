@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_noStore as noStore } from 'next/cache';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -418,6 +419,7 @@ export async function grantTokenToTenant(tenantCode: string, amount: number, not
 }
 
 export async function fetchTenantById(tenantId: string): Promise<any> {
+  noStore();
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('tenants')

@@ -11,12 +11,15 @@ import {
   Search, Loader2,
   Clock, CheckCircle2, Navigation as NavIcon,
   AlertCircle, Activity, ClipboardList,
-  Phone, X, FileText, Layers, Box
+  Phone, X, FileText, Layers, Box,
+  Warehouse, Ship, LayoutGrid
 } from 'lucide-react';
+import { SBU_MAP } from '@/lib/utils/sbuMapping';
 import { toast, Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useSearchParams } from 'next/navigation';
+import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status';
 import Link from 'next/link';
 import RejectedViewModal from '../work-orders/components/RejectedViewModal';
 
@@ -31,6 +34,17 @@ const TABS = [
   { id: 'completed', label: 'Done', icon: CheckCircle2 },
 ];
 
+// [AI] SBU visual indicators for JO cards — colors aligned with SBU_MAP
+const SBU_BADGE_CONFIG: Record<string, {
+  label: string; icon: React.ElementType;
+  bg: string; text: string; border: string;
+}> = {
+  TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  WAREHOUSE:  { label: 'Warehouse',  icon: Warehouse,   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  CLEARANCE:  { label: 'Clearance',  icon: LayoutGrid,  bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  FORWARDING: { label: 'Forwarding', icon: Ship,        bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200' },
+};
+
 export default function HQJobOrdersPage() {
   const { profile } = useAuth();
   const searchParams = useSearchParams();
@@ -43,11 +57,28 @@ export default function HQJobOrdersPage() {
   const [selectedRejectedWo, setSelectedRejectedWo] = useState<any>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // [AI] SBU filter state synced with URL
+  const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
 
   useEffect(() => {
     const q = searchParams.get('q');
     if (q) setSearchTerm(q);
+    
+    const sbu = searchParams.get('sbu');
+    if (sbu) setSbuFilter(sbu);
   }, [searchParams]);
+
+  const handleSbuFilterChange = (value: string) => {
+    setSbuFilter(value);
+    const url = new URL(window.location.href);
+    if (value === 'all') {
+      url.searchParams.delete('sbu');
+    } else {
+      url.searchParams.set('sbu', value);
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
 
   useEffect(() => {
     if (showSearch && searchInputRef.current) {
@@ -65,7 +96,7 @@ export default function HQJobOrdersPage() {
         .select(`
           *,
           wo_item:wo_items!wo_item_id (
-            id, item_data,
+            id, item_data, sbu_type,
             wo:work_orders!wo_id (
               id, wo_number, status, customer:md_entities!customer_id (id, name, legal_name)
             )
@@ -78,22 +109,45 @@ export default function HQJobOrdersPage() {
 
       const rawJOs = baseData || [];
       const baseJOs = Array.from(new Map(rawJOs.map(jo => [jo.id, jo])).values())
-        .filter(jo => jo.driver_id && jo.fleet_id);
+        // [AI] Warehouse JOs usually don't have driver/fleet, so don't exclude them
+        .filter(jo => jo.wo_item?.sbu_type === 'WAREHOUSE' || (jo.driver_id && jo.fleet_id));
 
       if (baseJOs.length > 0) {
         const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))];
         const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
+        const warehouseJoIds = baseJOs.filter(j => j.wo_item?.sbu_type === 'WAREHOUSE').map(j => j.id);
 
-        const [driversRes, fleetsRes] = await Promise.all([
+        const [driversRes, fleetsRes, warehouseReceiptsRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] },
-          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] }
+          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] },
+          warehouseJoIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseJoIds) : { data: [] }
         ]);
 
-        const enrichedJOs = baseJOs.map(jo => ({
-          ...jo,
-          md_drivers: driversRes.data?.find(d => d.id === jo.driver_id),
-          md_fleets: fleetsRes.data?.find(f => f.id === jo.fleet_id)
-        }));
+        const warehouseReceipts = warehouseReceiptsRes.data || [];
+
+        const enrichedJOs = baseJOs.map(jo => {
+          let driverObj = driversRes.data?.find(d => d.id === jo.driver_id);
+          let fleetObj = fleetsRes.data?.find(f => f.id === jo.fleet_id);
+          let extraPhone = null;
+
+          if (jo.wo_item?.sbu_type === 'WAREHOUSE') {
+            const receipt = warehouseReceipts.find(r => r.wo_item_id === jo.id);
+            if (receipt) {
+              if (receipt.driver) driverObj = receipt.driver;
+              else if (receipt.driver_name_manual) {
+                driverObj = { name: receipt.driver_name_manual, phone: receipt.driver_phone };
+              }
+              if (receipt.fleet) fleetObj = receipt.fleet;
+            }
+          }
+
+          return {
+            ...jo,
+            md_drivers: driverObj,
+            md_fleets: fleetObj,
+            driver_phone: jo.driver_phone || extraPhone
+          };
+        });
 
         setJobOrders(enrichedJOs);
       } else {
@@ -111,25 +165,7 @@ export default function HQJobOrdersPage() {
     fetchJobOrders();
   }, [fetchJobOrders]);
 
-  const getJobCategory = useCallback((jo: any) => {
-    const DONE_STATUSES = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE', 'INVOICED', 'PAID'];
-    const ACTIVE_STATUSES = [
-      'IN_PROGRESS', 'DALAM PERJALANAN', 'ON_ROAD', 'ON JOURNEY',
-      'ORDER DITERIMA', 'ACCEPTED', 'TIBA DI ASAL', 'MENUJU ASAL',
-      'PICKING_UP', 'DELIVERING', 'START JOURNEY', 'MENUNGGU BERANGKAT',
-      'STARTED', 'LOADING', 'UNLOADING', 'DITERIMA', 'SELESAI'
-    ];
-    const REJECTED_STATUSES = ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'];
-
-    const s = jo.status?.toUpperCase() || '';
-    const dr = jo.driver_response?.toLowerCase() || '';
-
-    if (REJECTED_STATUSES.includes(s)) return 'rejected';
-    if (DONE_STATUSES.includes(s)) return 'completed';
-    if (ACTIVE_STATUSES.includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU')) return 'active';
-    if (jo.driver_id && jo.fleet_id && !DONE_STATUSES.includes(s) && !ACTIVE_STATUSES.includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
-    return 'awaiting';
-  }, []);
+  // [AI] getJobCategory is now imported from @/lib/domain/jo/status
 
   const stats = useMemo(() => {
     const categories = jobOrders.map(jo => getJobCategory(jo));
@@ -141,7 +177,7 @@ export default function HQJobOrdersPage() {
       jobDone: categories.filter(c => c === 'completed').length,
       rejected: categories.filter(c => c === 'rejected').length
     };
-  }, [jobOrders, getJobCategory]);
+  }, [jobOrders]);
 
   const filteredJobs = useMemo(() => {
     return jobOrders.filter(jo => {
@@ -154,12 +190,18 @@ export default function HQJobOrdersPage() {
 
       if (!matchesSearch) return false;
 
+      // [AI] Filter by SBU type
+      if (sbuFilter !== 'all') {
+        const itemSbu = jo.wo_item?.sbu_type?.toUpperCase();
+        if (itemSbu !== sbuFilter) return false;
+      }
+
       if (selectedStatus === 'all') return category !== 'rejected';
       if (selectedStatus === 'new') return category === 'awaiting';
       if (selectedStatus === 'rejected') return category === 'rejected';
       return category === selectedStatus;
     });
-  }, [jobOrders, searchTerm, selectedStatus, getJobCategory]);
+  }, [jobOrders, searchTerm, selectedStatus, sbuFilter]);
 
   const getStatusBadge = (jo: any) => {
     const category = getJobCategory(jo);
@@ -292,6 +334,33 @@ export default function HQJobOrdersPage() {
             })}
           </div>
         </div>
+
+        {/* [AI] Mobile SBU Type Filter */}
+        <div className="px-4 pb-3">
+          <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {[
+              { id: 'all', label: 'All SBU', icon: Layers },
+              ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+            ].map(item => {
+              const isActive = sbuFilter === item.id;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleSbuFilterChange(item.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex-shrink-0 ${
+                    isActive
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'bg-white text-slate-400 border border-slate-200'
+                  }`}
+                >
+                  <Icon size={12} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ===== DESKTOP HEADER ===== */}
@@ -356,6 +425,32 @@ export default function HQJobOrdersPage() {
             </button>
           ))}
         </div>
+
+        {/* [AI] Desktop SBU Type Filter */}
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
+          {[
+            { id: 'all', label: 'All SBU', icon: Layers },
+            ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+          ].map(item => {
+            const isActive = sbuFilter === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleSbuFilterChange(item.id)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                <Icon size={12} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ===== MAIN CONTENT ===== */}
@@ -408,6 +503,20 @@ export default function HQJobOrdersPage() {
                         <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-[7px] font-black tracking-widest uppercase italic">
                           {jo.wo_item?.wo?.wo_number || 'LEGACY-WO'}
                         </span>
+                        
+                        {/* [AI] SBU Badge */}
+                        {(() => {
+                          const sbu = jo.wo_item?.sbu_type?.toUpperCase();
+                          const config = SBU_BADGE_CONFIG[sbu];
+                          if (!config) return null;
+                          const Icon = config.icon;
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}>
+                              <Icon size={8} /> {config.label}
+                            </span>
+                          );
+                        })()}
+                        
                         <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] italic truncate">
                           {jo.wo_item?.wo?.customer?.legal_name || jo.wo_item?.wo?.customer?.name || 'Private Client'}
                         </span>
@@ -534,11 +643,21 @@ export default function HQJobOrdersPage() {
                           <FileText size={12} /> Finance
                         </Button>
                       </Link>
-                      <Link href={`/hq/tracking?jo=${jo.jo_number}`} className="w-full sm:w-auto block">
-                        <Button variant="ghost" className="w-full h-9 bg-slate-900 border border-slate-700 text-white hover:bg-indigo-900/40 hover:border-indigo-500/50 rounded-lg font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20">
-                          <NavIcon size={12} /> Tracking
-                        </Button>
-                      </Link>
+                      {(() => {
+                        const sbu = jo.wo_item?.sbu_type?.toUpperCase();
+                        const trackingToken = jo.wo_item?.wo?.tracking_token || jo.wo_item?.wo?.id;
+                        const trackUrl = sbu === 'WAREHOUSE' 
+                          ? `/track/warehouse/${trackingToken}?jo_id=${jo.id}` 
+                          : `/hq/tracking?jo=${jo.jo_number}`;
+                        
+                        return (
+                          <Link href={trackUrl} className="w-full sm:w-auto block">
+                            <Button variant="ghost" className="w-full h-9 bg-slate-900 border border-slate-700 text-white hover:bg-indigo-900/40 hover:border-indigo-500/50 rounded-lg font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20">
+                              <NavIcon size={12} /> Tracking
+                            </Button>
+                          </Link>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

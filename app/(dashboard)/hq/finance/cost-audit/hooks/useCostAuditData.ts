@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -95,6 +96,27 @@ export function useCostAuditData() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("new_request");
+  
+  // [AI] SBU filter state synced with URL
+  const searchParams = useSearchParams();
+  const [sbuFilter, setSbuFilter] = useState(searchParams.get("sbu") || "all");
+
+  useEffect(() => {
+    const sbu = searchParams.get("sbu");
+    if (sbu) setSbuFilter(sbu);
+  }, [searchParams]);
+
+  const handleSbuFilterChange = (value: string) => {
+    setSbuFilter(value);
+    const url = new URL(window.location.href);
+    if (value === "all") {
+      url.searchParams.delete("sbu");
+    } else {
+      url.searchParams.set("sbu", value);
+    }
+    window.history.replaceState({}, "", url.toString());
+  };
+
   const [selectedWoId, setSelectedWoId] = useState<string | null>(null);
   const [paymentMap, setPaymentMap] = useState<Record<string, any[]>>({});
 
@@ -153,7 +175,7 @@ export function useCostAuditData() {
           md_fleets:fleet_id(id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)),
           md_transporters:transporter_id(id, tenant_id, name, is_own, vendor_type),
           wo_item:wo_items(
-            id, unit_price, total_revenue, item_data,
+            id, unit_price, total_revenue, item_data, sbu_type,
             wo:work_orders(
               id, wo_number,
               customer:md_entities!customer_id(name, legal_name, billing_method, phone)
@@ -481,15 +503,31 @@ export function useCostAuditData() {
     });
   }, [data, profile?.tenant_id, paymentMap]);
 
+  // [AI] Helper to extract SBU types for a group (from its jobs)
+  const getGroupSbuTypes = useCallback((group: any) => {
+    const types = new Set<string>();
+    group.jo_list?.forEach((joGroup: any) => {
+      const sbu = joGroup.jo?.wo_item?.sbu_type;
+      if (sbu) types.add(sbu.toUpperCase());
+    });
+    return Array.from(types);
+  }, []);
+
   // [AI] Memoized tab counts — computed once per data change, no repeated grouping
   const tabCounts = useMemo(() => {
     const term = searchTerm.toLowerCase();
     const searched = allGroups.filter((g: any) => {
-      return (
+      const matchesSearch =
         !term ||
         g.wo?.wo_number?.toLowerCase().includes(term) ||
-        g.wo?.customer?.name?.toLowerCase().includes(term)
-      );
+        g.wo?.customer?.name?.toLowerCase().includes(term);
+
+      let matchesSbu = true;
+      if (sbuFilter !== "all") {
+        matchesSbu = getGroupSbuTypes(g).includes(sbuFilter);
+      }
+
+      return matchesSearch && matchesSbu;
     });
 
     return {
@@ -523,6 +561,11 @@ export function useCostAuditData() {
           group.wo?.wo_number?.toLowerCase().includes(term) ||
           group.wo?.customer?.name?.toLowerCase().includes(term);
 
+        let matchesSbu = true;
+        if (sbuFilter !== "all") {
+          matchesSbu = getGroupSbuTypes(group).includes(sbuFilter);
+        }
+
         let matchesStatus = false;
         if (statusFilter === "all") matchesStatus = true;
         else if (statusFilter === "sbu_processing")
@@ -543,7 +586,7 @@ export function useCostAuditData() {
         else if (statusFilter === "paid")
           matchesStatus = group.isApSettled;
 
-        return matchesSearch && matchesStatus;
+        return matchesSearch && matchesStatus && matchesSbu;
       })
       .sort((a: any, b: any) => {
         const aNeeds = a.costs.some(
@@ -739,6 +782,8 @@ export function useCostAuditData() {
     setSearchTerm,
     statusFilter,
     setStatusFilter,
+    sbuFilter,
+    handleSbuFilterChange,
     selectedWoId,
     setSelectedWoId,
     groupedData,
