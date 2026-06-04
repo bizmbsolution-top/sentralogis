@@ -13,6 +13,11 @@ import { createStaffAdmin } from '@/app/(dashboard)/tenant/staff/actions';
 import toast from 'react-hot-toast';
 
 const hqRoles = [
+  { code: 'hq_commercial_director', name: 'VP Commercial / CCO' },
+  { code: 'hq_sales_manager', name: 'Sales Manager' },
+  { code: 'hq_sales_staff', name: 'Key Account Executive' },
+  { code: 'hq_pricing_analyst', name: 'Pricing Analyst' },
+  { code: 'hq_marketing_staff', name: 'Marketing Staff' },
   { code: 'hq_director_ops', name: 'Direktur Operasional' },
   { code: 'hq_director_fin', name: 'Direktur Keuangan' },
   { code: 'hq_director_cs', name: 'Direktur Customer Service' },
@@ -60,7 +65,8 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
     fullName: '',
     whatsapp: '',
     roleCode: '',
-    password: ''
+    password: '',
+    division: ''
   });
 
   if (!isOpen) return null;
@@ -83,7 +89,8 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
         sbuCode: staffType === 'sbu' ? selectedSbu?.sbu_code : null,
         warehouseId: staffType === 'sbu' && selectedWarehouseId ? selectedWarehouseId : null,
         whatsapp: formData.whatsapp,
-        password: formData.password
+        password: formData.password,
+        division: formData.division
       });
 
       if (!result.success) throw new Error(result.message);
@@ -148,17 +155,17 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
         </div>
 
         <form onSubmit={handleSubmit} className="p-10 space-y-8">
-           <div className="grid grid-cols-2 gap-4 p-1.5 bg-slate-100 rounded-2xl">
+            <div className="grid grid-cols-2 gap-4 p-1.5 bg-slate-100 rounded-2xl">
               <button
                 type="button"
-                onClick={() => { setStaffType('hq'); setFormData({...formData, roleCode: ''}); }}
+                onClick={() => { setStaffType('hq'); setFormData({...formData, roleCode: '', division: 'General'}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'hq' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 HQ Staff
               </button>
               <button
                 type="button"
-                onClick={() => { setStaffType('sbu'); setFormData({...formData, roleCode: ''}); }}
+                onClick={() => { setStaffType('sbu'); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'sbu' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 SBU Staff
@@ -217,18 +224,35 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
                    </select>
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                   <label className="text-sm font-bold text-slate-700 ml-1">HQ Position</label>
-                   <select 
-                     className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
-                     required
-                     value={formData.roleCode}
-                     onChange={e => setFormData({...formData, roleCode: e.target.value})}
-                   >
-                     <option value="">Select Position...</option>
-                     {hqRoles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
-                   </select>
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                     <label className="text-sm font-bold text-slate-700 ml-1">Division</label>
+                     <select 
+                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                       value={formData.division}
+                       onChange={e => setFormData({...formData, division: e.target.value})}
+                     >
+                       <option value="General">General / Management</option>
+                       <option value="Commercial & Sales">Commercial & Sales</option>
+                       <option value="Operations">Operations</option>
+                       <option value="Finance">Finance</option>
+                       <option value="HR & Admin">HR & Admin</option>
+                       <option value="IT">IT</option>
+                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-sm font-bold text-slate-700 ml-1">HQ Position</label>
+                     <select 
+                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                       required
+                       value={formData.roleCode}
+                       onChange={e => setFormData({...formData, roleCode: e.target.value})}
+                     >
+                       <option value="">Select Position...</option>
+                       {hqRoles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                     </select>
+                  </div>
+                </>
               )}
 
               {staffType === 'sbu' && selectedSbu && (

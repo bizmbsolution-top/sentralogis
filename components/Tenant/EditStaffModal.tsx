@@ -13,6 +13,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
   const [roleCode, setRoleCode] = useState(staff.role_code);
   const [sbuId, setSbuId] = useState(staff.sbu_id || '');
   const [warehouseId, setWarehouseId] = useState(staff.warehouse_id || '');
+  const [division, setDivision] = useState(staff.division || 'General');
 
   if (!isOpen) return null;
 
@@ -27,6 +28,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
           role_code: roleCode,
           sbu_id: sbuId || null,
           warehouse_id: warehouseId || null,
+          division: division || null,
           is_active: isActive,
           updated_at: new Date().toISOString()
         })
@@ -101,6 +103,23 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
                        ))}
                     </select>
                  </div>
+                 {!sbuId && (
+                     <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Division</label>
+                        <select 
+                          value={division}
+                          onChange={e => setDivision(e.target.value)}
+                          className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                        >
+                          <option value="General">General / Management</option>
+                          <option value="Commercial & Sales">Commercial & Sales</option>
+                          <option value="Operations">Operations</option>
+                          <option value="Finance">Finance</option>
+                          <option value="HR & Admin">HR & Admin</option>
+                          <option value="IT">IT</option>
+                        </select>
+                     </div>
+                  )}
                  <div className="space-y-1.5">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Position Code</label>
                     <input 

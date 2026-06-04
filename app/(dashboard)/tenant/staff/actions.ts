@@ -16,6 +16,7 @@ export async function createStaffAdmin(payload: {
   sbuCode?: string | null;
   warehouseId?: string | null;
   whatsapp?: string;
+  division?: string;
 }) {
   try {
     console.log('[createStaffAdmin] Processing:', payload.email);
@@ -68,15 +69,19 @@ export async function createStaffAdmin(payload: {
        throw new Error(rpcResponse.message || 'Database sync failed');
     }
 
-    // 3. Assign to Specific Warehouse if provided
-    if (payload.warehouseId) {
-       const { error: whError } = await supabaseAdmin
+    // 3. Assign to Specific Warehouse or Division if provided
+    if (payload.warehouseId || payload.division) {
+       const updateData: any = {};
+       if (payload.warehouseId) updateData.warehouse_id = payload.warehouseId;
+       if (payload.division) updateData.division = payload.division;
+
+       const { error: updateError } = await supabaseAdmin
          .from('tenant_users')
-         .update({ warehouse_id: payload.warehouseId })
+         .update(updateData)
          .eq('user_id', userId);
        
-       if (whError) {
-         console.error('[createStaffAdmin] Failed to bind warehouse:', whError);
+       if (updateError) {
+         console.error('[createStaffAdmin] Failed to update extra fields:', updateError);
        }
     }
 

@@ -266,6 +266,7 @@ export default function TenantOrganizationPage() {
                 <TableRow>
                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Full Name</TableHead>
                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Position</TableHead>
+                  <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Division</TableHead>
                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">SBU Allocation</TableHead>
                   <TableHead className="font-bold text-[10px] uppercase tracking-widest py-5">Status</TableHead>
                   <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest py-5">Actions</TableHead>
@@ -285,6 +286,11 @@ export default function TenantOrganizationPage() {
                     <TableCell>
                        <Badge variant="default" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
                         {s.tenant_roles?.role_name || s.role_code}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                       <Badge variant="secondary" className="!bg-slate-100 !text-slate-700 !border-slate-200 uppercase !text-[9px] font-bold tracking-widest shadow-sm">
+                        {s.division || 'General'}
                       </Badge>
                     </TableCell>
                     <TableCell>
