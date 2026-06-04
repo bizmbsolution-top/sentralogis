@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { fetchReceiptAdmin, updateReceiptAdmin } from './actions';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, Clock, Play, Pause, Square, Warehouse, Camera, DownloadCloud, ChevronDown, Scan } from 'lucide-react';
+import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, Clock, Play, Pause, Square, Warehouse, Camera, CloudDownload, ChevronDown, Scan } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';

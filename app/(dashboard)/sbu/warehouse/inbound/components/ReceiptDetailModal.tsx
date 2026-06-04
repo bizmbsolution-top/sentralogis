@@ -12,7 +12,7 @@ import {
   sendCompletedWA,
 } from '@/lib/notifications/warehouseWA';
 import { 
-  X, Loader2, ArrowRight, Truck, Package, PackageX, PackageCheck, AlertTriangle, User, Calendar, Edit2, DownloadCloud, CheckCircle2, Search, ChevronDown, MessageCircle, Plus, MapPin
+  X, Loader2, ArrowRight, Truck, Package, PackageX, PackageCheck, AlertTriangle, User, Calendar, Edit2, CloudDownload, CheckCircle2, Search, ChevronDown, MessageCircle, Plus, MapPin
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import ProductFormModal from '@/app/(dashboard)/hq/master-data/products/components/ProductFormModal';
@@ -504,7 +504,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
         <div className="p-6 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-start justify-between gap-4 sticky top-0 z-10">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-blue-50 rounded-xl border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-              <DownloadCloud size={24} />
+              <CloudDownload size={24} />
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -747,7 +747,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
             {isArrived && (
               <Card className="p-4 border-slate-200 shadow-sm space-y-3">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-2">
-                  <DownloadCloud size={16} className="text-slate-500" /> Dokumen
+                  <CloudDownload size={16} className="text-slate-500" /> Dokumen
                 </h3>
                 <div>
                   <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">Scan POD (Proof of Delivery)</span>
@@ -759,7 +759,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                     </div>
                   ) : (
                     <label className="flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-blue-300 transition-colors">
-                      <DownloadCloud size={16} className="text-slate-400 rotate-180" />
+                      <CloudDownload size={16} className="text-slate-400 rotate-180" />
                       <span className="text-xs font-bold text-slate-500">Upload Scan POD</span>
                       <input type="file" accept="application/pdf,image/*" className="hidden" onChange={handleUploadPOD} disabled={submitting} />
                     </label>
@@ -1131,7 +1131,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                   </a>
                 ) : (
                   <label className="px-4 py-2 bg-white text-indigo-600 text-sm font-bold rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors cursor-pointer flex items-center gap-2">
-                    {submitting ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} className="rotate-180" />}
+                    {submitting ? <Loader2 size={16} className="animate-spin" /> : <CloudDownload size={16} className="rotate-180" />}
                     Upload Scan BATB
                     <input type="file" accept="application/pdf,image/*" className="hidden" onChange={handleUploadBATB} disabled={submitting} />
                   </label>

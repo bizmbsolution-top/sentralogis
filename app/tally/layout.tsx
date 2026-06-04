@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Loader2, PackageSearch, DownloadCloud, UploadCloud, User } from 'lucide-react';
+import { Loader2, PackageSearch, CloudDownload, CloudUpload, User } from 'lucide-react';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 
@@ -70,7 +70,7 @@ export default function TallyLayout({ children }: { children: React.ReactNode })
           </Link>
           
           <Link href="/tally/outbound" className={`flex flex-col items-center gap-1 ${pathname === '/tally/outbound' ? 'text-blue-600' : 'text-slate-400'}`}>
-            <UploadCloud size={24} />
+            <CloudUpload size={24} />
             <span className="text-[10px] font-bold">Outbound</span>
           </Link>
           

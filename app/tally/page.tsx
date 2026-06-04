@@ -8,7 +8,7 @@ import {
   syncTalliesToCloud,
   OfflineReceipt 
 } from '@/lib/tallyStore';
-import { DownloadCloud, UploadCloud, RefreshCw, AlertTriangle, PackageCheck, Truck, Loader2 } from 'lucide-react';
+import { CloudDownload, CloudUpload, RefreshCw, AlertTriangle, PackageCheck, Truck, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
@@ -117,7 +117,7 @@ export default function TallyDashboard() {
             disabled={syncing || !isOnline}
             className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 active:scale-95 transition-all disabled:opacity-50"
           >
-            <DownloadCloud size={20} className="mb-1" />
+            <CloudDownload size={20} className="mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Download JO</span>
           </button>
           <button 

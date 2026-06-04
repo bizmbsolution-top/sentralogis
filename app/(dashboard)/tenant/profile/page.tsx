@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   User, Mail, Phone, Lock, 
   Shield, Key, Save, RefreshCw,
-  Building, Image, UploadCloud
+  Building, Image, CloudUpload
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -132,7 +132,7 @@ export default function TenantProfilePage() {
                  
                  <div className="relative">
                    <input type="file" accept="image/*" onChange={handleUploadLogo} disabled={uploadingLogo} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-                   <Button variant="primary" loading={uploadingLogo} icon={<UploadCloud className="w-4 h-4" />}>
+                   <Button variant="primary" loading={uploadingLogo} icon={<CloudUpload className="w-4 h-4" />}>
                      {logoUrl ? 'Change Logo' : 'Upload Logo'}
                    </Button>
                  </div>

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
-  DownloadCloud, Search, Plus, Loader2, ArrowRight, Truck, ClipboardCheck,
+  CloudDownload, Search, Plus, Loader2, ArrowRight, Truck, ClipboardCheck,
   PackageCheck, CheckCircle2, PackageX, AlertTriangle, User, MapPin,
   MessageSquare
 } from 'lucide-react';
@@ -112,7 +112,7 @@ export default function InboundReceivingPage() {
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, { bg: string, text: string, icon: any, label: string }> = {
-      'EXPECTED': { bg: 'bg-slate-100', text: 'text-slate-600', icon: DownloadCloud, label: 'Expected' },
+      'EXPECTED': { bg: 'bg-slate-100', text: 'text-slate-600', icon: CloudDownload, label: 'Expected' },
       'TRUCK_ARRIVED': { bg: 'bg-indigo-100', text: 'text-indigo-700', icon: Truck, label: 'Arrived' },
       'UNLOADING': { bg: 'bg-amber-100', text: 'text-amber-700', icon: Loader2, label: 'Unloading' },
       'CHECKING': { bg: 'bg-blue-100', text: 'text-blue-700', icon: ClipboardCheck, label: 'Checking' },
@@ -141,7 +141,7 @@ export default function InboundReceivingPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <DownloadCloud className="text-blue-600" size={24} />
+            <CloudDownload className="text-blue-600" size={24} />
             Inbound Receiving
           </h1>
           <p className="text-sm text-slate-500 mt-1">Kelola proses penerimaan barang dari truk hingga putaway.</p>
