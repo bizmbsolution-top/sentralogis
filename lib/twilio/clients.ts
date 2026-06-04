@@ -5,10 +5,10 @@ const authToken = process.env.TWILIO_AUTH_TOKEN;
 const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 if (!accountSid || !authToken) {
-    throw new Error('Twilio credentials not configured');
+    console.warn('Twilio credentials not configured in environment');
 }
 
-export const twilioClient = twilio(accountSid, authToken);
+export const twilioClient = accountSid && authToken ? twilio(accountSid, authToken) : null;
 
 export async function sendWhatsAppMessage(to: string, body: string) {
     try {
@@ -19,6 +19,11 @@ export async function sendWhatsAppMessage(to: string, body: string) {
         }
         if (!formattedNumber.startsWith('62')) {
             formattedNumber = `62${formattedNumber}`;
+        }
+
+        if (!twilioClient) {
+            console.warn('WhatsApp message skipped: Twilio client not initialized');
+            return { success: false, error: 'Twilio client not initialized' };
         }
 
         const message = await twilioClient.messages.create({
@@ -44,6 +49,11 @@ export async function sendWhatsAppTemplate(
         let formattedNumber = to.replace(/\D/g, '');
         if (formattedNumber.startsWith('0')) {
             formattedNumber = `62${formattedNumber.substring(1)}`;
+        }
+
+        if (!twilioClient) {
+            console.warn('WhatsApp template skipped: Twilio client not initialized');
+            return { success: false, error: 'Twilio client not initialized' };
         }
 
         const message = await twilioClient.messages.create({
