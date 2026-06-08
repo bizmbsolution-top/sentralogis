@@ -42,7 +42,7 @@ export default function PublicTrackingPage({ params }: { params: Promise<{ token
           fleet: data.fleet,
           driver: data.driver,
           routes: data.routes || [],
-          tracking_history: data.tracking_history || [],
+          tracking_history: data.tracking_logs || [],
           wo_details: data.wo_details,
         });
         setError(null);
