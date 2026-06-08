@@ -2503,7 +2503,7 @@ export default function DriverPortal() {
                                 {new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                               </div>
                               <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 pr-10 leading-relaxed">
-                                {log.notes?.replace(`[ROUTE:${stop.id}] `, '').replace(`Route ID: ${stop.id} | Catatan: `, '').replace(`Route ID: ${stop.id} (Photo Attached) | Catatan: `, '') || 'Pembaruan Status'}
+                                {log.notes?.replace(/\[ROUTE:[0-9a-fA-F-]{36}\] /g, '').replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim() || 'Pembaruan Status'}
                               </p>
                               {log.photo_url && (
                                 <div className="w-20 h-20 rounded-lg overflow-hidden border border-slate-200 cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedPhotoPreview(log.photo_url); }}>

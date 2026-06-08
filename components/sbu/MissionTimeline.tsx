@@ -173,7 +173,11 @@ export default function MissionTimeline({
                   <div className="w-10 text-slate-400 shrink-0 font-medium pt-0.5">{formatTime(t.created_at)}</div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-700 uppercase tracking-wide">{t.status_update}</p>
-                    {t.notes && <p className="text-slate-500 mt-0.5">{t.notes}</p>}
+                    {t.notes && t.notes.replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim() && (
+                      <p className="text-slate-500 mt-0.5">
+                        {t.notes.replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim()}
+                      </p>
+                    )}
                     {t.latitude && t.longitude && (
                         <p className="text-[9px] text-slate-400 mt-1 font-mono">
                           {t.latitude}, {t.longitude}
