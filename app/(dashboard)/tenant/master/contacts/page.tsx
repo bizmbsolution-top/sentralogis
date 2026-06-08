@@ -131,7 +131,8 @@ export default function ContactsPage() {
   }, [tenantId, fetchEntities, loadingAuth]);
 
   const generateEntityCode = async () => {
-    // [AI] Query ALL tenants' codes to avoid global unique constraint collision
+    if (!tenantId) return 'ENT/001';
+    
     let prefix = 'ENT';
     if (formData.is_customer) prefix = 'CUS';
     else if (formData.is_supplier) prefix = 'SPP';
@@ -142,14 +143,18 @@ export default function ContactsPage() {
       const { data } = await supabase
         .from('md_entities')
         .select('entity_code')
-        .ilike('entity_code', `${prefix}/%`);
+        .eq('tenant_id', tenantId)
+        .ilike('entity_code', `${prefix}/%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      const numbers = (data || [])
-        .map((r) => parseInt(r.entity_code.split('/')[1]))
-        .filter((n) => !isNaN(n));
+      if (!data || data.length === 0) return `${prefix}/001`;
 
-      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-      const newNumber = (maxNum + 1).toString().padStart(3, '0');
+      const lastCode = data[0].entity_code;
+      const lastNumber = parseInt(lastCode.split('/')[1]);
+      if (isNaN(lastNumber)) return `${prefix}/001`;
+
+      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
       return `${prefix}/${newNumber}`;
     } catch (err) {
       return `${prefix}/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
@@ -264,7 +269,8 @@ export default function ContactsPage() {
       setIsModalOpen(false);
       fetchEntities();
     } catch (error: any) {
-      toast.error(error.message || 'Terjadi kesalahan saat menyimpan data');
+      console.error('Submit Contact Error:', JSON.stringify(error, null, 2), error);
+      toast.error(error?.message || error?.details || 'Terjadi kesalahan saat menyimpan data');
     } finally {
       setSubmitting(false);
     }

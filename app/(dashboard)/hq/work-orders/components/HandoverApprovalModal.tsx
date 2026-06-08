@@ -272,7 +272,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
               <Shield size={28} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tight">Review Handover</h2>
+              <h2 className="text-2xl font-black text-black italic uppercase tracking-tight">Review Handover</h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{wo.wo_number}</span>
                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
@@ -280,7 +280,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-slate-50 hover:text-slate-700 rounded-2xl transition-colors">
+          <button onClick={onClose} className="p-3 hover:bg-slate-50 hover:text-black rounded-2xl transition-colors">
             <X size={20} className="text-slate-400" />
           </button>
         </div>
@@ -292,19 +292,19 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
             <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-5">
                 <div className="w-2 h-6 bg-blue-500 rounded-full"></div>
-                <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.3em]">Work Order Details</h3>
+                <h3 className="text-[10px] font-black text-black uppercase tracking-[0.3em]">Work Order Details</h3>
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-slate-50 p-4 rounded-2xl">
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
-                  <p className="text-sm font-black text-slate-800 italic">{wo.wo_number}</p>
+                  <p className="text-sm font-black text-black italic">{wo.wo_number}</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-2xl">
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Customer</p>
                   <div className="flex items-center gap-2">
                      <Building2 size={12} className="text-blue-500" />
-                     <p className="text-sm font-black text-slate-800 italic truncate">{wo.md_entities?.name}</p>
+                     <p className="text-sm font-black text-black italic truncate">{wo.md_entities?.name}</p>
                   </div>
                   {wo.md_entities?.legal_name && (
                     <p className="text-[9px] text-slate-500 font-bold mt-0.5 italic">({wo.md_entities.legal_name})</p>
@@ -314,7 +314,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Execution Date</p>
                   <div className="flex items-center gap-2">
                     <Calendar size={12} className="text-blue-500" />
-                    <p className="text-sm font-black text-slate-800 italic">
+                    <p className="text-sm font-black text-black italic">
                       {wo.execution_date 
                         ? new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) 
                         : '-'}
@@ -325,7 +325,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Items</p>
                   <div className="flex items-center gap-2">
                     <Layers size={12} className="text-blue-500" />
-                    <p className="text-sm font-black text-slate-800 italic">{allItems.length} Item(s)</p>
+                    <p className="text-sm font-black text-black italic">{allItems.length} Item(s)</p>
                   </div>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                   <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-5">
                       <div className="w-2 h-6 bg-orange-500 rounded-full"></div>
-                      <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.3em]">
+                      <h3 className="text-[10px] font-black text-black uppercase tracking-[0.3em]">
                         Item {itemIdx + 1}: {item.item_code}
                       </h3>
                       <span className="ml-auto px-3 py-1 bg-orange-50 text-orange-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-orange-100">
@@ -368,11 +368,11 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Units Required</p>
-                        <p className="text-xs font-black text-slate-800 italic">{unitCount} Fleet(s)</p>
+                        <p className="text-xs font-black text-black italic">{unitCount} Fleet(s)</p>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Deal Price</p>
-                        <p className="text-xs font-black text-slate-800 italic">{formatRupiah(dealPrice)}</p>
+                        <p className="text-xs font-black text-black italic">{formatRupiah(dealPrice)}</p>
                       </div>
                       <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                         <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">JO Assigned</p>
@@ -386,15 +386,15 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                       <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                          <span className="text-xs font-black text-slate-700">{assignedJOs.length} Assigned</span>
+                          <span className="text-xs font-black text-black">{assignedJOs.length} Assigned</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                          <span className="text-xs font-black text-slate-700">{itemJOs.length - assignedJOs.length} Created (Unassigned)</span>
+                          <span className="text-xs font-black text-black">{itemJOs.length - assignedJOs.length} Created (Unassigned)</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full bg-rose-400"></div>
-                          <span className="text-xs font-black text-slate-700">{unitCount - itemJOs.length} Empty Slots</span>
+                          <span className="text-xs font-black text-black">{unitCount - itemJOs.length} Empty Slots</span>
                         </div>
                       </div>
                       <div className="mt-3 flex gap-1">
@@ -427,7 +427,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                         <div className="flex flex-wrap items-center gap-2">
                           <MapPin size={14} className="text-rose-500" />
                           {stops.map((stop: any, sIdx: number) => (
-                            <span key={sIdx} className="flex items-center text-xs font-black text-slate-700 italic">
+                            <span key={sIdx} className="flex items-center text-xs font-black text-black italic">
                               {stop.location_name || stop.name || '-'}
                               {sIdx < stops.length - 1 && (
                                 <ArrowRight size={12} className="mx-2 text-slate-400" />
@@ -457,7 +457,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-slate-700 font-bold leading-relaxed italic">
+                            <p className="text-sm text-black font-bold leading-relaxed italic">
                               &quot;{handoverNote}&quot;
                             </p>
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">
@@ -526,17 +526,17 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-xs">
                               {/* Transporter */}
-                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                              <span className="flex items-center gap-1.5 font-bold text-black">
                                 <Building2 size={13} className="text-blue-500" />
                                 {jo.md_entities?.name || '-'}
                               </span>
                               {/* Fleet */}
-                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                              <span className="flex items-center gap-1.5 font-bold text-black">
                                 <Truck size={13} className="text-emerald-500" />
                                 {jo.md_fleets?.md_fleet_types?.type_name || '-'} — {jo.md_fleets?.plate_number || 'No Plate'}
                               </span>
                               {/* Driver */}
-                              <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                              <span className="flex items-center gap-1.5 font-bold text-black">
                                 <User size={13} className="text-violet-500" />
                                 {jo.md_drivers?.name || '-'}
                               </span>
@@ -593,7 +593,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
               value={rejectionNote}
               onChange={(e) => setRejectionNote(e.target.value)}
               placeholder="Explain why this handover is being rejected..."
-              className="w-full p-6 bg-slate-50 border border-slate-200 text-slate-800 rounded-[2rem] text-sm font-bold focus:outline-none focus:ring-4 focus:ring-rose-500/20 transition-all min-h-[100px] resize-none placeholder:text-slate-400"
+              className="w-full p-6 bg-slate-50 border border-slate-200 text-black rounded-[2rem] text-sm font-bold focus:outline-none focus:ring-4 focus:ring-rose-500/20 transition-all min-h-[100px] resize-none placeholder:text-slate-400"
             />
           </div>
         </div>

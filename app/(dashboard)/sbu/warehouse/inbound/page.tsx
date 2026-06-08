@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import { 
   CloudDownload, Search, Plus, Loader2, ArrowRight, Truck, ClipboardCheck,
   PackageCheck, CheckCircle2, PackageX, AlertTriangle, User, MapPin,
-  MessageSquare
+  MessageSquare, X
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -33,13 +33,15 @@ interface InboundReceipt {
 
 export default function InboundReceivingPage() {
   const { profile, loading: loadingAuth } = useAuth();
-  const [warehouseName, setWarehouseName] = useState<string>('Warehouse Utama');
+
   const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [receipts, setReceipts] = useState<InboundReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -49,21 +51,6 @@ export default function InboundReceivingPage() {
       setTenantId(profile.tenant_id);
     }
   }, [profile]);
-
-  useEffect(() => {
-    const fetchWarehouseName = async () => {
-      if (!profile?.warehouse_id) return;
-      const { data } = await supabase
-        .from('md_warehouses')
-        .select('name, code')
-        .eq('id', profile.warehouse_id)
-        .single();
-      if (data) {
-        setWarehouseName(`[${data.code}] ${data.name}`);
-      }
-    };
-    fetchWarehouseName();
-  }, [profile?.warehouse_id]);
 
   const fetchReceipts = useCallback(async () => {
     if (!tenantId || !profile?.warehouse_id) return;
@@ -130,10 +117,15 @@ export default function InboundReceivingPage() {
     );
   };
 
-  const filteredReceipts = receipts.filter(r => 
-    r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (r.transporter?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredReceipts = receipts.filter(r => {
+    if (searchTerm && !(
+      r.receipt_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (r.transporter?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )) return false;
+    if (dateFrom && new Date(r.created_at) < new Date(dateFrom)) return false;
+    if (dateTo && new Date(r.created_at) > new Date(dateTo + 'T23:59:59')) return false;
+    return true;
+  });
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -146,35 +138,17 @@ export default function InboundReceivingPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Kelola proses penerimaan barang dari truk hingga putaway.</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-slate-600">
-            <MapPin size={16} className="text-slate-400" />
-            <span className="text-sm font-bold">{warehouseName}</span>
-          </div>
-          <Link
-            href="/sbu/warehouse/inbound/notifications"
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-bold text-sm shadow-sm shadow-emerald-600/20 active:scale-95"
-          >
-            <MessageSquare size={18} />
-            WA Notif
-          </Link>
-          <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium text-sm shadow-sm shadow-blue-600/20 active:scale-95">
-            <Plus size={18} />
-            Create Receipt
-          </button>
-        </div>
       </div>
 
-      {/* Tabs */}
-      <Card className="p-2 border-slate-200 shadow-none overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl overflow-x-auto no-scrollbar">
+      {/* Tabs & Filters */}
+      <Card className="p-3 md:p-4 border-slate-200 shadow-none overflow-hidden">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl overflow-x-auto no-scrollbar">
             {['ALL', 'EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap min-h-[40px] ${
                   activeTab === tab 
                   ? 'bg-white text-blue-600 shadow-sm border border-slate-100' 
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
@@ -184,15 +158,40 @@ export default function InboundReceivingPage() {
               </button>
             ))}
           </div>
-          <div className="relative w-full md:w-64 px-2">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search receipt..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:bg-white transition-all"
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:bg-white transition-all"
+              />
+              <span className="text-slate-400 text-xs">-</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs min-h-[40px] focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:bg-white transition-all"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(""); setDateTo(""); }}
+                  className="p-2.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search receipt..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:bg-white transition-all"
+              />
+            </div>
           </div>
         </div>
       </Card>
@@ -222,7 +221,7 @@ export default function InboundReceivingPage() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="font-mono font-bold text-slate-900 text-lg group-hover:text-blue-600 transition-colors">
-                    {receipt.receipt_number}
+                    {receipt.receipt_number?.replace(/^RCV-/, '')}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-0.5">
                     {new Date(receipt.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}

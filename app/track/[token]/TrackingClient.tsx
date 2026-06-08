@@ -77,7 +77,13 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                     const { latitude, longitude, created_at } = payload.new;
                     if (latitude && longitude) setPosition({ lat: Number(latitude), lng: Number(longitude), timestamp: created_at });
                 }
-            ).subscribe();
+            )
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'job_orders', filter: `id=eq.${job.id}` },
+                (payload) => {
+                    setJob((prev: any) => ({ ...prev, status: payload.new.status }));
+                }
+            )
+            .subscribe();
         return () => { supabase.removeChannel(channel); };
     }, [job.id, supabase]);
 

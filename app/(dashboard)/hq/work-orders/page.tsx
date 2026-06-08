@@ -283,13 +283,22 @@ export default function HQWorkOrdersPage() {
       return <Badge className="!bg-indigo-950 !text-white !border-indigo-950 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PEKERJAAN SELESAI</Badge>;
     }
 
-    const anyMoving = allJobs.some(j =>
-      j.status?.toUpperCase().startsWith('MENUJU') ||
-      j.status?.toUpperCase().startsWith('TIBA') ||
-      ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+    const anyTruckingMoving = allItems.some((i: any) => 
+      i.sbu_type === 'TRUCKING' && i.job_orders?.some((j: any) => 
+        j.status?.toUpperCase().startsWith('MENUJU') ||
+        j.status?.toUpperCase().startsWith('TIBA') ||
+        ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+      )
     );
+    if (anyTruckingMoving) return <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON JOURNEY</Badge>;
 
-    if (anyMoving) return <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ON JOURNEY</Badge>;
+    const anyWarehouseMoving = allItems.some((i: any) => 
+      i.sbu_type === 'WAREHOUSE' && (
+        ['in_progress'].includes(i.status?.toLowerCase() || '') ||
+        i.job_orders?.some((j: any) => ['IN_PROGRESS', 'UNLOADING', 'CHECKING', 'PUTAWAY_IN_PROGRESS'].includes(j.status?.toUpperCase()))
+      )
+    );
+    if (anyWarehouseMoving) return <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">PROSES WMS</Badge>;
 
     const anyAccepted = allJobs.some(j =>
       j.driver_response === 'accepted' ||
@@ -603,139 +612,152 @@ export default function HQWorkOrdersPage() {
             {filteredWorkOrders.map((wo) => (
               <Card
                 key={wo.id}
-                className="group rounded-2xl lg:rounded-3xl border border-slate-200 lg:border-indigo-50 shadow-sm bg-white hover:shadow-md transition-all duration-300 overflow-hidden relative"
+                className="group rounded-2xl border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.05)] bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-blue-200/60 transition-all duration-300 overflow-hidden flex flex-col"
               >
-                <div className="p-4 lg:p-6 relative">
-                  <div className="flex items-center justify-between mb-4 lg:mb-8">
-                    {/* [AI] Dynamic card icon based on dominant SBU type */}
-                    {(() => {
-                      const sbuTypes = getWoSbuTypes(wo);
-                      const primarySbu = sbuTypes[0] || 'TRUCKING';
-                      const config = SBU_BADGE_CONFIG[primarySbu] || SBU_BADGE_CONFIG.TRUCKING;
-                      const SbuIcon = config.icon;
-                      const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(wo.status);
-                      return (
-                        <div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-sm transition-all rotate-3 group-hover:rotate-0 ${
-                          isCompleted ? 'bg-indigo-100 text-indigo-700' : `${config.bg} ${config.text}`
-                        }`}>
-                          <SbuIcon size={18} />
-                        </div>
-                      );
-                    })()}
-                    <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap justify-end">
+                <div className="p-5 flex-1 flex flex-col">
+                  {/* Top Bar: Icon + Status */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      {(() => {
+                        const sbuTypes = getWoSbuTypes(wo);
+                        const primarySbu = sbuTypes[0] || 'TRUCKING';
+                        const config = SBU_BADGE_CONFIG[primarySbu] || SBU_BADGE_CONFIG.TRUCKING;
+                        const SbuIcon = config.icon;
+                        const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(wo.status);
+                        
+                        return (
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-110 ${
+                            isCompleted ? 'bg-slate-50 text-slate-400 border border-slate-100' : `${config.bg} ${config.text} border ${config.border}`
+                          }`}>
+                            <SbuIcon size={18} strokeWidth={2.5} />
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* SBU Badges */}
+                      <div className="flex flex-col gap-1">
+                        {(() => {
+                          const sbuTypes = getWoSbuTypes(wo);
+                          if (sbuTypes.length === 0) return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">NO SBU</span>;
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              {sbuTypes.map(type => {
+                                const config = SBU_BADGE_CONFIG[type];
+                                if (!config) return null;
+                                return (
+                                  <span key={type} className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    {config.label}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    
+                    {/* Status Badges */}
+                    <div className="flex flex-col items-end gap-1.5">
                       {wo.hasPendingCosts && (
-                        <Badge className="!bg-amber-100 !text-amber-600 !border-amber-200 font-black text-[9px] px-2 lg:px-3 py-1 uppercase tracking-widest italic animate-pulse">AUDIT BIAYA</Badge>
+                        <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                          <AlertCircle size={10} /> Audit Biaya
+                        </span>
                       )}
-                      {getStatusBadge(wo)}
+                      <div className="scale-95 origin-top-right">
+                        {getStatusBadge(wo)}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mb-4 lg:mb-8">
-                    <h3 className="text-base lg:text-lg font-black text-blue-700 italic uppercase tracking-tighter leading-none group-hover:text-blue-500 transition-colors">
+                  {/* Main Info */}
+                  <div className="mb-4">
+                    <h3 className="text-lg font-black text-black tracking-tight group-hover:text-blue-700 transition-colors">
                       {wo.wo_number}
                     </h3>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Users size={12} className="text-sky-500" />
-                      <p className="text-[9px] font-black text-sky-700 uppercase tracking-widest truncate">{wo.md_entities?.legal_name || wo.md_entities?.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Users size={14} className="text-slate-500" />
+                      <p className="text-sm text-slate-800 font-bold truncate">{wo.md_entities?.legal_name || wo.md_entities?.name}</p>
                     </div>
-                    {/* [AI] SBU Type Badges */}
-                    {(() => {
-                      const sbuTypes = getWoSbuTypes(wo);
-                      if (sbuTypes.length === 0) return null;
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-100">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Execution</span>
+                      <div className="flex items-center gap-1.5 text-black font-bold text-sm">
+                        <Calendar size={14} className="text-blue-600" />
+                        {new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <div className="w-[1px] h-8 bg-slate-200"></div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Missions</span>
+                      <div className="flex items-center gap-1.5 text-black font-bold text-sm">
+                        <Layers size={14} className="text-amber-600" />
+                        {wo.wo_items?.length || 0} JO
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Actions Area */}
+                <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
+                  {(() => {
+                    const hasHandoverPending = wo.status === 'handover_pending' || wo.wo_items?.some((i: any) => i.status === 'handover_pending');
+                    const isRejected = wo.status === 'handover_rejected' || wo.wo_items?.some((i: any) => i.status === 'handover_rejected');
+
+                    if (isRejected) {
                       return (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {sbuTypes.map(type => {
-                            const config = SBU_BADGE_CONFIG[type];
-                            if (!config) return null;
-                            const SbuIcon = config.icon;
-                            return (
-                              <span
-                                key={type}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}
-                              >
-                                <SbuIcon size={10} />
-                                {config.label}
-                              </span>
-                            );
-                          })}
-                        </div>
+                        <Button
+                          onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
+                          className="flex-1 h-10 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <ExternalLink size={14} /> Lihat Alasan Tolak
+                        </Button>
                       );
-                    })()}
-                  </div>
+                    }
 
-                  <div className="grid grid-cols-2 gap-2 lg:gap-3 mb-4 lg:mb-8">
-                    <div className="bg-emerald-50/50 p-3 lg:p-4 rounded-xl lg:rounded-2xl group-hover:bg-emerald-50 transition-colors border border-emerald-100/50">
-                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1 italic">Execution</p>
-                      <div className="flex items-center gap-2 text-emerald-700">
-                        <Calendar size={12} className="text-emerald-500" />
-                        <span className="text-xs font-black italic">{new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
-                      </div>
-                    </div>
-                    <div className="bg-amber-50/50 p-3 lg:p-4 rounded-xl lg:rounded-2xl group-hover:bg-amber-50 transition-colors border border-amber-100/50">
-                      <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1 italic">Missions</p>
-                      <div className="flex items-center gap-2 text-amber-700">
-                        <Layers size={12} className="text-amber-500" />
-                        <span className="text-xs font-black italic">{wo.wo_items?.length || 0} JO</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 lg:gap-3">
-                    {(() => {
-                      const hasHandoverPending = wo.status === 'handover_pending' || wo.wo_items?.some((i: any) => i.status === 'handover_pending');
-                      const isRejected = wo.status === 'handover_rejected' || wo.wo_items?.some((i: any) => i.status === 'handover_rejected');
-
-                      if (isRejected) {
-                        return (
+                    if (hasHandoverPending) {
+                      return (
+                        <>
                           <Button
-                            onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
-                            className="flex-1 h-11 lg:h-12 bg-slate-900 hover:bg-rose-900/40 text-white border border-slate-700 hover:border-rose-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20"
+                            onClick={() => handleApproveHandover(wo)}
+                            className="flex-1 h-10 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm shadow-orange-500/20"
                           >
-                            <ExternalLink size={14} /> VIEW <ArrowRight size={14} />
+                            <ShieldCheck size={14} /> Review
                           </Button>
-                        );
-                      }
-
-                      if (hasHandoverPending) {
-                        return (
-                          <>
-                            <Button
-                              onClick={() => handleApproveHandover(wo)}
-                              className="flex-1 h-11 lg:h-12 bg-slate-900 hover:bg-orange-900/40 text-white border border-slate-700 hover:border-orange-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 animate-pulse"
-                            >
-                              <ShieldCheck size={14} /> REVIEW <ArrowRight size={14} />
-                            </Button>
-                            <Button
-                              onClick={() => handleEdit(wo.id)}
-                              className="w-11 h-11 lg:w-12 lg:h-12 bg-slate-900 hover:bg-indigo-900/40 text-white border border-slate-700 hover:border-indigo-500/50 rounded-xl flex items-center justify-center transition-all shadow-lg shadow-slate-900/20"
-                              title="Edit WO Details"
-                            >
-                              <FileText size={16} />
-                            </Button>
-                          </>
-                        );
-                      }
-
-                      return (
-                        <Button
-                          onClick={() => handleEdit(wo.id)}
-                          className="flex-1 h-11 lg:h-12 bg-slate-900 hover:bg-indigo-900/40 text-white border border-slate-700 hover:border-indigo-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20"
-                        >
-                          EDIT <ArrowRight size={14} />
-                        </Button>
+                          <Button
+                            onClick={() => handleEdit(wo.id)}
+                            variant="outline"
+                            className="w-10 h-10 p-0 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0"
+                            title="Edit WO Details"
+                          >
+                            <FileText size={16} />
+                          </Button>
+                        </>
                       );
-                    })()}
-                    {wo.hasPendingCosts && (
-                      <Link href="/hq/finance/cost-audit">
-                        <Button
-                          className="h-11 lg:h-12 px-3 lg:px-5 bg-slate-900 hover:bg-amber-900/40 text-white border border-slate-700 hover:border-amber-500/50 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20"
-                        >
-                          <TrendingUp size={14} />
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
+                    }
+
+                    return (
+                      <Button
+                        onClick={() => handleEdit(wo.id)}
+                        variant="outline"
+                        className="flex-1 h-10 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        Detail WO <ArrowRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    );
+                  })()}
+                  {wo.hasPendingCosts && (
+                    <Link href="/hq/finance/cost-audit" className="shrink-0">
+                      <Button
+                        className="w-10 h-10 p-0 bg-white text-amber-600 hover:bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-center transition-all shadow-sm"
+                        title="Audit Biaya"
+                      >
+                        <AlertCircle size={16} />
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </Card>
             ))}

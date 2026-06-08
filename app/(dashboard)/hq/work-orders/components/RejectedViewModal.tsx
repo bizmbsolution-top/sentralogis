@@ -124,7 +124,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
 
             {/* Document Header */}
             <div className="text-center mb-10 pb-8 border-b-2 border-slate-100">
-              <h1 className="text-2xl font-black text-slate-800 uppercase tracking-[0.15em]">Laporan Penolakan Handover</h1>
+              <h1 className="text-2xl font-black text-black uppercase tracking-[0.15em]">Laporan Penolakan Handover</h1>
               <p className="text-xs text-slate-400 mt-2 font-medium tracking-wider">SENTRALOGIS — UNIFIED OPERATIONAL MATRIX</p>
             </div>
 
@@ -137,7 +137,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
               <>
                 {/* Section 1: Informasi Work Order */}
                 <div className="mb-10">
-                  <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
+                  <h2 className="text-[11px] font-black text-black uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
                     I. Informasi Work Order
                   </h2>
                   <table className="w-full text-sm">
@@ -154,7 +154,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
                 {/* Section 2: Detail Item */}
                 {itemDetails.map((item: any, idx: number) => (
                   <div key={idx} className="mb-10">
-                    <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
+                    <h2 className="text-[11px] font-black text-black uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
                       II. Detail Order — {item.itemCode}
                     </h2>
                     <table className="w-full text-sm">
@@ -183,11 +183,11 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
                             {item.assignedJOs.map((jo: any, jIdx: number) => (
                               <tr key={jo.id} className="border-b border-slate-100 last:border-0 bg-white">
                                 <td className="py-2.5 px-4 text-slate-400">{jIdx + 1}</td>
-                                <td className="py-2.5 px-4 text-slate-800 font-bold">{jo.md_entities?.name || '-'}</td>
-                                <td className="py-2.5 px-4 text-slate-700">
+                                <td className="py-2.5 px-4 text-black font-bold">{jo.md_entities?.name || '-'}</td>
+                                <td className="py-2.5 px-4 text-black">
                                   {jo.md_fleets?.md_fleet_types?.type_name || '-'} — {jo.md_fleets?.plate_number || '-'}
                                 </td>
-                                <td className="py-2.5 px-4 text-slate-700">{jo.md_drivers?.name || '-'}</td>
+                                <td className="py-2.5 px-4 text-black">{jo.md_drivers?.name || '-'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -199,7 +199,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
 
                 {/* Section 3: Handover dari SBU */}
                 <div className="mb-10">
-                  <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
+                  <h2 className="text-[11px] font-black text-black uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
                     III. Handover dari SBU
                   </h2>
                   {itemDetails.filter((it: any) => it.handoverNote || it.handoverAt).length > 0 ? (
@@ -216,7 +216,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
                         </table>
                         <div className="mt-3 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
                           <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Alasan Handover</p>
-                          <p className="text-sm text-slate-700 font-bold leading-relaxed italic">
+                          <p className="text-sm text-black font-bold leading-relaxed italic">
                             &ldquo;{item.handoverNote || 'Tidak ada keterangan.'}&rdquo;
                           </p>
                         </div>
@@ -229,7 +229,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
 
                 {/* Section 4: Respon CS / HQ */}
                 <div className="mb-10">
-                  <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
+                  <h2 className="text-[11px] font-black text-black uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
                     IV. Respon Customer Service
                   </h2>
                   {itemDetails.filter((it: any) => it.isRejected).length > 0 ? (
@@ -247,7 +247,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
                         </table>
                         <div className="mt-3 bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-lg">
                           <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider mb-1">Alasan Penolakan</p>
-                          <p className="text-sm text-slate-700 font-bold leading-relaxed italic">
+                          <p className="text-sm text-black font-bold leading-relaxed italic">
                             &ldquo;{item.rejectionNote || 'Tidak ada alasan penolakan.'}&rdquo;
                           </p>
                         </div>
@@ -261,11 +261,11 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
                 {/* WO-level notes */}
                 {wo.notes && (
                   <div className="mb-10">
-                    <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
+                    <h2 className="text-[11px] font-black text-black uppercase tracking-[0.2em] mb-5 pb-2 border-b border-slate-100">
                       V. Catatan Tambahan
                     </h2>
                     <div className="bg-slate-50 border-l-4 border-slate-400 p-4 rounded-r-lg">
-                      <p className="text-sm text-slate-700 font-bold leading-relaxed italic">{wo.notes}</p>
+                      <p className="text-sm text-black font-bold leading-relaxed italic">{wo.notes}</p>
                     </div>
                   </div>
                 )}
@@ -287,7 +287,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
         <div className="px-8 py-4 border-t border-slate-100 flex items-center justify-end bg-white">
           <button
             onClick={onClose}
-            className="px-8 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95 border border-slate-200"
+            className="px-8 py-3 bg-slate-50 hover:bg-slate-100 text-black rounded-xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95 border border-slate-200"
           >
             Tutup Dokumen
           </button>
@@ -303,7 +303,7 @@ function Row({ label, value, bold, valueClassName }: { label: string; value: str
     <tr className="border-b border-slate-100/55">
       <td className="py-2.5 pr-6 text-slate-400 font-medium w-[180px] align-top">{label}</td>
       <td className="py-2.5 text-slate-400 w-[10px] align-top">:</td>
-      <td className={`py-2.5 pl-3 align-top ${valueClassName || (bold ? 'text-slate-800 font-bold' : 'text-slate-700 font-medium')}`}>
+      <td className={`py-2.5 pl-3 align-top ${valueClassName || (bold ? 'text-black font-bold' : 'text-black font-medium')}`}>
         {value}
       </td>
     </tr>

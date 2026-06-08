@@ -42,6 +42,40 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// [AI] Profile cache key for localStorage — avoids slow "Verifying Session" on every page load
+const PROFILE_CACHE_KEY = 'sentralogis-profile-cache';
+
+function getCachedProfile(): Profile | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    // [AI] Cache expires after 24 hours
+    if (cached._cachedAt && Date.now() - cached._cachedAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+      return null;
+    }
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedProfile(profile: Profile) {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ ...profile, _cachedAt: Date.now() }));
+  } catch {}
+}
+
+function clearCachedProfile() {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {}
+}
+
 // [AI] Single promise that resolves when profile is loaded — avoids polling loop in login()
 let profileResolve: ((profile: Profile | null) => void) | null = null;
 let profilePromise: Promise<Profile | null> | null = null;
@@ -294,12 +328,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // [AI] On page reload (INITIAL_SESSION), use cached profile for instant load
+        if (event === 'INITIAL_SESSION' && !hasInitializedProfile.current) {
+          const cached = getCachedProfile();
+          if (cached && cached.id === session.user.id) {
+            console.log('[Auth] Using cached profile for instant load');
+            setProfile(cached);
+            profileCache.current = cached;
+            hasInitializedProfile.current = true;
+            isFetchingProfile.current = false;
+            setLoading(false);
+            setProfileLoading(false);
+            resolveProfilePromise(cached);
+            // [AI] Still refresh in background to get fresh data
+            fetchFullProfile(session.user.id).then((p) => {
+              if (p) {
+                setProfile(p);
+                profileCache.current = p;
+                setCachedProfile(p);
+              }
+            }).catch(() => {});
+            return;
+          }
+        }
+
         isFetchingProfile.current = true;
         setLoading(true);
         setProfileLoading(true);
 
         try {
           const p = await fetchFullProfile(session.user.id);
+          if (p) setCachedProfile(p); // [AI] Cache profile for next page load
           handleProfileResult(p, event);
         } catch (fetchErr) {
           console.error('[Auth] Profile fetch exception:', fetchErr);
@@ -318,6 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         setProfileLoading(false);
         profileCache.current = null;
+        clearCachedProfile(); // [AI] Clear cache on logout
       }
     });
 
@@ -373,6 +433,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profileCache.current = null;
       profilePromise = null;
       profileResolve = null;
+      clearCachedProfile(); // [AI] Clear profile cache on logout
 
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sentralogis-auth');

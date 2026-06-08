@@ -96,9 +96,10 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         console.log('[CreateWOForm] WO header loaded:', wo.wo_number);
 
         // STEP 2: Ambil WO Items (gabungan tabel baru dan tabel lama untuk kompatibilitas)
+        // [AI] Join wo_item_manifests + md_product_skus agar data manifests tidak hilang saat edit
         const { data: newItems, error: newItemsError } = await supabase
           .from('wo_items')
-          .select('*')
+          .select('*, wo_item_manifests(*, md_product_skus(sku_code, name, brand_name, unit, volume_m3, weight_kg))')
           .eq('wo_id', editId);
 
         if (newItemsError) throw newItemsError;
@@ -168,7 +169,16 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             return {
               ...item,
               item_data: typeof item.item_data === 'string' ? JSON.parse(item.item_data) : item.item_data,
-              job_orders: enrichedJobs
+              job_orders: enrichedJobs,
+              // [AI] Map wo_item_manifests to manifests, flatten md_product_skus for AddWarehouseItemModal
+              manifests: (item.wo_item_manifests || []).map((m: any) => ({
+                ...m,
+                // Flatten nested md_product_skus fields to top level
+                sku_code: m.md_product_skus?.sku_code || '',
+                name: m.md_product_skus?.name || '',
+                brand_name: m.md_product_skus?.brand_name || '',
+                unit: m.md_product_skus?.unit || '',
+              }))
             };
           })
         );
@@ -401,17 +411,17 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       {isLoadingEdit && (
         <div className="fixed inset-0 z-[110] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-          <p className="text-xs font-black text-slate-900 uppercase tracking-[0.4em]">Loading Work Order Data...</p>
+          <p className="text-xs font-black text-black uppercase tracking-[0.4em]">Loading Work Order Data...</p>
         </div>
       )}
 
       <div className="max-w-[1400px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-4 pt-12">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold transition-all uppercase tracking-widest text-[10px]">
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-black font-bold transition-all uppercase tracking-widest text-[10px]">
             <ArrowLeft size={14} /> Back to Directory
           </button>
           <div className="md:text-right">
-            <h2 className="text-3xl font-black text-slate-900 italic tracking-tight">ORCHESTRATE WORK ORDER</h2>
+            <h2 className="text-3xl font-black text-black italic tracking-tight">ORCHESTRATE WORK ORDER</h2>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Multi-SBU Dispatcher System</p>
           </div>
         </div>
@@ -499,7 +509,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             </Card>
 
             <div className="space-y-4">
-               <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] ml-2 italic">Select SBU Modules</h3>
+               <h3 className="text-xs font-black text-black uppercase tracking-[0.3em] ml-2 italic">Select SBU Modules</h3>
                {SBU_OPTIONS.length === 0 ? (
                  <p className="text-xs text-slate-400 font-medium ml-2">No active SBU modules. Ask admin to activate SBUs first.</p>
                ) : (
@@ -517,7 +527,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                             {sbu.id === 'CLEARANCE' && <ShieldCheck size={24} />}
                             {sbu.id === 'FORWARDING' && <Globe size={24} />}
                          </div>
-                         <span className="text-xs font-black uppercase tracking-widest text-slate-900">{sbu.label}</span>
+                         <span className="text-xs font-black uppercase tracking-widest text-black">{sbu.label}</span>
                       </button>
                     ))}
                  </div>
@@ -526,7 +536,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] italic">Work Order Manifest</h3>
+                <h3 className="text-xs font-black text-black uppercase tracking-[0.3em] italic">Work Order Manifest</h3>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{woItems.length} Items Selected</span>
               </div>
 
@@ -548,15 +558,15 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`text-[9px] font-black text-white px-2 py-0.5 rounded uppercase tracking-[0.2em] ${item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600' : 'bg-blue-600'}`}>{item.sbu_type}</span>
-                            <span className="text-xs font-black text-slate-900 uppercase tracking-wider">{item.item_data?.unit_count || 1} Units</span>
+                            <span className="text-xs font-black text-black uppercase tracking-wider">{item.item_data?.unit_count || 1} Units</span>
                           </div>
                           
                           {item.sbu_type === 'WAREHOUSE' ? (
-                            <div className="mt-2 text-sm font-bold text-slate-900">
+                            <div className="mt-2 text-sm font-bold text-black">
                                {item.item_data?.operation_type || 'Warehouse Task'} | {item.item_data?.est_volume_cbm || 0} CBM
                             </div>
                           ) : (
-                            <div className="text-sm font-bold text-slate-900 mt-1">
+                            <div className="text-sm font-bold text-black mt-1">
                                {item.item_data?.vehicle_type_name || 'Generic Fleet'}
                             </div>
                           )}
@@ -565,7 +575,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                       <div className="flex items-center gap-4 border-l border-slate-100 pl-6">
                          <div className="text-right">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue</p>
-                            <p className="text-sm font-black text-slate-900 italic font-mono">IDR {Number(item.total_revenue).toLocaleString('id-ID')}</p>
+                            <p className="text-sm font-black text-black italic font-mono">IDR {Number(item.total_revenue).toLocaleString('id-ID')}</p>
                          </div>
                          <div className="flex items-center gap-2">
                             <button 
@@ -595,7 +605,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           </div>
 
           <div className="space-y-6">
-            <Card className="p-8 bg-white text-slate-900 !rounded-[3rem] shadow-xl shadow-slate-200/60 space-y-8 sticky top-8 border border-slate-100">
+            <Card className="p-8 bg-white text-black !rounded-[3rem] shadow-xl shadow-slate-200/60 space-y-8 sticky top-8 border border-slate-100">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic border-b border-slate-50 pb-6">Manifest Summary</h3>
               <div className="pt-6 border-t border-slate-50">
                    <div className="flex flex-col gap-1">

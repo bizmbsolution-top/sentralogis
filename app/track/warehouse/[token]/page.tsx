@@ -106,12 +106,19 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
   );
 
   const { wo, jobOrders: allJobOrders } = data;
+  const isOutbound = wo?.wo_number?.includes('OUT') || allJobOrders.some((j: any) => j.is_outbound);
+  
   const jobOrders = joIdParam ? allJobOrders.filter((j: any) => j.id === joIdParam) : allJobOrders;
+  
+  const getTrackingRecord = (j: any) => isOutbound ? j.shipment : j.receipt;
   
   // Sort: active first, then pending, then completed
   const sortedJOs = [...jobOrders].sort((a, b) => {
-    const isActive = (j: any) => j.receipt && !['COMPLETED', 'EXPECTED'].includes(j.receipt?.status);
-    const isCompleted = (j: any) => j.receipt?.status === 'COMPLETED';
+    const isActive = (j: any) => {
+      const status = getTrackingRecord(j)?.status;
+      return status && !['COMPLETED', 'EXPECTED', 'DISPATCHED', 'PLANNED', 'PENDING', 'ASSIGNED'].includes(status);
+    };
+    const isCompleted = (j: any) => ['COMPLETED', 'DISPATCHED'].includes(getTrackingRecord(j)?.status);
     
     if (isActive(a) && !isActive(b)) return -1;
     if (!isActive(a) && isActive(b)) return 1;
@@ -121,13 +128,29 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
   });
 
   const selectedJo = jobOrders.find((j: any) => j.id === selectedJoId);
-  const activeCount = jobOrders.filter((j: any) => j.receipt && !['COMPLETED', 'EXPECTED'].includes(j.receipt?.status)).length;
-  const completedCount = jobOrders.filter((j: any) => j.receipt?.status === 'COMPLETED').length;
+  const activeCount = jobOrders.filter((j: any) => {
+    const status = getTrackingRecord(j)?.status;
+    return status && !['COMPLETED', 'EXPECTED', 'DISPATCHED', 'PLANNED', 'PENDING', 'ASSIGNED'].includes(status);
+  }).length;
+  const completedCount = jobOrders.filter((j: any) => ['COMPLETED', 'DISPATCHED'].includes(getTrackingRecord(j)?.status)).length;
 
-  const getStatusDisplay = (receiptStatus: string | undefined) => {
-    if (!receiptStatus) return { label: 'Menunggu Alokasi', color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', icon: Clock };
+  const getStatusDisplay = (status: string | undefined, isOutbound: boolean) => {
+    if (!status) return { label: 'Menunggu Alokasi', color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', icon: Clock };
     
-    switch (receiptStatus) {
+    if (isOutbound) {
+      switch (status) {
+        case 'PLANNED': case 'PENDING': case 'ASSIGNED': return { label: 'Menunggu Jadwal', color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400', icon: Clock };
+        case 'PICKING': case 'STAGING': return { label: 'Proses Pengambilan (Picking)', color: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500 animate-pulse', icon: LayoutGrid };
+        case 'READY_FOR_CHECKING': case 'CHECKING': return { label: 'Pengecekan Fisik', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500 animate-pulse', icon: ShieldCheck };
+        case 'READY_FOR_LOADING': return { label: 'Truk Tiba (Siap Muat)', color: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500 animate-pulse', icon: MapPin };
+        case 'LOADING': return { label: 'Proses Muat (Loading)', color: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500 animate-pulse', icon: Box };
+        case 'READY_FOR_DOCUMENTS': return { label: 'Tunggu Dokumen Jalan', color: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500 animate-pulse', icon: ShieldCheck };
+        case 'COMPLETED': case 'DISPATCHED': return { label: 'Selesai (Outbound Done)', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: PackageCheck };
+        default: return { label: status.replace(/_/g, ' '), color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', icon: Box };
+      }
+    }
+
+    switch (status) {
       case 'EXPECTED': return { label: 'Menunggu Kedatangan', color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400', icon: Truck };
       case 'TRUCK_ARRIVED': return { label: 'Truk Tiba', color: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500 animate-pulse', icon: MapPin };
       case 'UNLOADING': return { label: 'Bongkar Muat', color: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500 animate-pulse', icon: Box };
@@ -135,35 +158,45 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
       case 'CHECKING_DONE': return { label: 'Pengecekan Fisik', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500 animate-pulse', icon: ShieldCheck };
       case 'PUTAWAY_IN_PROGRESS': return { label: 'Proses Putaway', color: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500 animate-pulse', icon: LayoutGrid };
       case 'COMPLETED': return { label: 'Selesai (Inbound Done)', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: PackageCheck };
-      default: return { label: receiptStatus.replace(/_/g, ' '), color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', icon: Box };
+      default: return { label: status.replace(/_/g, ' '), color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', icon: Box };
     }
   };
 
-  const getTimelineMilestones = (receipt: any) => {
-    if (!receipt) return [];
+  const getTimelineMilestones = (record: any, isOutbound: boolean) => {
+    if (!record) return [];
     
-    // Milestones are derived from timestamps or status progression
-    const milestones = [
-      { id: 'expected', label: 'Menunggu Kedatangan Truk', isDone: true, time: receipt.created_at, icon: Clock },
-      { id: 'arrived', label: 'Truk Tiba di Gudang', isDone: ['TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(receipt.status), time: receipt.updated_at, icon: Truck },
-      { id: 'unloading', label: 'Proses Bongkar Muat (Unloading)', isDone: ['UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(receipt.status), time: receipt.unloading_start_time || receipt.updated_at, icon: Box },
-      { id: 'checking', label: 'Pengecekan Kualitas & Kuantitas', isDone: ['CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(receipt.status), time: receipt.updated_at, icon: ShieldCheck },
-      { id: 'putaway', label: 'Penempatan Barang di Rak (Putaway)', isDone: ['PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(receipt.status), time: receipt.updated_at, icon: LayoutGrid },
-      { id: 'completed', label: 'Inbound Selesai', isDone: receipt.status === 'COMPLETED', time: receipt.updated_at, icon: PackageCheck },
+    if (isOutbound) {
+      return [
+        { id: 'planned', label: 'Menunggu Jadwal', isDone: true, time: record.created_at, icon: Clock },
+        { id: 'picking', label: 'Proses Pengambilan (Picking)', isDone: ['PICKING', 'STAGING', 'READY_FOR_CHECKING', 'CHECKING', 'READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: LayoutGrid },
+        { id: 'checking', label: 'Pengecekan Fisik', isDone: ['CHECKING', 'READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: ShieldCheck },
+        { id: 'truck', label: 'Truk Tiba di Gudang', isDone: ['READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: Truck },
+        { id: 'loading', label: 'Proses Muat (Loading)', isDone: ['LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: Box },
+        { id: 'completed', label: 'Outbound Selesai', isDone: ['COMPLETED', 'DISPATCHED'].includes(record.status), time: record.updated_at, icon: PackageCheck },
+      ];
+    }
+    
+    return [
+      { id: 'expected', label: 'Menunggu Kedatangan Truk', isDone: true, time: record.created_at, icon: Clock },
+      { id: 'arrived', label: 'Truk Tiba di Gudang', isDone: ['TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: Truck },
+      { id: 'unloading', label: 'Proses Bongkar Muat (Unloading)', isDone: ['UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(record.status), time: record.unloading_start_time || record.updated_at, icon: Box },
+      { id: 'checking', label: 'Pengecekan Kualitas & Kuantitas', isDone: ['CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: ShieldCheck },
+      { id: 'putaway', label: 'Penempatan Barang di Rak (Putaway)', isDone: ['PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(record.status), time: record.updated_at, icon: LayoutGrid },
+      { id: 'completed', label: 'Inbound Selesai', isDone: record.status === 'COMPLETED', time: record.updated_at, icon: PackageCheck },
     ];
-    return milestones;
   };
 
-  const isWoCompleted = wo?.status === 'completed' || (jobOrders.length > 0 && jobOrders.every((j: any) => j.status === 'completed' || j.receipt?.status === 'COMPLETED'));
+  const isWoCompleted = wo?.status === 'completed' || (jobOrders.length > 0 && jobOrders.every((j: any) => ['COMPLETED', 'DISPATCHED'].includes(getTrackingRecord(j)?.status)));
 
   let totalExpected = 0, totalGood = 0, totalQuarantine = 0, totalRejected = 0;
   if (isWoCompleted) {
     jobOrders.forEach((j: any) => {
-      if (j.receipt?.metrics) {
-        totalExpected += j.receipt.metrics.expectedQty || 0;
-        totalGood += j.receipt.metrics.goodQty || 0;
-        totalQuarantine += j.receipt.metrics.quarantineQty || 0;
-        totalRejected += j.receipt.metrics.rejectedQty || 0;
+      const rec = getTrackingRecord(j);
+      if (rec?.metrics) {
+        totalExpected += rec.metrics.expectedQty || 0;
+        totalGood += rec.metrics.goodQty || 0;
+        totalQuarantine += rec.metrics.quarantineQty || 0;
+        totalRejected += rec.metrics.rejectedQty || 0;
       }
     });
   }
@@ -202,7 +235,7 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
           {/* Progress Bar */}
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progress Inbound</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progress {isOutbound ? 'Outbound' : 'Inbound'}</p>
               <p className="text-xs font-black text-amber-600">{completedCount} dari {jobOrders.length} Truk Selesai</p>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
@@ -227,8 +260,8 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 ring-8 ring-emerald-50">
                  <PackageCheck size={40} />
                </div>
-               <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">Inbound Selesai</h2>
-               <p className="text-slate-500 font-medium mb-8">Semua {jobOrders.length} kendaraan telah selesai melakukan proses bongkar muat dan masuk ke rak penyimpanan.</p>
+               <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">{isOutbound ? 'Outbound Selesai' : 'Inbound Selesai'}</h2>
+               <p className="text-slate-500 font-medium mb-8">Semua {jobOrders.length} kendaraan telah selesai melakukan proses {isOutbound ? 'pemuatan barang (loading)' : 'bongkar muat dan masuk ke rak penyimpanan'}.</p>
                
                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -257,9 +290,10 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
             </h2>
             <div className="space-y-3">
               {sortedJOs.map((jo: any) => {
-                const statusInfo = getStatusDisplay(jo.receipt?.status);
-                const isActive = jo.receipt && !['COMPLETED', 'EXPECTED'].includes(jo.receipt?.status);
-                const pendingDamagesCount = jo.receipt?.wh_inbound_damage_records?.filter((r: any) => r.decision === 'PENDING').length || 0;
+                const rec = getTrackingRecord(jo);
+                const statusInfo = getStatusDisplay(rec?.status, isOutbound);
+                const isActive = rec && !['COMPLETED', 'EXPECTED', 'DISPATCHED', 'PLANNED', 'PENDING', 'ASSIGNED'].includes(rec?.status);
+                const pendingDamagesCount = (!isOutbound && rec?.wh_inbound_damage_records?.filter((r: any) => r.decision === 'PENDING').length) || 0;
 
                 return (
                   <button
@@ -309,7 +343,7 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
         ) : (
           <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
             {/* Truck Detail Header */}
-            <div className={`bg-white p-5 rounded-2xl border shadow-sm ${getStatusDisplay(selectedJo.receipt?.status).color.replace('text-', 'border-').replace('50', '200')}`}>
+            <div className={`bg-white p-5 rounded-2xl border shadow-sm ${getStatusDisplay(getTrackingRecord(selectedJo)?.status, isOutbound).color.replace('text-', 'border-').replace('50', '200')}`}>
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100 shrink-0">
                   <Truck className="w-7 h-7 text-slate-700" />
@@ -322,20 +356,22 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
                 </div>
               </div>
 
-              {selectedJo.receipt?.metrics && (
+              {getTrackingRecord(selectedJo)?.metrics && (
                 <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100">
                    <div className="bg-slate-50 rounded-xl p-2 text-center">
-                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Diharapkan</p>
-                     <p className="text-sm font-black text-slate-900">{selectedJo.receipt.metrics.expectedQty}</p>
+                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Target Qty</p>
+                     <p className="text-sm font-black text-slate-900">{getTrackingRecord(selectedJo).metrics.expectedQty}</p>
                    </div>
                    <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-100">
-                     <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Good/Baik</p>
-                     <p className="text-sm font-black text-emerald-700">{selectedJo.receipt.metrics.goodQty}</p>
+                     <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{isOutbound ? 'Picked/Loaded' : 'Good/Baik'}</p>
+                     <p className="text-sm font-black text-emerald-700">{getTrackingRecord(selectedJo).metrics.goodQty}</p>
                    </div>
-                   <div className="bg-amber-50 rounded-xl p-2 text-center border border-amber-100">
-                     <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-1">Karantina</p>
-                     <p className="text-sm font-black text-amber-700">{selectedJo.receipt.metrics.quarantineQty}</p>
-                   </div>
+                   {!isOutbound && (
+                     <div className="bg-amber-50 rounded-xl p-2 text-center border border-amber-100">
+                       <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-1">Karantina</p>
+                       <p className="text-sm font-black text-amber-700">{getTrackingRecord(selectedJo).metrics.quarantineQty}</p>
+                     </div>
+                   )}
                 </div>
               )}
             </div>
@@ -346,14 +382,14 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
                  <Clock size={150} />
                </div>
                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                 <Clock size={16} className="text-amber-500" /> Timeline Proses Inbound
+                 <Clock size={16} className="text-amber-500" /> Timeline Proses {isOutbound ? 'Outbound' : 'Inbound'}
                </h3>
                
                <div className="relative pl-12 space-y-8">
                  {/* Timeline Line */}
                  <div className="absolute left-[23px] top-4 bottom-0 w-0.5 bg-slate-100" />
                  
-                 {getTimelineMilestones(selectedJo.receipt).map((step: any, idx: number, arr: any[]) => {
+                 {getTimelineMilestones(getTrackingRecord(selectedJo), isOutbound).map((step: any, idx: number, arr: any[]) => {
                    const isLast = idx === arr.length - 1;
                    const isActive = step.isDone && (!arr[idx+1]?.isDone);
 
@@ -377,9 +413,9 @@ export default function WarehouseTrackingPage({ params }: { params: Promise<{ to
                          </div>
 
                          {/* Inject Damage Photos for Checking Step */}
-                         {step.id === 'checking' && step.isDone && selectedJo.receipt?.wh_inbound_damage_records?.length > 0 && (
+                         {!isOutbound && step.id === 'checking' && step.isDone && getTrackingRecord(selectedJo)?.wh_inbound_damage_records?.length > 0 && (
                            <div className="mt-4 flex flex-col gap-4">
-                             {selectedJo.receipt.wh_inbound_damage_records.map((dmg: any) => (
+                             {getTrackingRecord(selectedJo).wh_inbound_damage_records.map((dmg: any) => (
                                <div key={dmg.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                                  <p className="text-xs font-bold text-slate-900 mb-3 flex items-center gap-2">
                                    <AlertTriangle size={14} className="text-amber-500" /> Barang Rusak ({dmg.qty} Qty)

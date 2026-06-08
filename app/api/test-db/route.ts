@@ -1,25 +1,19 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import * as fs from 'fs';
-import * as path from 'path';
-
-export const dynamic = 'force-dynamic';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
-    const sqlPath = path.join(process.cwd(), 'supabase', 'migrations', '053_sku_categories_and_attributes.sql');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const queries = ["SELECT column_name FROM information_schema.columns WHERE table_name = 'md_product_skus'"];
-    
-    const results = [];
-    for (const q of queries) {
-      const { data, error } = await supabaseAdmin.rpc('exec_sql_manual', { sql_query: q });
-      results.push({ query: q.substring(0, 50), data, error });
-    }
-    
-    return NextResponse.json({ success: true, results });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const { data, error } = await supabase
+      .from('md_entities')
+      .select('id, name, parent_id, parent:md_entities!parent_id(name)')
+      .limit(10);
+      
+    return NextResponse.json({ success: true, data, error });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message });
   }
 }

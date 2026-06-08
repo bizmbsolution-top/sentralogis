@@ -116,6 +116,7 @@ export default function FleetsPage() {
 
   const generateFleetCode = async () => {
     // [AI] Query ALL tenants' codes to avoid global unique constraint collision
+    // [AI] Added random suffix to prevent race condition duplicates
     try {
       const { data } = await supabase
         .from('md_fleets')
@@ -128,9 +129,12 @@ export default function FleetsPage() {
 
       const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
       const newNumber = (maxNum + 1).toString().padStart(3, '0');
-      return `FLT/${newNumber}`;
+      // [AI] Add random 2-digit suffix to prevent race condition collision
+      const suffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+      return `FLT/${newNumber}${suffix}`;
     } catch (err) {
-      return `FLT/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+      const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      return `FLT/${rand}`;
     }
   };
 

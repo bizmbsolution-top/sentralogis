@@ -37,7 +37,7 @@ export default function WarehousePortalDashboard() {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
-      const { data: attData, error: attError } = await supabase
+      const { data: attData } = await supabase
         .from('wh_staff_attendance')
         .select('*')
         .eq('staff_id', sess.staff_id)
@@ -46,14 +46,13 @@ export default function WarehousePortalDashboard() {
         .limit(1)
         .maybeSingle();
 
-      if (attError) console.error(attError);
-        
       setAttendance(attData);
 
-      let query = supabase
+      // 2. Fetch Inbound Receipts
+      let inbQuery = supabase
         .from('wh_inbound_receipts')
         .select(`
-          id, receipt_number, status, expected_arrival,
+          id, receipt_number, status, expected_arrival, created_at,
           transporter:transporter_id(name),
           fleet:fleet_id(plate_number),
           driver:driver_id(name)
@@ -61,20 +60,66 @@ export default function WarehousePortalDashboard() {
         .neq('status', 'COMPLETED')
         .order('created_at', { ascending: false });
 
-      if (sess.warehouse_id) {
-        query = query.eq('warehouse_id', sess.warehouse_id);
-      } else {
-        query = query.eq('tenant_id', sess.tenant_id);
+      if (sess.warehouse_id) inbQuery = inbQuery.eq('warehouse_id', sess.warehouse_id);
+      else inbQuery = inbQuery.eq('tenant_id', sess.tenant_id);
+
+      const { data: inboundData } = await inbQuery;
+
+      // 3. Fetch Outbound Shipments
+      let outQuery = supabase
+        .from('wh_outbound_shipments')
+        .select(`
+          id, shipment_number, status, created_at, notes, driver_id, wo_item_id
+        `)
+        .neq('status', 'COMPLETED')
+        .order('created_at', { ascending: false });
+
+      if (sess.warehouse_id) outQuery = outQuery.eq('warehouse_id', sess.warehouse_id);
+      else outQuery = outQuery.eq('tenant_id', sess.tenant_id);
+
+      const { data: outboundDataRaw } = await outQuery;
+      let outboundData = outboundDataRaw || [];
+      const woItemIds = [...new Set(outboundData.map((d: any) => d.wo_item_id).filter(Boolean))];
+      if (woItemIds.length > 0) {
+         const { data: joData } = await supabase.from('job_orders').select('jo_number, wo_item_id').in('wo_item_id', woItemIds);
+         if (joData) {
+            outboundData = outboundData.map((d: any) => {
+               const jo = joData.find((j: any) => j.wo_item_id === d.wo_item_id);
+               return {
+                  ...d,
+                  wo_item: jo ? { job_orders: [jo] } : null
+               };
+            });
+         }
       }
 
-      const { data: receiptsData } = await query;
+      // Filter outbound based on role
+      const filteredOutbound = (outboundData || []).filter((d: any) => {
+        if (!sess.role || sess.role === 'ADMIN' || sess.role === 'SUPERADMIN') return true;
+        if (sess.role === 'PUTAWAY') {
+          return ['PLANNED', 'PENDING', 'ASSIGNED', 'PICKING', 'READY_FOR_CHECKING'].includes(d.status);
+        }
+        if (sess.role === 'TALLY') {
+          return ['READY_FOR_CHECKING', 'CHECKING', 'READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS'].includes(d.status);
+        }
+        if (sess.role === 'SECURITY') {
+          // Security can see all non-completed to record truck arrival anytime
+          return true; 
+        }
+        return true;
+      });
 
-      const newReceipts = receiptsData || [];
-      if (prevCountRef.current > 0 && newReceipts.length > prevCountRef.current) {
+      // Merge and sort
+      const mergedList = [
+        ...(inboundData || []).map((d: any) => ({ ...d, list_type: 'INBOUND' })),
+        ...filteredOutbound.map((d: any) => ({ ...d, list_type: 'OUTBOUND' }))
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      if (prevCountRef.current > 0 && mergedList.length > prevCountRef.current) {
         notifyUser();
       }
-      prevCountRef.current = newReceipts.length;
-      setReceipts(newReceipts);
+      prevCountRef.current = mergedList.length;
+      setReceipts(mergedList);
     } catch (err) {
       console.error(err);
     } finally {
@@ -190,7 +235,7 @@ export default function WarehousePortalDashboard() {
       <div className="space-y-4">
         <h3 className="text-base font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 px-1">
           <Inbox size={20} className="text-slate-400" />
-          Daftar Job Order (Inbound) ({receipts.length})
+          Daftar Tugas Aktif ({receipts.length})
         </h3>
         
         {receipts.length === 0 ? (
@@ -198,11 +243,56 @@ export default function WarehousePortalDashboard() {
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
               <CheckCircle2 size={32} />
             </div>
-            <p className="text-base font-black text-slate-400 uppercase tracking-wide">Belum ada truk masuk</p>
+            <p className="text-base font-black text-slate-400 uppercase tracking-wide">Belum ada tugas aktif</p>
           </div>
         ) : (
           <div className="space-y-3">
             {receipts.map(receipt => {
+              if (receipt.list_type === 'OUTBOUND') {
+                return (
+                  <div 
+                    key={receipt.id}
+                    onClick={() => router.push(`/warehouse/portal/outbound/${receipt.id}`)}
+                    className={`p-5 bg-white rounded-2xl border flex flex-col justify-between shadow-sm active:scale-[0.98] transition-transform cursor-pointer border-l-4 border-amber-400`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100 flex-shrink-0 mt-1">
+                          <Package size={28} className="text-amber-500" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white px-2 py-0.5 rounded">
+                              OUTBOUND
+                            </span>
+                          </div>
+                          <h4 className="font-black text-slate-900 text-base leading-tight">{receipt.wo_item?.job_orders?.[0]?.jo_number || receipt.shipment_number}</h4>
+                          <p className="text-xs font-bold opacity-75 mt-0.5">{receipt.status.replace(/_/g, ' ')}</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={20} className="text-slate-300 mt-2" />
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Catatan / JO</span>
+                        <span className="block text-xs font-bold text-slate-700 truncate">{receipt.notes || receipt.wo_item?.job_orders?.[0]?.jo_number || '-'}</span>
+                      </div>
+                      
+                      {/* Tampilkan info supir jika ada (Bisa dicheck oleh Tally) */}
+                      {receipt.driver_id && (
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-2">
+                           <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Truk / Armada Penjemput</span>
+                           <span className="block text-xs font-black text-emerald-600 truncate flex items-center gap-1">
+                             <CheckCircle2 size={12} /> Truk Sudah Standby
+                           </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               const MILESTONES = [
                 { key: 'EXPECTED', label: 'Expected' },
                 { key: 'TRUCK_ARRIVED', label: 'Arrived' },
@@ -227,7 +317,7 @@ export default function WarehousePortalDashboard() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-2 py-0.5 rounded">
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white px-2 py-0.5 rounded">
                             INBOUND
                           </span>
                         </div>

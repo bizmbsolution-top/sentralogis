@@ -602,7 +602,7 @@ const filteredItems = useMemo(() => {
                             <Button 
                               onClick={() => {
                                 const assignedJOs = jos.filter((j: any) => j.fleet_id && j.driver_id);
-                                const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://www.sentralogis.com');
+                                const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://www.sentralogis.com')).trim().replace(/[\r\n\s]+$/, '');
                                 for (const jo of assignedJOs) {
                                   const driver = jo.driver;
                                   const driverPhone = driver?.phone || '';

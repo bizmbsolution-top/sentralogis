@@ -131,27 +131,8 @@ export default function HQFleetsPage() {
   }, [tenantId, fetchData, loadingAuth]);
 
   const generateFleetCode = async () => {
-    if (!tenantId) return 'FLT/001';
-    
-    try {
-      // [AI] Query ALL tenants' codes to avoid global unique constraint collision
-      const { data } = await supabase
-        .from('md_fleets')
-        .select('fleet_code')
-        .like('fleet_code', 'FLT/%');
-      
-      if (!data || data.length === 0) return 'FLT/001';
-      
-      const numbers = data
-        .map((r) => parseInt(r.fleet_code.split('/')[1]))
-        .filter((n) => !isNaN(n));
-      
-      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-      const newNumber = (maxNum + 1).toString().padStart(3, '0');
-      return `FLT/${newNumber}`;
-    } catch (err) {
-      return `FLT/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    }
+    // Generate a short, unique, time-based code: e.g. FLT-LQKX2Z
+    return `FLT-${Date.now().toString(36).toUpperCase()}`;
   };
 
   const handleSubmit = async () => {
@@ -238,8 +219,13 @@ export default function HQFleetsPage() {
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
-      console.error('Final Fleet Catch Error:', error);
-      toast.error(error.message || 'Gagal menyimpan armada. Cek Console (F12).');
+      console.error('Final Fleet Catch Error:', JSON.stringify(error, null, 2), error);
+      
+      if (error?.code === '23505' && error?.message?.includes('plate_number_key')) {
+        toast.error('Nomor Plat armada ini sudah terdaftar di sistem! Silakan gunakan plat yang berbeda.', { duration: 5000 });
+      } else {
+        toast.error(error?.message || error?.details || 'Gagal menyimpan armada.');
+      }
     } finally {
       setSubmitting(false);
     }

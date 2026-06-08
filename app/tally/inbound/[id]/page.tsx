@@ -144,6 +144,32 @@ export default function TallyInboundExecution({ params }: { params: Promise<{ id
 
   const handleSave = async (nextStatus: string) => {
     if (!receipt) return;
+
+    // [AI] Validate qty when advancing from CHECKING
+    if (receipt.status === 'CHECKING' && nextStatus === 'PUTAWAY_IN_PROGRESS') {
+      for (const item of items) {
+        const totalScanned = (item.actual_good_qty || 0) + (item.quarantine_qty || 0) + (item.rejected_qty || 0);
+        const expected = item.expected_qty || 0;
+
+        if (totalScanned === 0 && expected > 0) {
+          toast.error(`Item "${item.product_name}" belum diisi qty sama sekali!`);
+          return;
+        }
+
+        if (totalScanned < expected) {
+          const shortage = expected - totalScanned;
+          toast.error(`Item "${item.product_name}" kurang ${shortage} pcs! (Isi: ${totalScanned}, Target: ${expected})`, { duration: 5000 });
+          return;
+        }
+
+        if (totalScanned > expected) {
+          const overage = totalScanned - expected;
+          toast.error(`Item "${item.product_name}" lebih ${overage} pcs! (Isi: ${totalScanned}, Target: ${expected}). Hubungi supervisor.`, { duration: 5000 });
+          return;
+        }
+      }
+    }
+
     try {
       await saveTallyLocally(receipt.id, items, nextStatus, currentMetadata);
       setReceipt(prev => prev ? { ...prev, status: nextStatus as any } : null);
@@ -275,9 +301,16 @@ export default function TallyInboundExecution({ params }: { params: Promise<{ id
         {(receipt.status === 'CHECKING' || receipt.status === 'PUTAWAY_IN_PROGRESS' || receipt.status === 'COMPLETED') && items.map((item) => {
           const totalScanned = item.actual_good_qty + item.quarantine_qty + item.rejected_qty;
           const isComplete = totalScanned >= item.expected_qty;
+          const isMismatch = receipt.status === 'CHECKING' && totalScanned > 0 && totalScanned !== item.expected_qty;
+          const isShortage = isMismatch && totalScanned < item.expected_qty;
+          const isOverage = isMismatch && totalScanned > item.expected_qty;
 
           return (
-            <div key={item.id} className={`bg-white rounded-xl border p-4 shadow-sm transition-all ${isComplete ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200'}`}>
+            <div key={item.id} className={`bg-white rounded-xl border p-4 shadow-sm transition-all ${
+              isOverage ? 'border-rose-300 bg-rose-50/30' :
+              isShortage ? 'border-amber-300 bg-amber-50/30' :
+              isComplete ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200'
+            }`}>
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
                   <h3 className="font-bold text-slate-900 text-sm">{item.product_name}</h3>
@@ -321,7 +354,39 @@ export default function TallyInboundExecution({ params }: { params: Promise<{ id
                       className="w-full bg-rose-50 border border-rose-200 rounded-lg px-2 py-2 text-center font-bold text-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
                     />
                   </div>
-                  
+
+                  {/* Qty Mismatch Warning */}
+                  {receipt.status === 'CHECKING' && totalScanned > 0 && totalScanned !== item.expected_qty && (
+                    <div className={`col-span-3 mt-2 p-2.5 rounded-lg flex items-center gap-2 ${
+                      totalScanned > item.expected_qty
+                        ? 'bg-rose-50 border border-rose-200'
+                        : 'bg-amber-50 border border-amber-200'
+                    }`}>
+                      <AlertTriangle size={14} className={totalScanned > item.expected_qty ? 'text-rose-500' : 'text-amber-500'} />
+                      <span className={`text-xs font-bold ${
+                        totalScanned > item.expected_qty ? 'text-rose-700' : 'text-amber-700'
+                      }`}>
+                        {totalScanned > item.expected_qty
+                          ? `LEBIH ${totalScanned - item.expected_qty} pcs dari target ${item.expected_qty}`
+                          : `KURANG ${item.expected_qty - totalScanned} pcs dari target ${item.expected_qty}`
+                        }
+                      </span>
+                      <span className={`ml-auto text-[10px] font-bold ${
+                        totalScanned > item.expected_qty ? 'text-rose-500' : 'text-amber-500'
+                      }`}>
+                        {totalScanned} / {item.expected_qty}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Qty Matched Indicator */}
+                  {receipt.status === 'CHECKING' && totalScanned > 0 && totalScanned === item.expected_qty && (
+                    <div className="col-span-3 mt-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2">
+                      <CheckCircle2 size={14} className="text-emerald-500" />
+                      <span className="text-xs font-bold text-emerald-700">Jumlah sesuai ({totalScanned} / {item.expected_qty})</span>
+                    </div>
+                  )}
+
                   {/* Damage Photo Upload if rejected/quarantine > 0 */}
                   {(item.quarantine_qty > 0 || item.rejected_qty > 0) && (
                     <div className="col-span-3 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">

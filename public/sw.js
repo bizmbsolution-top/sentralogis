@@ -58,12 +58,18 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       
-      return fetch(event.request).catch((err) => {
+      return fetch(event.request).catch(async (err) => {
         console.warn('[SW] Fetch failed for:', event.request.url, err);
         // If it's a page navigation request, we can serve the cached offline portal
         if (event.request.headers.get('accept')?.includes('text/html')) {
-          return caches.match('/driver/portal');
+          const cachedHtml = await caches.match('/driver/portal');
+          if (cachedHtml) return cachedHtml;
         }
+        // Fallback valid Response to prevent TypeError
+        return new Response('Network error or offline.', {
+          status: 503,
+          statusText: 'Service Unavailable'
+        });
       });
     })
   );

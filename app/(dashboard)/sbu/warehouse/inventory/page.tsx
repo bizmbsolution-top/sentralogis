@@ -3,40 +3,33 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { toast } from "react-hot-toast";
 import {
-  Loader2, Search, Package, AlertTriangle,
-  CheckCircle2, Filter
+  Loader2, Search, Package, CheckCircle2, Filter, ChevronRight, XCircle, AlertTriangle
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import StockCardModal from "./components/StockCardModal";
 
-interface InventoryItem {
-  id: string;
+interface ProductSummary {
+  product_sku_id: string;
   sku_code: string;
   product_name: string;
-  quantity: number;
-  available_quantity: number;
-  reserved_quantity: number;
-  batch_number: string;
-  expiry_date: string;
-  location_code: string;
-  status: string;
+  total_qty: number;
+  good_qty: number;
+  damaged_qty: number;
+  quarantine_qty: number;
+  location_count: number;
+  _locations: Set<string>;
 }
-
-const statusColor: Record<string, string> = {
-  AVAILABLE: "text-emerald-600 bg-emerald-100",
-  RESERVED: "text-blue-600 bg-blue-100",
-  QUARANTINE: "text-amber-600 bg-amber-100",
-  DAMAGED: "text-red-600 bg-red-100",
-  EXPIRED: "text-slate-500 bg-slate-100",
-};
 
 export default function SBUInventoryPage() {
   const supabase = createClient()!;
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [summaries, setSummaries] = useState<ProductSummary[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<string>("ALL");
+  
+  // Modal state
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; skuCode: string; name: string } | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -53,64 +46,105 @@ export default function SBUInventoryPage() {
       }
       if (!tenantId) return;
 
-      const { data, error } = await (supabase as any)
-        .from('wh_inventory')
+      // 1. Fetch Inbound Ledger
+      const { data: inboundData } = await supabase
+        .from('wh_inbound_receipt_items')
         .select(`
-          id, quantity, available_quantity, reserved_quantity,
-          batch_number, expiry_date, status,
-          product_sku:product_sku_id(sku_code, name),
-          location:location_id(code)
+          actual_good_qty, product_sku_id,
+          product_sku:product_sku_id(id, sku_code, name),
+          wh_inbound_receipts!inner(tenant_id)
         `)
-        .eq('tenant_id', tenantId)
-        .order('expiry_date', { ascending: true, nullsLast: true })
-        .limit(100);
+        .eq('wh_inbound_receipts.tenant_id', tenantId);
 
-      if (error) throw error;
+      // 2. Fetch Outbound Ledger
+      const { data: outboundData } = await supabase
+        .from('wh_outbound_shipment_items')
+        .select(`
+          picked_qty, damage_qty, product_sku_id,
+          wh_outbound_shipments!inner(tenant_id)
+        `)
+        .eq('wh_outbound_shipments.tenant_id', tenantId);
 
-      const mapped = (data || []).map((i: any) => ({
-        id: i.id,
-        sku_code: i.product_sku?.sku_code || '',
-        product_name: i.product_sku?.name || '',
-        quantity: Number(i.quantity || 0),
-        available_quantity: Number(i.available_quantity || 0),
-        reserved_quantity: Number(i.reserved_quantity || 0),
-        batch_number: i.batch_number || '-',
-        expiry_date: i.expiry_date || '-',
-        location_code: i.location?.code || '-',
-        status: i.status,
+      // 3. Fetch Locations from wh_inventory
+      const { data: invData } = await (supabase as any)
+        .from('wh_inventory')
+        .select('product_sku_id, location_id')
+        .eq('tenant_id', tenantId);
+
+      // Group by product
+      const grouped: Record<string, ProductSummary> = {};
+      
+      const initGroup = (skuId: string, skuCode: string, name: string) => {
+        if (!grouped[skuId]) {
+          grouped[skuId] = {
+            product_sku_id: skuId,
+            sku_code: skuCode || '-',
+            product_name: name || '-',
+            total_qty: 0,
+            good_qty: 0,
+            damaged_qty: 0,
+            quarantine_qty: 0,
+            location_count: 0,
+            _locations: new Set()
+          };
+        }
+      };
+
+      (inboundData || []).forEach((item: any) => {
+        const skuId = item.product_sku_id;
+        if (!skuId) return;
+        initGroup(skuId, item.product_sku?.sku_code, item.product_sku?.name);
+        grouped[skuId].total_qty += Number(item.actual_good_qty || 0);
+      });
+
+      (outboundData || []).forEach((item: any) => {
+        const skuId = item.product_sku_id;
+        if (!skuId || !grouped[skuId]) return;
+        grouped[skuId].total_qty -= Number(item.picked_qty || 0);
+        grouped[skuId].total_qty += Number(item.damage_qty || 0);
+      });
+
+      (invData || []).forEach((item: any) => {
+        const skuId = item.product_sku_id;
+        if (skuId && grouped[skuId] && item.location_id) {
+          grouped[skuId]._locations.add(item.location_id);
+        }
+      });
+
+      const summaries = Object.values(grouped).map(g => ({
+        ...g,
+        location_count: g._locations.size
       }));
 
-      setItems(mapped);
+      setSummaries(summaries);
     } catch (e) {
       console.error('Failed to fetch inventory:', e);
+      toast.error('Gagal mengambil data inventory');
     } finally {
       setLoading(false);
     }
   }
 
-  const filtered = items.filter(i => {
-    if (filter !== "ALL" && i.status !== filter) return false;
+  const filtered = summaries.filter(s => {
     if (search) {
       const q = search.toLowerCase();
-      return i.sku_code.toLowerCase().includes(q) ||
-             i.product_name.toLowerCase().includes(q) ||
-             i.batch_number.toLowerCase().includes(q) ||
-             i.location_code.toLowerCase().includes(q);
+      return s.sku_code.toLowerCase().includes(q) ||
+             s.product_name.toLowerCase().includes(q);
     }
     return true;
   });
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[50vh]">
-      <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      <Loader2 className="w-8 h-8 animate-spin text-slate-800" />
     </div>
   );
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
-        <p className="text-slate-500 text-sm mt-1">Stock Overview</p>
+        <h1 className="text-2xl font-black text-black">Inventory Summary</h1>
+        <p className="text-slate-500 text-sm mt-1 font-medium">Real-time stock overview by product</p>
       </div>
 
       <div className="flex items-center gap-3">
@@ -118,73 +152,68 @@ export default function SBUInventoryPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search SKU, product, batch, location..."
+            placeholder="Search SKU or Product Name..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 font-medium placeholder:font-normal"
           />
-        </div>
-        <div className="flex gap-2">
-          {["ALL", "AVAILABLE", "RESERVED", "QUARANTINE", "DAMAGED"].map(s => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filter === s
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
-            </button>
-          ))}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">SKU</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">Product</th>
-              <th className="text-right px-4 py-3 font-semibold text-slate-700">Qty</th>
-              <th className="text-right px-4 py-3 font-semibold text-slate-700">Available</th>
-              <th className="text-right px-4 py-3 font-semibold text-slate-700">Reserved</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">Batch</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">Expiry</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">Location</th>
-              <th className="text-left px-4 py-3 font-semibold text-slate-700">Status</th>
+              <th className="text-left px-5 py-4 font-black text-black">SKU</th>
+              <th className="text-left px-5 py-4 font-black text-black">Product Name</th>
+              <th className="text-right px-5 py-4 font-black text-black">Total Sisa Barang (Stock Card)</th>
+              <th className="text-center px-5 py-4 font-black text-black">Locations Count</th>
+              <th className="text-center px-5 py-4 font-black text-black w-24">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
-                  <Package size={32} className="mx-auto mb-2 text-slate-300" />
-                  No inventory found
+                <td colSpan={5} className="text-center py-16 text-slate-400">
+                  <Package size={40} className="mx-auto mb-3 text-slate-300" />
+                  <p className="font-medium text-slate-500">No inventory found</p>
                 </td>
               </tr>
             )}
             {filtered.map((item) => (
-              <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{item.sku_code}</td>
-                <td className="px-4 py-3 text-slate-900 font-medium">{item.product_name}</td>
-                <td className="px-4 py-3 text-right font-semibold">{item.quantity.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-emerald-600 font-semibold">{item.available_quantity.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-blue-600 font-semibold">{item.reserved_quantity.toLocaleString()}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">{item.batch_number}</td>
-                <td className="px-4 py-3 text-xs">{item.expiry_date}</td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.location_code}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${statusColor[item.status] || "bg-slate-100 text-slate-600"}`}>
-                    {item.status}
+              <tr 
+                key={item.product_sku_id} 
+                className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                onClick={() => setSelectedProduct({ id: item.product_sku_id, skuCode: item.sku_code, name: item.product_name })}
+              >
+                <td className="px-5 py-4 font-mono text-xs font-black text-black">{item.sku_code}</td>
+                <td className="px-5 py-4 font-bold text-black">{item.product_name}</td>
+                <td className="px-5 py-4 text-right font-black text-black text-base">{item.total_qty.toLocaleString()}</td>
+                <td className="px-5 py-4 text-center">
+                  <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 bg-slate-100 text-slate-700 rounded-md font-black text-xs">
+                    {item.location_count}
                   </span>
+                </td>
+                <td className="px-5 py-4 text-center">
+                  <button className="p-2 text-slate-400 group-hover:text-black group-hover:bg-slate-200 rounded-lg transition-all">
+                    <ChevronRight size={18} />
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selectedProduct && (
+        <StockCardModal 
+          productId={selectedProduct.id}
+          skuCode={selectedProduct.skuCode}
+          productName={selectedProduct.name}
+          tenantId={profile?.tenant_id || ''}
+          onClose={() => setSelectedProduct(null)}
+        />
+      )}
     </div>
   );
 }

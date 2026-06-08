@@ -12,7 +12,7 @@ import {
   Clock, CheckCircle2, Navigation as NavIcon,
   AlertCircle, Activity, ClipboardList,
   Phone, X, FileText, Layers, Box,
-  Warehouse, Ship, LayoutGrid
+  Warehouse, Ship, LayoutGrid, Users, ArrowRight
 } from 'lucide-react';
 import { SBU_MAP } from '@/lib/utils/sbuMapping';
 import { toast, Toaster } from 'react-hot-toast';
@@ -206,6 +206,7 @@ export default function HQJobOrdersPage() {
   const getStatusBadge = (jo: any) => {
     const category = getJobCategory(jo);
     const s = jo.status?.toUpperCase();
+    const isWarehouse = jo.wo_item?.sbu_type === 'WAREHOUSE';
 
     if (category === 'completed') {
       let label = 'COMPLETED';
@@ -214,13 +215,16 @@ export default function HQJobOrdersPage() {
       return <Badge className="!bg-indigo-950 !text-white !border-indigo-950 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">{label}</Badge>;
     }
     if (category === 'active') {
-      return <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON JOURNEY</Badge>;
+      const label = isWarehouse ? 'PROSES WMS' : 'ON JOURNEY';
+      return <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">{label}</Badge>;
     }
     if (category === 'assigned') {
       return <Badge className="!bg-blue-100 !text-blue-700 !border-blue-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ASSIGNED</Badge>;
     }
     if (category === 'rejected') return <Badge className="!bg-rose-100 !text-rose-700 !border-rose-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">REJECTED</Badge>;
-    return <Badge className="!bg-amber-100 !text-amber-700 !border-amber-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">NEW</Badge>;
+    
+    const newLabel = isWarehouse ? 'MENUNGGU WMS' : 'NEW';
+    return <Badge className="!bg-amber-100 !text-amber-700 !border-amber-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">{newLabel}</Badge>;
   };
 
   const getTabCount = (tabId: string) => {
@@ -481,185 +485,167 @@ export default function HQJobOrdersPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:gap-8">
             {filteredJobs.map((jo) => (
-              <Card key={jo.id} className="group relative overflow-hidden border border-slate-200 lg:border-indigo-50 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl lg:rounded-3xl bg-white">
-                {/* Status Indicator Bar */}
-                <div className={`h-1 lg:w-2 lg:h-auto ${
-                  getJobCategory(jo) === 'rejected' ? 'bg-rose-500' :
-                  ['completed', 'PEKERJAAN SELESAI', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(jo.status) ? 'bg-indigo-950' :
-                  jo.driver_response === 'accepted' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
-                }`} />
-
-                <div className="p-4 lg:p-6">
-                  {/* Header */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4 lg:mb-6">
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-base lg:text-lg font-black text-indigo-950 italic uppercase tracking-tighter group-hover:text-sky-600 transition-colors duration-300">
-                          {jo.jo_number}
-                        </h2>
-                        {getStatusBadge(jo)}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-[7px] font-black tracking-widest uppercase italic">
+              <Card key={jo.id} className="group rounded-2xl border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.05)] bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-blue-200/60 transition-all duration-300 overflow-hidden flex flex-col">
+                <div className="p-5 flex-1 flex flex-col">
+                  {/* Top Bar: Icon + Status */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      {(() => {
+                        const sbu = jo.wo_item?.sbu_type?.toUpperCase() || 'TRUCKING';
+                        const config = SBU_BADGE_CONFIG[sbu] || SBU_BADGE_CONFIG.TRUCKING;
+                        const Icon = config.icon;
+                        const category = getJobCategory(jo);
+                        const isCompleted = category === 'completed';
+                        
+                        return (
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-110 ${
+                            isCompleted ? 'bg-slate-50 text-slate-400 border border-slate-100' : `${config.bg} ${config.text} border ${config.border}`
+                          }`}>
+                            <Icon size={18} strokeWidth={2.5} />
+                          </div>
+                        );
+                      })()}
+                      
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-black uppercase tracking-wider">
                           {jo.wo_item?.wo?.wo_number || 'LEGACY-WO'}
                         </span>
-                        
-                        {/* [AI] SBU Badge */}
+                        {/* Restore SBU Label */}
                         {(() => {
-                          const sbu = jo.wo_item?.sbu_type?.toUpperCase();
-                          const config = SBU_BADGE_CONFIG[sbu];
-                          if (!config) return null;
-                          const Icon = config.icon;
+                          const sbu = jo.wo_item?.sbu_type?.toUpperCase() || 'TRUCKING';
+                          const config = SBU_BADGE_CONFIG[sbu] || SBU_BADGE_CONFIG.TRUCKING;
                           return (
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}>
-                              <Icon size={8} /> {config.label}
+                            <span className="text-[9px] font-black text-black uppercase tracking-wider">
+                              {config.label}
                             </span>
                           );
                         })()}
-                        
-                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] italic truncate">
-                          {jo.wo_item?.wo?.customer?.legal_name || jo.wo_item?.wo?.customer?.name || 'Private Client'}
-                        </span>
                       </div>
                     </div>
-
-                    <div className="flex flex-col items-start sm:items-end gap-0.5 text-right flex-shrink-0">
-                      <p className="text-[7px] font-black text-indigo-300 uppercase tracking-widest italic">Deployment</p>
-                      <div className="flex items-center gap-1.5 text-indigo-500">
-                        <Calendar size={10} />
-                        <span className="text-[9px] font-bold">
-                          {format(new Date(jo.created_at), 'dd MMM yyyy HH:mm', { locale: id })}
-                        </span>
-                      </div>
+                    
+                    {/* Status Badge */}
+                    <div className="scale-95 origin-top-right">
+                      {getStatusBadge(jo)}
                     </div>
                   </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 lg:mb-6">
-                    {/* Driver Info */}
-                    <div className="p-3 lg:p-4 bg-indigo-50/50 rounded-xl lg:rounded-2xl border border-indigo-50/50 flex items-center gap-3 lg:gap-4 hover:bg-white hover:border-sky-500/20 hover:shadow-lg transition-all duration-300">
-                      <div className="w-9 h-9 lg:w-10 lg:h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-400 hover:bg-sky-600 hover:text-white transition-all duration-300 flex-shrink-0">
-                        <User size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mb-0.5 italic">Pilot</p>
-                        <p className="text-xs font-black text-indigo-950 uppercase tracking-tight truncate">{jo.md_drivers?.name || 'OUTSOURCED'}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <Phone size={10} className="text-sky-500" />
-                          <p className="text-[9px] font-bold text-indigo-500 tracking-tight truncate">{jo.driver_phone || jo.md_drivers?.phone || 'NO CONTACT'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Fleet Info */}
-                    <div className="p-3 lg:p-4 bg-indigo-50/50 rounded-xl lg:rounded-2xl border border-indigo-50/50 flex items-center gap-3 lg:gap-4 hover:bg-white hover:border-emerald-500/20 hover:shadow-lg transition-all duration-300">
-                      <div className="w-9 h-9 lg:w-10 lg:h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-400 hover:bg-emerald-600 hover:text-white transition-all duration-300 flex-shrink-0">
-                        <Truck size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mb-0.5 italic">Asset</p>
-                        <p className="text-xs font-black text-indigo-950 uppercase tracking-tight truncate">{jo.md_fleets?.plate_number || 'Generic Unit'}</p>
-                        <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest truncate">{jo.md_fleets?.fleet_type?.type_name || 'Generic Class'}</p>
-                      </div>
-                    </div>
-
-                    {/* Mission Scope */}
-                    <div className="p-3 lg:p-4 bg-indigo-50/50 rounded-xl lg:rounded-2xl border border-indigo-50/50 flex items-start gap-3 lg:gap-4 hover:bg-white hover:border-orange-500/20 hover:shadow-lg transition-all duration-300">
-                      <div className="w-9 h-9 lg:w-10 lg:h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-400 hover:bg-orange-500 hover:text-white transition-all duration-300 flex-shrink-0 mt-0.5">
-                        <MapPin size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mb-0.5 italic">Scope</p>
-                        <p className="text-xs font-black text-indigo-950 uppercase tracking-tight truncate">
-                          {jo.wo_item?.item_data?.origin_name || jo.wo_item?.item_data?.shipper_name || jo.wo_item?.item_data?.shipper_city || 'Origin'} → {jo.wo_item?.item_data?.destination_name || jo.wo_item?.item_data?.recipient_name || jo.wo_item?.item_data?.recipient_city || 'Dest'}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <Activity size={10} className={jo.wo_item?.item_data?.locations?.length > 2 ? 'text-orange-500' : 'text-emerald-500'} />
-                          <p className={`text-[9px] font-bold uppercase italic ${jo.wo_item?.item_data?.locations?.length > 2 ? 'text-orange-500' : 'text-emerald-500'}`}>
-                            {jo.wo_item?.item_data?.locations?.length > 2 ? `${jo.wo_item.item_data.locations.length} Stops` : 'Direct'}
-                          </p>
-                        </div>
-                      </div>
+                  {/* Main Info */}
+                  <div className="mb-4">
+                    <h3 className="text-lg font-black text-black tracking-tight group-hover:text-blue-700 transition-colors">
+                      {jo.jo_number}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Users size={14} className="text-black" />
+                      <p className="text-sm text-black font-black truncate">
+                        {jo.wo_item?.wo?.customer?.legal_name || jo.wo_item?.wo?.customer?.name || 'Private Client'}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  {getJobCategory(jo) === 'rejected' ? (
-                    <div className="p-3 lg:p-4 bg-rose-50 rounded-xl lg:rounded-2xl border border-rose-100 flex flex-col sm:flex-row items-center gap-3">
-                      <AlertCircle size={16} className="text-rose-500 flex-shrink-0" />
-                      <div className="flex-1 text-center sm:text-left">
-                        <p className="text-[9px] font-black text-rose-700 uppercase tracking-widest">Ditolak oleh CS</p>
-                        <p className="text-[7px] font-bold text-rose-400 uppercase tracking-wider">Read Only</p>
+                  {/* Details Grid */}
+                  <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-100 overflow-x-auto no-scrollbar pb-1">
+                    <div className="flex flex-col shrink-0">
+                      <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Execution</span>
+                      <div className="flex items-center gap-1.5 text-black font-black text-sm">
+                        <Calendar size={14} className="text-blue-600" />
+                        {format(new Date(jo.created_at), 'dd MMM yyyy', { locale: id })}
                       </div>
-                      <Button
-                        onClick={() => {
-                          const woItem = jo.wo_item;
-                          setSelectedRejectedWo({
-                            id: woItem?.wo?.id,
-                            wo_number: woItem?.wo?.wo_number,
-                            execution_date: woItem?.item_data?.execution_date,
-                            order_date: woItem?.item_data?.order_date,
-                            md_entities: woItem?.wo?.customer,
-                            notes: woItem?.wo?.notes,
-                            status: 'handover_rejected',
-                            wo_items: [{
-                              ...woItem,
+                    </div>
+                    <div className="w-[1px] h-8 bg-slate-200 shrink-0"></div>
+                    <div className="flex flex-col shrink-0">
+                      <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Pilot</span>
+                      <div className="flex items-center gap-1.5 text-black font-black text-sm">
+                        <User size={14} className="text-indigo-600" />
+                        <span className="truncate max-w-[100px]">{jo.md_drivers?.name || 'TBA'}</span>
+                      </div>
+                    </div>
+                    <div className="w-[1px] h-8 bg-slate-200 shrink-0"></div>
+                    <div className="flex flex-col shrink-0">
+                      <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Asset</span>
+                      <div className="flex items-center gap-1.5 text-black font-black text-sm">
+                        <Truck size={14} className="text-emerald-600" />
+                        <span className="truncate max-w-[100px]">{jo.md_fleets?.plate_number || 'TBA'}</span>
+                      </div>
+                    </div>
+                    <div className="w-[1px] h-8 bg-slate-200 shrink-0"></div>
+                    <div className="flex flex-col shrink-0">
+                      <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Scope</span>
+                      <div className="flex items-center gap-1.5 text-black font-black text-sm">
+                        <MapPin size={14} className="text-orange-600" />
+                        <span className="truncate max-w-[100px]">{jo.wo_item?.item_data?.destination_name || 'Destination'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Actions Area */}
+                <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
+                  {(() => {
+                    const category = getJobCategory(jo);
+
+                    if (category === 'rejected') {
+                      return (
+                        <Button
+                          onClick={() => {
+                            const woItem = jo.wo_item;
+                            setSelectedRejectedWo({
+                              id: woItem?.wo?.id,
+                              wo_number: woItem?.wo?.wo_number,
+                              execution_date: woItem?.item_data?.execution_date,
+                              order_date: woItem?.item_data?.order_date,
+                              md_entities: woItem?.wo?.customer,
+                              notes: woItem?.wo?.notes,
                               status: 'handover_rejected',
-                              job_orders: [jo]
-                            }]
-                          });
-                          setShowRejectedModal(true);
-                        }}
-                        className="w-full sm:w-auto h-10 bg-slate-900 hover:bg-rose-900/40 text-white rounded-xl font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-slate-700 hover:border-rose-500/50 shadow-lg shadow-slate-900/20"
-                      >
-                        <ClipboardList size={12} /> Lihat Detail
-                      </Button>
-                    </div>
-                  ) : getJobCategory(jo) === 'completed' ? (
-                    <div className="p-3 lg:p-4 bg-indigo-50 rounded-xl lg:rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center gap-3">
-                      <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0" />
-                      <div className="flex-1 text-center sm:text-left">
-                        <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Mission Complete</p>
-                        <p className="text-[7px] font-bold text-indigo-400 uppercase tracking-wider">
-                          {jo.status?.toUpperCase() === 'INVOICED' || jo.status?.toUpperCase() === 'PAID' ? 'Invoiced' : 'Awaiting Audit'}
-                        </p>
-                      </div>
-                      <Link href={`/hq/finance/cost-audit?jo_id=${jo.id}`} className="w-full sm:w-auto block">
-                        <Button className="w-full h-10 bg-slate-900 hover:bg-indigo-900/40 text-white rounded-xl font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20 border border-slate-700 hover:border-indigo-500/50">
-                          <FileText size={12} /> Cost Audit
+                              wo_items: [{
+                                ...woItem,
+                                status: 'handover_rejected',
+                                job_orders: [jo]
+                              }]
+                            });
+                            setShowRejectedModal(true);
+                          }}
+                          className="flex-1 h-10 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <AlertCircle size={14} /> Lihat Detail Penolakan
                         </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="p-3 lg:p-4 bg-indigo-50 rounded-xl lg:rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center gap-3">
-                      <div className="w-full sm:w-auto h-9 bg-white rounded-lg flex items-center justify-center gap-2 border border-indigo-100 shadow-sm flex-shrink-0">
-                        <CheckCircle2 size={12} className="text-emerald-500" />
-                        <span className="text-[8px] font-black text-emerald-700 uppercase tracking-widest italic">
-                          {jo.wa_link_sent_at ? 'Link Sent' : 'Awaiting'}
-                        </span>
-                      </div>
-                      <Link href={`/hq/finance/cost-audit?jo_id=${jo.id}`} className="w-full sm:w-auto block">
-                        <Button variant="ghost" className="w-full h-9 bg-slate-900 border border-slate-700 text-white hover:bg-indigo-900/40 hover:border-indigo-500/50 rounded-lg font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20">
-                          <FileText size={12} /> Finance
-                        </Button>
-                      </Link>
-                      {(() => {
-                        const sbu = jo.wo_item?.sbu_type?.toUpperCase();
-                        const trackingToken = jo.wo_item?.wo?.tracking_token || jo.wo_item?.wo?.id;
-                        const trackUrl = sbu === 'WAREHOUSE' 
-                          ? `/track/warehouse/${trackingToken}?jo_id=${jo.id}` 
-                          : `/hq/tracking?jo=${jo.jo_number}`;
-                        
-                        return (
-                          <Link href={trackUrl} className="w-full sm:w-auto block">
-                            <Button variant="ghost" className="w-full h-9 bg-slate-900 border border-slate-700 text-white hover:bg-indigo-900/40 hover:border-indigo-500/50 rounded-lg font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/20">
-                              <NavIcon size={12} /> Tracking
-                            </Button>
-                          </Link>
-                        );
-                      })()}
-                    </div>
-                  )}
+                      );
+                    }
+
+                    if (category === 'completed') {
+                      return (
+                        <Link href={`/hq/finance/cost-audit?jo_id=${jo.id}`} className="flex-1">
+                          <button className="w-full h-10 bg-slate-50 hover:bg-slate-100 !text-black border border-slate-200 rounded-xl font-black text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <FileText size={14} /> Audit Cost <ArrowRight size={14} />
+                          </button>
+                        </Link>
+                      );
+                    }
+
+                    const sbu = jo.wo_item?.sbu_type?.toUpperCase();
+                    const trackingToken = jo.wo_item?.wo?.tracking_token || jo.wo_item?.wo?.id;
+                    const trackUrl = sbu === 'WAREHOUSE' 
+                      ? `/track/warehouse/${trackingToken}?jo_id=${jo.id}` 
+                      : `/hq/tracking?jo=${jo.jo_number}`;
+
+                    return (
+                      <>
+                        <div className="h-10 px-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm text-black text-[10px] font-black">
+                          <CheckCircle2 size={12} className={jo.wa_link_sent_at ? "text-emerald-500" : "text-slate-300"} />
+                          {jo.wa_link_sent_at ? 'WA Sent' : 'No WA'}
+                        </div>
+                        <Link href={`/hq/finance/cost-audit?jo_id=${jo.id}`} className="flex-1 shrink-0">
+                          <button className="w-full h-10 bg-white !text-black border border-slate-200 hover:bg-slate-50 rounded-xl font-black text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <FileText size={14} /> Finance
+                          </button>
+                        </Link>
+                        <Link href={trackUrl} className="flex-1 shrink-0">
+                          <button className="w-full h-10 bg-white !text-black border border-slate-200 hover:bg-slate-50 rounded-xl font-black text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <NavIcon size={14} /> Track <ArrowRight size={12} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                          </button>
+                        </Link>
+                      </>
+                    );
+                  })()}
                 </div>
               </Card>
             ))}

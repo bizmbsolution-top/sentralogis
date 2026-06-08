@@ -38,7 +38,7 @@ export default function BATBGenerator({ receipt, items, damageRecords = [] }: BA
       iframeDoc.write(`
         <html>
           <head>
-            <title>BATB_${receipt.receipt_number}</title>
+            <title>BATB_${receipt.receipt_number?.replace(/^RCV-/, '')}</title>
             <style>
               @media print {
                 body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -125,15 +125,15 @@ export default function BATBGenerator({ receipt, items, damageRecords = [] }: BA
             <tbody>
               <tr>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', width: '18%' }}>No. Receipt</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', width: '32%' }}>: {receipt.receipt_number}</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', width: '18%' }}>Layanan</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', width: '32%' }}>: INBOUND</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px', width: '32%' }}>: {receipt.receipt_number?.replace(/^RCV-/, '')}</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold', width: '18%' }}>Lokasi Gudang</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px', width: '32%' }}>: {receipt.warehouse_name || '-'}</td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Nama Pelanggan</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {receipt.customer_name || '-'}</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Lokasi Gudang</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {receipt.warehouse_name || '-'}</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {receipt.customer?.name || receipt.customer_name || '-'}</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Shipper (Pengirim)</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {receipt.shipper?.name || '-'}</td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Transporter</td>

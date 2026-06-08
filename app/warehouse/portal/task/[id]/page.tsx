@@ -95,9 +95,10 @@ export default function WarehouseTaskExecutionPage() {
 
         // Fetch Items if Role is Tally or Putaway
         if (taskData.assigned_role === 'TALLY' || taskData.assigned_role === 'PUTAWAY') {
+          // [AI] Tambah storage_rule untuk menentukan tampilan expiry date (FIFO aging / FEFO remaining)
           const { data: itemsData } = await supabase
             .from('wh_inbound_receipt_items')
-            .select('*, product:md_product_skus!product_sku_id(name, sku_code, unit), location:md_warehouse_locations!planned_putaway_location_id(code)')
+            .select('*, product:md_product_skus!product_sku_id(name, sku_code, unit, storage_rule), location:md_warehouse_locations!planned_putaway_location_id(code)')
             .eq('receipt_id', taskData.receipt_id)
             .order('created_at', { ascending: true });
           
@@ -238,11 +239,27 @@ export default function WarehouseTaskExecutionPage() {
     setItems(items.map(item => item.id === itemId ? { ...item, [field]: value } : item));
   };
 
+  // [AI] Updated: tambah expiry_date, batch_number, dan customer_id dari receipt item
   const upsertInventory = async (item: any, locationId: string, quantity: number, status: string) => {
     const productSkuId = item.product_sku_id || item.product?.id;
     if (!productSkuId || !receipt.tenant_id || !receipt.warehouse_id) return;
 
-    // Check if inventory record exists for same product + location + status
+    // [AI] Ambil expiry_date, batch_number dari receipt item
+    const expiryDate = item.expiry_date || null;
+    const batchNumber = item.batch_number || null;
+
+    // [AI] Ambil customer_id dari md_product_skus (untuk filter inventory by pelanggan)
+    let customerId = null;
+    const { data: skuData } = await supabase
+      .from('md_product_skus')
+      .select('customer_id')
+      .eq('id', productSkuId)
+      .maybeSingle();
+    if (skuData?.customer_id) {
+      customerId = skuData.customer_id;
+    }
+
+    // Check if inventory record exists for same product + location + status + batch
     const { data: existing, error: checkErr } = await supabase
       .from('wh_inventory')
       .select('id, quantity')
@@ -250,7 +267,8 @@ export default function WarehouseTaskExecutionPage() {
       .eq('location_id', locationId)
       .eq('status', status)
       .eq('warehouse_id', receipt.warehouse_id)
-      .single();
+      .eq('batch_number', batchNumber)
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase
@@ -266,10 +284,12 @@ export default function WarehouseTaskExecutionPage() {
           warehouse_id: receipt.warehouse_id,
           location_id: locationId,
           product_sku_id: productSkuId,
+          customer_id: customerId, // [AI] Populate customer_id dari md_product_skus
           quantity,
           status,
           received_date: new Date().toISOString().split('T')[0],
-          batch_number: 'BATCH-' + new Date().getTime()
+          expiry_date: expiryDate,
+          batch_number: batchNumber
         });
       if (error) throw error;
     }
@@ -401,6 +421,11 @@ export default function WarehouseTaskExecutionPage() {
         .update({ status: 'COMPLETED' })
         .eq('id', receipt.id);
       if (recUpdErr) throw recUpdErr;
+
+      // Update related JO to completed
+      if (receipt.wo_item_id) {
+         await supabase.from('job_orders').update({ status: 'completed' }).eq('id', receipt.wo_item_id);
+      }
 
       toast.success('Putaway selesai! Semua barang tersimpan.');
       fetchTaskDetails(session);
@@ -588,6 +613,33 @@ export default function WarehouseTaskExecutionPage() {
       return;
     }
 
+    // [AI] Validate qty before submitting
+    for (const item of items) {
+      const goodQty = Number(item.actual_good_qty) || 0;
+      const damageQty = damageEntries
+        .filter(d => d.receipt_item_id === item.id && Number(d.qty) > 0)
+        .reduce((sum, d) => sum + Number(d.qty), 0);
+      const totalScanned = goodQty + damageQty;
+      const expected = Number(item.expected_qty) || 0;
+
+      if (totalScanned === 0 && expected > 0) {
+        toast.error(`Item "${item.product?.name}" belum diisi qty!`);
+        return;
+      }
+
+      if (totalScanned < expected) {
+        const shortage = expected - totalScanned;
+        toast.error(`Item "${item.product?.name}" kurang ${shortage} pcs! (Isi: ${totalScanned}, Target: ${expected})`, { duration: 5000 });
+        return;
+      }
+
+      if (totalScanned > expected) {
+        const overage = totalScanned - expected;
+        toast.error(`Item "${item.product?.name}" lebih ${overage} pcs! (Isi: ${totalScanned}, Target: ${expected}). Hubungi supervisor.`, { duration: 5000 });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       for (const item of items) {
@@ -668,7 +720,7 @@ export default function WarehouseTaskExecutionPage() {
             <ChevronLeft size={28} />
          </button>
          <div className="text-center">
-            <h2 className="font-black text-lg text-slate-900 tracking-wide">{receipt.receipt_number}</h2>
+            <h2 className="font-black text-lg text-slate-900 tracking-wide">{receipt.receipt_number?.replace(/^RCV-/, '')}</h2>
             <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{status.replace(/_/g, ' ')}</p>
          </div>
          <div className="w-8" />
@@ -1327,19 +1379,55 @@ export default function WarehouseTaskExecutionPage() {
                                        </div>
                                     </div>
 
-                                    <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between">
-                                       <div>
-                                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Alokasi Lokasi</p>
-                                          {locCode ? (
-                                            <p className="text-2xl font-black font-mono text-blue-800 tracking-wider">{locCode}</p>
-                                          ) : (
-                                            <p className="text-sm font-bold text-blue-600/70 italic">Belum di-assign dari JO</p>
-                                          )}
-                                       </div>
-                                       <div className="text-right opacity-50">
-                                          <PackageCheck size={28} className="text-blue-600" />
-                                       </div>
-                                    </div>
+                                     <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between">
+                                        <div>
+                                           <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Alokasi Lokasi</p>
+                                           {locCode ? (
+                                             <p className="text-2xl font-black font-mono text-blue-800 tracking-wider">{locCode}</p>
+                                           ) : (
+                                             <p className="text-sm font-bold text-blue-600/70 italic">Belum di-assign dari JO</p>
+                                           )}
+                                        </div>
+                                        <div className="text-right opacity-50">
+                                           <PackageCheck size={28} className="text-blue-600" />
+                                        </div>
+                                     </div>
+
+                                     {/* [AI] Expiry Date Section - selalu tampil dengan info aging/remaining */}
+                                     <div className="mb-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                           <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                                              Exp Date
+                                           </label>
+                                           {/* Info badge berdasarkan storage_rule */}
+                                           {item.product?.storage_rule === 'FEFO' && item.expiry_date && (
+                                             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                                               Sisa {Math.max(0, Math.ceil((new Date(item.expiry_date).getTime() - Date.now()) / 86400000))} hari
+                                             </span>
+                                           )}
+                                           {item.product?.storage_rule === 'FIFO' && (
+                                             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                                               Aging {Math.max(0, Math.ceil((Date.now() - new Date(item.received_date || Date.now()).getTime()) / 86400000))} hari
+                                             </span>
+                                           )}
+                                           {item.product?.storage_rule === 'FEFO' && !item.expiry_date && (
+                                             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                                               ⚠️ Wajib diisi untuk FEFO
+                                             </span>
+                                           )}
+                                        </div>
+                                        <input 
+                                           type="date"
+                                           value={item.expiry_date || ''}
+                                           onChange={(e) => {
+                                              const updatedItems = items.map(i => 
+                                                i.id === item.id ? {...i, expiry_date: e.target.value} : i
+                                              );
+                                              setItems(updatedItems);
+                                           }}
+                                           className="w-full h-10 px-3 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 text-sm font-bold"
+                                        />
+                                     </div>
 
                                     <div className="space-y-3">
                                        {(putawayEntries[item.id] || []).map((entry, idx) => (

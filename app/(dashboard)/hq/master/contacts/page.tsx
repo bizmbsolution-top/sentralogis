@@ -61,6 +61,7 @@ interface Entity {
   created_at: string;
   parent_id?: string;
   parent?: { name: string; entity_code: string };
+  logo_url?: string;
 }
 
 export default function HQContactsPage() {
@@ -123,10 +124,10 @@ export default function HQContactsPage() {
     if (!tenantId) return;
     setLoading(true);
     
-    // Join with self to get parent name
+    // Use simple select, we will resolve parent locally
     let query = supabase
       .from('md_entities')
-      .select('*, parent:md_entities!parent_id(name, entity_code)')
+      .select('*')
       .eq('tenant_id', tenantId);
     
     if (activeTab === 'customer') query = query.eq('is_customer', true);
@@ -274,25 +275,48 @@ export default function HQContactsPage() {
           .update(entityData)
           .eq('id', selectedEntity.id);
 
-        if (error) throw error;
+        if (error) {
+          // [AI] Fallback: if PGRST204 (column not found), retry with safeUpsert
+          if (error.code === 'PGRST204') {
+            console.warn('[HQContacts] Update failed with PGRST204, retrying with safeUpsert...');
+            const { error: retryError } = await safeUpsert('md_entities', { ...entityData, id: selectedEntity.id }, { onConflict: 'id' });
+            if (retryError) throw retryError;
+          } else {
+            throw error;
+          }
+        }
       } else {
         const code = await generateEntityCode();
         
+        const insertPayload = {
+          ...entityData,
+          tenant_id: tenantId,
+          entity_code: code,
+          created_at: new Date().toISOString(),
+          created_by: profile?.id || null
+        };
+
         const { data, error } = await supabase
           .from('md_entities')
-          .insert({
-            ...entityData,
-            tenant_id: tenantId,
-            entity_code: code,
-            created_at: new Date().toISOString(),
-            created_by: profile?.id || null
-          })
+          .insert(insertPayload)
           .select('id');
 
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error('Gagal mendapatkan ID entitas baru');
-        
-        entityId = data[0].id;
+        if (error) {
+          // [AI] Fallback: if PGRST204 (column not found), retry with safeUpsert
+          if (error.code === 'PGRST204') {
+            console.warn('[HQContacts] Insert failed with PGRST204, retrying with safeUpsert...');
+            const { data: retryData, error: retryError } = await safeUpsert('md_entities', insertPayload);
+            if (retryError) throw retryError;
+            if (retryData && retryData.length > 0) {
+              entityId = retryData[0].id;
+            }
+          } else {
+            throw error;
+          }
+        } else {
+          if (!data || data.length === 0) throw new Error('Gagal mendapatkan ID entitas baru');
+          entityId = data[0].id;
+        }
       }
 
       if (entityId) {
@@ -559,8 +583,10 @@ export default function HQContactsPage() {
                                     )}
                                     <div>
                                       <div className="text-sm font-medium text-slate-900">{ent.name}</div>
-                                      {ent.parent && (
-                                        <div className="text-xs text-blue-500 mt-0.5">Child of {ent.parent.name}</div>
+                                      {ent.parent_id && (
+                                        <div className="text-xs text-blue-500 mt-0.5">
+                                          Child of {entities.find(e => e.id === ent.parent_id)?.name || 'Unknown Parent'}
+                                        </div>
                                       )}
                                       <div className="text-xs text-slate-400 mt-0.5">{ent.legal_name || '-'}</div>
                                     </div>

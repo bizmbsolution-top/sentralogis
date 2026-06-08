@@ -44,6 +44,13 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
   const [transporterDropdownOpen, setTransporterDropdownOpen] = useState(false);
   const [selectedTransporterId, setSelectedTransporterId] = useState<string | null>(null);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
+
+  // [AI] Contacts Hierarchy State
+  const [allEntities, setAllEntities] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedShipperId, setSelectedShipperId] = useState<string | null>(null);
+  const [isUpdatingContacts, setIsUpdatingContacts] = useState(false);
+
   const transporterDropdownRef = useRef<HTMLDivElement>(null);
   const fleetDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +64,9 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
           *,
           transporter:transporter_id(name),
           fleet:fleet_id(plate_number),
-          driver:driver_id(name, whatsapp)
+          driver:driver_id(name, whatsapp),
+          customer:customer_id(name),
+          shipper:shipper_id(name)
         `)
         .eq('id', receiptId)
         .single();
@@ -70,8 +79,10 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
         if (whData) recData.warehouse_name = whData.name;
       }
 
-      // Fetch customer name via WO chain
-      if (recData.wo_item_id) {
+      if (recData.customer_id) {
+         setSelectedCustomerId(recData.customer_id);
+      } else if (recData.wo_item_id) {
+        // [AI] Fetch customer name via WO chain if not directly set
         const { data: joData } = await supabase.from('job_orders').select('wo_item_id').eq('id', recData.wo_item_id).single();
         if (joData?.wo_item_id) {
            const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', joData.wo_item_id).single();
@@ -79,11 +90,16 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
               const { data: woData } = await supabase.from('work_orders').select('customer_id').eq('id', woItemData.wo_id).single();
               if (woData?.customer_id) {
                  const { data: custData } = await supabase.from('md_entities').select('name').eq('id', woData.customer_id).single();
-                 if (custData) recData.customer_name = custData.name;
+                 if (custData) {
+                    recData.customer_name = custData.name;
+                    setSelectedCustomerId(woData.customer_id);
+                 }
               }
            }
         }
       }
+
+      if (recData.shipper_id) setSelectedShipperId(recData.shipper_id);
 
       setReceipt(recData);
       // Fetch Items
@@ -187,6 +203,28 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
             const allCompleted = siblingJOs.every((jo: any) => ['completed', 'done', 'selesai'].includes(jo.status?.toLowerCase()));
             if (allCompleted) {
               await supabase.from('wo_items').update({ status: 'completed' }).eq('id', parentWoItemId);
+              
+              // 3. Check if all wo_items for the parent work_order are completed
+              const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
+              if (woItemData?.wo_id) {
+                const parentWoId = woItemData.wo_id;
+                const { data: siblingWoItems } = await supabase.from('wo_items').select('status').eq('wo_id', parentWoId);
+                
+                if (siblingWoItems) {
+                  const allWoItemsCompleted = siblingWoItems.every((item: any) => ['completed', 'done', 'selesai'].includes(item.status?.toLowerCase()));
+                  if (allWoItemsCompleted) {
+                    await supabase.from('work_orders').update({ status: 'done' }).eq('id', parentWoId);
+                  } else {
+                    await supabase.from('work_orders').update({ status: 'proses' }).eq('id', parentWoId);
+                  }
+                }
+              }
+            } else {
+              await supabase.from('wo_items').update({ status: 'in_progress' }).eq('id', parentWoItemId);
+              const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
+              if (woItemData?.wo_id) {
+                 await supabase.from('work_orders').update({ status: 'proses' }).eq('id', woItemData.wo_id);
+              }
             }
           }
         }
@@ -217,6 +255,32 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
   };
 
   const submitChecking = async () => {
+    // [AI] Validate qty before submitting
+    for (const item of items) {
+      const goodQty = Number(item.actual_good_qty) || 0;
+      const quarantineQty = Number(item.quarantine_qty) || 0;
+      const rejectedQty = Number(item.rejected_qty) || 0;
+      const totalScanned = goodQty + quarantineQty + rejectedQty;
+      const expected = Number(item.expected_qty) || 0;
+
+      if (totalScanned === 0 && expected > 0) {
+        toast.error(`Item "${item.product_name || item.sku_code}" belum diisi qty!`);
+        return;
+      }
+
+      if (totalScanned < expected) {
+        const shortage = expected - totalScanned;
+        toast.error(`Item "${item.product_name || item.sku_code}" kurang ${shortage} pcs! (Isi: ${totalScanned}, Target: ${expected})`, { duration: 5000 });
+        return;
+      }
+
+      if (totalScanned > expected) {
+        const overage = totalScanned - expected;
+        toast.error(`Item "${item.product_name || item.sku_code}" lebih ${overage} pcs! (Isi: ${totalScanned}, Target: ${expected}). Hubungi supervisor.`, { duration: 5000 });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       // Update each item
@@ -315,6 +379,57 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
     }
   };
 
+  const handleUpdateLogistics = async () => {
+    setSubmitting(true);
+    try {
+      const updates: any = {};
+      
+      if (selectedTransporterId) {
+        updates.transporter_id = selectedTransporterId;
+        updates.transporter_name_manual = null; // Clear manual if ID selected
+      } else if (transporterInput) {
+        updates.transporter_name_manual = transporterInput;
+        updates.transporter_id = null;
+      }
+      
+      const fleetId = (document.getElementById('fleetSelect') as HTMLSelectElement)?.value;
+      const driverId = (document.getElementById('driverSelect') as HTMLSelectElement)?.value;
+      
+      if (fleetId) updates.fleet_id = fleetId;
+      if (driverId) updates.driver_id = driverId;
+
+      const { error } = await supabase.from('wh_inbound_receipts').update(updates).eq('id', receiptId);
+      if (error) throw error;
+      
+      toast.success('Info logistik berhasil diperbarui');
+      fetchData();
+    } catch (e) {
+      toast.error('Gagal memperbarui info logistik');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateContacts = async () => {
+    setIsUpdatingContacts(true);
+    try {
+      const updates: any = {
+        customer_id: selectedCustomerId || null,
+        shipper_id: selectedShipperId || null,
+      };
+
+      const { error } = await supabase.from('wh_inbound_receipts').update(updates).eq('id', receiptId);
+      if (error) throw error;
+      
+      toast.success('Data pelanggan & pengirim diperbarui');
+      fetchData();
+    } catch (e) {
+      toast.error('Gagal memperbarui kontak');
+    } finally {
+      setIsUpdatingContacts(false);
+    }
+  };
+
   // [AI] Extracted fetchTransporters so it can be called from onSuccess of TransportersFormModal
   // [AI] No tenant_id filter — matches TransportersTable.tsx pattern (column may not exist on deployed DB)
   const fetchTransporters = useCallback(async () => {
@@ -347,10 +462,26 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
     return list;
   }, [receipt?.tenant_id]);
 
-  // Fetch transporters once on mount
+  // [AI] Fetch all entities for hierarchy
+  const fetchEntities = useCallback(async () => {
+    if (!receipt?.tenant_id) return;
+    const { data, error } = await supabase.from('md_entities')
+      .select('id, name, parent_id, is_customer')
+      .eq('tenant_id', receipt.tenant_id)
+      .eq('is_active', true)
+      .order('name');
+    if (error) {
+      console.error('[fetchEntities] Error:', error);
+    } else {
+      setAllEntities(data || []);
+    }
+  }, [receipt?.tenant_id]);
+
+  // Fetch transporters and entities once on mount
   useEffect(() => {
     fetchTransporters();
-  }, [fetchTransporters]);
+    fetchEntities();
+  }, [fetchTransporters, fetchEntities]);
 
   // [AI] Init transporter input + auto-restore selectedTransporterId by matching name
   useEffect(() => {
@@ -508,7 +639,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h2 className="text-2xl font-black font-mono text-slate-900">{receipt.receipt_number}</h2>
+                <h2 className="text-2xl font-black font-mono text-slate-900">{receipt.receipt_number?.replace(/^RCV-/, '')}</h2>
                 <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider
                   ${isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                   {receipt.status.replace(/_/g, ' ')}
@@ -739,6 +870,67 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                 <div>
                   <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest">Expected Arrival</span>
                   <span className="font-medium text-slate-900">{receipt.expected_arrival ? new Date(receipt.expected_arrival).toLocaleString('id-ID') : '-'}</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Contact Info */}
+            <Card className="p-4 border-slate-200 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <User size={16} className="text-slate-500" /> Kontak Logistik
+                </div>
+                {!isCompleted && (
+                   <button 
+                     onClick={handleUpdateContacts} 
+                     disabled={isUpdatingContacts}
+                     className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold hover:bg-indigo-100 transition-colors"
+                   >
+                     {isUpdatingContacts ? 'Menyimpan...' : 'Simpan Kontak'}
+                   </button>
+                )}
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Pelanggan</span>
+                  {!isCompleted ? (
+                    <select
+                      value={selectedCustomerId || ''}
+                      onChange={(e) => {
+                        setSelectedCustomerId(e.target.value);
+                        setSelectedShipperId(null);
+                      }}
+                      className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 transition-all bg-white text-slate-900"
+                    >
+                      <option value="">-- Pilih Pelanggan --</option>
+                      {allEntities.filter(e => e.is_customer).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-medium text-slate-900">{receipt.customer?.name || receipt.customer_name || '-'}</span>
+                  )}
+                </div>
+                
+                <div>
+                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Shipper / Supplier</span>
+                  {!isCompleted ? (
+                    <select
+                      value={selectedShipperId || ''}
+                      onChange={(e) => setSelectedShipperId(e.target.value)}
+                      disabled={!selectedCustomerId}
+                      className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 transition-all bg-white text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">-- Pilih Shipper --</option>
+                      {selectedCustomerId && allEntities
+                        .filter(e => e.id === selectedCustomerId || e.parent_id === selectedCustomerId)
+                        .map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-medium text-slate-900">{receipt.shipper?.name || '-'}</span>
+                  )}
                 </div>
               </div>
             </Card>

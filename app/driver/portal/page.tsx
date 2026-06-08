@@ -336,53 +336,99 @@ export default function DriverPortal() {
       let enrichedJobs = completedJobs || [];
       const woItemIds = completedJobs.map(j => j.wo_item_id).filter(Boolean);
       const joIds = completedJobs.map(j => j.id).filter(Boolean);
-      
-      const [woRes, routesRes] = await Promise.all([
+      const allJoIds = (allJobs || []).map(j => j.id).filter(Boolean);
+      const [woRes, routesRes, paymentsRes] = await Promise.all([
         woItemIds.length > 0
           ? supabase.from('wo_items').select('id, item_code, item_data').in('id', woItemIds)
           : Promise.resolve({ data: [], error: null }),
         joIds.length > 0
           ? supabase.from('job_routes').select('job_order_id, distance_km').in('job_order_id', joIds)
+          : Promise.resolve({ data: [], error: null }),
+        allJoIds.length > 0
+          ? supabase.from('job_order_payments').select('*').in('job_order_id', allJoIds)
           : Promise.resolve({ data: [], error: null })
       ]);
       
       const woMap = new Map((woRes.data || []).map(w => [w.id, w]));
+      const paymentsMap = new Map();
+      (paymentsRes.data || []).forEach(p => {
+        if (!paymentsMap.has(p.job_order_id)) paymentsMap.set(p.job_order_id, []);
+        paymentsMap.get(p.job_order_id).push(p);
+      });
       const routesMap = new Map();
       (routesRes.data || []).forEach(r => {
         if (!routesMap.has(r.job_order_id)) routesMap.set(r.job_order_id, []);
         routesMap.get(r.job_order_id).push(r);
       });
       
-      enrichedJobs = completedJobs.map(j => ({
-        ...j,
-        wo_items: woMap.get(j.wo_item_id) || null,
-        job_routes: routesMap.get(j.id) || []
-      }));
+      enrichedJobs = completedJobs.map(j => {
+        const pMap = paymentsMap.get(j.id) || [];
+        const advancePayments = pMap.filter((p: any) => p.payment_type === 'advance_driver').reduce((s: number, p: any) => s + Number(p.amount), 0);
+        const pelunasanPayments = pMap.filter((p: any) => p.payment_type === 'pelunasan_driver').reduce((s: number, p: any) => s + Number(p.amount), 0);
+        const legacyAdv = (j.advance_status === 'paid' || j.advance_status === 'completed') ? Number(j.advance_amount || 0) : 0;
+        const legacyPel = (j.driver_payment_status === 'paid' || j.driver_payment_status === 'completed') ? Math.max(Number(j.driver_payment_amount || 0), advancePayments > 0 ? advancePayments : legacyAdv) : 0;
+        
+        const advPaid = advancePayments > 0 ? advancePayments : legacyAdv;
+        const pelPaid = pelunasanPayments > 0 ? pelunasanPayments : (legacyPel > advPaid ? legacyPel - advPaid : 0);
+        
+        const sp = Number(j.driver_share_percentage || 0);
+        const bp = Number(j.base_price || 0);
+        const ch = (sp > 0 && bp > 0) ? (bp * (sp / 100)) : 0;
+        const hd = Number(j.driver_revenue_share) || ch || Number(j.driver_payment_amount) || Number(j.advance_amount) || 0;
+        
+        return {
+          ...j,
+          wo_items: woMap.get(j.wo_item_id) || null,
+          job_routes: routesMap.get(j.id) || [],
+          _finances: {
+             hak: hd,
+             advancePaid: advPaid,
+             pelunasanPaid: pelPaid,
+             totalPaid: advPaid + pelPaid,
+             sisa: Math.max(0, hd - (advPaid + pelPaid))
+          }
+        };
+      });
       
       setCompletedJobs(enrichedJobs);
       setTotalCompletedJobsCount(enrichedJobs.length);
 
-      if (enrichedJobs && enrichedJobs.length > 0) {
+      if (allJobs && allJobs.length > 0) {
         let totalDistance = 0;
         let sumEarnings = 0;
         let sumOutstanding = 0;
         let sumHak = 0;
         let sumAdvanceReceived = 0;
         
+        // Distance only from completed
         for (const job of enrichedJobs) {
           const routeDist = job.job_routes?.reduce((sum: number, r: any) => sum + (Number(r.distance_km) || 0), 0) || 0;
           totalDistance += routeDist;
+        }
+        
+        // Finances from all jobs that are either completed OR have payments
+        for (const job of allJobs) {
+          const pMap = paymentsMap.get(job.id) || [];
+          const advancePayments = pMap.filter((p: any) => p.payment_type === 'advance_driver').reduce((s: number, p: any) => s + Number(p.amount), 0);
+          const pelunasanPayments = pMap.filter((p: any) => p.payment_type === 'pelunasan_driver').reduce((s: number, p: any) => s + Number(p.amount), 0);
+          const legacyAdv = (job.advance_status === 'paid' || job.advance_status === 'completed') ? Number(job.advance_amount || 0) : 0;
+          const legacyPel = (job.driver_payment_status === 'paid' || job.driver_payment_status === 'completed') ? Math.max(Number(job.driver_payment_amount || 0), advancePayments > 0 ? advancePayments : legacyAdv) : 0;
           
-          const hakDriver = Number(job.advance_amount || 0);
-          sumHak += hakDriver;
-
-          const advancePaid = job.advance_status === 'paid' ? Number(job.advance_amount || 0) : 0;
-          const pelunasanPaid = job.driver_payment_status === 'paid' ? Number(job.driver_payment_amount || 0) : 0;
-          sumAdvanceReceived += advancePaid;
-          sumEarnings += advancePaid + pelunasanPaid;
-
-          if (job.driver_payment_status !== 'paid') {
-            sumOutstanding += hakDriver - (job.advance_status === 'paid' ? Number(job.advance_amount || 0) : 0);
+          const advPaid = advancePayments > 0 ? advancePayments : legacyAdv;
+          const pelPaid = pelunasanPayments > 0 ? pelunasanPayments : (legacyPel > advPaid ? legacyPel - advPaid : 0);
+          
+          const sp = Number(job.driver_share_percentage || 0);
+          const bp = Number(job.base_price || 0);
+          const ch = (sp > 0 && bp > 0) ? (bp * (sp / 100)) : 0;
+          const hd = Number(job.driver_revenue_share) || ch || Number(job.driver_payment_amount) || Number(job.advance_amount) || 0;
+          
+          const isCompleted = completedStatuses.includes((job.status || '').toUpperCase());
+          
+          if (isCompleted || advPaid > 0 || pelPaid > 0) {
+             sumHak += hd;
+             sumAdvanceReceived += advPaid;
+             sumEarnings += (advPaid + pelPaid);
+             sumOutstanding += Math.max(0, hd - (advPaid + pelPaid));
           }
         }
         
@@ -1149,17 +1195,17 @@ export default function DriverPortal() {
               <p className="text-sm font-bold mt-3 uppercase tracking-widest opacity-80">Driver Portal</p>
             </div>
 
-            <form onSubmit={handleLogin} className={`${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white/15 border-white/20'} backdrop-blur-2xl p-8 rounded-3xl border shadow-2xl space-y-6`}>
+            <form onSubmit={handleLogin} className={`${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'} backdrop-blur-2xl p-8 rounded-3xl border shadow-2xl space-y-6`}>
               <div className="space-y-3">
-                <label className="text-base font-bold uppercase tracking-wide opacity-80">Nomor WhatsApp</label>
+                <label className={`text-base font-bold uppercase tracking-wide ${isDark ? 'opacity-80 text-white' : 'text-slate-700'}`}>Nomor WhatsApp</label>
                 <div className="relative">
-                  <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 opacity-50" />
+                  <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 ${isDark ? 'opacity-50' : 'text-slate-400'}`} />
                   <input 
                     type="tel"
                     placeholder="0812 3456 7890"
                     value={whatsapp}
                     onChange={(e) => setWhatsapp(e.target.value)}
-                    className={`w-full ${isDark ? 'bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:ring-indigo-500' : 'bg-white/20 border-white/30 text-white placeholder:text-white/40 focus:ring-white/50'} border rounded-2xl py-5 pl-14 pr-4 text-xl font-bold outline-none transition-all`}
+                    className={`w-full ${isDark ? 'bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:ring-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-blue-500'} border rounded-2xl py-5 pl-14 pr-4 text-xl font-bold outline-none transition-all`}
                     required
                   />
                 </div>
@@ -1167,8 +1213,8 @@ export default function DriverPortal() {
 
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold uppercase tracking-wide opacity-80">PIN 4 Digit</label>
-                  <button type="button" onClick={() => setShowPin(!showPin)} className="opacity-60 hover:opacity-100 flex items-center gap-2 text-sm">
+                  <label className={`text-sm font-bold uppercase tracking-wide ${isDark ? 'opacity-80 text-white' : 'text-slate-700'}`}>PIN 4 Digit</label>
+                  <button type="button" onClick={() => setShowPin(!showPin)} className={`flex items-center gap-2 text-sm ${isDark ? 'opacity-60 hover:opacity-100' : 'text-slate-500 hover:text-slate-700'}`}>
                     {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
                     {showPin ? 'Sembunyikan' : 'Tampilkan'}
                   </button>
@@ -1183,7 +1229,7 @@ export default function DriverPortal() {
                       value={pin[idx]}
                       onChange={(e) => handlePinChange(idx, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(idx, e)}
-                      className={`w-full aspect-square ${isDark ? 'bg-slate-950 border-slate-800 text-white focus:ring-indigo-500' : 'bg-white/20 border-white/30 text-white focus:ring-white/50'} border rounded-2xl text-center text-2xl font-black outline-none transition-all`}
+                      className={`w-full aspect-square ${isDark ? 'bg-slate-950 border-slate-800 text-white focus:ring-indigo-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:ring-blue-500'} border rounded-2xl text-center text-2xl font-black outline-none transition-all`}
                       maxLength={1}
                     />
                   ))}
@@ -1958,7 +2004,7 @@ export default function DriverPortal() {
 
           <main className="max-w-xl mx-auto px-6 pt-6 space-y-6">
             {/* Advance Payment Notification */}
-            {selectedJob.advance_status === 'paid' && (
+            {(selectedJob.advance_status === 'paid' || selectedJob.advance_status === 'completed') && (
               <div className="mb-6 bg-emerald-600 text-white p-5 rounded-[2rem] shadow-xl shadow-emerald-600/20 flex items-center gap-5 animate-in slide-in-from-top-4 duration-700">
                 <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
                   <Check size={24} className="text-white" />
@@ -2784,12 +2830,12 @@ export default function DriverPortal() {
                       )}
                       <div className="text-[10px] font-semibold opacity-70 border-t pt-2 border-slate-200/50 space-y-0.5">
                         <div className="flex justify-between">
-                          <span>Total Hak: Rp {Number(job.driver_revenue_share || 0).toLocaleString('id-ID')}</span>
+                          <span>Total Hak: Rp {Number(job._finances?.hak || 0).toLocaleString('id-ID')}</span>
                           <span>🛣️ {jobDistance.toFixed(0)} km</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Advance: {job.advance_status === 'paid' ? `Rp ${Number(job.advance_amount || 0).toLocaleString('id-ID')} ✓` : 'Pending'}</span>
-                          <span>Sisa: Rp {Number(Math.max(0, (job.driver_revenue_share || 0) - (job.advance_amount || 0) - (job.driver_payment_amount || 0))).toLocaleString('id-ID')}</span>
+                          <span>Advance: {job._finances?.advancePaid > 0 ? `Rp ${Number(job._finances.advancePaid).toLocaleString('id-ID')} ✓` : 'Pending'}</span>
+                          <span>Sisa: Rp {Number(job._finances?.sisa || 0).toLocaleString('id-ID')}</span>
                         </div>
                       </div>
                     </div>

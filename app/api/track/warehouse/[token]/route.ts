@@ -46,31 +46,51 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (joError) throw joError;
 
-    // 4. Enrich each JO with Warehouse Receipt details
+    // 4. Enrich each JO with Warehouse details (Inbound or Outbound)
     const enrichedJOs = await Promise.all((jobOrders || []).map(async (jo: any) => {
-      // Fetch Inbound Receipt
-      const { data: receipt } = await supabase
-        .from('wh_inbound_receipts')
-        .select(`
-          id, receipt_number, status, expected_arrival, 
-          unloading_start_time, unloading_end_time,
-          batb_document_url, pod_document_url, notes, created_at, updated_at,
-          transporter:transporter_id(name),
-          transporter_name_manual,
-          driver:driver_id(name),
-          driver_name_manual,
-          fleet:fleet_id(plate_number),
-          wh_inbound_receipt_items(id, expected_qty, actual_good_qty, quarantine_qty, rejected_qty),
-          wh_inbound_damage_records(id, qty, damage_condition, source_photo_url, condition_photo_url, decision)
-        `)
-        .eq('wo_item_id', jo.id)
-        .maybeSingle();
-
       const woItem = woItemMap.get(jo.wo_item_id) || null;
-      
-      let fleetPlate = receipt?.fleet?.plate_number || null;
-      let driverName = receipt?.driver?.name || receipt?.driver_name_manual || null;
-      let transporterName = receipt?.transporter?.name || receipt?.transporter_name_manual || null;
+      const isOutbound = woItem?.item_code === 'WHOUT' || woItem?.sbu_type?.includes('OUTBOUND');
+
+      let receipt = null;
+      let shipment = null;
+
+      if (isOutbound) {
+        const { data } = await supabase
+          .from('wh_outbound_shipments')
+          .select(`
+            id, shipment_number, status, created_at, updated_at,
+            surat_jalan_url, bast_url,
+            transporter:transporter_id(name),
+            driver:driver_id(name),
+            fleet:fleet_id(plate_number),
+            wh_outbound_shipment_items(id, qty, picked_qty)
+          `)
+          .eq('job_order_id', jo.id)
+          .maybeSingle();
+        shipment = data;
+      } else {
+        const { data } = await supabase
+          .from('wh_inbound_receipts')
+          .select(`
+            id, receipt_number, status, expected_arrival, 
+            unloading_start_time, unloading_end_time,
+            batb_document_url, pod_document_url, notes, created_at, updated_at,
+            transporter:transporter_id(name),
+            transporter_name_manual,
+            driver:driver_id(name),
+            driver_name_manual,
+            fleet:fleet_id(plate_number),
+            wh_inbound_receipt_items(id, expected_qty, actual_good_qty, quarantine_qty, rejected_qty),
+            wh_inbound_damage_records(id, qty, damage_condition, source_photo_url, condition_photo_url, decision)
+          `)
+          .eq('wo_item_id', jo.id)
+          .maybeSingle();
+        receipt = data;
+      }
+
+      let fleetPlate = receipt?.fleet?.plate_number || shipment?.fleet?.plate_number || null;
+      let driverName = receipt?.driver?.name || receipt?.driver_name_manual || shipment?.driver?.name || null;
+      let transporterName = receipt?.transporter?.name || receipt?.transporter_name_manual || shipment?.transporter?.name || null;
 
       // Calculate Qty Metrics
       let expectedQty = 0;
@@ -85,14 +105,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           quarantineQty += Number(item.quarantine_qty || 0);
           rejectedQty += Number(item.rejected_qty || 0);
         });
+      } else if (shipment?.wh_outbound_shipment_items) {
+        shipment.wh_outbound_shipment_items.forEach((item: any) => {
+          expectedQty += Number(item.qty || 0);
+          goodQty += Number(item.picked_qty || 0);
+        });
       }
 
       return {
         ...jo,
         wo_item: woItem,
+        is_outbound: isOutbound,
         receipt: receipt ? {
           ...receipt,
           metrics: { expectedQty, goodQty, quarantineQty, rejectedQty }
+        } : null,
+        shipment: shipment ? {
+          ...shipment,
+          metrics: { expectedQty, goodQty, quarantineQty: 0, rejectedQty: 0 }
         } : null,
         fleet_plate: fleetPlate,
         driver_name: driverName,

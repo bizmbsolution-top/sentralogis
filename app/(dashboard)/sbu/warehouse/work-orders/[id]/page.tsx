@@ -27,6 +27,7 @@ import {
   Eye,
   Warehouse,
   GripVertical,
+  Zap,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import dayjs from "dayjs";
@@ -42,10 +43,14 @@ function ManifestEditorModal({ jo, profile, onClose, onRefresh }: any) {
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    if (jo.wo_item_manifests) {
+    const manifestsToUse = jo.wo_item_manifests?.length > 0
+      ? jo.wo_item_manifests
+      : jo.wo_item?.wo_item_manifests || [];
+
+    if (manifestsToUse) {
       setRows(
-        jo.wo_item_manifests.map((m: any) => ({
-          id: m.id, // existing DB id
+        manifestsToUse.map((m: any) => ({
+          id: m.id, // existing DB id or from wo_item fallback
           product_sku_id: m.product_sku_id,
           sku_code: m.md_product_skus?.sku_code,
           name: m.md_product_skus?.name,
@@ -56,7 +61,7 @@ function ManifestEditorModal({ jo, profile, onClose, onRefresh }: any) {
         })),
       );
     }
-  }, [jo.wo_item_manifests]);
+  }, [jo.wo_item_manifests, jo.wo_item?.wo_item_manifests]);
 
   // Debounced search for the search bar
   useEffect(() => {
@@ -434,8 +439,37 @@ function AllocationEditorModal({
   profile,
   onClose,
   onRefresh,
+  isOutbound = false,
 }: any) {
   const router = useRouter();
+
+  const [rows, setRows] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const manifestItems = jo.wo_item_manifests?.length > 0
+      ? jo.wo_item_manifests
+      : jo.wo_item?.wo_item_manifests || [];
+
+  useEffect(() => {
+    if (jo.jo_warehouse_assignments) {
+      setRows(
+        jo.jo_warehouse_assignments.map((a: any) => {
+          const targetManifestId = a.wo_item_manifest_id || a.manifest_id || a.job_order_manifest_id || "";
+          const manifest = manifestItems.find((m: any) => m.id === targetManifestId);
+          return {
+            id: a.id,
+            warehouse_location_id: a.warehouse_location_id,
+            manifest_id: targetManifestId,
+            allocated_kg: Number(a.allocated_kg) || 0,
+            allocated_cbm: Number(a.allocated_cbm) || 0,
+            quantity: Number(a.quantity) || 0,
+            sku_code: manifest?.md_product_skus?.sku_code || "",
+            name: manifest?.md_product_skus?.name || "",
+          };
+        }),
+      );
+    }
+  }, [jo.jo_warehouse_assignments, manifestItems]);
+
 
   // If there are no zones for this warehouse, guide the user to the master location page
   if (zones.length === 0) {
@@ -464,36 +498,6 @@ function AllocationEditorModal({
     );
   }
 
-  const [rows, setRows] = useState<any[]>([]);
-  const [saving, setSaving] = useState(false);
-  const manifestItems = jo.wo_item_manifests || [];
-
-  useEffect(() => {
-    if (jo.jo_warehouse_assignments) {
-      setRows(
-        jo.jo_warehouse_assignments.map((a: any) => {
-          const targetManifestId = a.wo_item_manifest_id || a.manifest_id || a.job_order_manifest_id || "";
-          const manifest = manifestItems.find((m: any) => m.id === targetManifestId);
-          return {
-            id: a.id,
-            warehouse_location_id: a.warehouse_location_id,
-            selectedZone: a.md_warehouse_locations?.area?.area_code || "",
-            manifest_id: targetManifestId,
-            product_sku_id: manifest?.product_sku_id ?? "",
-            sku_code: manifest?.md_product_skus?.sku_code ?? "",
-            product_name: manifest?.md_product_skus?.name ?? "",
-            jo_quantity: manifest?.quantity ?? "",
-            unit: manifest?.md_product_skus?.unit ?? "",
-            unit_weight_kg: manifest?.unit_weight_kg || manifest?.md_product_skus?.weight_kg || 0,
-            unit_volume_m3: manifest?.unit_volume_m3 || manifest?.md_product_skus?.volume_m3 || 0,
-            quantity: a.quantity || "",
-            allocated_kg: a.allocated_kg,
-            allocated_cbm: a.allocated_cbm,
-          };
-        }),
-      );
-    }
-  }, [jo.jo_warehouse_assignments, manifestItems]);
 
   const addRow = () => {
     setRows([
@@ -631,6 +635,38 @@ function AllocationEditorModal({
           .insert(payloads);
         if (insErr) throw insErr;
       }
+
+      // 3. Create wh_outbound_shipments if Outbound
+      if (isOutbound) {
+        const { data: existingShipment } = await supabase.from('wh_outbound_shipments').select('id').eq('wo_item_id', jo.wo_item_id).single();
+        if (!existingShipment && jo.assigned_warehouse_id) {
+           const shipmentNumber = jo.jo_number || `OUT-S${Date.now()}`;
+           
+           const { data: newShipment, error: shipErr } = await supabase.from('wh_outbound_shipments').insert({
+              tenant_id: profile?.tenant_id,
+              warehouse_id: jo.assigned_warehouse_id, 
+              wo_item_id: jo.wo_item_id,
+              shipment_number: shipmentNumber,
+              status: 'PLANNED',
+              notes: `Outbound shipment for JO ${jo.jo_number}`,
+              created_by: profile?.id || null
+           }).select('id').single();
+
+           if (newShipment && !shipErr) {
+             const itemsPayload = manifestItems.map((m: any) => ({
+               shipment_id: newShipment.id,
+               product_sku_id: m.product_sku_id,
+               requested_qty: Number(m.quantity) || 0,
+               picked_qty: 0,
+               loaded_qty: 0
+             }));
+             if (itemsPayload.length > 0) {
+               await supabase.from('wh_outbound_shipment_items').insert(itemsPayload);
+             }
+           }
+        }
+      }
+
       toast.success("Alokasi berhasil disimpan");
       onRefresh();
       onClose();
@@ -641,12 +677,75 @@ function AllocationEditorModal({
     }
   };
 
+  const handleAutoAllocate = async () => {
+    try {
+      setSaving(true);
+      const newRows: any[] = [];
+      
+      for (const m of manifestItems) {
+        let remainingQty = Number(m.quantity) || 0;
+        
+        // Fetch inventory lots for this SKU, ordered by expiry_date (FEFO)
+        const { data: lots, error } = await supabase
+          .from('wh_inventory')
+          .select('id, location_id, available_quantity, expiry_date, batch_number')
+          .eq('tenant_id', profile?.tenant_id)
+          .eq('product_sku_id', m.product_sku_id)
+          .eq('status', 'AVAILABLE')
+          .gt('available_quantity', 0)
+          .order('expiry_date', { ascending: true })
+          .order('created_at', { ascending: true });
+          
+        if (error) {
+          console.error("Error fetching inventory for auto-allocate:", error);
+          continue;
+        }
+        
+        for (const lot of (lots || [])) {
+          if (remainingQty <= 0) break;
+          const pickQty = Math.min(remainingQty, lot.available_quantity);
+          
+          // Find the location code from props
+          const loc = locations.find((l: any) => l.id === lot.location_id);
+          const zoneId = loc?.area?.area_code || "";
+          
+          newRows.push({
+            id: `temp-${Date.now()}-${Math.random()}`,
+            manifest_id: m.id,
+            product_sku_id: m.product_sku_id,
+            sku_code: m.md_product_skus?.sku_code || "",
+            product_name: m.md_product_skus?.name || "",
+            jo_quantity: m.quantity || 0,
+            quantity: pickQty,
+            unit: m.md_product_skus?.unit || "",
+            unit_weight_kg: m.unit_weight_kg || m.md_product_skus?.weight_kg || 0,
+            unit_volume_m3: m.unit_volume_m3 || m.md_product_skus?.volume_m3 || 0,
+            selectedZone: zoneId,
+            warehouse_location_id: lot.location_id,
+            batch_info: `Lot: ${lot.batch_number || '-'} | Exp: ${lot.expiry_date ? dayjs(lot.expiry_date).format('DD MMM YYYY') : '-'}`,
+          });
+          
+          remainingQty -= pickQty;
+        }
+      }
+      
+      setRows(newRows);
+      if (newRows.length > 0) {
+        toast.success("Auto FEFO / FIFO berhasil menarik daftar lokasi!");
+      } else {
+        toast.error("Stok tidak ditemukan untuk produk di WO ini.");
+      }
+    } catch (err: any) {
+      toast.error("Gagal melakukan auto-allocation: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const totalKg = rows.reduce((acc, r) => acc + computeRowKg(r), 0);
   const totalCbm = rows.reduce((acc, r) => acc + computeRowCbm(r), 0);
   const totalKgDisplay = totalKg ? `${totalKg.toFixed(2)} KG` : "-";
   const totalCbmDisplay = totalCbm ? `${totalCbm.toFixed(3)} CBM` : "-";
-  const totalKgClass = totalKg ? "text-slate-900" : "text-slate-400";
-  const totalCbmClass = totalCbm ? "text-slate-900" : "text-slate-400";
 
   const skuSummaries = manifestItems.map((m: any) => {
     // 1. Sum up in-memory allocations in the CURRENT modal for this manifestItem
@@ -661,12 +760,11 @@ function AllocationEditorModal({
       { allocated_kg: 0, allocated_cbm: 0 },
     );
 
-    // 2. Sum up database allocations from OTHER Job Orders for this same SKU
+    // 2. Sum up database allocations from OTHER Job Orders for this same manifest item
     const otherJOsAlloc = dbAssignments.reduce(
       (acc: any, assign: any) => {
         if (assign.job_order_id !== jo.id) {
-          const assignSkuId = assign.wo_item_manifests?.product_sku_id;
-          if (assignSkuId === m.product_sku_id) {
+          if (assign.wo_item_manifest_id === m.id) {
             acc.allocated_kg += Number(assign.allocated_kg) || 0;
             acc.allocated_cbm += Number(assign.allocated_cbm) || 0;
           }
@@ -801,12 +899,23 @@ function AllocationEditorModal({
                   Daftar Lokasi Penugasan
                 </h3>
               </div>
-              <button
-                onClick={addRow}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all hover:scale-102 shadow-md shadow-emerald-600/10"
-              >
-                <Plus size={14} /> Tambah Lokasi
-              </button>
+              {isOutbound ? (
+                <button
+                  onClick={handleAutoAllocate}
+                  disabled={saving}
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all hover:scale-102 shadow-md shadow-amber-500/20 disabled:opacity-50"
+                >
+                  <Zap size={14} className={saving ? "animate-pulse" : ""} /> Auto FEFO / FIFO
+                </button>
+              ) : (
+                <button
+                  onClick={addRow}
+                  disabled={saving}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all hover:scale-102 shadow-md shadow-emerald-600/10 disabled:opacity-50"
+                >
+                  <Plus size={14} /> Tambah Lokasi
+                </button>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[800px]">
@@ -1038,12 +1147,13 @@ function JOCard({
   dbAssignments = [],
   profile,
   onRefresh,
+  isOutbound,
 }: any) {
   const [showManifestEditor, setShowManifestEditor] = useState(false);
   const [showAllocationEditor, setShowAllocationEditor] = useState(false);
 
   // Compute manifest totals
-  const manifests = jo.wo_item_manifests || [];
+  const manifests = jo.wo_item_manifests?.length > 0 ? jo.wo_item_manifests : jo.wo_item?.wo_item_manifests || [];
   const totalManifestItems = manifests.length;
   const totalManifestKg = manifests.reduce(
     (s: number, m: any) => s + (m.quantity || 0) * (m.unit_weight_kg || 0),
@@ -1200,6 +1310,7 @@ function JOCard({
           profile={profile}
           onClose={() => setShowAllocationEditor(false)}
           onRefresh={onRefresh}
+          isOutbound={isOutbound}
         />
       )}
     </Card>
@@ -1231,6 +1342,7 @@ export default function WarehouseExecutionPage() {
         .select(
           `
           *,
+          wo_item_manifests (*, md_product_skus(sku_code, name, brand_name, unit, weight_kg, volume_m3)),
           wo:work_orders!wo_id (
             id, wo_number, order_date, execution_date, customer_id,
             customer:md_entities!customer_id ( name, legal_name, phone )
@@ -1259,7 +1371,10 @@ export default function WarehouseExecutionPage() {
 
       const injectedJos = joData?.map((j: any) => ({
         ...j,
-        wo_item: { wo: itemData.wo },
+        wo_item: { 
+          wo: itemData.wo,
+          wo_item_manifests: itemData.wo_item_manifests 
+        },
       }));
       setJos(injectedJos || []);
 
@@ -1516,6 +1631,10 @@ export default function WarehouseExecutionPage() {
                 dbAssignments={dbAssignments}
                 profile={profile}
                 onRefresh={fetchData}
+                isOutbound={
+                  (woItemData.item_data?.operation_type || woItemData.item_data?.task_type || "").toUpperCase() === "OUTBOUND" ||
+                  woItemData.wo?.wo_type === "OUTBOUND"
+                }
               />
             ))}
           </div>

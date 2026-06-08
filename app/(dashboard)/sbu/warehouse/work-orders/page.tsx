@@ -11,6 +11,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import dayjs from "dayjs";
 import Link from "next/link";
+import { Badge } from "@/components/ui/Badge";
 
 type WOItem = {
   id: string;
@@ -27,6 +28,7 @@ type WOItem = {
     customer?: { name: string; legal_name: string };
   };
   job_orders: any[];
+  wo_item_manifests?: any[];
 };
 
 export default function WarehouseWorkOrdersPage() {
@@ -60,6 +62,10 @@ export default function WarehouseWorkOrdersPage() {
           wo:work_orders!wo_id (
             id, wo_number, order_date, execution_date,
             customer:md_entities!customer_id ( name, legal_name )
+          ),
+          wo_item_manifests (
+            id, quantity, unit_weight_kg, unit_volume_m3,
+            md_product_skus ( name, sku_code )
           )
         `)
         .eq('tenant_id', profile.tenant_id)
@@ -111,29 +117,23 @@ export default function WarehouseWorkOrdersPage() {
 
   const isItemCompleted = (item: WOItem) => {
     if (['completed', 'done', 'selesai'].includes(item.status?.toLowerCase() || '')) return true;
-    const totalUnits = item.item_data?.unit_count || 1;
     const jos = item.job_orders || [];
-    return jos.length > 0 && jos.length >= totalUnits && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
+    // WO is completed only when it has JOs AND every JO is completed
+    return jos.length > 0 && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
   };
 
   const pendingCount = items.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
-  const inProgressCount = items.filter(i => !isItemCompleted(i) && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(i.status?.toLowerCase() || '')).length;
+  const inProgressCount = items.filter(i => !isItemCompleted(i) && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(i.status?.toLowerCase() || '')).length;
   const completedCount = items.filter(i => isItemCompleted(i)).length;
-  const docFinancesCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'doc_finances').length;
-  const readyBillingCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'ready_billing').length;
-  const billingCount = items.filter(i => !isItemCompleted(i) && i.status?.toLowerCase() === 'billing').length;
 
   const displayItems = filteredItems.filter(item => {
      if (statusFilter === 'ALL') return true;
-     const s = item.status?.toLowerCase() || '';
      const completed = isItemCompleted(item);
+     const s = item.status?.toLowerCase() || '';
      
      if (statusFilter === 'PENDING') return !completed && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s);
-     if (statusFilter === 'IN_PROGRESS') return !completed && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(s);
+     if (statusFilter === 'IN_PROGRESS') return !completed && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(s);
      if (statusFilter === 'COMPLETED') return completed;
-     if (statusFilter === 'DOC_FINANCES') return !completed && s === 'doc_finances';
-     if (statusFilter === 'READY_BILLING') return !completed && s === 'ready_billing';
-     if (statusFilter === 'BILLING') return !completed && s === 'billing';
      return true;
   });
 
@@ -155,7 +155,7 @@ export default function WarehouseWorkOrdersPage() {
       </div>
 
       {/* Summary Cards as Filters */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 gap-4">
          <button onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')} className={`p-4 bg-white border ${statusFilter === 'PENDING' ? 'border-amber-500 ring-2 ring-amber-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-amber-300`}>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                <Clock className="w-5 h-5" />
@@ -181,33 +181,6 @@ export default function WarehouseWorkOrdersPage() {
             <div>
                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 line-clamp-1">Selesai</p>
                <p className="text-xl font-black italic">{completedCount}</p>
-            </div>
-         </button>
-         <button onClick={() => setStatusFilter(statusFilter === 'DOC_FINANCES' ? 'ALL' : 'DOC_FINANCES')} className={`p-4 bg-white border ${statusFilter === 'DOC_FINANCES' ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-purple-300`}>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-               <ClipboardList className="w-5 h-5" />
-            </div>
-            <div>
-               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 line-clamp-1">Doc & Finances</p>
-               <p className="text-xl font-black italic">{docFinancesCount}</p>
-            </div>
-         </button>
-         <button onClick={() => setStatusFilter(statusFilter === 'READY_BILLING' ? 'ALL' : 'READY_BILLING')} className={`p-4 bg-white border ${statusFilter === 'READY_BILLING' ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-indigo-300`}>
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-               <Package className="w-5 h-5" />
-            </div>
-            <div>
-               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 line-clamp-1">Ready Billing</p>
-               <p className="text-xl font-black italic">{readyBillingCount}</p>
-            </div>
-         </button>
-         <button onClick={() => setStatusFilter(statusFilter === 'BILLING' ? 'ALL' : 'BILLING')} className={`p-4 bg-white border ${statusFilter === 'BILLING' ? 'border-rose-500 ring-2 ring-rose-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-rose-300`}>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-               <Warehouse className="w-5 h-5" />
-            </div>
-            <div>
-               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 line-clamp-1">Billing</p>
-               <p className="text-xl font-black italic">{billingCount}</p>
             </div>
          </button>
       </div>
@@ -248,44 +221,59 @@ export default function WarehouseWorkOrdersPage() {
          ) : (
             <div className="divide-y divide-slate-100">
                {displayItems.map((item) => {
-                  const totalUnits = item.item_data?.unit_count || 1;
-                  const jos = item.job_orders || [];
-                  const isCompleted = jos.length > 0 && jos.length >= totalUnits && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
-                  
-                  let displayStatus = 'Menunggu WH Eksekusi';
-                  let badgeColor = 'bg-amber-100 text-amber-700';
+                   const jos = item.job_orders || [];
+                   const completedJos = jos.filter((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
+                   const isCompleted = isItemCompleted(item);
+                   const opType = item.item_data?.operation_type?.toUpperCase() || '';
+                   const isInbound = opType === 'INBOUND';
+                   
+                   let badgeComponent = <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">MENUNGGU WMS EKSEKUSI</Badge>;
 
-                  if (['need_assignment', 'pending'].includes(item.status?.toLowerCase() || '')) {
-                     displayStatus = 'Menunggu WH Eksekusi';
-                     badgeColor = 'bg-amber-100 text-amber-700';
-                  } else if (isCompleted || item.status === 'completed') {
-                     displayStatus = 'Selesai';
-                     badgeColor = 'bg-emerald-100 text-emerald-700';
-                  } else {
-                     displayStatus = 'Sedang Proses';
-                     badgeColor = 'bg-blue-100 text-blue-700';
-                  }
+                   if (isCompleted || item.status === 'completed') {
+                      badgeComponent = <Badge className="!bg-indigo-950 !text-white !border-indigo-950 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PEKERJAAN SELESAI</Badge>;
+                   } else {
+                      const anyInProgress = jos.some((j: any) => ['in_progress', 'checking', 'putaway_in_progress', 'unloading'].includes(j.status?.toLowerCase())) || ['in_progress'].includes(item.status?.toLowerCase() || '');
+                      if (anyInProgress) {
+                         badgeComponent = <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">PROSES WMS</Badge>;
+                      }
+                   }
 
-                  return (
-                     <div key={item.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6 group">
-                        <div className="flex items-start gap-4">
-                           <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
-                              <Warehouse className="w-6 h-6" />
-                           </div>
-                           <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                 <h3 className="font-bold text-slate-900">{item.wo?.wo_number}</h3>
-                                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
-                                    {displayStatus}
-                                 </span>
-                              </div>
-                              <p className="text-xs font-semibold text-slate-500 mb-2">Item: {item.item_code} • {item.wo?.customer?.name || "Customer"}</p>
-                              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                 <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {dayjs(item.wo?.execution_date).format('DD MMM YYYY')}</span>
-                                 <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> {totalUnits} Trucks/Units</span>
-                              </div>
-                           </div>
-                        </div>
+                   return (
+                      <div key={item.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6 group">
+                         <div className="flex items-start gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isInbound ? 'bg-sky-100 text-sky-600' : 'bg-orange-100 text-orange-600'}`}>
+                               <div className="text-center leading-none">
+                                  <div className="text-[9px] font-black tracking-wider">{isInbound ? 'IN' : 'OUT'}</div>
+                                  <Package className="w-5 h-5 mx-auto" />
+                               </div>
+                            </div>
+                            <div>
+                               <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <h3 className="font-bold text-slate-900">{item.wo?.wo_number}</h3>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isInbound ? 'bg-sky-100 text-sky-700' : 'bg-orange-100 text-orange-700'}`}>
+                                     {isInbound ? 'INBOUND' : 'OUTBOUND'}
+                                  </span>
+                                  {badgeComponent}
+                               </div>
+                               <p className="text-xs font-semibold text-slate-500 mb-2">Item: {item.item_code} • {item.wo?.customer?.name || "Customer"}</p>
+                               
+                               {/* Product List */}
+                               {item.wo_item_manifests && item.wo_item_manifests.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mb-2">
+                                     {item.wo_item_manifests.map((manifest: any) => (
+                                        <span key={manifest.id} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-bold">
+                                           {manifest.quantity}x {manifest.md_product_skus?.name || manifest.md_product_skus?.sku_code}
+                                        </span>
+                                     ))}
+                                  </div>
+                               )}
+
+                               <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {dayjs(item.wo?.execution_date).format('DD MMM YYYY')}</span>
+                                  <span className="flex items-center gap-1"><ClipboardList className="w-3 h-3" /> JO: {completedJos.length}/{jos.length} done</span>
+                               </div>
+                            </div>
+                         </div>
                         <div className="flex items-center gap-3">
                            <Link href={`/sbu/warehouse/work-orders/${item.wo?.id}?itemId=${item.id}`}>
                               <button className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-slate-900/20 transition-all hover:scale-105 flex items-center gap-2">

@@ -53,7 +53,25 @@ export default function HQWarehouseOutbound() {
     finally { setLoading(false); }
   }, [profile, supabase]);
 
-  useEffect(() => { if (profile) fetchData(); }, [profile, fetchData]);
+  useEffect(() => {
+    if (!profile) return;
+    fetchData();
+
+    const channel = supabase
+      .channel('hq-outbound-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wh_tasks' },
+        () => {
+          fetchData(); // Refetch when there's an update
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile, fetchData, supabase]);
 
   const statusBadge = (s: string) => {
     const map: Record<string, "success" | "warning" | "info" | "default"> = {
