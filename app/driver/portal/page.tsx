@@ -1068,7 +1068,12 @@ export default function DriverPortal() {
       toast.success('Laporan berhasil dikirim');
       
       // Refresh job data to fetch the new tracking logs
-      await reloadJobWithFleet(selectedJob.id);
+      const reloadedJob = await reloadJobWithFleet(selectedJob.id);
+      if (reloadedJob) {
+        const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
+        reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+        setSelectedJob(reloadedJob);
+      }
     } catch (err: any) {
       console.error('Timeline Event Error:', err);
       toast.error(err.message);

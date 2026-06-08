@@ -247,7 +247,7 @@ export async function PATCH(
         const { data: routeInfo } = await supabase.from('job_routes').select('location_name').eq('id', route_id).maybeSingle();
         const locationName = routeInfo?.location_name || 'Lokasi';
         
-        await supabase.from('job_tracking').insert({
+        const { error: insertError } = await supabase.from('job_tracking').insert({
           job_order_id: jo.id,
           job_route_id: route_id, // Requires migration 098
           status_update: `Laporan di ${locationName}`,
@@ -256,6 +256,11 @@ export async function PATCH(
           photo_url: uploadedPublicUrl || null, // Requires migration 098
           notes: route_notes || 'Mengirim laporan / foto'
         })
+        
+        if (insertError) {
+          throw new Error(insertError.message || 'Database insert failed. Pastikan Migration SQL sudah dijalankan.');
+        }
+
         return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl })
       } catch (e: any) {
         console.error('[API] Timeline tracking log failed:', e)
