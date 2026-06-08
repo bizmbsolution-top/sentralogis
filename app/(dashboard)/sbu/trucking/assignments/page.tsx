@@ -372,7 +372,10 @@ export default function JobOrderManagementPage() {
   const stats = useMemo(() => {
     const categories = jobOrders.map(jo => getJobCategory(jo));
     return {
-      total: jobOrders.filter(jo => getJobCategory(jo) !== 'rejected').length,
+      total: jobOrders.filter(jo => {
+        const cat = getJobCategory(jo);
+        return cat !== 'rejected' && cat !== 'completed';
+      }).length,
       needsAssign: categories.filter(c => c === 'awaiting').length,
       assignedCount: categories.filter(c => c === 'assigned').length,
       onJourney: categories.filter(c => c === 'active').length,
@@ -392,8 +395,8 @@ export default function JobOrderManagementPage() {
 
       if (!matchesSearch) return false;
 
-      // [AI] Rejected JOs are hidden from 'all' — only visible via 'rejected' tab
-      if (selectedStatus === 'all') return category !== 'rejected';
+      // [AI] Rejected and Completed JOs are hidden from 'all' — only visible via their respective tabs
+      if (selectedStatus === 'all') return category !== 'rejected' && category !== 'completed';
       if (selectedStatus === 'new') return category === 'awaiting';
       if (selectedStatus === 'rejected') return category === 'rejected';
       return category === selectedStatus;
