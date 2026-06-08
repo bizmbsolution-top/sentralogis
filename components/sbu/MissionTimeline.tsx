@@ -144,11 +144,13 @@ export default function MissionTimeline({
 
                     {route.pod_photo_url && (
                       <div className="mt-3">
-                        <img 
-                          src={route.pod_photo_url} 
-                          alt="POD Proof" 
-                          className="w-full h-40 object-cover rounded-lg border border-slate-200"
-                        />
+                        <a href={route.pod_photo_url} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={route.pod_photo_url} 
+                            alt="POD Proof" 
+                            className="w-20 h-20 object-cover rounded-lg border border-slate-200 shadow-sm hover:scale-105 transition-transform"
+                          />
+                        </a>
                       </div>
                     )}
                   </div>
@@ -176,6 +178,15 @@ export default function MissionTimeline({
                         <p className="text-[9px] text-slate-400 mt-1 font-mono">
                           {t.latitude}, {t.longitude}
                         </p>
+                    )}
+                    {t.photo_url && (
+                      <a href={t.photo_url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                        <img 
+                          src={t.photo_url} 
+                          alt="Timeline update" 
+                          className="w-16 h-16 object-cover rounded border border-slate-200 shadow-sm hover:scale-105 transition-transform"
+                        />
+                      </a>
                     )}
                   </div>
                </div>
