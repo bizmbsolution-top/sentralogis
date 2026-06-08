@@ -507,9 +507,9 @@ export default function DriverPortal() {
     const joIds = data.map(jo => jo.id);
     const fleetIds = data.map(jo => jo.fleet_id).filter(Boolean);
     
-    const [woRes, routesRes, fleetsRes, woDataRes, trackingRes] = await Promise.all([
+    const [woRes, routesRes, fleetsRes, trackingRes] = await Promise.all([
       woItemIds.length > 0
-        ? supabase.from('wo_items').select('id, item_code, item_data').in('id', woItemIds)
+        ? supabase.from('wo_items').select('id, item_code, item_data, wo_id').in('id', woItemIds)
         : Promise.resolve({ data: [], error: null }),
       joIds.length > 0
         ? supabase.from('job_routes').select('*').in('job_order_id', joIds).order('sequence', { ascending: true })
@@ -517,22 +517,28 @@ export default function DriverPortal() {
       fleetIds.length > 0
         ? supabase.from('md_fleets').select('id, plate_number').in('id', fleetIds)
         : Promise.resolve({ data: [], error: null }),
-      woIds.length > 0
-        ? supabase.from('work_orders').select('id, wo_number').in('id', woIds)
-        : Promise.resolve({ data: [], error: null }),
       joIds.length > 0
         ? supabase.from('job_tracking').select('*').in('job_order_id', joIds).order('created_at', { ascending: true })
         : Promise.resolve({ data: [], error: null })
     ]);
+
+    const woItemData = woRes.data || [];
+    const woIds = woItemData.map((w: any) => w.wo_id).filter(Boolean);
     
-    const woMap = new Map((woRes.data || []).map(w => [w.id, w]));
-    const woDetailsMap = new Map((woDataRes.data || []).map(w => [w.id, w]));
+    let woDataRes = { data: [] as any[] };
+    if (woIds.length > 0) {
+      const { data } = await supabase.from('work_orders').select('id, wo_number').in('id', woIds);
+      woDataRes.data = data || [];
+    }
+    
+    const woMap = new Map((woItemData).map(w => [w.id, w]));
+    const woDetailsMap = new Map((woDataRes.data).map((w: any) => [w.id, w]));
     const fleetMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
     
     const dataWithJoins = data.map(jo => ({
       ...jo,
       wo_items: woMap.get(jo.wo_item_id) || null,
-      work_order: woDetailsMap.get(jo.wo_id) || null,
+      work_order: jo.wo_item_id ? woDetailsMap.get(woMap.get(jo.wo_item_id)?.wo_id) : null,
       md_fleets: fleetMap.get(jo.fleet_id) || null,
       job_routes: (routesRes.data || []).filter(r => r.job_order_id === jo.id).sort((a, b) => a.sequence - b.sequence),
       tracking_logs: (trackingRes.data || []).filter(t => t.job_order_id === jo.id)
