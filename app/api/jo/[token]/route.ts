@@ -154,6 +154,13 @@ export async function GET(
         .maybeSingle()
       if (tenantData?.name) tenantName = tenantData.name
     }
+    
+    // 6. Ambil Tracking Logs (Timeline Updates)
+    const { data: trackingLogs } = await supabase
+      .from('job_tracking')
+      .select('*')
+      .eq('job_order_id', jobOrder.id)
+      .order('created_at', { ascending: true })
 
     return NextResponse.json({ 
       success: true, 
@@ -164,6 +171,7 @@ export async function GET(
         driver: driverInfo,
         fleet: fleetInfo,
         tenant_name: tenantName,
+        tracking_logs: trackingLogs || [],
         wo_details: {
           wo_number: workOrder?.wo_number || 'N/A',
           execution_date: workOrder?.execution_date || woItem?.item_data?.execution_date || null,
@@ -185,7 +193,7 @@ export async function PATCH(
   try {
     const { token } = await params
     const body = await request.json()
-    const { status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note, route_notes } = body
+    const { action, status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note, route_notes } = body
     const supabase = createAdminClient()
 
     // [AI] Find Job Order securely using our unified look-up helper
@@ -193,15 +201,16 @@ export async function PATCH(
     if (!jo) return NextResponse.json({ error: 'JO not found' }, { status: 404 })
 
     // Handle photo upload via base64
+    let uploadedPublicUrl = pod_photo_url;
     if (pod_photo_base64 && route_id) {
       try {
         const base64Data = pod_photo_base64.split(',')[1]
         const buffer = Buffer.from(base64Data, 'base64')
         const fileExt = pod_photo_name?.split('.').pop() || 'jpg'
-        const fileName = `${jo.id}/${route_id}-${Date.now()}.${fileExt}`
+        const fileName = `${jo.id}/${route_id}-timeline-${Date.now()}.${fileExt}`
         const filePath = `tracking/${fileName}`
 
-        const { error: uploadError, data: uploadData } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('pod_documents')
           .upload(filePath, buffer, {
             contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
@@ -214,29 +223,56 @@ export async function PATCH(
         const { data: { publicUrl } } = supabase.storage
           .from('pod_documents')
           .getPublicUrl(filePath)
-
-        // Update route with photo URL
-        const { error: routeError } = await supabase
-          .from('job_routes')
-          .update({ pod_photo_url: publicUrl })
-          .eq('id', route_id)
-
-        if (routeError) throw routeError
+          
+        uploadedPublicUrl = publicUrl;
 
         // Insert into documents table for audit
         await supabase.from('documents').insert({
           job_order_id: jo.id,
           doc_type: 'MILESTONE_PHOTO',
           file_url: publicUrl,
-          document_name: `Photo for Route segment ${route_id}`,
+          document_name: `Timeline Photo for Route ${route_id}`,
           uploaded_by: (jo as any).driver_id || null
         })
-
-        return NextResponse.json({ success: true, publicUrl })
       } catch (uploadErr: any) {
         console.error('[API] Photo upload failed:', uploadErr)
         return NextResponse.json({ error: 'Gagal upload foto: ' + uploadErr.message }, { status: 500 })
       }
+    }
+    
+    // NEW: Action for live timeline updates per route
+    if (action === 'add_timeline_event') {
+      try {
+        // Find location name for better context
+        const { data: routeInfo } = await supabase.from('job_routes').select('location_name').eq('id', route_id).maybeSingle();
+        const locationName = routeInfo?.location_name || 'Lokasi';
+        
+        await supabase.from('job_tracking').insert({
+          job_order_id: jo.id,
+          job_route_id: route_id, // Requires migration 098
+          status_update: `Laporan di ${locationName}`,
+          latitude: lat,
+          longitude: lng,
+          photo_url: uploadedPublicUrl || null, // Requires migration 098
+          notes: route_notes || 'Mengirim laporan / foto'
+        })
+        return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl })
+      } catch (e: any) {
+        console.error('[API] Timeline tracking log failed:', e)
+        return NextResponse.json({ error: 'Gagal menyimpan laporan: ' + e.message }, { status: 500 })
+      }
+    }
+
+    // LEGACY Photo upload direct handling (returns early)
+    if (pod_photo_base64 && route_id && !action) {
+      // Update route with photo URL (Legacy behavior)
+      const { error: routeError } = await supabase
+        .from('job_routes')
+        .update({ pod_photo_url: uploadedPublicUrl })
+        .eq('id', route_id)
+
+      if (routeError) return NextResponse.json({ error: routeError.message }, { status: 500 })
+      return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl })
     }
 
     // 2. UPDATE RUTE PER STOP

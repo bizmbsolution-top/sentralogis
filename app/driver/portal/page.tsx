@@ -39,7 +39,8 @@ import {
   ClipboardList,
   Expand,
   Image as ImageIcon,
-  Lock
+  Lock,
+  Send
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
@@ -68,6 +69,9 @@ export default function DriverPortal() {
   const [sosDescription, setSosDescription] = useState<string>('');
   const [sosLoading, setSosLoading] = useState(false);
   const [stopNotes, setStopNotes] = useState<{ [key: string]: string }>({});
+  const [timelinePhotos, setTimelinePhotos] = useState<{ [key: string]: File | null }>({});
+  const [timelinePhotoPreviews, setTimelinePhotoPreviews] = useState<{ [key: string]: string | null }>({});
+  const [timelineLoading, setTimelineLoading] = useState<{ [key: string]: boolean }>({});
 
   // Attendance & Fleet selection
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
@@ -503,7 +507,7 @@ export default function DriverPortal() {
     const joIds = data.map(jo => jo.id);
     const fleetIds = data.map(jo => jo.fleet_id).filter(Boolean);
     
-    const [woRes, routesRes, fleetsRes] = await Promise.all([
+    const [woRes, routesRes, fleetsRes, woDataRes, trackingRes] = await Promise.all([
       woItemIds.length > 0
         ? supabase.from('wo_items').select('id, item_code, item_data').in('id', woItemIds)
         : Promise.resolve({ data: [], error: null }),
@@ -512,25 +516,29 @@ export default function DriverPortal() {
         : Promise.resolve({ data: [], error: null }),
       fleetIds.length > 0
         ? supabase.from('md_fleets').select('id, plate_number').in('id', fleetIds)
+        : Promise.resolve({ data: [], error: null }),
+      woIds.length > 0
+        ? supabase.from('work_orders').select('id, wo_number').in('id', woIds)
+        : Promise.resolve({ data: [], error: null }),
+      joIds.length > 0
+        ? supabase.from('job_tracking').select('*').in('job_order_id', joIds).order('created_at', { ascending: true })
         : Promise.resolve({ data: [], error: null })
     ]);
     
     const woMap = new Map((woRes.data || []).map(w => [w.id, w]));
-    const routesMap = new Map();
-    (routesRes.data || []).forEach(r => {
-      if (!routesMap.has(r.job_order_id)) routesMap.set(r.job_order_id, []);
-      routesMap.get(r.job_order_id).push(r);
-    });
+    const woDetailsMap = new Map((woDataRes.data || []).map(w => [w.id, w]));
     const fleetMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
     
     const dataWithJoins = data.map(jo => ({
       ...jo,
       wo_items: woMap.get(jo.wo_item_id) || null,
-      job_routes: routesMap.get(jo.id) || [],
-      md_fleets: fleetMap.get(jo.fleet_id) || null
+      work_order: woDetailsMap.get(jo.wo_id) || null,
+      md_fleets: fleetMap.get(jo.fleet_id) || null,
+      job_routes: (routesRes.data || []).filter(r => r.job_order_id === jo.id).sort((a, b) => a.sequence - b.sequence),
+      tracking_logs: (trackingRes.data || []).filter(t => t.job_order_id === jo.id)
     }));
     
-          const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
+    const completedStatuses = ['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'AWAITING_AUDIT', 'READY_FOR_BILLING', 'VERIFIED'];
     const activeJobs = dataWithJoins.filter(jo => {
       const s = (jo.status || '').toUpperCase();
       return !completedStatuses.includes(s);
@@ -543,6 +551,10 @@ export default function DriverPortal() {
     if (job && job.fleet_id) {
       const { data: fleet } = await supabase.from('md_fleets').select('id, plate_number').eq('id', job.fleet_id).single();
       if (fleet) job.md_fleets = fleet;
+    }
+    if (job) {
+      const { data: tracking } = await supabase.from('job_tracking').select('*').eq('job_order_id', job.id).order('created_at', { ascending: true });
+      job.tracking_logs = tracking || [];
     }
     return job;
   };
@@ -821,12 +833,10 @@ export default function DriverPortal() {
           console.warn('Geolocation failed', e);
       }
 
-      const notes = stopNotes[routeId] || '';
-
       const response = await fetch(`/api/jo/${selectedJob.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ route_id: routeId, route_status: routeStatus, lat, lng, route_notes: notes })
+        body: JSON.stringify({ route_id: routeId, route_status: routeStatus, lat, lng })
       });
 
       if (!response.ok) {
@@ -955,6 +965,109 @@ export default function DriverPortal() {
       toast.error('Gagal memicu SOS: ' + err.message);
     } finally {
       setSosLoading(false);
+    }
+  };
+
+  // COMPRESS IMAGE HELPER
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); // 70% quality JPEG
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // SEND TIMELINE EVENT
+  const sendTimelineEvent = async (routeId: string) => {
+    const notes = stopNotes[routeId] || '';
+    const photo = timelinePhotos[routeId];
+    
+    if (!notes && !photo) {
+      alert('Silakan isi catatan atau pilih foto terlebih dahulu.');
+      return;
+    }
+
+    setTimelineLoading({...timelineLoading, [routeId]: true});
+    try {
+      let lat = 0, lng = 0;
+      try {
+          const position: GeolocationPosition = await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
+          });
+          lat = position.coords.latitude;
+          lng = position.coords.longitude;
+      } catch (e) {
+          console.warn('Geolocation failed', e);
+      }
+
+      let base64Photo = null;
+      let photoName = null;
+      
+      if (photo) {
+        base64Photo = await compressImage(photo);
+        photoName = photo.name;
+      }
+
+      const response = await fetch(`/api/jo/${selectedJob.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'add_timeline_event',
+          route_id: routeId, 
+          lat, lng, 
+          route_notes: notes,
+          pod_photo_base64: base64Photo,
+          pod_photo_name: photoName
+        })
+      });
+
+      if (!response.ok) {
+        const d = await response.json();
+        throw new Error(d.error || 'Gagal mengirim laporan');
+      }
+
+      // Clear inputs
+      setStopNotes({...stopNotes, [routeId]: ''});
+      setTimelinePhotos({...timelinePhotos, [routeId]: null});
+      setTimelinePhotoPreviews({...timelinePhotoPreviews, [routeId]: null});
+      toast.success('Laporan berhasil dikirim');
+      
+      // Refresh job data to fetch the new tracking logs
+      await reloadJobWithFleet(selectedJob.id);
+    } catch (err: any) {
+      console.error('Timeline Event Error:', err);
+      toast.error(err.message);
+    } finally {
+      setTimelineLoading({...timelineLoading, [routeId]: false});
     }
   };
 
@@ -2362,20 +2475,99 @@ export default function DriverPortal() {
                       </div>
                     )}
 
+                    {/* TIMELINE / LIVE UPDATES CHAT BOX */}
+                    <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800/50">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Activity size={14} className="text-blue-500" />
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live Updates / Timeline</h4>
+                      </div>
+                      
+                      {/* List of historical logs for this stop */}
+                      <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        {(selectedJob.tracking_logs || [])
+                          .filter((log: any) => log.job_route_id === stop.id || log.notes?.includes(stop.id))
+                          .map((log: any, idx: number) => (
+                            <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-100 dark:border-slate-800/60 flex flex-col gap-2 relative">
+                              <div className="absolute top-3 right-3 text-[9px] font-bold text-slate-400">
+                                {new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 pr-10 leading-relaxed">
+                                {log.notes?.replace(`[ROUTE:${stop.id}] `, '').replace(`Route ID: ${stop.id} | Catatan: `, '').replace(`Route ID: ${stop.id} (Photo Attached) | Catatan: `, '') || 'Pembaruan Status'}
+                              </p>
+                              {log.photo_url && (
+                                <div className="w-20 h-20 rounded-lg overflow-hidden border border-slate-200 cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedPhotoPreview(log.photo_url); }}>
+                                  <img src={log.photo_url} alt="Update" className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        
+                        {(selectedJob.tracking_logs || []).filter((log: any) => log.job_route_id === stop.id || log.notes?.includes(stop.id)).length === 0 && (
+                          <div className="text-center py-4 text-[10px] font-medium text-slate-400 italic bg-slate-50/50 dark:bg-slate-900/20 rounded-xl">
+                            Belum ada laporan untuk lokasi ini.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Timeline Input Area */}
+                      {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
+                        <div className="flex flex-col gap-2 p-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20 transition-all">
+                          {timelinePhotoPreviews[stop.id] && (
+                            <div className="p-2 relative w-fit">
+                              <img src={timelinePhotoPreviews[stop.id]!} alt="Preview" className="h-16 rounded-lg object-cover border border-slate-200" />
+                              <button 
+                                onClick={() => {
+                                  setTimelinePhotos({...timelinePhotos, [stop.id]: null});
+                                  setTimelinePhotoPreviews({...timelinePhotoPreviews, [stop.id]: null});
+                                }}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 shadow-md hover:scale-110 transition-transform"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 px-1">
+                            <label className="p-2.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl cursor-pointer transition-colors">
+                              <Camera size={18} />
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                capture="environment" 
+                                className="hidden" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setTimelinePhotos({...timelinePhotos, [stop.id]: file});
+                                    setTimelinePhotoPreviews({...timelinePhotoPreviews, [stop.id]: URL.createObjectURL(file)});
+                                  }
+                                }}
+                              />
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ketik laporan / kendala antrian..."
+                              value={stopNotes[stop.id] || ''}
+                              onChange={(e) => setStopNotes({...stopNotes, [stop.id]: e.target.value})}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') sendTimelineEvent(stop.id);
+                              }}
+                              className="flex-1 bg-transparent text-xs font-semibold py-3 px-1 outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400/60"
+                            />
+                            <button
+                              onClick={() => sendTimelineEvent(stop.id)}
+                              disabled={timelineLoading[stop.id]}
+                              className="p-2.5 mr-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-md transition-all active:scale-95"
+                            >
+                              {timelineLoading[stop.id] ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Stop Completion Contextual Buttons */}
                     {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
                       <div className="mt-5">
-                            {/* Notes Input */}
-                            <div className="mb-4">
-                              <input
-                                type="text"
-                                placeholder="Ket: antri macet, lokasi tutup..."
-                                value={stopNotes[stop.id] || ''}
-                                onChange={(e) => setStopNotes({...stopNotes, [stop.id]: e.target.value})}
-                                className="w-full border rounded-xl py-3 px-4 text-xs font-semibold outline-none bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-800 dark:text-white"
-                              />
-                            </div>
-                            
                             {stop.status === 'pending' && (
                           (() => {
                             const firstUncompleted = selectedJobRoutes.find((r: any) => r.status !== 'completed');
