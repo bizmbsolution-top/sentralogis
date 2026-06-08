@@ -22,7 +22,9 @@ export default function PublicTrackingPage({ params }: { params: Promise<{ token
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/jo/${token}`);
+        const response = await fetch(`/api/jo/${token}?t=${Date.now()}`, {
+          cache: 'no-store'
+        });
         const result = await response.json();
 
         if (!response.ok) {

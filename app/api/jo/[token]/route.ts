@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createJournalEntry } from '@/lib/finance/journaling'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // [AI] Safe utility to find Job Order by any of the token columns or ID
 // Bypasses PostgREST type casting issues with mixed UUID and string columns
 async function findJobOrder(supabase: any, token: string) {
