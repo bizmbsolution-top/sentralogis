@@ -153,6 +153,35 @@ export default function MissionTimeline({
                         </a>
                       </div>
                     )}
+
+                    {/* Timeline Updates for this stop */}
+                    {tracking && tracking.filter((t: any) => t.job_route_id === route.id || t.notes?.includes(route.id)).length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {tracking
+                          .filter((t: any) => t.job_route_id === route.id || t.notes?.includes(route.id))
+                          .map((t: any, i: number) => {
+                            const cleanNotes = t.notes?.replace(/\[ROUTE:[0-9a-fA-F-]{36}\] /g, '').replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim();
+                            return (
+                              <div key={t.id || i} className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 flex items-start gap-2">
+                                <div className="text-[10px] text-slate-400 shrink-0 font-medium pt-0.5">{formatTime(t.created_at)}</div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-semibold text-slate-700">{cleanNotes || t.status_update}</p>
+                                  {t.photo_url && (
+                                    <a href={t.photo_url} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
+                                      <img 
+                                        src={t.photo_url} 
+                                        alt="Update Photo" 
+                                        className="w-16 h-16 object-cover rounded-md border border-slate-200 shadow-sm hover:scale-105 transition-transform"
+                                      />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        }
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -161,36 +190,25 @@ export default function MissionTimeline({
         })}
       </div>
 
-      {/* RAW GPS Tracking Logs */}
-      {tracking && tracking.length > 0 && (
+      {/* Unassigned RAW GPS Tracking Logs */}
+      {tracking && tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:')).length > 0 && (
         <div className="mt-6 pt-4 border-t border-slate-200">
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
-             <MapPin size={12} /> Intelligency Tracking Logs
+             <MapPin size={12} /> Live Updates
           </h4>
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {tracking.map((t: any, i: number) => (
+            {tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:')).map((t: any, i: number) => (
                <div key={t.id || i} className="text-[10px] flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                   <div className="w-10 text-slate-400 shrink-0 font-medium pt-0.5">{formatTime(t.created_at)}</div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-700 uppercase tracking-wide">{t.status_update}</p>
-                    {t.notes && t.notes.replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim() && (
-                      <p className="text-slate-500 mt-0.5">
-                        {t.notes.replace(/Route ID: [0-9a-fA-F-]{36}( \| Catatan: )?(\(Photo Attached\) )?/g, '').trim()}
-                      </p>
+                    {t.notes && t.notes.trim() && (
+                      <p className="text-slate-500 mt-0.5">{t.notes}</p>
                     )}
                     {t.latitude && t.longitude && (
                         <p className="text-[9px] text-slate-400 mt-1 font-mono">
                           {t.latitude}, {t.longitude}
                         </p>
-                    )}
-                    {t.photo_url && (
-                      <a href={t.photo_url} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                        <img 
-                          src={t.photo_url} 
-                          alt="Timeline update" 
-                          className="w-16 h-16 object-cover rounded border border-slate-200 shadow-sm hover:scale-105 transition-transform"
-                        />
-                      </a>
                     )}
                   </div>
                </div>
