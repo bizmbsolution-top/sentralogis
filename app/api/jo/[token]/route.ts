@@ -185,7 +185,7 @@ export async function PATCH(
   try {
     const { token } = await params
     const body = await request.json()
-    const { status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note } = body
+    const { status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note, route_notes } = body
     const supabase = createAdminClient()
 
     // [AI] Find Job Order securely using our unified look-up helper
@@ -264,6 +264,7 @@ export async function PATCH(
       const routeUpdate: any = {}
       if (route_status) routeUpdate.status = route_status
       if (pod_photo_url) routeUpdate.pod_photo_url = pod_photo_url
+      if (route_notes !== undefined) routeUpdate.notes = route_notes
       
       if (lat && lng) {
         routeUpdate.latitude = lat
@@ -344,7 +345,7 @@ export async function PATCH(
           status_update: granularStatus,
           latitude: lat,
           longitude: lng,
-          notes: `Route ID: ${route_id}${pod_photo_url ? ' (Photo Attached)' : ''}`
+          notes: `Route ID: ${route_id}${pod_photo_url ? ' (Photo Attached)' : ''}${route_notes ? ' | Catatan: ' + route_notes : ''}`
         })
       } catch (e) {
         console.warn('[API] Tracking log failed:', e)

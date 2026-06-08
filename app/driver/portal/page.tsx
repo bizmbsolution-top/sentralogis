@@ -64,9 +64,10 @@ export default function DriverPortal() {
 
   // SOS States
   const [isSOSModalOpen, setIsSOSModalOpen] = useState(false);
-  const [sosCategory, setSosCategory] = useState<'Kecelakaan' | 'Sakit' | 'Mogok' | ''>('');
-  const [sosDescription, setSosDescription] = useState('');
+  const [sosCategory, setSosCategory] = useState<string>('');
+  const [sosDescription, setSosDescription] = useState<string>('');
   const [sosLoading, setSosLoading] = useState(false);
+  const [stopNotes, setStopNotes] = useState<{ [key: string]: string }>({});
 
   // Attendance & Fleet selection
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
@@ -820,10 +821,12 @@ export default function DriverPortal() {
           console.warn('Geolocation failed', e);
       }
 
+      const notes = stopNotes[routeId] || '';
+
       const response = await fetch(`/api/jo/${selectedJob.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ route_id: routeId, route_status: routeStatus, lat, lng })
+        body: JSON.stringify({ route_id: routeId, route_status: routeStatus, lat, lng, route_notes: notes })
       });
 
       if (!response.ok) {
@@ -1106,11 +1109,6 @@ export default function DriverPortal() {
     }
   };
 
-  // Helper to resolve Single Dynamic Button Verb and Color
-  // [AI] Unified Indonesian verbs for ease of use by gaptek drivers
-  // [AI] Master button config — sync status constants with actual API output values
-  // API writes: ORDER DITERIMA | DALAM PERJALANAN | PEKERJAAN SELESAI
-  // Portal sends: DITERIMA | START JOURNEY | PEKERJAAN SELESAI
   const getJobActionButtonConfig = (status: string) => {
     const s = (status || '').toUpperCase().trim();
     if (['ASSIGNED', 'PENDING', 'NEED_ASSIGNMENT', 'ACTIVE', 'HANDOVER_PENDING'].includes(s)) {
@@ -1160,9 +1158,7 @@ export default function DriverPortal() {
         <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 text-white'} flex flex-col items-center justify-center p-6 font-sans relative transition-colors duration-300`}>
           <Toaster position="top-center" />
           
-          {/* Download PWA App / Toggle Theme Row on Auth Page */}
           <div className="absolute top-6 right-6 flex items-center gap-3">
-            {/* [AI] PWA Install button is always visible so gaptek drivers can click and learn how to install */}
             <button 
               type="button"
               onClick={handleInstallPWA} 
@@ -1247,7 +1243,6 @@ export default function DriverPortal() {
           </div>
         </div>
 
-        {/* [AI] Render the unified installation guide modal here so it works on the login screen */}
         {showIOSInstallGuide && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/60 backdrop-blur-sm">
             <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border transition-colors duration-300 ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white text-slate-800 border-slate-100'}`}>
@@ -1261,7 +1256,6 @@ export default function DriverPortal() {
                 </button>
               </div>
 
-              {/* [AI] Premium Automatic Install Banner if browser prompt event is ready */}
               {deferredPrompt && (
                 <div className={`mb-6 p-5 rounded-2xl text-center border transition-all ${
                   isDark ? 'bg-slate-950/60 border-slate-800 text-slate-200 shadow-inner' : 'bg-amber-50/50 border-amber-200/50 text-slate-700'
@@ -1278,7 +1272,6 @@ export default function DriverPortal() {
                 </div>
               )}
 
-              {/* Visual Tabs for OS selection */}
               <div className="flex border-b border-slate-200/50 dark:border-slate-800/80 mb-5 gap-2">
                 <button
                   type="button"
@@ -2291,6 +2284,11 @@ export default function DriverPortal() {
                           </div>
                           <h3 className="font-bold text-slate-800 text-base mt-1 uppercase tracking-tight leading-none truncate">{stop.location_name}</h3>
                           <p className="text-[11px] font-medium text-slate-400 leading-relaxed mt-1 break-words">{stop.address}</p>
+                          {stop.notes && (
+                            <p className="text-[11px] font-semibold text-slate-500 italic mt-1 bg-yellow-50 p-1.5 rounded border border-yellow-100 dark:bg-yellow-900/20 dark:border-yellow-900/50 dark:text-yellow-200">
+                              "{stop.notes}"
+                            </p>
+                          )}
                         </div>
                       </div>
                       
@@ -2367,7 +2365,18 @@ export default function DriverPortal() {
                     {/* Stop Completion Contextual Buttons */}
                     {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
                       <div className="mt-5">
-                        {stop.status === 'pending' && (
+                            {/* Notes Input */}
+                            <div className="mb-4">
+                              <input
+                                type="text"
+                                placeholder="Ket: antri macet, lokasi tutup..."
+                                value={stopNotes[stop.id] || ''}
+                                onChange={(e) => setStopNotes({...stopNotes, [stop.id]: e.target.value})}
+                                className="w-full border rounded-xl py-3 px-4 text-xs font-semibold outline-none bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-800 dark:text-white"
+                              />
+                            </div>
+                            
+                            {stop.status === 'pending' && (
                           (() => {
                             const firstUncompleted = selectedJobRoutes.find((r: any) => r.status !== 'completed');
                             const isNext = firstUncompleted?.id === stop.id;
