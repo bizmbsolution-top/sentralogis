@@ -346,18 +346,4 @@ async function uploadPhotoToCloud(file: File, filename: string): Promise<string 
     return null;
   }
 }
-    
-    // Track sent bytes (file size)
-    const sentBytes = file.size;
-    await incrementDataSent(sentBytes);
-
-    const { data: publicUrlData } = supabase.storage
-      .from('inbound-docs')
-      .getPublicUrl(`photos/${filename}`);
-
-    return publicUrlData.publicUrl;
-  } catch (err) {
-    return null;
-  }
-}
 
