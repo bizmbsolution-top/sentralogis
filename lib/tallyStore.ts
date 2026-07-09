@@ -1,5 +1,26 @@
 import { set, get, update, del, entries } from 'idb-keyval';
 import { supabase } from './supabaseClient';
+import { compressImage } from './compression';
+
+// Data usage tracking keys
+const DATA_SENT_KEY = 'data_usage_sent';
+const DATA_RECEIVED_KEY = 'data_usage_received';
+
+export async function incrementDataSent(bytes: number) {
+  await update(DATA_SENT_KEY, (val: number | undefined) => (val || 0) + bytes);
+}
+
+export async function incrementDataReceived(bytes: number) {
+  await update(DATA_RECEIVED_KEY, (val: number | undefined) => (val || 0) + bytes);
+}
+
+export async function getDataUsage(): Promise<{ sent: number; received: number }> {
+  const [sent, received] = await Promise.all([
+    get(DATA_SENT_KEY),
+    get(DATA_RECEIVED_KEY)
+  ]);
+  return { sent: sent || 0, received: received || 0 };
+}
 
 export interface OfflineReceipt {
   id: string;
@@ -44,92 +65,95 @@ export interface OfflinePutawayRecord {
 }
 
 // ----------------------------------------------------
-// 1. Download & Save To Local Device
-// ----------------------------------------------------
+  // 1. Download & Save To Local Device
+  // ----------------------------------------------------
 export async function downloadReceiptsToDevice(tenantId: string, warehouseId: string): Promise<OfflineReceipt[]> {
-  // Fetch active receipts
-  const { data: receiptsData, error: recError } = await supabase
-    .from('wh_inbound_receipts')
-    .select(`
-      id, receipt_number, status, expected_arrival,
-      transporter:transporter_id(name),
-      fleet:fleet_id(plate_number),
-      transporter_name_manual, driver_name_manual, driver_phone,
-      vehicle_photo_url, pod_document_url, unloading_start_time, unloading_end_time
-    `)
-    .eq('tenant_id', tenantId)
-    .eq('warehouse_id', warehouseId)
-    .in('status', ['EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'PUTAWAY_IN_PROGRESS']) 
-    .order('created_at', { ascending: false });
-
-  if (recError) throw recError;
-
-  const offlineList: OfflineReceipt[] = [];
-
-  for (const rec of receiptsData || []) {
-    // Fetch items for each receipt
-    const { data: itemsData, error: itemsError } = await supabase
-      .from('wh_inbound_receipt_items')
+    // Fetch active receipts
+    const { data: receiptsData, error: recError } = await supabase
+      .from('wh_inbound_receipts')
       .select(`
-        id, expected_qty, actual_good_qty, quarantine_qty, rejected_qty,
-        damage_source, damage_condition, damage_notes, damage_photo_url,
-        product:product_sku_id(name, sku_code, unit)
+        id, receipt_number, status, expected_arrival,
+        transporter:transporter_id(name),
+        fleet:fleet_id(plate_number),
+        transporter_name_manual, driver_name_manual, driver_phone,
+        vehicle_photo_url, pod_document_url, unloading_start_time, unloading_end_time
       `)
-      .eq('receipt_id', rec.id);
+      .eq('tenant_id', tenantId)
+      .eq('warehouse_id', warehouseId)
+      .in('status', ['EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'PUTAWAY_IN_PROGRESS']) 
+      .order('created_at', { ascending: false });
 
-    if (itemsError) throw itemsError;
+    if (recError) throw recError;
 
-    const offlineRec: OfflineReceipt = {
-      id: rec.id,
-      receipt_number: rec.receipt_number,
-      status: rec.status,
-      expected_arrival: rec.expected_arrival,
-      transporter: (rec.transporter as any)?.name || null,
-      fleet: (rec.fleet as any)?.plate_number || null,
-      transporter_name_manual: rec.transporter_name_manual,
-      driver_name_manual: rec.driver_name_manual,
-      driver_phone: rec.driver_phone,
-      vehicle_photo_url: rec.vehicle_photo_url,
-      pod_document_url: rec.pod_document_url,
-      unloading_start_time: rec.unloading_start_time,
-      unloading_end_time: rec.unloading_end_time,
-      _synced: true,
-      items: itemsData.map((item: any) => ({
-        id: item.id,
-        expected_qty: Number(item.expected_qty) || 0,
-        actual_good_qty: Number(item.actual_good_qty) || 0,
-        quarantine_qty: Number(item.quarantine_qty) || 0,
-        rejected_qty: Number(item.rejected_qty) || 0,
-        damage_source: item.damage_source,
-        damage_condition: item.damage_condition,
-        damage_notes: item.damage_notes,
-        damage_photo_url: item.damage_photo_url,
-        putaway_records: [],
-        product_name: item.product?.name || 'Unknown',
-        sku_code: item.product?.sku_code || '-',
-        unit: item.product?.unit || 'pcs'
-      }))
-    };
+    const offlineList: OfflineReceipt[] = [];
+    let receivedBytes = 0;
 
-    offlineList.push(offlineRec);
-    
-    // Save to IDB using prefix 'receipt_'
-    await set(`receipt_${rec.id}`, offlineRec);
+    for (const rec of receiptsData || []) {
+      // Fetch items for each receipt
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('wh_inbound_receipt_items')
+        .select(`
+          id, expected_qty, actual_good_qty, quarantine_qty, rejected_qty,
+          damage_source, damage_condition, damage_notes, damage_photo_url,
+          product:product_sku_id(name, sku_code, unit)
+        `)
+        .eq('receipt_id', rec.id);
+
+      if (itemsError) throw itemsError;
+
+      // Track received data (rough estimate of JSON payload)
+      receivedBytes += JSON.stringify(rec).length + JSON.stringify(itemsData || []).length;
+
+      const offlineRec: OfflineReceipt = {
+        id: rec.id,
+        receipt_number: rec.receipt_number,
+        status: rec.status,
+        expected_arrival: rec.expected_arrival,
+        transporter: (rec.transporter as any)?.name || null,
+        fleet: (rec.fleet as any)?.plate_number || null,
+        transporter_name_manual: rec.transporter_name_manual,
+        driver_name_manual: rec.driver_name_manual,
+        driver_phone: rec.driver_phone,
+        vehicle_photo_url: rec.vehicle_photo_url,
+        pod_document_url: rec.pod_document_url,
+        unloading_start_time: rec.unloading_start_time,
+        unloading_end_time: rec.unloading_end_time,
+        _synced: true,
+        items: itemsData.map((item: any) => ({
+          id: item.id,
+          expected_qty: Number(item.expected_qty) || 0,
+          actual_good_qty: Number(item.actual_good_qty) || 0,
+          quarantine_qty: Number(item.quarantine_qty) || 0,
+          rejected_qty: Number(item.rejected_qty) || 0,
+          damage_source: item.damage_source,
+          damage_condition: item.damage_condition,
+          damage_notes: item.damage_notes,
+          damage_photo_url: item.damage_photo_url,
+          putaway_records: [],
+          product_name: item.product?.name || 'Unknown',
+          sku_code: item.product?.sku_code || '-',
+          unit: item.product?.unit || 'pcs'
+        }))
+      };
+
+      // Jangan timpa data lokal yang belum tersinkron (offline edits)
+      const existing = await get(`receipt_${rec.id}`);
+      if (existing && !(existing as OfflineReceipt)._synced) {
+        // Keep local dirty version; skip overwrite
+        offlineList.push(existing as OfflineReceipt);
+        continue;
+      }
+
+      offlineList.push(offlineRec);
+      
+      // Save to IDB using prefix 'receipt_'
+      await set(`receipt_${rec.id}`, offlineRec);
+    }
+
+    // Track data usage at end of download
+    await incrementDataReceived(receivedBytes);
+    return offlineList;
   }
-
-  return offlineList;
-}
-
-// ----------------------------------------------------
-// 2. Get All Local Receipts
-// ----------------------------------------------------
-export async function getLocalReceipts(): Promise<OfflineReceipt[]> {
-  const allEntries = await entries();
-  return allEntries
-    .filter(([key]) => (key as string).startsWith('receipt_'))
-    .map(([, val]) => val as OfflineReceipt)
-    .sort((a, b) => b.receipt_number.localeCompare(a.receipt_number)); // rough sort
-}
 
 // ----------------------------------------------------
 // 3. Save Tally Work (Offline)
@@ -174,11 +198,23 @@ export async function syncTalliesToCloud(): Promise<number> {
       }
 
       // 1. Update items
+      let sentBytes = 0;
       for (const item of rec.items) {
         if (item._localPhotoFile) {
           const url = await uploadPhotoToCloud(item._localPhotoFile, `damage_${item.id}_${Date.now()}.jpg`);
           if (url) item.damage_photo_url = url;
         }
+
+        const payload = JSON.stringify({
+          actual_good_qty: item.actual_good_qty,
+          quarantine_qty: item.quarantine_qty,
+          rejected_qty: item.rejected_qty,
+          damage_source: item.damage_source,
+          damage_condition: item.damage_condition,
+          damage_notes: item.damage_notes,
+          damage_photo_url: item.damage_photo_url,
+        });
+        sentBytes += payload.length;
 
         const { error: itemErr } = await supabase
           .from('wh_inbound_receipt_items')
@@ -200,6 +236,20 @@ export async function syncTalliesToCloud(): Promise<number> {
       }
 
       // 2. Update receipt status & metadata
+      const recPayload = JSON.stringify({
+        status: rec.status,
+        updated_at: new Date().toISOString(),
+        transporter_name_manual: rec.transporter_name_manual,
+        driver_name_manual: rec.driver_name_manual,
+        driver_phone: rec.driver_phone,
+        vehicle_photo_url: rec.vehicle_photo_url,
+        pod_document_url: rec.pod_document_url,
+        unloading_start_time: rec.unloading_start_time,
+        unloading_end_time: rec.unloading_end_time
+      });
+      sentBytes += recPayload.length;
+      await incrementDataSent(sentBytes);
+
       const { error: recErr } = await supabase
         .from('wh_inbound_receipts')
         .update({ 
@@ -246,23 +296,65 @@ export async function clearLocalTallies() {
 }
 
 // ----------------------------------------------------
-// Helper: Upload photo to Supabase Storage
+// Helper: Upload photo to Supabase Storage with compression
 // ----------------------------------------------------
 async function uploadPhotoToCloud(file: File, filename: string): Promise<string | null> {
   try {
+    // Determine compression settings based on network
+    const conn = (navigator as any).connection;
+    let quality = 0.8;
+    let maxWidth = 1200;
+    let maxHeight = 1200;
+    if (conn) {
+      const saveData = !!conn.saveData;
+      const effectiveType = (conn.effectiveType || '').toLowerCase();
+      if (saveData || effectiveType.includes('2g')) {
+        quality = 0.3;
+        maxWidth = 800;
+        maxHeight = 800;
+      } else if (effectiveType.includes('3g')) {
+        quality = 0.5;
+        maxWidth = 1000;
+        maxHeight = 1000;
+      }
+      // else keep defaults for 4g+
+    }
+
+    // Compress image
+    const compressedFile = await compressImage(file, maxWidth, maxHeight, quality);
+    const sentBytes = compressedFile.size; // track after compression
+
     const { data, error } = await supabase.storage
       .from('inbound-docs')
-      .upload(`photos/${filename}`, file, { upsert: true });
+      .upload(`photos/${filename}`, compressedFile, { upsert: true });
 
     if (error) {
       console.error("Upload error", error);
       return null;
     }
-    
+
+    // Track sent bytes (compressed size)
+    await incrementDataSent(sentBytes);
+
     const { data: publicUrlData } = supabase.storage
       .from('inbound-docs')
       .getPublicUrl(`photos/${filename}`);
-      
+
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.error("Upload failed:", err);
+    return null;
+  }
+}
+    
+    // Track sent bytes (file size)
+    const sentBytes = file.size;
+    await incrementDataSent(sentBytes);
+
+    const { data: publicUrlData } = supabase.storage
+      .from('inbound-docs')
+      .getPublicUrl(`photos/${filename}`);
+
     return publicUrlData.publicUrl;
   } catch (err) {
     return null;
