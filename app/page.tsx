@@ -30,12 +30,16 @@ import {
   Bell,
   BarChart3,
   Truck,
-  Package
+  Package,
+  Warehouse
 } from 'lucide-react';
 import toast, { Toaster } from "react-hot-toast";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+import type { Locale } from "@/lib/i18n/translations";
 
 export default function SentralogisCosmicLanding() {
   const [copied, setCopied] = useState(false);
+  const { locale, setLocale, t } = useLanguage();
 
   const copyEmail = () => {
     navigator.clipboard.writeText("info@sentralogis.com");
@@ -71,8 +75,11 @@ export default function SentralogisCosmicLanding() {
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // Spawn many stars for a rich galaxy feel (hilir mudik)
-    const particleCount = Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
+    // Spawn stars - reduced count on mobile for performance
+    const isMobile = canvas.width < 768;
+    const particleCount = isMobile
+      ? Math.min(80, Math.floor((canvas.width * canvas.height) / 8000))
+      : Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
     const colors = ["#00E5FF", "#FF7043", "#00E676", "#818CF8", "#F8FAFC", "#E879F9", "#FBBF24", "#FB7185", "#34D399", "#60A5FA"];
 
     for (let i = 0; i < particleCount; i++) {
@@ -119,22 +126,24 @@ export default function SentralogisCosmicLanding() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Draw connection lines between nearby particles for constellation effect
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 100) {
-            ctx.save();
-            ctx.globalAlpha = (1 - dist / 100) * 0.08;
-            ctx.strokeStyle = "#818CF8";
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
-            ctx.restore();
+      // Draw connection lines between nearby particles (skip on mobile for performance)
+      if (!isMobile) {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) {
+              ctx.save();
+              ctx.globalAlpha = (1 - dist / 100) * 0.08;
+              ctx.strokeStyle = "#818CF8";
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+              ctx.restore();
+            }
           }
         }
       }
@@ -234,42 +243,67 @@ export default function SentralogisCosmicLanding() {
       {/* Interactive star canvas on top of galaxy */}
       <canvas id="cosmic-canvas" className="fixed inset-0 pointer-events-none z-[1]" />
 
-      {/* 2. WORLD-CLASS GLASSMORPHIC NAVIGATION BAR */}
-      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/30 border-b border-white/[0.06] px-6 py-4 flex justify-between items-center shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
-        <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center">
-            <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/30 via-purple-500/20 to-pink-500/30 blur-lg rounded-full animate-pulse" />
-            <img src="/sentralogis_logo.png" alt="Sentralogis" className="h-9 w-auto relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
-          </div>
-          <span className="text-xl font-black tracking-wider uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 drop-shadow-[0_0_20px_rgba(139,92,246,0.4)]" style={{ textShadow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(139,92,246,0.15)' }}>
-            Sentralogis
-          </span>
-          <span className="text-[9px] font-black tracking-widest bg-purple-950/50 text-purple-300 px-2 py-0.5 border border-purple-500/30 rounded-full hidden sm:inline-block shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-            GALAXY ORBIT
-          </span>
-        </div>
-
-        <nav className="hidden md:flex items-center gap-8 text-xs font-bold tracking-widest uppercase text-slate-400">
-          <a href="#" className="hover:text-slate-100 transition-colors">BERANDA</a>
-          <a href="#features" className="hover:text-slate-100 transition-colors">FITUR & EKOSISTEM</a>
-          <a href="#contact" className="hover:text-slate-100 transition-colors">KONTAK</a>
-        </nav>
-
-        <div className="flex items-center gap-4">
-          <a 
-            href="/login"
-            className="relative group overflow-hidden border border-cyan-500/30 bg-cyan-950/20 text-[#00E5FF] hover:text-white px-5 py-2.5 text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_-3px_rgba(6,182,212,0.3)] transition-all hover:shadow-[0_0_20px_1px_rgba(6,182,212,0.5)] active:scale-95"
-          >
-            <span className="relative z-10 flex items-center gap-2">
-              PORTAL LOGIN <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+      {/* 2. WORLD-CLASS GLASSMORPHIC NAVIGATION BAR (MOBILE-FIRST REDESIGN) */}
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/40 border-b border-white/[0.08] px-4 sm:px-6 pt-safe-area-top shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+        <div className="flex justify-between items-center py-3 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/30 via-purple-500/20 to-pink-500/30 blur-lg rounded-full animate-pulse" />
+              <img src="/sentralogis_logo.png" alt="Sentralogis" className="h-7 sm:h-9 w-auto relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+            </div>
+            <span className="text-base sm:text-xl font-black tracking-wider uppercase text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+              Sentralogis
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-indigo-600 translate-y-[100%] group-hover:translate-y-0 transition-transform duration-300 -z-0" />
-          </a>
+            <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-purple-950/50 text-purple-300 px-2 py-0.5 border border-purple-500/30 rounded-full hidden md:inline-block shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+              GALAXY ORBIT
+            </span>
+          </div>
+
+          <nav className="hidden lg:flex items-center gap-8 text-xs font-bold tracking-widest uppercase text-slate-400">
+            <a href="#" className="hover:text-slate-100 transition-colors">{t.nav.beranda}</a>
+            <a href="#features" className="hover:text-slate-100 transition-colors">{t.nav.fitur}</a>
+            <a href="#contact" className="hover:text-slate-100 transition-colors">{t.nav.kontak}</a>
+          </nav>
+
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            {/* Language Switcher — Flag Emoji */}
+            <div className="flex items-center gap-0.5 border border-white/10 rounded-full px-1 py-0.5 bg-slate-900/60">
+              {([
+                { code: 'id' as Locale, flag: '🇮🇩', label: 'Indonesia' },
+                { code: 'en' as Locale, flag: '🇬🇧', label: 'English' },
+                { code: 'zh' as Locale, flag: '🇨🇳', label: '中文' },
+              ]).map(l => (
+                <button key={l.code} onClick={() => setLocale(l.code)} title={l.label}
+                  className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-sm sm:text-base rounded-full transition-all ${locale === l.code ? 'bg-cyan-500/20 ring-1 ring-cyan-400/40 shadow-[0_0_8px_rgba(6,182,212,0.3)]' : 'hover:bg-white/10'}`}>
+                  {l.flag}
+                </button>
+              ))}
+            </div>
+
+            {/* 1. PORTAL GUDANG — Icon only on mobile, full text on desktop */}
+            <a 
+              href="/warehouse/portal/login"
+              title="Portal Gudang (PIN)"
+              className="relative group overflow-hidden border border-emerald-400/60 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.8)] transition-all active:scale-95 flex items-center justify-center sm:gap-2 shrink-0"
+            >
+              <Warehouse className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden sm:inline font-black text-xs tracking-wider uppercase">⚡ Portal Gudang (PIN)</span>
+            </a>
+
+            {/* 2. BACKOFFICE ADMIN LOGIN */}
+            <a 
+              href="/login"
+              className="relative group overflow-hidden border border-slate-700/60 bg-slate-900/80 hover:border-cyan-500/40 text-slate-200 hover:text-white px-3 sm:px-4 py-2.5 sm:py-2 text-xs sm:text-xs font-bold tracking-wider uppercase rounded-full transition-all active:scale-95 flex items-center gap-2 shrink-0"
+            >
+              <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="font-bold">Login</span>
+            </a>
+          </div>
         </div>
       </header>
 
       {/* 3. HERO & TELEMETRY SECTION */}
-      <section className="relative z-10 pt-40 pb-20 px-6 max-w-5xl mx-auto flex flex-col items-center justify-center text-center min-h-[90vh]">
+      <section className="relative z-10 pt-28 sm:pt-40 pb-16 sm:pb-20 px-5 sm:px-6 max-w-5xl mx-auto flex flex-col items-center justify-center text-center min-h-[85vh] sm:min-h-[90vh]">
         
         <div className="space-y-10 w-full flex flex-col items-center">
           <motion.div 
@@ -278,20 +312,20 @@ export default function SentralogisCosmicLanding() {
             className="inline-flex items-center gap-2 bg-[#FF7043]/10 text-[#FF7043] text-xs sm:text-sm font-black tracking-widest uppercase px-5 py-2.5 border border-[#FF7043]/20 rounded-full shadow-[0_0_15px_rgba(255,112,67,0.1)]"
           >
             <Sparkles className="w-4 h-4 animate-spin duration-3000" />
-            // PLATFORM RANTAI PASOK KELAS ELITE
+            // {t.hero.badge}
           </motion.div>
           
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight leading-[1.05] uppercase w-full"
+            className="text-4xl sm:text-7xl md:text-8xl font-black tracking-tight leading-[1.05] uppercase w-full"
           >
-            Orkestrasi <br className="hidden sm:block" />
+            {t.hero.title1} <br className="hidden sm:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00E5FF] via-emerald-300 to-[#FF7043] drop-shadow-[0_2px_15px_rgba(6,182,212,0.2)]">
-              Universe Logistik
+              {t.hero.titleHighlight}
             </span> <br className="hidden sm:block" />
-            Perusahaan Anda
+            {t.hero.title2}
           </motion.h1>
 
           <motion.p 
@@ -299,25 +333,24 @@ export default function SentralogisCosmicLanding() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
             className="text-slate-400 text-base sm:text-xl font-medium max-w-3xl mx-auto leading-relaxed"
-          >
-            Hubungkan aset fisik makro, otomasi keuangan instan, dan portofolio kompetensi nyata SDM ke dalam satu sistem kendali terpusat yang glowing, modern, dan tak tertandingi.
-          </motion.p>
+            dangerouslySetInnerHTML={{ __html: t.hero.subtitle }}
+          />
 
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex flex-col sm:flex-row gap-5 justify-center mt-6 w-full max-w-md mx-auto sm:max-w-none"
+            className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center mt-6 w-full max-w-md mx-auto sm:max-w-none"
           >
             <a href="mailto:info@sentralogis.com" className="inline-block w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-[#00E5FF] to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 hover:text-black font-black text-sm uppercase tracking-widest rounded-full shadow-[0_0_30px_-5px_rgba(6,182,212,0.6)] hover:shadow-[0_0_30px_2px_rgba(6,182,212,0.8)] active:scale-95 transition-all">
-                KONSULTASI GRATIS &rarr;
+              <button className="w-full sm:w-auto px-8 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-[#00E5FF] to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 hover:text-black font-black text-sm uppercase tracking-widest rounded-full shadow-[0_0_30px_-5px_rgba(6,182,212,0.6)] hover:shadow-[0_0_30px_2px_rgba(6,182,212,0.8)] active:scale-95 transition-all">
+                {t.hero.cta_consult}
               </button>
             </a>
             
             <a href="#features" className="inline-block w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-10 py-5 bg-slate-900/50 hover:bg-slate-800/80 text-[#00E5FF] hover:text-white font-black text-sm uppercase tracking-widest rounded-full border border-cyan-500/20 shadow-sm active:scale-95 transition-all">
-                PELAJARI FITUR &darr;
+              <button className="w-full sm:w-auto px-8 sm:px-10 py-4 sm:py-5 bg-slate-900/50 hover:bg-slate-800/80 text-[#00E5FF] hover:text-white font-black text-sm uppercase tracking-widest rounded-full border border-cyan-500/20 shadow-sm active:scale-95 transition-all">
+                {t.hero.cta_features}
               </button>
             </a>
           </motion.div>
@@ -326,7 +359,7 @@ export default function SentralogisCosmicLanding() {
       </section>
 
       {/* 4. FITUR UNGGULAN — MODERN BENTO GRID SHOWCASE */}
-      <section id="features" className="py-32 px-6 max-w-7xl mx-auto space-y-20 relative z-10">
+      <section id="features" className="py-20 sm:py-32 px-5 sm:px-6 max-w-7xl mx-auto space-y-16 sm:space-y-20 relative z-10">
         
         {/* Section Header */}
         <div className="text-center space-y-5 max-w-3xl mx-auto">
@@ -335,18 +368,18 @@ export default function SentralogisCosmicLanding() {
             // SENTRALOGIS CAPABILITIES MATRIX
           </div>
           <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tight text-white leading-none">
-            Fitur Unggulan{' '}
+            {t.features.title}{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300">
-              Sentralogis
+              {t.features.titleHighlight}
             </span>
           </h2>
           <p className="text-slate-400 text-sm sm:text-base font-medium leading-relaxed max-w-2xl mx-auto">
-            Ekosistem terintegrasi yang menghubungkan kecerdasan operasional, komunikasi real-time, dan otomasi penuh untuk mengoptimalkan seluruh rantai pasok Anda.
+            {t.features.subtitle}
           </p>
         </div>
 
         {/* BENTO GRID — 6 Feature Modules */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           
           {/* ═══ FEATURE 1: SLA Performance ═══ */}
           <motion.div 
@@ -366,15 +399,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-amber-100 transition-colors">
-                SLA Performance
+                {t.features.sla.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                Tingkatkan kinerja SDM secara terukur melalui <span className="text-amber-400 font-bold">Service Level Agreement</span> yang terotomasi. Setiap aktivitas driver, tally, dan admin tercatat sebagai skor performa yang mendorong kompetisi sehat antar tim lapangan.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.sla.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Skor performa terukur per individu", "Target SLA configurable per operasi", "Reward & recognition sistem otomatis"].map((item, i) => (
+              {t.features.sla.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-950/50 border border-amber-500/25 flex items-center justify-center text-amber-400 text-[10px]">✓</span>
                   {item}
@@ -400,15 +432,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-cyan-100 transition-colors">
-                Chat Panel Internal
+                {t.features.chat.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                Panel komunikasi internal yang <span className="text-cyan-400 font-bold">fokus ke setiap order</span>. Tim operasional, driver, dan warehouse dapat berdiskusi langsung di konteks order tanpa berpindah aplikasi. Setiap percakapan terikat pada nomor order untuk traceability penuh.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.chat.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Thread diskusi per order number", "Lampiran foto & dokumen langsung", "Notifikasi real-time ke semua pihak"].map((item, i) => (
+              {t.features.chat.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-cyan-950/50 border border-cyan-500/25 flex items-center justify-center text-cyan-400 text-[10px]">✓</span>
                   {item}
@@ -434,15 +465,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-emerald-100 transition-colors">
-                WhatsApp untuk Driver
+                {t.features.whatsapp.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                Driver cukup menggunakan <span className="text-emerald-400 font-bold">WhatsApp</span> untuk mengirim POD (Proof of Delivery), foto bukti muat/bongkar, dan update status. Informasi langsung tersinkron ke dashboard dan diteruskan ke pelanggan secara otomatis.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.whatsapp.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Kirim POD via WhatsApp instan", "Auto-sync ke dashboard operasional", "Notifikasi otomatis ke pelanggan"].map((item, i) => (
+              {t.features.whatsapp.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-950/50 border border-emerald-500/25 flex items-center justify-center text-emerald-400 text-[10px]">✓</span>
                   {item}
@@ -468,15 +498,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-violet-100 transition-colors">
-                Realtime Updating
+                {t.features.realtime.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                Semua perubahan status order, posisi armada, dan informasi muatan <span className="text-violet-400 font-bold">ter-update secara real-time</span> tanpa perlu refresh. Pelanggan Anda mendapat visibilitas penuh dari muat hingga bongkar, setiap saat, dari mana saja.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.realtime.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Live tracking posisi armada", "Push notification status berubah", "Customer portal self-service"].map((item, i) => (
+              {t.features.realtime.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-950/50 border border-violet-500/25 flex items-center justify-center text-violet-400 text-[10px]">✓</span>
                   {item}
@@ -502,15 +531,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-rose-100 transition-colors">
-                Otomatis Penugasan
+                {t.features.dispatch.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                Sistem <span className="text-rose-400 font-bold">smart dispatch</span> yang secara otomatis menugaskan order ke driver terbaik berdasarkan lokasi, reputasi, ketersediaan armada, dan kapasitas muatan. Mengurangi waktu idle dan meningkatkan utilisasi fleet secara drastis.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.dispatch.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Auto-match driver & order optimal", "Pertimbangan reputasi & proximity", "Reduce idle time armada drastis"].map((item, i) => (
+              {t.features.dispatch.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-rose-950/50 border border-rose-500/25 flex items-center justify-center text-rose-400 text-[10px]">✓</span>
                   {item}
@@ -536,15 +564,14 @@ export default function SentralogisCosmicLanding() {
 
             <div className="space-y-2.5 relative z-10">
               <h3 className="text-xl font-black uppercase text-white tracking-tight group-hover:text-sky-100 transition-colors">
-                Intelligence Towers
+                {t.features.towers.title}
               </h3>
-              <p className="text-slate-400 text-[13px] font-medium leading-relaxed">
-                <span className="text-sky-400 font-bold">Pusat komando visual</span> untuk memonitor seluruh operasi logistik dari satu layar. Visualisasi peta armada, bottleneck warehouse, dan analitik performa SDM dalam satu dashboard menara pengawas yang intuitif dan actionable.
-              </p>
+              <p className="text-slate-400 text-[13px] font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: t.features.towers.desc }} />
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2.5">
-              {["Bird-eye view seluruh operasi", "Heatmap bottleneck & anomali", "KPI dashboard SDM & armada"].map((item, i) => (
+              {t.features.towers.items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-xs font-bold text-slate-300">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-sky-950/50 border border-sky-500/25 flex items-center justify-center text-sky-400 text-[10px]">✓</span>
                   {item}
@@ -561,7 +588,7 @@ export default function SentralogisCosmicLanding() {
           <div className="relative bg-slate-950 px-6">
             <div className="flex items-center gap-3 text-[10px] font-mono font-black tracking-widest text-slate-500 uppercase">
               <span className="w-2 h-2 rounded-full bg-purple-500/50 animate-pulse" />
-              ECOSYSTEM OVERVIEW
+              {t.ecosystem.badge}
               <span className="w-2 h-2 rounded-full bg-cyan-500/50 animate-pulse" />
             </div>
           </div>
@@ -571,7 +598,7 @@ export default function SentralogisCosmicLanding() {
         <div className="relative">
           <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 blur-xl" />
           
-          <div className="relative rounded-3xl border border-white/[0.06] bg-slate-950/60 backdrop-blur-xl p-8 sm:p-12 overflow-hidden">
+          <div className="relative rounded-3xl border border-white/[0.06] bg-slate-950/60 backdrop-blur-xl p-6 sm:p-8 md:p-12 overflow-hidden">
             {/* Background grid pattern */}
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
             
@@ -583,8 +610,8 @@ export default function SentralogisCosmicLanding() {
                   <Send className="w-6 h-6 text-indigo-400" />
                 </div>
                 <div>
-                  <h4 className="text-[11px] font-black uppercase text-indigo-400 tracking-wide">Data Masuk</h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">Order dibuat</p>
+                  <h4 className="text-[11px] font-black uppercase text-indigo-400 tracking-wide">{t.ecosystem.step1.title}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">{t.ecosystem.step1.desc}</p>
                 </div>
               </div>
 
@@ -599,8 +626,8 @@ export default function SentralogisCosmicLanding() {
                   <Bot className="w-6 h-6 text-cyan-400" />
                 </div>
                 <div>
-                  <h4 className="text-[11px] font-black uppercase text-cyan-400 tracking-wide">AI Dispatch</h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">Pembagian tugas otomatis</p>
+                  <h4 className="text-[11px] font-black uppercase text-cyan-400 tracking-wide">{t.ecosystem.step2.title}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">{t.ecosystem.step2.desc}</p>
                 </div>
               </div>
 
@@ -615,8 +642,8 @@ export default function SentralogisCosmicLanding() {
                   <Smartphone className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div>
-                  <h4 className="text-[11px] font-black uppercase text-emerald-400 tracking-wide">Eksekusi Lapangan</h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">via WhatsApp</p>
+                  <h4 className="text-[11px] font-black uppercase text-emerald-400 tracking-wide">{t.ecosystem.step3.title}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">{t.ecosystem.step3.desc}</p>
                 </div>
               </div>
 
@@ -631,8 +658,8 @@ export default function SentralogisCosmicLanding() {
                   <TowerControl className="w-6 h-6 text-amber-400" />
                 </div>
                 <div>
-                  <h4 className="text-[11px] font-black uppercase text-amber-400 tracking-wide">Intelligence Towers</h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">Monitor hasil real-time</p>
+                  <h4 className="text-[11px] font-black uppercase text-amber-400 tracking-wide">{t.ecosystem.step4.title}</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">{t.ecosystem.step4.desc}</p>
                 </div>
               </div>
 
@@ -640,9 +667,8 @@ export default function SentralogisCosmicLanding() {
 
             {/* Bottom tagline */}
             <div className="relative z-10 text-center mt-10 pt-6 border-t border-white/5">
-              <p className="text-[13px] text-slate-400 font-medium leading-relaxed max-w-4xl mx-auto">
-                <span className="text-white font-bold tracking-wide">Alur Ekosistem (Ecosystem Flow):</span> Secara praktis, ekosistem ini bergerak dari <span className="text-indigo-400 font-bold">Data Masuk</span> (order dibuat) ➔ <span className="text-cyan-400 font-bold">AI Dispatch</span> (pembagian tugas otomatis) ➔ <span className="text-emerald-400 font-bold">Eksekusi Lapangan via WhatsApp</span> (driver bekerja) ➔ bermuara di <span className="text-amber-400 font-bold">Intelligence Towers</span> (manajemen & klien memonitor hasil secara real-time).
-              </p>
+              <p className="text-[13px] text-slate-400 font-medium leading-relaxed max-w-4xl mx-auto"
+                dangerouslySetInnerHTML={{ __html: t.ecosystem.flowDesc }} />
             </div>
           </div>
         </div>
@@ -650,7 +676,7 @@ export default function SentralogisCosmicLanding() {
       </section>
 
       {/* 6. GLOWING NEBULA EMAIL CTA SECTION */}
-      <section id="contact" className="py-36 px-6 relative z-10 overflow-hidden border-t border-white/5">
+      <section id="contact" className="py-24 sm:py-36 px-5 sm:px-6 relative z-10 overflow-hidden border-t border-white/5">
         
         {/* Massive back nebula */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none -z-0" />
@@ -660,24 +686,24 @@ export default function SentralogisCosmicLanding() {
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 bg-[#FF7043]/10 text-[#FF7043] text-xs font-black tracking-widest uppercase px-4 py-2 border border-[#FF7043]/20 rounded-full">
               <Mail className="w-3.5 h-3.5" />
-              // HUBUNGI KAMI UNTUK DUKUNGAN KELAS ELITE
+              // {t.cta.badge}
             </div>
             <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white leading-none">
-              Siap Memulai Orbit Rantai Pasok Anda?
+              {t.cta.title}
             </h2>
             <p className="text-slate-400 max-w-xl mx-auto text-sm sm:text-base font-medium leading-relaxed">
-              Tinggalkan cara logistik konvensional yang inefisien. Jadwalkan demo operasional kustom khusus untuk perusahaan Anda secara langsung via email.
+              {t.cta.subtitle}
             </p>
           </div>
 
           {/* Glowing central email glass card */}
-          <div className="max-w-md mx-auto rounded-3xl border border-white/10 bg-slate-950/60 p-8 shadow-[0_0_50px_-10px_rgba(99,102,241,0.2)] hover:border-cyan-500/30 transition-all flex flex-col items-center gap-6">
+          <div className="max-w-md mx-auto rounded-3xl border border-white/10 bg-slate-950/60 p-6 sm:p-8 shadow-[0_0_50px_-10px_rgba(99,102,241,0.2)] hover:border-cyan-500/30 transition-all flex flex-col items-center gap-5 sm:gap-6">
             <div className="w-14 h-14 rounded-2xl bg-cyan-950/50 text-[#00E5FF] flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
               <Mail className="w-7 h-7" />
             </div>
 
             <div className="space-y-1 text-center">
-              <span className="text-[9px] font-mono font-black text-slate-500 uppercase tracking-widest">OFFICIAL PARTNER CONTACT</span>
+              <span className="text-[9px] font-mono font-black text-slate-500 uppercase tracking-widest">{t.cta.emailLabel}</span>
               <p className="text-xl sm:text-2xl font-black text-[#00E5FF] tracking-tight hover:underline cursor-pointer select-all">
                 info@sentralogis.com
               </p>
@@ -701,7 +727,7 @@ export default function SentralogisCosmicLanding() {
               >
                 {copied ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-[#00E676]" /> SALIN BERHASIL
+                    <Check className="w-3.5 h-3.5 text-[#00E676]" /> {t.cta.copySuccess}
                   </>
                 ) : (
                   <>

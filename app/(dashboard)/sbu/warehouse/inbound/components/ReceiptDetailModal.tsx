@@ -12,13 +12,104 @@ import {
   sendCompletedWA,
 } from '@/lib/notifications/warehouseWA';
 import { 
-  X, Loader2, ArrowRight, Truck, Package, PackageX, PackageCheck, AlertTriangle, User, Calendar, Edit2, CloudDownload, CheckCircle2, Search, ChevronDown, MessageCircle, Plus, MapPin
+  X, Loader2, ArrowRight, Truck, Package, PackageX, PackageCheck, AlertTriangle, User, Calendar, Edit2, CloudDownload, CheckCircle2, Search, ChevronDown, MessageCircle, Plus, MapPin, XCircle
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import ProductFormModal from '@/app/(dashboard)/hq/master-data/products/components/ProductFormModal';
 import ContactFormModal from '@/components/master/ContactFormModal';
 import BATBGenerator from './BATBGenerator';
 
+
+const getUomConversion = (productSku: any) => {
+  if (!productSku) return null;
+  
+  let conversions: any[] = [];
+  try {
+    conversions = typeof productSku.uom_conversions === 'string'
+      ? JSON.parse(productSku.uom_conversions)
+      : (productSku.uom_conversions || []);
+  } catch (e) {
+    conversions = productSku.uom_conversions || [];
+  }
+  
+  if (!Array.isArray(conversions) || conversions.length === 0) {
+    const multiplier = Number(productSku.conversion_to_base) || 1;
+    const currentUnit = String(productSku.unit || 'PCS').toUpperCase();
+    const baseUom = String(productSku.base_uom || 'PCS').toUpperCase();
+    if (multiplier > 1 && currentUnit !== baseUom) {
+      return {
+        direction: 'MULTIPLY',
+        unit: currentUnit,
+        targetUom: baseUom,
+        multiplier
+      };
+    }
+    return null;
+  }
+  
+  const currentUnit = String(productSku.unit || 'PCS').toUpperCase();
+  const baseUom = String(productSku.base_uom || 'PCS').toUpperCase();
+  
+  let conv = conversions.find((c: any) => String(c.from_uom).toUpperCase() === currentUnit);
+  if (conv) {
+    const multiplier = Number(conv.multiplier);
+    if (multiplier > 1) {
+      return {
+        direction: 'MULTIPLY',
+        unit: currentUnit,
+        targetUom: String(conv.to_uom).toUpperCase(),
+        multiplier
+      };
+    }
+  }
+  
+  conv = conversions.find((c: any) => 
+    String(c.to_uom).toUpperCase() === currentUnit || 
+    String(c.to_uom).toUpperCase() === baseUom ||
+    (currentUnit === 'PCS' && String(c.to_uom).toUpperCase() === 'PACK')
+  );
+  if (conv) {
+    const multiplier = Number(conv.multiplier);
+    if (multiplier > 1) {
+      return {
+        direction: 'DIVIDE',
+        unit: String(conv.from_uom).toUpperCase(),
+        targetUom: currentUnit,
+        multiplier
+      };
+    }
+  }
+  
+  const multiplier = Number(productSku.conversion_to_base) || 1;
+  if (multiplier > 1 && currentUnit !== baseUom) {
+    return {
+      direction: 'MULTIPLY',
+      unit: currentUnit,
+      targetUom: baseUom,
+      multiplier
+    };
+  }
+  
+  return null;
+};
+
+const formatQtyWithConversion = (qty: number, productSku: any) => {
+  if (!productSku) return `${qty.toLocaleString()}`;
+  
+  const conv = getUomConversion(productSku);
+  if (conv) {
+    if (conv.direction === 'MULTIPLY') {
+      const baseQty = qty * conv.multiplier;
+      return `${qty.toLocaleString()} ${conv.unit}, ${baseQty.toLocaleString()} ${conv.targetUom}`;
+    } else {
+      const largerQty = qty / conv.multiplier;
+      const formattedLarger = Number(largerQty.toFixed(2)).toLocaleString();
+      return `${formattedLarger} ${conv.unit}, ${qty.toLocaleString()} ${conv.targetUom}`;
+    }
+  }
+  
+  return `${qty.toLocaleString()} ${productSku.unit || 'PCS'}`;
+};
 
 interface ReceiptDetailModalProps {
   receiptId: string;
@@ -50,6 +141,11 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedShipperId, setSelectedShipperId] = useState<string | null>(null);
   const [isUpdatingContacts, setIsUpdatingContacts] = useState(false);
+
+  // Putaway Location Allocation
+  const [putawayZones, setPutawayZones] = useState<any[]>([]);
+  const [putawayLocations, setPutawayLocations] = useState<any[]>([]);
+  const [putawayData, setPutawayData] = useState<Record<string, any[]>>({});
 
   const transporterDropdownRef = useRef<HTMLDivElement>(null);
   const fleetDropdownRef = useRef<HTMLDivElement>(null);
@@ -83,17 +179,14 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
          setSelectedCustomerId(recData.customer_id);
       } else if (recData.wo_item_id) {
         // [AI] Fetch customer name via WO chain if not directly set
-        const { data: joData } = await supabase.from('job_orders').select('wo_item_id').eq('id', recData.wo_item_id).single();
-        if (joData?.wo_item_id) {
-           const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', joData.wo_item_id).single();
-           if (woItemData?.wo_id) {
-              const { data: woData } = await supabase.from('work_orders').select('customer_id').eq('id', woItemData.wo_id).single();
-              if (woData?.customer_id) {
-                 const { data: custData } = await supabase.from('md_entities').select('name').eq('id', woData.customer_id).single();
-                 if (custData) {
-                    recData.customer_name = custData.name;
-                    setSelectedCustomerId(woData.customer_id);
-                 }
+        const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', recData.wo_item_id).single();
+        if (woItemData?.wo_id) {
+           const { data: woData } = await supabase.from('work_orders').select('customer_id').eq('id', woItemData.wo_id).single();
+           if (woData?.customer_id) {
+              const { data: custData } = await supabase.from('md_entities').select('name').eq('id', woData.customer_id).single();
+              if (custData) {
+                 recData.customer_name = custData.name;
+                 setSelectedCustomerId(woData.customer_id);
               }
            }
         }
@@ -107,7 +200,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
         .from('wh_inbound_receipt_items')
         .select(`
           *,
-          product:product_sku_id(name, sku_code, unit)
+          product:product_sku_id(id, name, sku_code, unit, base_uom, conversion_to_base, uom_conversions)
         `)
         .eq('receipt_id', receiptId)
         .order('created_at', { ascending: true });
@@ -116,16 +209,23 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
       setItems(itemsData || []);
 
       if (recData.wo_item_id) {
-        const { data: assignData } = await supabase
-          .from('jo_warehouse_assignments')
-          .select(`
-             warehouse_location_id,
-             quantity,
-             location:md_warehouse_locations(code),
-             wo_item_manifests!wo_item_manifest_id(product_sku_id)
-          `)
-          .eq('job_order_id', recData.wo_item_id);
-        setAssignments(assignData || []);
+        const { data: joData } = await supabase
+          .from('job_orders')
+          .select('id')
+          .eq('wo_item_id', recData.wo_item_id)
+          .maybeSingle();
+        if (joData) {
+          const { data: assignData } = await supabase
+            .from('jo_warehouse_assignments')
+            .select(`
+               warehouse_location_id,
+               quantity,
+               location:md_warehouse_locations(code),
+               wo_item_manifests!wo_item_manifest_id(product_sku_id)
+            `)
+            .eq('job_order_id', joData.id);
+          setAssignments(assignData || []);
+        }
       } else {
         setAssignments([]);
       }
@@ -188,43 +288,39 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
 
       // [AI] Sync JO status and WO status if newStatus is COMPLETED
       if (newStatus === 'COMPLETED' && receipt?.wo_item_id) {
-        const joId = receipt.wo_item_id;
+        const parentWoItemId = receipt.wo_item_id;
         
         // 1. Update JO status
-        await supabase.from('job_orders').update({ status: 'completed' }).eq('id', joId);
+        await supabase.from('job_orders').update({ status: 'completed' }).eq('wo_item_id', parentWoItemId);
 
         // 2. Check if all JOs for the parent wo_item are completed
-        const { data: joData } = await supabase.from('job_orders').select('wo_item_id').eq('id', joId).single();
-        if (joData?.wo_item_id) {
-          const parentWoItemId = joData.wo_item_id;
-          const { data: siblingJOs } = await supabase.from('job_orders').select('status').eq('wo_item_id', parentWoItemId);
-          
-          if (siblingJOs) {
-            const allCompleted = siblingJOs.every((jo: any) => ['completed', 'done', 'selesai'].includes(jo.status?.toLowerCase()));
-            if (allCompleted) {
-              await supabase.from('wo_items').update({ status: 'completed' }).eq('id', parentWoItemId);
+        const { data: siblingJOs } = await supabase.from('job_orders').select('status').eq('wo_item_id', parentWoItemId);
+        
+        if (siblingJOs) {
+          const allCompleted = siblingJOs.every((jo: any) => ['completed', 'done', 'selesai'].includes(jo.status?.toLowerCase()));
+          if (allCompleted) {
+            await supabase.from('wo_items').update({ status: 'completed' }).eq('id', parentWoItemId);
+            
+            // 3. Check if all wo_items for the parent work_order are completed
+            const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
+            if (woItemData?.wo_id) {
+              const parentWoId = woItemData.wo_id;
+              const { data: siblingWoItems } = await supabase.from('wo_items').select('status').eq('wo_id', parentWoId);
               
-              // 3. Check if all wo_items for the parent work_order are completed
-              const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
-              if (woItemData?.wo_id) {
-                const parentWoId = woItemData.wo_id;
-                const { data: siblingWoItems } = await supabase.from('wo_items').select('status').eq('wo_id', parentWoId);
-                
-                if (siblingWoItems) {
-                  const allWoItemsCompleted = siblingWoItems.every((item: any) => ['completed', 'done', 'selesai'].includes(item.status?.toLowerCase()));
-                  if (allWoItemsCompleted) {
-                    await supabase.from('work_orders').update({ status: 'done' }).eq('id', parentWoId);
-                  } else {
-                    await supabase.from('work_orders').update({ status: 'proses' }).eq('id', parentWoId);
-                  }
+              if (siblingWoItems) {
+                const allWoItemsCompleted = siblingWoItems.every((item: any) => ['completed', 'done', 'selesai'].includes(item.status?.toLowerCase()));
+                if (allWoItemsCompleted) {
+                  await supabase.from('work_orders').update({ status: 'done' }).eq('id', parentWoId);
+                } else {
+                  await supabase.from('work_orders').update({ status: 'proses' }).eq('id', parentWoId);
                 }
               }
-            } else {
-              await supabase.from('wo_items').update({ status: 'in_progress' }).eq('id', parentWoItemId);
-              const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
-              if (woItemData?.wo_id) {
-                 await supabase.from('work_orders').update({ status: 'proses' }).eq('id', woItemData.wo_id);
-              }
+            }
+          } else {
+            await supabase.from('wo_items').update({ status: 'in_progress' }).eq('id', parentWoItemId);
+            const { data: woItemData } = await supabase.from('wo_items').select('wo_id').eq('id', parentWoItemId).single();
+            if (woItemData?.wo_id) {
+               await supabase.from('work_orders').update({ status: 'proses' }).eq('id', woItemData.wo_id);
             }
           }
         }
@@ -308,16 +404,90 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
     }
   };
 
+  const addPutawayEntry = (itemId: string) => {
+    setPutawayData(prev => ({
+      ...prev,
+      [itemId]: [...(prev[itemId] || []), { location_id: '', quantity: '', _key: Date.now() + Math.random() }],
+    }));
+  };
+
+  const updatePutawayEntry = (itemId: string, key: number, field: string, value: any) => {
+    setPutawayData(prev => ({
+      ...prev,
+      [itemId]: (prev[itemId] || []).map((e: any) =>
+        e._key === key ? { ...e, [field]: value } : e
+      ),
+    }));
+  };
+
+  const removePutawayEntry = (itemId: string, key: number) => {
+    setPutawayData(prev => ({
+      ...prev,
+      [itemId]: (prev[itemId] || []).filter((e: any) => e._key !== key),
+    }));
+  };
+
   const finishPutaway = async () => {
     setSubmitting(true);
     try {
-      // In a real WMS, we would update `wh_inventory` here based on `actual_good_qty` and `quarantine_qty`.
-      // Since `location_id` logic needs its own UI, we simulate it for now.
-      
-      // Mark as completed
+      const entries: Record<string, any[]> = {};
+      let hasEmpty = false;
+      for (const item of items) {
+        const itemEntries = putawayData[item.id] || [];
+        if (itemEntries.length === 0) continue;
+        const valid = itemEntries.filter((e: any) => e.location_id && Number(e.quantity) > 0);
+        if (valid.length > 0) {
+          entries[item.id] = valid.map((e: any) => ({
+            location_id: e.location_id,
+            quantity: Number(e.quantity),
+            status: 'STORAGE',
+          }));
+        } else {
+          hasEmpty = true;
+        }
+      }
+      if (hasEmpty) {
+        toast.error('Ada item dengan data putaway tidak lengkap (pilih lokasi & isi qty).');
+        setSubmitting(false);
+        return;
+      }
+      if (Object.keys(entries).length === 0) {
+        toast.error('Belum ada alokasi putaway. Tambahkan minimal satu lokasi.');
+        setSubmitting(false);
+        return;
+      }
+
+      // Save putaway_entries to each receipt item
+      for (const item of items) {
+        const itemEntries = entries[item.id];
+        if (!itemEntries?.length) continue;
+        const { error: updErr } = await supabase
+          .from('wh_inbound_receipt_items')
+          .update({ putaway_entries: itemEntries })
+          .eq('id', item.id);
+        if (updErr) throw updErr;
+
+        // Create wh_inventory records
+        for (const entry of itemEntries) {
+          const invPayload = {
+            tenant_id: profile?.tenant_id,
+            warehouse_id: receipt.warehouse_id,
+            location_id: entry.location_id,
+            product_sku_id: item.product_sku_id,
+            quantity: Number(entry.quantity),
+            received_date: new Date().toISOString().slice(0, 10),
+            status: entry.status === 'QUARANTINE' ? 'QUARANTINE' : 'AVAILABLE',
+            batch_number: item.batch_number || null,
+            expiry_date: item.expiry_date || null,
+          };
+          const { error: invErr } = await supabase.from('wh_inventory').insert(invPayload);
+          if (invErr) throw invErr;
+        }
+      }
+
       await handleUpdateStatus('COMPLETED');
     } catch (error: any) {
-      toast.error('Gagal menyelesaikan Putaway');
+      toast.error('Gagal menyelesaikan Putaway: ' + error.message);
       setSubmitting(false);
     }
   };
@@ -532,6 +702,40 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
         .then(({ data }) => setQuarantineLocations(data || []));
     }
   }, [receipt?.status, receipt?.warehouse_id]);
+
+  // Fetch all zones and locations for putaway
+  useEffect(() => {
+    if (receipt?.status === 'PUTAWAY_IN_PROGRESS' && receipt?.warehouse_id) {
+      supabase.from('md_warehouse_areas')
+        .select('id, area_code, area_name')
+        .eq('warehouse_id', receipt.warehouse_id)
+        .order('area_name', { ascending: true })
+        .then(({ data }) => setPutawayZones(data || []));
+
+      supabase.from('md_warehouse_locations')
+        .select('id, code, area_id, location_type, storage_method')
+        .eq('warehouse_id', receipt.warehouse_id)
+        .eq('is_active', true)
+        .order('code', { ascending: true })
+        .then(({ data }) => setPutawayLocations(data || []));
+      
+      // Init putawayData from existing putaway_entries
+      setPutawayData(prev => {
+        const next = { ...prev };
+        items.forEach(item => {
+          if (item.putaway_entries?.length > 0) {
+            next[item.id] = item.putaway_entries.map((e: any) => ({
+              ...e,
+              _key: Date.now() + Math.random(),
+            }));
+          } else if (!next[item.id]) {
+            next[item.id] = [];
+          }
+        });
+        return next;
+      });
+    }
+  }, [receipt?.status, receipt?.warehouse_id, items.length]);
 
   // [AI] Click-outside handler to close transporter dropdown
   useEffect(() => {
@@ -991,124 +1195,203 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                   <Package size={16} className="text-slate-500" /> Item Details
                 </h3>
               </div>
-              <div className="overflow-x-auto bg-white flex-1">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
-                      <th className="px-4 py-3 font-semibold uppercase tracking-wider">Produk</th>
-                      <th className="px-4 py-3 font-semibold uppercase tracking-wider">Lokasi</th>
-                      <th className="px-4 py-3 font-semibold text-right uppercase tracking-wider w-48">Kuantitas</th>
-                      <th className="px-4 py-3 font-semibold text-right uppercase tracking-wider w-32">Dimensi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/50 group/item align-top">
-                        <td className="px-4 py-4">
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
+              <div className="overflow-y-auto bg-slate-50/50 flex-1 p-4 space-y-4">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                    <PackageX size={32} className="text-slate-300 mb-2" />
+                    <p className="text-slate-500 font-medium">Belum ada item product di receipt ini.</p>
+                  </div>
+                ) : (
+                  items.map((item) => (
+                    <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group/item flex flex-col md:flex-row gap-4">
+                      {/* Product Info & Locations */}
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <div className="font-black text-slate-900 text-sm flex items-center gap-2">
                             {item.product?.name}
                             <button onClick={() => setEditProductModalId(item.product_sku_id)} title="Edit Master Produk" className="text-slate-300 hover:text-indigo-600 transition-colors opacity-0 group-hover/item:opacity-100">
                                 <Edit2 size={12} />
                             </button>
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">{item.product?.sku_code}</div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col gap-3">
-                            <div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Rencana Alokasi</div>
-                              {(() => {
-                                const assign = assignments.find(a => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
-                                if (assign?.location?.code) {
-                                  return (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-widest border border-blue-200">
-                                      <MapPin size={12} /> {assign.location.code}
-                                    </span>
-                                  );
-                                }
-                                return <span className="text-xs text-slate-400 italic">TBA</span>;
-                              })()}
+                          <div className="text-[9px] text-slate-400 font-mono font-bold mt-0.5 tracking-wider bg-slate-100 inline-block px-2 py-0.5 rounded-md">{item.product?.sku_code}</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          {/* Rencana Alokasi */}
+                          <div className="bg-blue-50/50 rounded-xl p-2.5 border border-blue-100 flex-1 min-w-[140px]">
+                            <div className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                              <MapPin size={10} /> Rencana Alokasi
                             </div>
-                            
-                            <div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Aktual Putaway</div>
-                              {(() => {
+                            {(() => {
+                              const assign = assignments.find(a => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
+                              if (assign?.location?.code) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white text-blue-700 text-xs font-bold shadow-sm border border-blue-100">
+                                    {assign.location.code}
+                                  </span>
+                                );
+                              }
+                              return <span className="text-[10px] text-slate-400 font-bold italic">TBA</span>;
+                            })()}
+                          </div>
+
+                          {/* Aktual Putaway */}
+                          <div className="bg-indigo-50/50 rounded-xl p-2.5 border border-indigo-100 flex-[2] min-w-[200px]">
+                            <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                              <ArrowRight size={10} /> Aktual Putaway
+                            </div>
+                            {isPutaway ? (
+                              <div className="space-y-2">
+                                {(putawayData[item.id] || []).map((entry: any) => {
+                                  const whZone = putawayZones.find(z => z.id === putawayLocations.find((l: any) => l.id === entry.location_id)?.area_id);
+                                  const locCode = putawayLocations.find((l: any) => l.id === entry.location_id)?.code || '';
+                                  return (
+                                    <div key={entry._key} className="flex flex-wrap items-center gap-1.5 bg-white p-1.5 rounded-lg border border-indigo-100/50 shadow-sm">
+                                      <select
+                                        value={entry.location_id}
+                                        onChange={(e) => updatePutawayEntry(item.id, entry._key, 'location_id', e.target.value)}
+                                        className="flex-1 min-w-[120px] px-1.5 py-1 border-none rounded text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 bg-transparent text-indigo-900"
+                                      >
+                                        <option value="">Pilih Lokasi</option>
+                                        {putawayZones.map(zone => {
+                                          const zoneLocs = putawayLocations.filter((l: any) => l.area_id === zone.id && l.location_type !== 'QUARANTINE');
+                                          if (zoneLocs.length === 0) return null;
+                                          return (
+                                            <optgroup key={zone.id} label={`${zone.area_code} - ${zone.area_name}`}>
+                                              {zoneLocs.map((loc: any) => (
+                                                <option key={loc.id} value={loc.id}>{loc.code}</option>
+                                              ))}
+                                            </optgroup>
+                                          );
+                                        })}
+                                      </select>
+                                      <div className="w-[1px] h-4 bg-indigo-100"></div>
+                                      <input
+                                        type="number" min="0" placeholder="Qty"
+                                        value={entry.quantity}
+                                        onChange={(e) => updatePutawayEntry(item.id, entry._key, 'quantity', e.target.value)}
+                                        className="w-14 px-1.5 py-1 border-none rounded text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 text-center bg-transparent text-indigo-900"
+                                      />
+                                      <button
+                                        onClick={() => removePutawayEntry(item.id, entry._key)}
+                                        className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-colors ml-1"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                                <button
+                                  onClick={() => addPutawayEntry(item.id)}
+                                  className="text-[10px] font-black text-indigo-500 hover:text-white hover:bg-indigo-500 border border-indigo-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all w-full justify-center shadow-sm bg-white"
+                                >
+                                  <Plus size={12} /> Tambah Lokasi Putaway
+                                </button>
+                              </div>
+                            ) : (
+                              (() => {
                                 const entries = item.putaway_entries || [];
                                 if (entries.length > 0) {
                                   return (
-                                    <div className="space-y-1">
-                                      {entries.map((ent: any, idx: number) => (
-                                        <div key={idx} className="flex items-center gap-1">
-                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border ${ent.status === 'QUARANTINE' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                                            <MapPin size={10} /> {ent.location_id}
-                                          </span>
-                                          <span className="text-xs font-bold text-slate-500">x{ent.quantity}</span>
-                                        </div>
-                                      ))}
+                                    <div className="flex flex-wrap gap-2">
+                                      {entries.map((ent: any, idx: number) => {
+                                        const locCode = putawayLocations.find((l: any) => l.id === ent.location_id)?.code || ent.location_id.slice(0, 8);
+                                        return (
+                                          <div key={idx} className="flex items-center gap-1.5 bg-white px-2 py-1 rounded shadow-sm border border-indigo-100">
+                                            <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest ${ent.status === 'QUARANTINE' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                              <MapPin size={10} /> {locCode}
+                                            </span>
+                                            <div className="w-[1px] h-3 bg-indigo-100"></div>
+                                            <span className="text-xs font-black text-slate-700">{formatQtyWithConversion(Number(ent.quantity) || 0, item.product)}</span>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   );
                                 }
-                                return <span className="text-xs text-slate-400 italic">Belum Putaway</span>;
-                              })()}
-                            </div>
+                                return <span className="text-[10px] text-slate-400 font-bold italic">Belum Putaway</span>;
+                              })()
+                            )}
                           </div>
-                        </td>
-                        
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col gap-2 items-end">
-                            <div className="flex justify-between w-full text-xs items-center">
-                              <span className="text-slate-500">Expected:</span>
-                              <span className="font-bold text-slate-700">{item.expected_qty} <span className="font-normal text-[10px] text-slate-400">{item.product?.unit}</span></span>
+                        </div>
+                      </div>
+
+                      {/* Divider for mobile */}
+                      <div className="h-[1px] w-full bg-slate-100 md:hidden block"></div>
+
+                      {/* Quantities & Dimensions */}
+                      <div className="flex flex-col md:w-64 space-y-3 shrink-0 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                        {/* Expected */}
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200/50">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Expected Qty</span>
+                          <span className="text-base font-black text-slate-800 italic">
+                            {formatQtyWithConversion(Number(item.expected_qty) || 0, item.product)}
+                          </span>
+                        </div>
+
+                        {/* Checking Inputs / Actuals */}
+                        {(isChecking || isCheckingDone || isPutaway || isCompleted) && (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                                <CheckCircle2 size={10} /> Good
+                              </span>
+                              {isChecking ? (
+                                <div className="flex items-center gap-1.5 bg-white border border-emerald-200 rounded-lg px-1 py-0.5 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition-all shadow-sm">
+                                  <input type="number" min="0" value={item.actual_good_qty || ''} onChange={(e) => handleItemChange(item.id, 'actual_good_qty', e.target.value)} className="w-14 h-6 text-right border-none outline-none text-emerald-700 font-black text-xs bg-transparent" />
+                                  <span className="text-[8px] text-slate-400 font-black uppercase pr-1">{item.product?.default_inbound_uom || item.product?.unit || 'PCS'}</span>
+                                </div>
+                              ) : (
+                                <span className="font-black text-emerald-600 text-xs bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{formatQtyWithConversion(Number(item.actual_good_qty) || 0, item.product)}</span>
+                              )}
                             </div>
                             
-                            {isChecking || isCheckingDone || isPutaway || isCompleted ? (
-                              <>
-                                <div className="flex justify-between w-full text-xs items-center">
-                                  <span className="text-emerald-600/80">Good:</span>
-                                  {isChecking ? (
-                                    <input type="number" min="0" value={item.actual_good_qty || ''} onChange={(e) => handleItemChange(item.id, 'actual_good_qty', e.target.value)} className="w-16 h-6 px-1 text-right border border-emerald-200 rounded focus:ring-1 focus:ring-emerald-500 outline-none text-emerald-700 font-bold bg-emerald-50" />
-                                  ) : (
-                                    <span className="font-bold text-emerald-600">{item.actual_good_qty}</span>
-                                  )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1">
+                                <AlertTriangle size={10} /> Quar
+                              </span>
+                              {isChecking ? (
+                                <div className="flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-1 py-0.5 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition-all shadow-sm">
+                                  <input type="number" min="0" value={item.quarantine_qty || ''} onChange={(e) => handleItemChange(item.id, 'quarantine_qty', e.target.value)} className="w-14 h-6 text-right border-none outline-none text-amber-700 font-black text-xs bg-transparent" />
+                                  <span className="text-[8px] text-slate-400 font-black uppercase pr-1">{item.product?.default_inbound_uom || item.product?.unit || 'PCS'}</span>
                                 </div>
-                                
-                                <div className="flex justify-between w-full text-xs items-center">
-                                  <span className="text-amber-600/80">Quar:</span>
-                                  {isChecking ? (
-                                    <input type="number" min="0" value={item.quarantine_qty || ''} onChange={(e) => handleItemChange(item.id, 'quarantine_qty', e.target.value)} className="w-16 h-6 px-1 text-right border border-amber-200 rounded focus:ring-1 focus:ring-amber-500 outline-none text-amber-700 font-bold bg-amber-50" />
-                                  ) : (
-                                    <span className="font-bold text-amber-600">{item.quarantine_qty}</span>
-                                  )}
+                              ) : (
+                                <span className="font-black text-amber-600 text-xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">{formatQtyWithConversion(Number(item.quarantine_qty) || 0, item.product)}</span>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1">
+                                <XCircle size={10} /> Reject
+                              </span>
+                              {isChecking ? (
+                                <div className="flex items-center gap-1.5 bg-white border border-rose-200 rounded-lg px-1 py-0.5 focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-100 transition-all shadow-sm">
+                                  <input type="number" min="0" value={item.rejected_qty || ''} onChange={(e) => handleItemChange(item.id, 'rejected_qty', e.target.value)} className="w-14 h-6 text-right border-none outline-none text-rose-700 font-black text-xs bg-transparent" />
+                                  <span className="text-[8px] text-slate-400 font-black uppercase pr-1">{item.product?.default_inbound_uom || item.product?.unit || 'PCS'}</span>
                                 </div>
-                                
-                                <div className="flex justify-between w-full text-xs items-center">
-                                  <span className="text-rose-600/80">Reject:</span>
-                                  {isChecking ? (
-                                    <input type="number" min="0" value={item.rejected_qty || ''} onChange={(e) => handleItemChange(item.id, 'rejected_qty', e.target.value)} className="w-16 h-6 px-1 text-right border border-rose-200 rounded focus:ring-1 focus:ring-rose-500 outline-none text-rose-700 font-bold bg-rose-50" />
-                                  ) : (
-                                    <span className="font-bold text-rose-600">{item.rejected_qty}</span>
-                                  )}
-                                </div>
-                              </>
-                            ) : null}
+                              ) : (
+                                <span className="font-black text-rose-600 text-xs bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">{formatQtyWithConversion(Number(item.rejected_qty) || 0, item.product)}</span>
+                              )}
+                            </div>
                           </div>
-                        </td>
+                        )}
 
-                        <td className="px-4 py-4 text-right">
-                          <div className="flex flex-col gap-1 items-end text-xs">
-                            <div className="flex items-center gap-1.5"><span className="text-slate-400">CBM:</span><span className="font-bold text-slate-700">{item.actual_cbm || item.expected_cbm || '0.00'}</span></div>
-                            <div className="flex items-center gap-1.5"><span className="text-slate-400">KGS:</span><span className="font-bold text-slate-700">{item.actual_kg || item.expected_kg || '0.00'}</span></div>
+                        {/* Dimensions */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/50">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-200 px-1.5 py-0.5 rounded">CBM</span>
+                            <span className="font-bold text-slate-700 text-xs ml-1">{item.actual_cbm || item.expected_cbm || '0.00'}</span>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {items.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500 italic">No items found in this receipt.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-200 px-1.5 py-0.5 rounded">KGS</span>
+                            <span className="font-bold text-slate-700 text-xs ml-1">{item.actual_kg || item.expected_kg || '0.00'}</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* CHECKING_DONE: Review Section */}
@@ -1134,22 +1417,22 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                             </div>
                             <div className="text-right">
                               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Expected</p>
-                              <p className="font-bold text-slate-700">{item.expected_qty}</p>
+                              <p className="font-bold text-slate-700">{formatQtyWithConversion(Number(item.expected_qty) || 0, item.product)}</p>
                             </div>
                           </div>
 
                           <div className="grid grid-cols-3 gap-3 text-center text-xs font-bold">
                             <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100">
                               <span className="text-emerald-600">Good</span>
-                              <p className="text-lg text-emerald-700">{item.actual_good_qty || 0}</p>
+                              <p className="text-xs text-emerald-700 font-bold mt-1">{formatQtyWithConversion(Number(item.actual_good_qty) || 0, item.product)}</p>
                             </div>
                             <div className="p-2 bg-amber-50 rounded-lg border border-amber-100">
                               <span className="text-amber-600">Damage</span>
-                              <p className="text-lg text-amber-700">{itemDamages.reduce((s, r) => s + Number(r.qty), 0)}</p>
+                              <p className="text-xs text-amber-700 font-bold mt-1">{formatQtyWithConversion(itemDamages.reduce((s, r) => s + Number(r.qty), 0), item.product)}</p>
                             </div>
                             <div className={`p-2 rounded-lg border ${overage > 0 ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
                               <span className={overage > 0 ? 'text-blue-600' : 'text-slate-400'}>Overage</span>
-                              <p className={`text-lg ${overage > 0 ? 'text-blue-700' : 'text-slate-400'}`}>{overage}</p>
+                              <p className={`text-xs font-bold mt-1 ${overage > 0 ? 'text-blue-700' : 'text-slate-400'}`}>{formatQtyWithConversion(overage, item.product)}</p>
                             </div>
                           </div>
 
@@ -1179,7 +1462,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
                           {itemDamages.map(rec => (
                             <div key={rec.id} className="p-3 bg-white border border-rose-200 rounded-xl space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-widest">Damage: {rec.qty} unit</span>
+                                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-widest">Damage: {formatQtyWithConversion(Number(rec.qty) || 0, item.product)}</span>
                                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                                   rec.decision === 'PENDING' ? 'bg-amber-100 text-amber-700' :
                                   rec.decision === 'ACCEPT_QUARANTINE' ? 'bg-emerald-100 text-emerald-700' :

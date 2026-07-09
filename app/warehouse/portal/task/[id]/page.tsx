@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { fetchReceiptAdmin, updateReceiptAdmin } from './actions';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, Clock, Play, Pause, Square, Warehouse, Camera, CloudDownload, ChevronDown, Scan } from 'lucide-react';
+import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, Clock, Play, Pause, Square, Warehouse, Camera, CloudDownload, ChevronDown, Scan, ArrowLeftRight, MapPin } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,97 @@ export type PutawayEntry = {
   id: string;
   locationCode: string;
   qty: string;
+};
+
+const getUomConversion = (productSku: any) => {
+  if (!productSku) return null;
+  
+  let conversions: any[] = [];
+  try {
+    conversions = typeof productSku.uom_conversions === 'string'
+      ? JSON.parse(productSku.uom_conversions)
+      : (productSku.uom_conversions || []);
+  } catch (e) {
+    conversions = productSku.uom_conversions || [];
+  }
+  
+  if (!Array.isArray(conversions) || conversions.length === 0) {
+    const multiplier = Number(productSku.conversion_to_base) || 1;
+    const currentUnit = String(productSku.unit || 'PCS').toUpperCase();
+    const baseUom = String(productSku.base_uom || 'PCS').toUpperCase();
+    if (multiplier > 1 && currentUnit !== baseUom) {
+      return {
+        direction: 'MULTIPLY',
+        unit: currentUnit,
+        targetUom: baseUom,
+        multiplier
+      };
+    }
+    return null;
+  }
+  
+  const currentUnit = String(productSku.unit || 'PCS').toUpperCase();
+  const baseUom = String(productSku.base_uom || 'PCS').toUpperCase();
+  
+  let conv = conversions.find((c: any) => String(c.from_uom).toUpperCase() === currentUnit);
+  if (conv) {
+    const multiplier = Number(conv.multiplier);
+    if (multiplier > 1) {
+      return {
+        direction: 'MULTIPLY',
+        unit: currentUnit,
+        targetUom: String(conv.to_uom).toUpperCase(),
+        multiplier
+      };
+    }
+  }
+  
+  conv = conversions.find((c: any) => 
+    String(c.to_uom).toUpperCase() === currentUnit || 
+    String(c.to_uom).toUpperCase() === baseUom ||
+    (currentUnit === 'PCS' && String(c.to_uom).toUpperCase() === 'PACK')
+  );
+  if (conv) {
+    const multiplier = Number(conv.multiplier);
+    if (multiplier > 1) {
+      return {
+        direction: 'DIVIDE',
+        unit: String(conv.from_uom).toUpperCase(),
+        targetUom: currentUnit,
+        multiplier
+      };
+    }
+  }
+  
+  const multiplier = Number(productSku.conversion_to_base) || 1;
+  if (multiplier > 1 && currentUnit !== baseUom) {
+    return {
+      direction: 'MULTIPLY',
+      unit: currentUnit,
+      targetUom: baseUom,
+      multiplier
+    };
+  }
+  
+  return null;
+};
+
+const formatQtyWithConversion = (qty: number, productSku: any) => {
+  if (!productSku) return `${qty.toLocaleString()}`;
+  
+  const conv = getUomConversion(productSku);
+  if (conv) {
+    if (conv.direction === 'MULTIPLY') {
+      const baseQty = qty * conv.multiplier;
+      return `${qty.toLocaleString()} ${conv.unit}, ${baseQty.toLocaleString()} ${conv.targetUom}`;
+    } else {
+      const largerQty = qty / conv.multiplier;
+      const formattedLarger = Number(largerQty.toFixed(2)).toLocaleString();
+      return `${formattedLarger} ${conv.unit}, ${qty.toLocaleString()} ${conv.targetUom}`;
+    }
+  }
+  
+  return `${qty.toLocaleString()} ${productSku.unit || 'PCS'}`;
 };
 
 export default function WarehouseTaskExecutionPage() {
@@ -81,6 +172,16 @@ export default function WarehouseTaskExecutionPage() {
       
       setReceipt(recData);
 
+      // Fetch transfer context if this is a transfer inbound
+      if (recData?.transfer_id) {
+        const { data: trData } = await supabase
+          .from('wh_transfer_orders')
+          .select('id, transfer_number, from_warehouse:from_warehouse_id(name), to_warehouse:to_warehouse_id(name)')
+          .eq('id', recData.transfer_id)
+          .single();
+        if (trData) setReceipt((prev: any) => ({ ...prev, transfer_order: trData }));
+      }
+
       // Derive task logic from session role instead of wh_jo_staff_assignments
       const taskData = {
         id: taskId,
@@ -98,21 +199,28 @@ export default function WarehouseTaskExecutionPage() {
           // [AI] Tambah storage_rule untuk menentukan tampilan expiry date (FIFO aging / FEFO remaining)
           const { data: itemsData } = await supabase
             .from('wh_inbound_receipt_items')
-            .select('*, product:md_product_skus!product_sku_id(name, sku_code, unit, storage_rule), location:md_warehouse_locations!planned_putaway_location_id(code)')
+            .select('*, product:md_product_skus!product_sku_id(id, name, sku_code, unit, base_uom, conversion_to_base, uom_conversions, storage_rule), location:md_warehouse_locations!planned_putaway_location_id(code)')
             .eq('receipt_id', taskData.receipt_id)
             .order('created_at', { ascending: true });
           
           let assignmentsData: any[] = [];
           if (recData.wo_item_id) {
-             const { data: assignData } = await supabase
-               .from('jo_warehouse_assignments')
-               .select(`
-                  warehouse_location_id,
-                  location:md_warehouse_locations(code),
-                  wo_item_manifests!wo_item_manifest_id(product_sku_id)
-               `)
-               .eq('job_order_id', recData.wo_item_id);
-             assignmentsData = assignData || [];
+             const { data: joData } = await supabase
+               .from('job_orders')
+               .select('id')
+               .eq('wo_item_id', recData.wo_item_id)
+               .maybeSingle();
+             if (joData) {
+                const { data: assignData } = await supabase
+                  .from('jo_warehouse_assignments')
+                  .select(`
+                     warehouse_location_id,
+                     location:md_warehouse_locations(code),
+                     wo_item_manifests!wo_item_manifest_id(product_sku_id)
+                  `)
+                  .eq('job_order_id', joData.id);
+                assignmentsData = assignData || [];
+             }
              setJoAssignments(assignmentsData);
           }
           
@@ -424,11 +532,25 @@ export default function WarehouseTaskExecutionPage() {
 
       // Update related JO to completed
       if (receipt.wo_item_id) {
-         await supabase.from('job_orders').update({ status: 'completed' }).eq('id', receipt.wo_item_id);
+         await supabase.from('job_orders').update({ status: 'completed' }).eq('wo_item_id', receipt.wo_item_id);
+      }
+
+      if (receipt.transfer_id) {
+         const { error: trfErr } = await supabase
+           .from('wh_transfer_orders')
+           .update({ status: 'RECEIVED' })
+           .eq('id', receipt.transfer_id);
+         if (trfErr) throw trfErr;
+
+         const { error: dtlErr } = await supabase
+           .from('wh_transfer_details')
+           .update({ status: 'RECEIVED' })
+           .eq('transfer_id', receipt.transfer_id);
+         if (dtlErr) throw dtlErr;
       }
 
       toast.success('Putaway selesai! Semua barang tersimpan.');
-      fetchTaskDetails(session);
+      router.push('/warehouse/portal');
     } catch (err) {
       toast.error('Gagal menyimpan data putaway');
     } finally {
@@ -720,7 +842,7 @@ export default function WarehouseTaskExecutionPage() {
             <ChevronLeft size={28} />
          </button>
          <div className="text-center">
-            <h2 className="font-black text-lg text-slate-900 tracking-wide">{receipt.receipt_number?.replace(/^RCV-/, '')}</h2>
+            <h2 className="font-black text-lg text-slate-900 tracking-wide">{receipt.transfer_order?.transfer_number || receipt.receipt_number?.replace(/^RCV-/, '')}</h2>
             <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{status.replace(/_/g, ' ')}</p>
          </div>
          <div className="w-8" />
@@ -742,7 +864,18 @@ export default function WarehouseTaskExecutionPage() {
                  <span className="text-sm font-bold text-slate-900">{receipt.driver_name_manual || receipt.driver?.name || '-'}</span>
               </div>
            </div>
-        </Card>
+         </Card>
+
+        {/* Transfer Info */}
+        {receipt.transfer_order && (
+          <Card className="p-5 border-violet-200 shadow-sm bg-violet-50">
+            <h3 className="font-black text-violet-900 text-base flex items-center gap-2"><ArrowLeftRight size={20} /> Transfer Order</h3>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div><span className="block text-xs text-violet-500 font-black uppercase tracking-widest">Dari</span><span className="text-sm font-bold text-violet-900">{receipt.transfer_order.from_warehouse?.name || '-'}</span></div>
+              <div><span className="block text-xs text-violet-500 font-black uppercase tracking-widest">Ke</span><span className="text-sm font-bold text-violet-900">{receipt.transfer_order.to_warehouse?.name || '-'}</span></div>
+            </div>
+          </Card>
+        )}
 
         {/* ---------------------------------------------------------------- */}
         {/* ROLE GATING LOGIC */}
@@ -951,19 +1084,27 @@ export default function WarehouseTaskExecutionPage() {
                {status === 'EXPECTED' && (
                   <Button
                     onClick={async () => {
-                      // Save form data first
-                      await updateReceiptAdmin(receipt.id, {
-                        transporter_id: selectedTransporterId || null,
-                        transporter_name_manual: transporterName || null,
-                        driver_id: selectedDriverId || null,
-                        driver_name_manual: driverName || null,
-                        driver_phone: driverPhone || null,
-                        fleet_id: selectedFleetId || null,
-                        vehicle_photo_url: vehiclePhotoUrl || null,
-                        pod_document_url: podUrl || null
-                      });
-                      // Then update status
-                      handleUpdateStatus('TRUCK_ARRIVED');
+                      setSubmitting(true);
+                      try {
+                        // Save form data first
+                        await updateReceiptAdmin(receipt.id, {
+                          transporter_id: selectedTransporterId || null,
+                          transporter_name_manual: transporterName || null,
+                          driver_id: selectedDriverId || null,
+                          driver_name_manual: driverName || null,
+                          driver_phone: driverPhone || null,
+                          fleet_id: selectedFleetId || null,
+                          vehicle_photo_url: vehiclePhotoUrl || null,
+                          pod_document_url: podUrl || null
+                        });
+                        // Then update status
+                        await handleUpdateStatus('TRUCK_ARRIVED');
+                      } catch (err: any) {
+                        toast.error('Gagal menyimpan data kendaraan');
+                        console.error('Update vehicle data failed:', err);
+                      } finally {
+                        setSubmitting(false);
+                      }
                     }}
                     loading={submitting}
                     className="w-full h-14 !bg-rose-600 hover:!bg-rose-700 text-white rounded-xl shadow-lg shadow-rose-600/30 text-sm font-bold uppercase tracking-wider"
@@ -1123,7 +1264,7 @@ export default function WarehouseTaskExecutionPage() {
                                   </div>
                                   <div className="text-right">
                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Expected</p>
-                                     <p className="font-bold text-slate-700">{item.expected_qty} <span className="text-xs font-normal">{item.product?.unit}</span></p>
+                                     <p className="font-bold text-slate-700">{formatQtyWithConversion(Number(item.expected_qty) || 0, item.product)}</p>
                                   </div>
                                </div>
 
@@ -1320,11 +1461,53 @@ export default function WarehouseTaskExecutionPage() {
                  </Button>
               )}
 
-              {status === 'PUTAWAY_IN_PROGRESS' && (
-                 <div className="p-6 bg-emerald-50 text-emerald-500 rounded-xl text-center text-sm font-bold flex flex-col items-center gap-2 border-2 border-dashed border-emerald-200">
-                    <Warehouse size={24} /> Barang Sedang Disusun di Rak
-                 </div>
-              )}
+               {status === 'PUTAWAY_IN_PROGRESS' && (
+                  <div className="space-y-4 p-4 bg-emerald-50/30 rounded-xl border border-emerald-200">
+                     <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
+                        <Warehouse size={14} /> Alokasi Lokasi Putaway
+                     </h3>
+                     {items.filter(i => Number(i.actual_good_qty) > 0).map(item => {
+                        const assignment = joAssignments.find((a: any) => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
+                        const locCode = assignment?.location?.code || (item as any).location?.code;
+                        const entries = putawayEntries[item.id] || [];
+                        return (
+                           <Card key={item.id} className="p-4 border-emerald-200 bg-white">
+                              <div className="flex justify-between items-center mb-3">
+                                 <div>
+                                    <p className="font-bold text-sm text-slate-900">{item.product?.name}</p>
+                                    <p className="text-[10px] text-slate-500 font-mono">{item.product?.sku_code}</p>
+                                 </div>
+                                 <div className="text-right">
+                                    <p className="text-[10px] font-bold text-emerald-600">Qty</p>
+                                    <p className="font-bold text-lg text-emerald-700">{formatQtyWithConversion(Number(item.actual_good_qty) || 0, item.product)}</p>
+                                 </div>
+                              </div>
+                              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
+                                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Rencana Alokasi</p>
+                                 {locCode ? (
+                                    <p className="text-xl font-black font-mono text-blue-800 tracking-wider">{locCode}</p>
+                                 ) : (
+                                    <p className="text-sm font-bold text-blue-600/70 italic">Belum di-assign</p>
+                                 )}
+                              </div>
+                              {entries.length > 0 && (
+                                 <div className="space-y-1.5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Aktual Putaway</p>
+                                    {entries.map((entry: any, idx: number) => (
+                                       <div key={entry.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                                          <MapPin size={12} className="text-emerald-500" />
+                                          <span className="font-bold font-mono text-sm text-slate-800">{entry.locationCode || '—'}</span>
+                                          <span className="text-xs text-slate-500">x</span>
+                                          <span className="font-bold text-sm text-slate-700">{formatQtyWithConversion(Number(entry.qty) || 0, item.product)}</span>
+                                       </div>
+                                    ))}
+                                 </div>
+                              )}
+                           </Card>
+                        );
+                     })}
+                  </div>
+               )}
 
               {status === 'COMPLETED' && (
                  <div className="p-6 bg-slate-100 text-slate-400 rounded-xl text-center text-sm font-bold flex flex-col items-center gap-2 border-2 border-dashed border-slate-200">
@@ -1375,7 +1558,7 @@ export default function WarehouseTaskExecutionPage() {
                                        </div>
                                        <div className="text-right">
                                           <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Qty Bagus</p>
-                                          <p className="font-bold text-xl text-emerald-700">{item.actual_good_qty}</p>
+                                          <p className="font-bold text-xl text-emerald-700">{formatQtyWithConversion(Number(item.actual_good_qty) || 0, item.product)}</p>
                                        </div>
                                     </div>
 

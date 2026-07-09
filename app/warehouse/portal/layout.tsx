@@ -15,6 +15,17 @@ export default function WarehousePortalLayout({
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
 
+  // [AI] Force unregister old SW, then register new one to clear 503 cache
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      }).finally(() => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  }, []);
+
   useEffect(() => {
     // Check for PWA session in localStorage
     const storedSession = localStorage.getItem('sentralogis_wh_session');
@@ -56,7 +67,7 @@ export default function WarehousePortalLayout({
   // If on login page, don't show the header shell
   if (pathname === '/warehouse/portal/login') {
     return (
-      <div className="min-h-screen bg-slate-900 font-sans text-slate-900">
+      <div className="min-h-screen bg-slate-900 font-sans text-slate-900 pt-safe-area-top pb-safe-area-bottom">
         <Toaster position="top-center" />
         {children}
       </div>
@@ -65,7 +76,7 @@ export default function WarehousePortalLayout({
 
   // Active PWA Shell
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col pt-safe-area-top">
       <Toaster position="top-center" />
       
       {/* PWA App Bar */}
@@ -99,7 +110,7 @@ export default function WarehousePortalLayout({
       </main>
       
       {/* Safe area for mobile notch/home indicator */}
-      <div className="h-safe-area-bottom bg-slate-50" />
+      <div className="h-safe-area-bottom bg-slate-50 pb-safe-area-bottom" />
     </div>
   );
 }

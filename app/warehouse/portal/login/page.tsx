@@ -41,6 +41,7 @@ export default function WarehouseLoginPage() {
         name: data.name,
         whatsapp: data.whatsapp,
         role: data.role,
+        roles: data.roles && data.roles.length > 0 ? data.roles : [data.role],
         warehouse_id: data.warehouse_id
       };
       
@@ -56,7 +57,7 @@ export default function WarehouseLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-5 pt-safe-area-top pb-safe-area-bottom">
       <div className="w-full max-w-sm space-y-8 relative z-10">
         
         <div className="text-center space-y-2">
@@ -67,7 +68,7 @@ export default function WarehouseLoginPage() {
           <p className="text-sm font-medium text-slate-400">Warehouse Staff Portal</p>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-2xl space-y-5">
+        <form onSubmit={handleLogin} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-2xl space-y-5">
           <div className="space-y-4">
             <div>
               <label className="text-sm font-black text-slate-600 uppercase tracking-widest mb-1.5 block">Nomor WhatsApp</label>
@@ -79,7 +80,7 @@ export default function WarehouseLoginPage() {
                   value={wa}
                   onChange={e => setWa(e.target.value)}
                   placeholder="08123456789"
-                  className="w-full pl-10 h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full pl-10 h-12 sm:h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
                 />
               </div>
             </div>
@@ -95,7 +96,9 @@ export default function WarehouseLoginPage() {
                   value={pin}
                   onChange={e => setPin(e.target.value)}
                   placeholder="••••••"
-                  className="w-full pl-10 h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center tracking-widest text-lg font-mono"
+                  className="w-full pl-10 h-12 sm:h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-center tracking-widest text-lg font-mono"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                 />
               </div>
             </div>
@@ -110,7 +113,7 @@ export default function WarehouseLoginPage() {
           </Button>
         </form>
         
-          <p className="text-center text-sm font-bold text-slate-600">
+        <p className="text-center text-sm font-bold text-slate-600 px-4">
           Gunakan PIN yang diberikan oleh Admin Gudang
         </p>
       </div>

@@ -45,7 +45,10 @@ export default function LoginPage() {
     resizeCanvas();
 
     // Spawn many stars for a rich galaxy feel (hilir mudik)
-    const particleCount = Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
+    const isMobile = canvas.width < 768;
+    const particleCount = isMobile
+      ? Math.min(60, Math.floor((canvas.width * canvas.height) / 10000))
+      : Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
     const colors = ["#00E5FF", "#FF7043", "#00E676", "#818CF8", "#F8FAFC", "#E879F9", "#FBBF24", "#FB7185", "#34D399", "#60A5FA"];
 
     for (let i = 0; i < particleCount; i++) {
@@ -92,22 +95,24 @@ export default function LoginPage() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Draw connection lines between nearby particles for constellation effect
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 100) {
-            ctx.save();
-            ctx.globalAlpha = (1 - dist / 100) * 0.08;
-            ctx.strokeStyle = "#818CF8";
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
-            ctx.restore();
+      // Draw connection lines between nearby particles (skip on mobile for performance)
+      if (!isMobile) {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) {
+              ctx.save();
+              ctx.globalAlpha = (1 - dist / 100) * 0.08;
+              ctx.strokeStyle = "#818CF8";
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+              ctx.restore();
+            }
           }
         }
       }
@@ -233,10 +238,10 @@ export default function LoginPage() {
     <div className="min-h-screen relative overflow-hidden bg-[#050816] flex items-center justify-center">
       
       {/* Exit Button */}
-      <div className="absolute top-6 left-6 z-50">
-        <a href="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50 pt-safe-area-top">
+        <a href="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 sm:px-4 py-2.5 sm:py-2 rounded-full backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
           <ArrowRight className="w-4 h-4 rotate-180" />
-          <span className="text-xs font-bold uppercase tracking-wider">Kembali ke Website</span>
+          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Kembali</span>
         </a>
       </div>
 
@@ -258,7 +263,7 @@ export default function LoginPage() {
       <canvas id="cosmic-canvas" className="absolute inset-0 pointer-events-none z-[1]" />
 
       {/* Login Form */}
-      <div className="w-full flex items-center justify-center p-6 sm:p-8 lg:p-12 relative z-10">
+      <div className="w-full flex items-center justify-center p-5 sm:p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md">
           <div className="relative" ref={cardRef}>
             <div
@@ -282,7 +287,7 @@ export default function LoginPage() {
               }}
             />
 
-            <div className="relative backdrop-blur-2xl bg-white/[0.05] border border-white/[0.1] rounded-[2rem] p-8 sm:p-10 shadow-2xl overflow-hidden">
+            <div className="relative backdrop-blur-2xl bg-white/[0.05] border border-white/[0.1] rounded-[2rem] p-6 sm:p-10 shadow-2xl overflow-hidden">
               <div
                 className="absolute inset-0 opacity-30 pointer-events-none"
                 style={{
@@ -309,14 +314,7 @@ export default function LoginPage() {
 
               {/* Form Header with Logo */}
               <div className="text-center mb-8 relative z-10">
-                <div className="flex items-center justify-center gap-3 mb-6">
-                  <img src="/sentralogis_logo.svg" alt="Sentralogis" className="h-14 w-auto drop-shadow-lg" />
-                  <span className="text-white font-black text-2xl tracking-tight">SENTRALOGIS</span>
-                </div>
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm mb-4">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-white/60 text-xs font-medium tracking-wide">Platform Active — v2.6</span>
-                </div>
+                
                 <h2 className="text-2xl font-bold text-white tracking-tight">Welcome Back</h2>
                 <p className="mt-2 text-sm text-white/40">Sign in to your workspace</p>
               </div>
@@ -353,7 +351,7 @@ export default function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@company.com"
                       autoComplete="email"
-                      className="w-full pl-12 pr-4 py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
+                      className="w-full pl-12 pr-4 py-4 sm:py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all text-base"
                       required
                     />
                   </div>
@@ -373,13 +371,13 @@ export default function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••"
                       autoComplete="current-password"
-                      className="w-full pl-12 pr-14 py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
+                      className="w-full pl-12 pr-14 py-4 sm:py-4 bg-white/[0.06] border border-white/[0.1] rounded-xl outline-none text-white placeholder-white/25 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all text-base"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors p-1"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -389,7 +387,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-3 group relative overflow-hidden"
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-3 group relative overflow-hidden text-base"
                 >
                   <div
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -412,11 +410,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              <div className="mt-8 pt-6 border-t border-white/[0.08] text-center relative z-10">
-                <p className="text-[10px] text-white/25 font-medium uppercase tracking-[0.2em]">
-                  Secured by Sentralogis Core v2.6
-                </p>
-              </div>
+              
             </div>
           </div>
 
