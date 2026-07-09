@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Sparkles, 
@@ -31,7 +31,8 @@ import {
   BarChart3,
   Truck,
   Package,
-  Warehouse
+  Warehouse,
+  ChevronDown
 } from 'lucide-react';
 import toast, { Toaster } from "react-hot-toast";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -39,7 +40,20 @@ import type { Locale } from "@/lib/i18n/translations";
 
 export default function SentralogisCosmicLanding() {
   const [copied, setCopied] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const langRef = useRef<HTMLDivElement>(null);
   const { locale, setLocale, t } = useLanguage();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const copyEmail = () => {
     navigator.clipboard.writeText("info@sentralogis.com");
@@ -266,18 +280,41 @@ export default function SentralogisCosmicLanding() {
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-3">
-            {/* Language Switcher — Flag Emoji */}
-            <div className="flex items-center gap-0.5 border border-white/10 rounded-full px-1 py-0.5 bg-slate-900/60">
-              {([
-                { code: 'id' as Locale, flag: '🇮🇩', label: 'Indonesia' },
-                { code: 'en' as Locale, flag: '🇬🇧', label: 'English' },
-                { code: 'zh' as Locale, flag: '🇨🇳', label: '中文' },
-              ]).map(l => (
-                <button key={l.code} onClick={() => setLocale(l.code)} title={l.label}
-                  className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-sm sm:text-base rounded-full transition-all ${locale === l.code ? 'bg-cyan-500/20 ring-1 ring-cyan-400/40 shadow-[0_0_8px_rgba(6,182,212,0.3)]' : 'hover:bg-white/10'}`}>
-                  {l.flag}
-                </button>
-              ))}
+            {/* Language Selector — Dropdown Flag */}
+            <div className="relative" ref={langRef}>
+              <button 
+                onClick={() => setLangOpen(!langOpen)}
+                className="flex items-center gap-1 border border-white/10 rounded-full px-2 py-1.5 bg-slate-900/60 hover:bg-slate-800/80 transition-colors"
+              >
+                <span className="text-base sm:text-lg">
+                  {locale === 'id' ? '🇮🇩' : locale === 'en' ? '🇬🇧' : '🇨🇳'}
+                </span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${langOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {langOpen && (
+                <div className="absolute right-0 top-full mt-2 w-40 py-1.5 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50">
+                  {([
+                    { code: 'id' as Locale, flag: '🇮🇩', label: 'Indonesia' },
+                    { code: 'en' as Locale, flag: '🇬🇧', label: 'English' },
+                    { code: 'zh' as Locale, flag: '🇨🇳', label: '中文' },
+                  ]).map(l => (
+                    <button 
+                      key={l.code} 
+                      onClick={() => { setLocale(l.code); setLangOpen(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                        locale === l.code 
+                          ? 'bg-cyan-500/15 text-cyan-300' 
+                          : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <span className="text-lg">{l.flag}</span>
+                      <span className="font-medium">{l.label}</span>
+                      {locale === l.code && <span className="ml-auto text-cyan-400 text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 1. PORTAL GUDANG — Icon only on mobile, full text on desktop */}
