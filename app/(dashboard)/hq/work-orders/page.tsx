@@ -11,9 +11,9 @@ import {
   CheckCircle2,
   Truck, Activity, ShieldCheck, TrendingUp,
   ArrowRight, Users, Layers, ExternalLink, X,
-  Warehouse, Ship, LayoutGrid
+  Warehouse, Ship, LayoutGrid, AlertCircle
 } from 'lucide-react';
-import { SBU_MAP } from '@/lib/utils/sbuMapping';
+import { SBU_MAP, sbuToWoType, type SBUType } from '@/lib/utils/sbuMapping';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import CreateWOForm from './components/CreateWOForm';
 import HandoverApprovalModal from './components/HandoverApprovalModal';
 import RejectedViewModal from './components/RejectedViewModal';
+import HistoryModal from '@/components/shared/HistoryModal';
 
 interface WorkOrder {
   id: string;
@@ -34,6 +35,7 @@ interface WorkOrder {
   md_entities: { name: string; legal_name?: string };
   wo_items: any[];
   hasPendingCosts?: boolean;
+  lastInitials?: string;
 }
 
 const TABS = [
@@ -73,10 +75,36 @@ export default function HQWorkOrdersPage() {
   const [selectedWOForApproval, setSelectedWOForApproval] = useState<WorkOrder | null>(null);
   const [showRejectedModal, setShowRejectedModal] = useState(false);
   const [selectedWOForRejected, setSelectedWOForRejected] = useState<WorkOrder | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedEntityForHistory, setSelectedEntityForHistory] = useState<{id: string, type: 'work_order'|'job_order', title: string} | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   // [AI] SBU filter state — synced with URL ?sbu= param
   const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
+  const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!profile?.tenant_id) return;
+    supabase
+      .from('tenant_sbus')
+      .select('sbu_type')
+      .eq('tenant_id', profile.tenant_id)
+      .eq('status', 'active')
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const activeWoTypes = new Set(
+            data.map((s: any) => sbuToWoType(s.sbu_type as SBUType))
+          );
+          setActiveSbuTypes(activeWoTypes);
+        }
+      });
+  }, [profile?.tenant_id]);
+
+  useEffect(() => {
+    if (activeSbuTypes.size > 0 && sbuFilter !== 'all' && !activeSbuTypes.has(sbuFilter)) {
+      handleSbuFilterChange('all');
+    }
+  }, [activeSbuTypes, sbuFilter]);
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -135,6 +163,8 @@ export default function HQWorkOrdersPage() {
               job_orders(
                 id,
                 status,
+                fleet_id,
+                driver_id,
                 is_doc_finished,
                 is_cost_finished,
                 transporter:md_entities!transporter_id(name)
@@ -154,10 +184,56 @@ export default function HQWorkOrdersPage() {
       const wos = woRes.data || [];
       const pendingCosts = costsRes.data || [];
 
+// [AI] Fetch latest audit log for each WO to get last user initials
+         const woIds = wos.map(w => w.id);
+         let latestLogs: Record<string, any> = {};
+         if (woIds.length > 0) {
+           const { data: logs } = await supabase.from('wo_audit_logs')
+             .select('entity_id, performed_by')
+             .in('entity_id', woIds)
+             .eq('entity_type', 'work_order')
+             .order('performed_at', { ascending: false });
+
+           // Get unique performed_by user IDs
+           const performedByIds = [...new Set((logs || []).map(l => l.performed_by).filter(Boolean))];
+           
+           // Fetch user names from tenant_users
+           let profilesMap: Record<string, any> = {};
+           if (performedByIds.length > 0) {
+             const { data: profilesData } = await supabase
+               .from('tenant_users')
+               .select('user_id, full_name')
+               .in('user_id', performedByIds);
+             
+             if (profilesData) {
+               profilesMap = Object.fromEntries(profilesData.map(p => [p.user_id, { name: p.full_name }]));
+             }
+           }
+           
+           if (logs) {
+             for (const log of logs) {
+               if (!latestLogs[log.entity_id]) {
+                 latestLogs[log.entity_id] = { ...log, user: log.performed_by && profilesMap[log.performed_by] };
+               }
+             }
+           }
+         }
+
       const hydratedWos = wos.map(wo => {
         const joIds = wo.wo_items?.flatMap((i: any) => i.job_orders?.map((j: any) => j.id)) || [];
         const hasPending = pendingCosts.some(c => joIds.includes(c.jo_id));
-        return { ...wo, hasPendingCosts: hasPending };
+        const latestLog = latestLogs[wo.id];
+        let initials = 'S'; // System fallback
+        if (latestLog?.user?.profile?.name) {
+          initials = latestLog.user.profile.name.substring(0, 2).toUpperCase();
+        } else if (latestLog?.user?.profile?.email) {
+          initials = latestLog.user.profile.email.substring(0, 2).toUpperCase();
+        } else if (wo.updated_by || wo.created_by) {
+          // If no log yet, use generic user
+          initials = 'U';
+        }
+
+        return { ...wo, hasPendingCosts: hasPending, lastInitials: initials };
       });
 
       setWorkOrders(hydratedWos);
@@ -223,8 +299,12 @@ export default function HQWorkOrdersPage() {
           allItems.some((i: any) => i.sbu_type === 'WAREHOUSE' && ['in_progress', 'truck_arrived', 'unloading', 'checking', 'putaway_in_progress'].includes(i.status?.toLowerCase() || ''))
         );
 
-        const anyAssigned = !isCompleted && !hasHandoverPending && !hasHandoverRejected && !anyMoving && allJobs.some(j => j.fleet_id && j.driver_id);
-        const isDraft = s === 'DRAFT' && !hasHandoverPending && !hasHandoverRejected;
+        const anyAssigned = !isCompleted && !hasHandoverPending && !hasHandoverRejected && !anyMoving && (
+          allJobs.some(j => (j.fleet_id && j.driver_id) || ['assigned', 'confirmed_assigned', 'dispatched'].includes((j.status || '').toLowerCase())) ||
+          allItems.some((i: any) => ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress'].includes((i.status || '').toLowerCase())) ||
+          ['ASSIGNED', 'ACTIVE'].includes(s)
+        );
+        const isDraft = s === 'DRAFT' && !hasHandoverPending && !hasHandoverRejected && !anyAssigned && !anyMoving && !isCompleted;
         const isPending = (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !hasHandoverPending && !hasHandoverRejected && !anyAssigned && !anyMoving && !isCompleted;
 
         if (statusFilter === 'draft') return matchesSearch && matchesSbu && isDraft;
@@ -247,6 +327,24 @@ export default function HQWorkOrdersPage() {
       return matchesSearch && matchesStatus && matchesSbu;
     });
   }, [workOrders, searchTerm, statusFilter, sbuFilter]);
+
+  const stats = useMemo(() => {
+    const total = workOrders.length;
+    const active = workOrders.filter(wo => {
+      const s = wo.status?.toUpperCase() || '';
+      const allJobs = wo.wo_items?.flatMap((i: any) => i.job_orders || []).filter((j: any) => j.status !== 'cancelled') || [];
+      const anyMoving = allJobs.some((j: any) =>
+        j.status?.toUpperCase().startsWith('MENUJU') ||
+        j.status?.toUpperCase().startsWith('TIBA') ||
+        ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+      );
+      const anyAssigned = allJobs.some((j: any) => j.fleet_id && j.driver_id);
+      return !['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s) && (anyMoving || anyAssigned);
+    }).length;
+    const handover = workOrders.filter(w => w.status === 'handover_pending' || w.wo_items?.some((i: any) => i.status === 'handover_pending')).length;
+    const completed = workOrders.filter(w => ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(w.status)).length;
+    return { total, active, handover, completed };
+  }, [workOrders]);
 
   const getStatusBadge = (wo: WorkOrder) => {
     const s = wo.status?.toUpperCase() || '';
@@ -307,7 +405,8 @@ export default function HQWorkOrdersPage() {
 
     if (anyAccepted) return <Badge className="!bg-blue-100 !text-blue-700 !border-blue-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ACCEPTED</Badge>;
 
-    const anyAssigned = allJobs.some(j => j.fleet_id && j.driver_id);
+    const anyAssigned = allJobs.some(j => (j.fleet_id && j.driver_id) || ['assigned', 'confirmed_assigned', 'dispatched', 'in_progress'].includes((j.status || '').toLowerCase())) ||
+                        allItems.some((i: any) => ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress'].includes((i.status || '').toLowerCase()));
     if (anyAssigned || s === 'ACTIVE' || s === 'ASSIGNED') {
       return <Badge className="!bg-sky-100 !text-sky-700 !border-sky-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ASSIGNED UNITS</Badge>;
     }
@@ -473,7 +572,9 @@ export default function HQWorkOrdersPage() {
           <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {[
               { id: 'all', label: 'All SBU', icon: Layers },
-              ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+              ...Object.entries(SBU_BADGE_CONFIG)
+                .filter(([key]) => activeSbuTypes.size === 0 || activeSbuTypes.has(key))
+                .map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
             ].map(item => {
               const isActive = sbuFilter === item.id;
               const Icon = item.icon;
@@ -558,7 +659,9 @@ export default function HQWorkOrdersPage() {
           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
           {[
             { id: 'all', label: 'All SBU', icon: Layers },
-            ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
+            ...Object.entries(SBU_BADGE_CONFIG)
+              .filter(([key]) => activeSbuTypes.size === 0 || activeSbuTypes.has(key))
+              .map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
           ].map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
@@ -582,6 +685,53 @@ export default function HQWorkOrdersPage() {
 
       {/* ===== MAIN CONTENT ===== */}
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6 pb-6">
+        {/* Operations Dashboard Metrics */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50/30 border border-blue-100/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-blue-900/60 uppercase tracking-wider">Total Orders</span>
+              <div className="p-2 bg-blue-500/10 text-blue-600 rounded-xl">
+                <Layers size={18} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-blue-900 mt-2">{stats.total}</h2>
+            <p className="text-[10px] text-blue-500 font-bold mt-1">All registered WOs</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50/30 border border-emerald-100/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-emerald-900/60 uppercase tracking-wider">Active Ops</span>
+              <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl animate-pulse">
+                <Activity size={18} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-emerald-900 mt-2">{stats.active}</h2>
+            <p className="text-[10px] text-emerald-500 font-bold mt-1">On road or in WMS</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50/30 border border-amber-100/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-900/60 uppercase tracking-wider">Awaiting Handover</span>
+              <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+                <ShieldCheck size={18} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-amber-900 mt-2">{stats.handover}</h2>
+            <p className="text-[10px] text-amber-500 font-bold mt-1">Need review & approval</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-50 to-slate-100/30 border border-slate-200/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-900/60 uppercase tracking-wider">Completed WOs</span>
+              <div className="p-2 bg-slate-900/10 text-slate-800 rounded-xl">
+                <CheckCircle2 size={18} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-slate-900 mt-2">{stats.completed}</h2>
+            <p className="text-[10px] text-slate-500 font-bold mt-1">Ready for invoicing</p>
+          </div>
+        </div>
+
         {/* Mobile: Active filter label */}
         <div className="lg:hidden flex items-center justify-between mb-4">
           <p className="text-sm text-slate-500">
@@ -609,11 +759,16 @@ export default function HQWorkOrdersPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-8 animate-in fade-in duration-700">
-            {filteredWorkOrders.map((wo) => (
-              <Card
-                key={wo.id}
-                className="group rounded-2xl border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(15,23,42,0.05)] bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-blue-200/60 transition-all duration-300 overflow-hidden flex flex-col"
-              >
+            {filteredWorkOrders.map((wo) => {
+              const sbuTypes = getWoSbuTypes(wo);
+              const primarySbu = sbuTypes[0] || 'TRUCKING';
+              const sbuBorderColor = primarySbu === 'WAREHOUSE' ? 'border-l-amber-500' : primarySbu === 'CLEARANCE' ? 'border-l-emerald-500' : primarySbu === 'FORWARDING' ? 'border-l-indigo-500' : 'border-l-blue-500';
+
+              return (
+                <Card
+                  key={wo.id}
+                  className={`group rounded-2xl border border-slate-200/60 border-l-4 ${sbuBorderColor} shadow-[0_2px_10px_-3px_rgba(15,23,42,0.05)] bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-blue-200/60 transition-all duration-300 overflow-hidden flex flex-col`}
+                >
                 <div className="p-5 flex-1 flex flex-col">
                   {/* Top Bar: Icon + Status */}
                   <div className="flex items-start justify-between mb-4">
@@ -697,6 +852,24 @@ export default function HQWorkOrdersPage() {
                         {wo.wo_items?.length || 0} JO
                       </div>
                     </div>
+                    <div className="w-[1px] h-8 bg-slate-200"></div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Last Action</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="w-5 h-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[9px] font-black border border-indigo-200">
+                          {wo.lastInitials || 'S'}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedEntityForHistory({ id: wo.id, type: 'work_order', title: `WO ${wo.wo_number} History` });
+                            setShowHistoryModal(true);
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+                        >
+                          View History
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -728,7 +901,7 @@ export default function HQWorkOrdersPage() {
                           </Button>
                           <Button
                             onClick={() => handleEdit(wo.id)}
-                            variant="outline"
+                            variant="secondary"
                             className="w-10 h-10 p-0 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0"
                             title="Edit WO Details"
                           >
@@ -741,7 +914,7 @@ export default function HQWorkOrdersPage() {
                     return (
                       <Button
                         onClick={() => handleEdit(wo.id)}
-                        variant="outline"
+                        variant="secondary"
                         className="flex-1 h-10 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
                       >
                         Detail WO <ArrowRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
@@ -760,7 +933,7 @@ export default function HQWorkOrdersPage() {
                   )}
                 </div>
               </Card>
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -787,6 +960,18 @@ export default function HQWorkOrdersPage() {
         <RejectedViewModal
           wo={selectedWOForRejected}
           onClose={() => setShowRejectedModal(false)}
+        />
+      )}
+
+      {showHistoryModal && selectedEntityForHistory && (
+        <HistoryModal
+          entityId={selectedEntityForHistory.id}
+          entityType={selectedEntityForHistory.type}
+          title={selectedEntityForHistory.title}
+          onClose={() => {
+            setShowHistoryModal(false);
+            setSelectedEntityForHistory(null);
+          }}
         />
       )}
     </div>

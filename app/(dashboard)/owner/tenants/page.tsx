@@ -21,6 +21,7 @@ interface Tenant {
   logo_url: string | null
   subscription_tier: string
   token_balance: number
+  token_used_month: number
   user_id: string
   status: string
   admin_email: string
@@ -281,21 +282,25 @@ export default function OwnerTenantsPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Token Balance</p>
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Token Balance</p>
                       <div className="flex items-center gap-2">
                         <Coins size={18} className="text-amber-500" />
                         <span className="text-xl font-black text-slate-900">{tenant.token_balance.toLocaleString()}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400 font-medium">Terpakai bulan ini</span>
+                      <span className="font-bold text-rose-500">{tenant.token_used_month?.toLocaleString() || 0} TKN</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
                       <button onClick={() => { setSelectedTenant(tenant); setIsResetModalOpen(true); }} className="h-10 w-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 transition-all shadow-sm" title="Reset Password"><Key size={18} /></button>
                       <a href={`/owner/statement/${tenant.tenant_code}`}><button className="h-10 w-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 transition-all shadow-sm" title="Token Statement"><FileText size={18} /></button></a>
                       <button onClick={() => { setSelectedTenantHistory(tenant); setIsHistoryOpen(true); }} className="h-10 w-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm" title="View History"><History size={18} /></button>
                       <button onClick={() => { setSelectedTenant(tenant); setIsGrantModalOpen(true); }} className="h-10 w-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Grant Tokens"><Plus size={20} /></button>
                     </div>
-                  </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm text-slate-600"><Mail size={14} className="text-slate-400" /><span className="truncate">{tenant.admin_email}</span></div>
@@ -346,6 +351,7 @@ export default function OwnerTenantsPage() {
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tenant Code</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Tenant</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Token Used</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Active SBU</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">WhatsApp</th>
                   <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Admin Email</th>
@@ -359,6 +365,10 @@ export default function OwnerTenantsPage() {
                     <td className="px-6 py-4 font-mono text-xs font-medium">{tenant.tenant_code}</td>
                     <td className="px-6 py-4 font-medium text-slate-900">{tenant.name || 'Unnamed'}</td>
                     <td className="px-6 py-4 font-bold text-slate-900">{tenant.token_balance.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-rose-600">{tenant.token_used_month?.toLocaleString() || '0'}</span>
+                      <span className="text-[10px] text-slate-400 ml-1">TKN</span>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
                         {(tenant.active_sbus || []).map((sbu) => {

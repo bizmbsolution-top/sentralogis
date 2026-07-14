@@ -36,22 +36,39 @@ export default function WarehouseWorkOrdersPage() {
   const [items, setItems] = useState<WOItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [assignedWarehouseId, setAssignedWarehouseId] = useState<string | null>(null);
+   const [statusFilter, setStatusFilter] = useState("ALL");
+   const [typeFilter, setTypeFilter] = useState("INBOUND");
+   const [assignedWarehouseId, setAssignedWarehouseId] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
 
   const fetchItems = useCallback(async () => {
     if (!profile?.tenant_id || !profile?.id) return;
     try {
       setLoading(true);
 
-      // 1. Get Assigned Warehouse
       const { data: orgUser } = await supabase
         .from('wo_organization_users')
         .select('assigned_warehouse_id')
         .eq('user_id', profile.id)
         .maybeSingle();
 
-      const whId = orgUser?.assigned_warehouse_id || null;
+      let whId = orgUser?.assigned_warehouse_id || profile?.warehouse_id || null;
+      
+      const { data: whData } = await supabase.from('md_warehouses').select('id, name').eq('tenant_id', profile.tenant_id);
+      if (whData) setWarehouses(whData);
+
+      if (!whId) {
+        if (selectedWarehouse) {
+          whId = selectedWarehouse;
+        } else {
+          setLoading(false);
+          return;
+        }
+      } else {
+        setSelectedWarehouse(whId);
+      }
+
       setAssignedWarehouseId(whId);
 
       // 2. Fetch WO Items
@@ -77,8 +94,16 @@ export default function WarehouseWorkOrdersPage() {
       let rawItems = (data as any) || [];
       
       // Filter by assigned warehouse ID if applicable
+      // Include both outbound (warehouse_id = source) and inbound (warehouse_id = destination) work orders
       if (whId) {
-        rawItems = rawItems.filter((item: any) => item.item_data?.warehouse_id === whId);
+        rawItems = rawItems.filter((item: any) => {
+          const itemWarehouseId = item.item_data?.warehouse_id;
+          const itemDirection = item.item_data?.direction;
+          
+          // For outbound work orders: warehouse_id is the source warehouse
+          // For inbound work orders: warehouse_id is the destination warehouse
+          return itemWarehouseId === whId;
+        });
       }
 
       // 3. Fetch Job Orders
@@ -103,7 +128,7 @@ export default function WarehouseWorkOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.tenant_id, profile?.id]);
+  }, [profile?.tenant_id, profile?.id, selectedWarehouse]);
 
   useEffect(() => {
     fetchItems();
@@ -115,27 +140,62 @@ export default function WarehouseWorkOrdersPage() {
     item.wo?.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const isItemCompleted = (item: WOItem) => {
-    if (['completed', 'done', 'selesai'].includes(item.status?.toLowerCase() || '')) return true;
-    const jos = item.job_orders || [];
-    // WO is completed only when it has JOs AND every JO is completed
-    return jos.length > 0 && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
-  };
+   const isItemCompleted = (item: WOItem) => {
+     if (['completed', 'done', 'selesai'].includes(item.status?.toLowerCase() || '')) return true;
+     const jos = item.job_orders || [];
+     return jos.length > 0 && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
+   };
 
-  const pendingCount = items.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
-  const inProgressCount = items.filter(i => !isItemCompleted(i) && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(i.status?.toLowerCase() || '')).length;
-  const completedCount = items.filter(i => isItemCompleted(i)).length;
+   const getItemType = (item: WOItem): string => {
+     const opType = item.item_data?.operation_type?.toUpperCase() || '';
+     const direction = item.item_data?.direction || '';
+     const isTransfer = opType.includes('TRANSFER');
+     if (isTransfer && direction === 'INBOUND') return 'TRANSFER_IN';
+     if (isTransfer && direction === 'OUTBOUND') return 'TRANSFER_OUT';
+     if (isTransfer) return 'TRANSFER_IN';
+     if (direction === 'INBOUND' || opType === 'INBOUND') return 'INBOUND';
+     if (direction === 'OUTBOUND' || opType === 'OUTBOUND') return 'OUTBOUND';
+     return 'UNKNOWN';
+   };
 
-  const displayItems = filteredItems.filter(item => {
-     if (statusFilter === 'ALL') return true;
-     const completed = isItemCompleted(item);
-     const s = item.status?.toLowerCase() || '';
-     
-     if (statusFilter === 'PENDING') return !completed && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s);
-     if (statusFilter === 'IN_PROGRESS') return !completed && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(s);
-     if (statusFilter === 'COMPLETED') return completed;
+   const allTypes = items.map(i => getItemType(i));
+   const inboundCount = allTypes.filter(t => t === 'INBOUND').length;
+   const outboundCount = allTypes.filter(t => t === 'OUTBOUND').length;
+   const transferCount = allTypes.filter(t => ['TRANSFER_IN', 'TRANSFER_OUT'].includes(t)).length;
+   const hasOutbound = outboundCount > 0;
+
+   const typeFilteredItems = items.filter(item => {
+     const itemType = getItemType(item);
+     if (typeFilter === 'ALL') return true;
+     if (typeFilter === 'INBOUND') return itemType === 'INBOUND';
+     if (typeFilter === 'OUTBOUND') return itemType === 'OUTBOUND';
+     if (typeFilter === 'TRANSFER') return ['TRANSFER_IN', 'TRANSFER_OUT'].includes(itemType);
      return true;
-  });
+   });
+
+   const pendingCount = typeFilteredItems.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
+   const inProgressCount = typeFilteredItems.filter(i => !isItemCompleted(i) && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(i.status?.toLowerCase() || '')).length;
+   const completedCount = typeFilteredItems.filter(i => isItemCompleted(i)).length;
+
+   const displayItems = filteredItems.filter(item => {
+      if (statusFilter === 'ALL' && typeFilter === 'ALL') return true;
+      const completed = isItemCompleted(item);
+      const s = item.status?.toLowerCase() || '';
+      
+      const matchesStatus = statusFilter === 'ALL' ? true : (
+        statusFilter === 'PENDING' ? (!completed && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s)) :
+        statusFilter === 'IN_PROGRESS' ? (!completed && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(s)) :
+        statusFilter === 'COMPLETED' ? completed : true
+      );
+      if (!matchesStatus) return false;
+
+      const itemType = getItemType(item);
+      if (typeFilter === 'ALL') return true;
+      if (typeFilter === 'INBOUND') return itemType === 'INBOUND';
+      if (typeFilter === 'OUTBOUND') return itemType === 'OUTBOUND';
+      if (typeFilter === 'TRANSFER') return ['TRANSFER_IN', 'TRANSFER_OUT'].includes(itemType);
+      return true;
+   });
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -151,6 +211,17 @@ export default function WarehouseWorkOrdersPage() {
                <h1 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">WMS Tasks</h1>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Daftar Pekerjaan Gudang</p>
             </div>
+            {!profile?.warehouse_id && warehouses.length > 0 && (
+              <select
+                value={selectedWarehouse}
+                onChange={(e) => setSelectedWarehouse(e.target.value)}
+                className="ml-4 px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-slate-900/10"
+              >
+                {warehouses.map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            )}
          </div>
       </div>
 
@@ -185,6 +256,24 @@ export default function WarehouseWorkOrdersPage() {
          </button>
       </div>
 
+      {/* Type Tabs */}
+      <div className="flex gap-2 flex-wrap">
+         <button onClick={() => setTypeFilter('ALL')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'ALL' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-300'}`}>
+            ALL <span className="opacity-60">({items.length})</span>
+         </button>
+         <button onClick={() => setTypeFilter('INBOUND')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'INBOUND' ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/20' : 'bg-white text-sky-600 border border-sky-200 hover:border-sky-300'}`}>
+            INBOUND <span className="opacity-60">({inboundCount})</span>
+         </button>
+         {hasOutbound && (
+           <button onClick={() => setTypeFilter('OUTBOUND')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'OUTBOUND' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'bg-white text-orange-600 border border-orange-200 hover:border-orange-300'}`}>
+              OUTBOUND <span className="opacity-60">({outboundCount})</span>
+           </button>
+         )}
+         <button onClick={() => setTypeFilter('TRANSFER')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'TRANSFER' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-white text-purple-600 border border-purple-200 hover:border-purple-300'}`}>
+            TRANSFER <span className="opacity-60">({transferCount})</span>
+         </button>
+      </div>
+
       {/* Search & List */}
       <Card className="bg-white border border-slate-200 shadow-sm !rounded-[2.5rem] overflow-hidden">
          <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -216,7 +305,9 @@ export default function WarehouseWorkOrdersPage() {
                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
                   <ClipboardList className="w-8 h-8 text-slate-300" />
                </div>
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tidak ada tugas ditemukan</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {!assignedWarehouseId && !profile?.warehouse_id ? 'Pilih gudang terlebih dahulu' : 'Tidak ada tugas ditemukan'}
+                </p>
             </div>
          ) : (
             <div className="divide-y divide-slate-100">
@@ -225,9 +316,38 @@ export default function WarehouseWorkOrdersPage() {
                    const completedJos = jos.filter((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
                    const isCompleted = isItemCompleted(item);
                    const opType = item.item_data?.operation_type?.toUpperCase() || '';
-                   const isInbound = opType === 'INBOUND';
-                   
-                   let badgeComponent = <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">MENUNGGU WMS EKSEKUSI</Badge>;
+                    const direction = item.item_data?.direction || '';
+                    const isInbound = opType === 'INBOUND' || direction === 'INBOUND';
+                    const isTransfer = opType.includes('TRANSFER');
+                    const isInboundTransfer = isTransfer && direction === 'INBOUND';
+                    const isOutboundTransfer = isTransfer && direction === 'OUTBOUND';
+                    
+                    let opLabel = 'OUTBOUND';
+                    let opShort = 'OUT';
+                    let opBgIcon = 'bg-orange-100 text-orange-600';
+                    let opBgBadge = 'bg-orange-100 text-orange-700';
+                    
+                    if (isInboundTransfer) {
+                      opLabel = 'TRANSFER IN';
+                      opShort = 'IN';
+                      opBgIcon = 'bg-purple-100 text-purple-600';
+                      opBgBadge = 'bg-purple-100 text-purple-700';
+                    } else if (isOutboundTransfer) {
+                      opLabel = 'TRANSFER OUT';
+                      opShort = 'OUT';
+                      opBgIcon = 'bg-purple-100 text-purple-600';
+                      opBgBadge = 'bg-purple-100 text-purple-700';
+                    } else if (isInbound) {
+                      opLabel = 'INBOUND';
+                      opShort = 'IN';
+                      opBgIcon = 'bg-sky-100 text-sky-600';
+                      opBgBadge = 'bg-sky-100 text-sky-700';
+                    }
+                   let badgeComponent = <Badge className="!bg-amber-100 !text-amber-700 !border-amber-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PERLU ASSIGNMENT</Badge>;
+
+                   if (item.status === 'menunggu_wh_eksekusi') {
+                      badgeComponent = <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">SIAP EKSEKUSI</Badge>;
+                   }
 
                    if (isCompleted || item.status === 'completed') {
                       badgeComponent = <Badge className="!bg-indigo-950 !text-white !border-indigo-950 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PEKERJAAN SELESAI</Badge>;
@@ -241,17 +361,17 @@ export default function WarehouseWorkOrdersPage() {
                    return (
                       <div key={item.id} className="p-6 hover:bg-slate-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6 group">
                          <div className="flex items-start gap-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isInbound ? 'bg-sky-100 text-sky-600' : 'bg-orange-100 text-orange-600'}`}>
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${opBgIcon}`}>
                                <div className="text-center leading-none">
-                                  <div className="text-[9px] font-black tracking-wider">{isInbound ? 'IN' : 'OUT'}</div>
+                                  <div className="text-[9px] font-black tracking-wider">{opShort}</div>
                                   <Package className="w-5 h-5 mx-auto" />
                                </div>
                             </div>
                             <div>
                                <div className="flex items-center gap-2 mb-1 flex-wrap">
                                   <h3 className="font-bold text-slate-900">{item.wo?.wo_number}</h3>
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isInbound ? 'bg-sky-100 text-sky-700' : 'bg-orange-100 text-orange-700'}`}>
-                                     {isInbound ? 'INBOUND' : 'OUTBOUND'}
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${opBgBadge}`}>
+                                     {opLabel}
                                   </span>
                                   {badgeComponent}
                                </div>

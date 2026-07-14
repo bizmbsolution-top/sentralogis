@@ -13,49 +13,53 @@ import { createStaffAdmin } from '@/app/(dashboard)/tenant/staff/actions';
 import toast from 'react-hot-toast';
 
 const hqRoles = [
-  { code: 'hq_commercial_director', name: 'VP Commercial / CCO' },
-  { code: 'hq_sales_manager', name: 'Sales Manager' },
-  { code: 'hq_sales_staff', name: 'Key Account Executive' },
-  { code: 'hq_pricing_analyst', name: 'Pricing Analyst' },
-  { code: 'hq_marketing_staff', name: 'Marketing Staff' },
-  { code: 'hq_director_ops', name: 'Direktur Operasional' },
-  { code: 'hq_director_fin', name: 'Direktur Keuangan' },
-  { code: 'hq_director_cs', name: 'Direktur Customer Service' },
-  { code: 'hq_cs', name: 'Customer Service' },
-  { code: 'hq_ops', name: 'Operations Staff' },
-  { code: 'hq_finance', name: 'Finance Staff' },
+  { code: 'hq_commercial_director', name: 'HQ Commercial Director', division: 'Commercial & Sales', level: 'director' },
+  { code: 'hq_sales_manager', name: 'HQ Sales Manager', division: 'Commercial & Sales', level: 'manager' },
+  { code: 'hq_sales_staff', name: 'HQ Sales Staff', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_pricing_analyst', name: 'HQ Pricing Analyst', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_marketing_staff', name: 'HQ Marketing Staff', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_director_ops', name: 'Direktur Operasional', division: 'Operations', level: 'director' },
+  { code: 'hq_director_fin', name: 'Direktur Keuangan', division: 'Finance', level: 'director' },
+  { code: 'hq_director_bizdev', name: 'Direktur Business Development', division: 'General / Management', level: 'director' },
+  { code: 'hq_director_hrd', name: 'Direktur HRD', division: 'HR & Admin', level: 'director' },
+  { code: 'hq_director_cs', name: 'Direktur Customer Service', division: 'Operations', level: 'director' },
+  { code: 'hq_cs', name: 'Customer Service', division: 'Operations', level: 'staff' },
+  { code: 'hq_ops', name: 'Operations Staff', division: 'Operations', level: 'staff' },
+  { code: 'hq_finance', name: 'Finance Staff', division: 'Finance', level: 'staff' },
+  { code: 'tenant_admin', name: 'Tenant Admin / Management', division: 'General / Management', level: 'manager' },
 ];
 
 const sbuRolesMap: any = {
   tr: [
-    { code: 'sbu_manager_tr', name: 'Manager Trucking' },
-    { code: 'sbu_admin_tr', name: 'Admin Kantor Trucking' },
-    { code: 'sbu_ops_tr', name: 'Operations Trucking' },
-    { code: 'sbu_fin_tr', name: 'Finance Trucking' },
+    { code: 'sbu_manager_tr', name: 'Manager Trucking', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_tr', name: 'Admin Kantor Trucking', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_tr', name: 'Operations Trucking', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_tr', name: 'Finance Trucking', division: 'Finance', level: 'staff' },
   ],
   wh: [
-    { code: 'sbu_manager_wh', name: 'Manager Warehouse' },
-    { code: 'sbu_admin_wh', name: 'Admin Kantor Warehouse' },
-    { code: 'sbu_ops_wh', name: 'Operations Warehouse' },
-    { code: 'sbu_fin_wh', name: 'Finance Warehouse' },
+    { code: 'sbu_manager_wh', name: 'Manager Warehouse', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_wh', name: 'Admin Kantor Warehouse', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_wh', name: 'Operations Warehouse', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_wh', name: 'Finance Warehouse', division: 'Finance', level: 'staff' },
   ],
   ink: [
-    { code: 'sbu_manager_ink', name: 'Manager Clearance' },
-    { code: 'sbu_admin_ink', name: 'Admin Kantor Clearance' },
-    { code: 'sbu_ops_ink', name: 'Operations Clearance' },
-    { code: 'sbu_fin_ink', name: 'Finance Clearance' },
+    { code: 'sbu_manager_ink', name: 'Manager Clearance', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_ink', name: 'Admin Kantor Clearance', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_ink', name: 'Operations Clearance', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_ink', name: 'Finance Clearance', division: 'Finance', level: 'staff' },
   ],
   fwd: [
-    { code: 'sbu_manager_fwd', name: 'Manager Forwarding' },
-    { code: 'sbu_admin_fwd', name: 'Admin Kantor Forwarding' },
-    { code: 'sbu_ops_fwd', name: 'Operations Forwarding' },
-    { code: 'sbu_fin_fwd', name: 'Finance Forwarding' },
+    { code: 'sbu_manager_fwd', name: 'Manager Forwarding', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_fwd', name: 'Admin Kantor Forwarding', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_fwd', name: 'Operations Forwarding', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_fwd', name: 'Finance Forwarding', division: 'Finance', level: 'staff' },
   ],
 };
 
 export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, warehouses }: any) {
   const [loading, setLoading] = useState(false);
   const [staffType, setStaffType] = useState<'hq' | 'sbu'>('hq');
+  const [jobLevel, setJobLevel] = useState<string>('');
   const [selectedSbu, setSelectedSbu] = useState<any>(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [successData, setSuccessData] = useState<any>(null);
@@ -158,14 +162,14 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
             <div className="grid grid-cols-2 gap-4 p-1.5 bg-slate-100 rounded-2xl">
               <button
                 type="button"
-                onClick={() => { setStaffType('hq'); setFormData({...formData, roleCode: '', division: 'General'}); }}
+                onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseId(''); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'hq' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 HQ Staff
               </button>
               <button
                 type="button"
-                onClick={() => { setStaffType('sbu'); setFormData({...formData, roleCode: '', division: ''}); }}
+                onClick={() => { setStaffType('sbu'); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'sbu' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 SBU Staff
@@ -204,8 +208,8 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
                 icon={<Phone className="w-4 h-4 text-slate-400"/>}
               />
               
-              {staffType === 'sbu' ? (
-                <div className="space-y-1.5">
+              {staffType === 'sbu' && (
+                <div className="space-y-1.5 md:col-span-2">
                    <label className="text-sm font-bold text-slate-700 ml-1">Select Unit (SBU)</label>
                    <select 
                      className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
@@ -214,7 +218,8 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
                      onChange={e => {
                        const sbu = sbus.find((s: any) => s.id === e.target.value);
                        setSelectedSbu(sbu);
-                       setFormData({...formData, roleCode: ''});
+                       setJobLevel('');
+                       setFormData({...formData, roleCode: '', division: ''});
                      }}
                    >
                      <option value="">Choose Unit...</option>
@@ -223,60 +228,110 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
                      ))}
                    </select>
                 </div>
-              ) : (
+              )}
+
+              {(staffType === 'hq' || (staffType === 'sbu' && selectedSbu)) && (
                 <>
                   <div className="space-y-1.5">
-                     <label className="text-sm font-bold text-slate-700 ml-1">Division</label>
+                     <label className="text-sm font-bold text-slate-700 ml-1">Division (Divisi)</label>
                      <select 
                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
                        value={formData.division}
-                       onChange={e => setFormData({...formData, division: e.target.value})}
+                       onChange={e => {
+                         const newDiv = e.target.value;
+                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const filtered = rawRoles
+                           .filter((r: any) => !newDiv || r.division === newDiv)
+                           .filter((r: any) => !jobLevel || r.level === jobLevel);
+                         const valid = filtered.some((r: any) => r.code === formData.roleCode);
+                         setFormData({
+                           ...formData,
+                           division: newDiv,
+                           roleCode: valid ? formData.roleCode : (filtered.length === 1 ? filtered[0].code : '')
+                         });
+                       }}
                      >
-                       <option value="General">General / Management</option>
-                       <option value="Commercial & Sales">Commercial & Sales</option>
-                       <option value="Operations">Operations</option>
-                       <option value="Finance">Finance</option>
-                       <option value="HR & Admin">HR & Admin</option>
-                       <option value="IT">IT</option>
+                       <option value="">-- All Divisions --</option>
+                       {(staffType === 'hq' 
+                         ? ['General / Management', 'Commercial & Sales', 'Operations', 'Finance', 'HR & Admin', 'IT']
+                         : ['General / Management', 'Operations', 'Finance', 'HR & Admin']
+                       ).map(d => <option key={d} value={d}>{d}</option>)}
                      </select>
                   </div>
+
                   <div className="space-y-1.5">
-                     <label className="text-sm font-bold text-slate-700 ml-1">HQ Position</label>
+                     <label className="text-sm font-bold text-slate-700 ml-1">Level / Jenjang</label>
+                     <select 
+                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                       value={jobLevel}
+                       onChange={e => {
+                         const newLvl = e.target.value;
+                         setJobLevel(newLvl);
+                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const filtered = rawRoles
+                           .filter((r: any) => !formData.division || r.division === formData.division)
+                           .filter((r: any) => !newLvl || r.level === newLvl);
+                         const valid = filtered.some((r: any) => r.code === formData.roleCode);
+                         if (!valid) {
+                           setFormData(prev => ({
+                             ...prev,
+                             roleCode: filtered.length === 1 ? filtered[0].code : ''
+                           }));
+                         }
+                       }}
+                     >
+                       <option value="">-- All Levels --</option>
+                       {(staffType === 'hq'
+                         ? [{ id: 'director', label: 'Direktur' }, { id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                         : [{ id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                       ).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                     </select>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                     <label className="text-sm font-bold text-slate-700 ml-1">Position / Role Code</label>
                      <select 
                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
                        required
                        value={formData.roleCode}
-                       onChange={e => setFormData({...formData, roleCode: e.target.value})}
+                       onChange={e => {
+                         const newCode = e.target.value;
+                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const roleObj = rawRoles.find((r: any) => r.code === newCode);
+                         if (roleObj) {
+                           setJobLevel(roleObj.level);
+                           setFormData({
+                             ...formData,
+                             roleCode: newCode,
+                             division: roleObj.division
+                           });
+                         } else {
+                           setFormData({ ...formData, roleCode: newCode });
+                         }
+                       }}
                      >
                        <option value="">Select Position...</option>
-                       {hqRoles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                        {(() => {
+                          const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                          const filtered = rawRoles
+                            .filter((r: any) => !formData.division || r.division === formData.division)
+                            .filter((r: any) => !jobLevel || r.level === jobLevel);
+                          const listToShow = filtered.length > 0 ? filtered : rawRoles;
+                          return (
+                            <>
+                              {filtered.length === 0 && (formData.division || jobLevel) && (
+                                <option value="" disabled>-- No exact match for filter (Showing all {rawRoles.length}) --</option>
+                              )}
+                              {listToShow.map((r: any) => (
+                                <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+                              ))}
+                            </>
+                          );
+                        })()}
                      </select>
                   </div>
-                </>
-              )}
 
-              {staffType === 'sbu' && selectedSbu && (
-                <>
-                  <div className="space-y-1.5 md:col-span-2">
-                     <label className="text-sm font-bold text-slate-700 ml-1">SBU Position for {selectedSbu.sbu_name}</label>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {sbuRolesMap[selectedSbu.sbu_type]?.map((r: any) => (
-                          <button
-                            key={r.code}
-                            type="button"
-                            onClick={() => setFormData({...formData, roleCode: r.code})}
-                            className={`p-4 rounded-2xl border text-left transition-all ${
-                              formData.roleCode === r.code ? 'border-blue-500 bg-blue-50/50 shadow-inner' : 'border-slate-100 bg-slate-50 hover:border-slate-200'
-                            }`}
-                          >
-                            <p className={`text-xs font-black uppercase tracking-widest ${formData.roleCode === r.code ? 'text-blue-700' : 'text-slate-500'}`}>{r.name}</p>
-                            <p className="text-[10px] text-slate-400 font-medium italic mt-1">Code: {r.code}</p>
-                          </button>
-                        ))}
-                     </div>
-                  </div>
-                  
-                  {warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
+                  {staffType === 'sbu' && selectedSbu && warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
                     <div className="space-y-1.5 md:col-span-2 mt-2">
                        <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
                        <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>

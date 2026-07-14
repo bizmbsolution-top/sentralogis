@@ -211,39 +211,30 @@ export default function IntelligenceTower() {
     setActiveTab('map');
   };
 
-  const handleShareToCustomer = () => {
-    if (!selectedJo) {
-      toast.error('Pilih job order terlebih dahulu');
-      return;
-    }
+  const handleShareToCustomer = (woJos: any[]) => {
+    if (!woJos || woJos.length === 0) return;
 
-    const woId = selectedJo.wo_id || selectedJo.wo_item?.wo?.id || null;
-    const woNumber = selectedJo.wo_number || selectedJo.wo_item?.wo?.wo_number || 'N/A';
-    const joNumber = selectedJo.jo_number || 'N/A';
-    const customerName = selectedJo.customer_name || 'Pelanggan';
+    const firstJo = woJos[0];
+    const woId = firstJo.wo_id || firstJo.wo_item?.wo?.id || null;
+    const woNumber = firstJo.wo_number || firstJo.wo_item?.wo?.wo_number || 'N/A';
+    const customerName = firstJo.customer_name || 'Pelanggan';
     
-    let link: string;
-    if (woId) {
-      link = `${window.location.origin}/track/wo/${woId}`;
-    } else {
-      const token = selectedJo.driver_link_token || selectedJo.tracking_token || selectedJo.id;
-      link = `${window.location.origin}/jo/${token}`;
-    }
+    const link = woId
+      ? `${window.location.origin}/track/wo/${woId}`
+      : `${window.location.origin}/track/${firstJo.driver_link_token || firstJo.tracking_token || firstJo.id}`;
     
-    const message = `Halo ${customerName},\n\nBerikut link pelacakan pengiriman Anda:\n${woNumber} - ${joNumber}\n\nPantau secara real-time:\n${link}`;
+    const joList = woJos.map((j: any) => `• ${j.plate_number} — ${j.driver_name}`).join('\n');
+    const message = `Halo ${customerName},\n\nBerikut link pelacakan pengiriman Anda:\n${woNumber}\n\nArmada:\n${joList}\n\nPantau secara real-time:\n${link}`;
     
-    let phone = selectedJo.customer_phone || '';
+    let phone = firstJo.customer_phone || '';
     phone = phone.replace(/\D/g, '');
     if (phone.startsWith('0')) phone = '62' + phone.substring(1);
     if (phone.startsWith('8')) phone = '62' + phone;
 
     if (phone && phone.length >= 10) {
-      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
     } else {
-      // Fallback: open WhatsApp Web with pre-filled message, user picks contact
-      const waWebUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-      window.open(waWebUrl, '_blank');
+      window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
     }
     toast.success('Membuka WhatsApp...');
   };
@@ -263,11 +254,20 @@ export default function IntelligenceTower() {
         ) : (
           Object.entries(groupedByWO).map(([woNum, jos]) => (
             <div key={woNum}>
-              <div className="flex items-center gap-2 px-2 mb-1.5">
-                <Box className="w-3 h-3 text-slate-400" />
-                <span className="text-xs font-medium text-slate-600">{woNum}</span>
-                <span className="text-[10px] text-slate-400 ml-auto truncate">{jos[0].customer_name}</span>
+              <div className="px-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <Box className="w-3 h-3 text-slate-400" />
+                  <span className="text-xs font-medium text-slate-600">{woNum}</span>
+                  <span className="text-[10px] text-slate-400 flex-1 truncate">{jos[0].customer_name}</span>
+                </div>
               </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleShareToCustomer(jos); }}
+                className="w-full mb-1.5 h-8 px-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 rounded-lg text-[11px] font-semibold text-emerald-700 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Share WA ke Pelanggan
+              </button>
               <div className="space-y-1">
                 {jos.map(jo => {
                   const isSelected = selectedJoId === jo.id;
@@ -442,17 +442,6 @@ export default function IntelligenceTower() {
         </div>
       )}
 
-      {/* Mobile: Floating Share Button */}
-      {selectedJo && (
-        <button
-          onClick={handleShareToCustomer}
-          className="lg:hidden fixed bottom-20 right-4 z-30 h-12 w-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-all active:scale-95"
-          title="Share to Customer"
-        >
-          <MessageSquare size={20} />
-        </button>
-      )}
-
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Left Sidebar */}
@@ -584,13 +573,6 @@ export default function IntelligenceTower() {
                       >
                         <History className="w-3 h-3" />
                         Log
-                      </button>
-                      <button 
-                        onClick={handleShareToCustomer}
-                        className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-medium flex items-center gap-1 transition-all"
-                      >
-                        <MessageSquare className="w-3 h-3" />
-                        Share
                       </button>
                     </div>
                   </div>

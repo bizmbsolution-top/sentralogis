@@ -1,39 +1,39 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { toast, Toaster } from "react-hot-toast";
 import {
   FileText, ChevronLeft, Check, Search, BarChart3, Loader2, Inbox, RefreshCw,
-  FileSpreadsheet, Filter, ChevronDown
+  FileSpreadsheet, Filter, ChevronDown, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon
 } from "lucide-react";
+import { useAuth } from "@/lib/hooks/useAuth";
+
+const TRUCKING_SBU_ROLES = ['sbu_manager_tr', 'sbu_ops_tr', 'sbu_fin_tr', 'sbu_admin_tr'];
+const GLOBAL_ROLES = ['owner_sentralogis', 'tenant_superadmin', 'tenant_admin'];
 
 export default function SBUTruckingReportingPage() {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
+  const [allData, setAllData] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 90)).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [truckTypeFilter, setTruckTypeFilter] = useState("");
-  const [transporterFilter, setTransporterFilter] = useState("all"); // all, internal, vendor
+  const [transporterFilter, setTransporterFilter] = useState("all");
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [truckTypes, setTruckTypes] = useState<string[]>([]);
 
-  const operationalStatuses = ['done', 'rejected'];
-
-  const getMappedStatuses = (filters: string[]) => {
-    let expanded = [...filters];
-    if (filters.includes('done')) expanded = [...expanded, 'delivered', 'finished'];
-    if (filters.includes('on_journey')) expanded = [...expanded, 'accepted', 'picking_up', 'delivering'];
-    return expanded.map(s => s.toLowerCase());
-  };
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(30);
 
   const columns = [
     { id: 'wo_number', label: 'WO Number' },
@@ -57,11 +57,27 @@ export default function SBUTruckingReportingPage() {
     'cash_advance', 'ap_total', 'total_cost', 'gross_margin'
   ];
 
+  // [AI] Client-side pagination: slice allData based on page & pageSize
+  const data = useMemo(() => {
+    if (pageSize === 999999) return allData;
+    const startIdx = (page - 1) * pageSize;
+    return allData.slice(startIdx, startIdx + pageSize);
+  }, [allData, page, pageSize]);
+
+  const operationalStatuses = ['done', 'rejected'];
+
+  const getMappedStatuses = (filters: string[]) => {
+    let expanded = [...filters];
+    if (filters.includes('done')) expanded = [...expanded, 'delivered', 'finished'];
+    if (filters.includes('on_journey')) expanded = [...expanded, 'accepted', 'picking_up', 'delivering'];
+    return expanded.map(s => s.toLowerCase());
+  };
+
   // [AI] Fetch master data from md_entities (customers) to resolve non-existent tables
   const fetchMasterData = async () => {
     try {
       const [{ data: ct }, { data: tt }] = await Promise.all([
-        supabase.from('md_entities').select('id, name, legal_name').eq('is_customer', true).order('name'),
+        supabase.from('md_entities').select('id, name, legal_name').eq('is_customer', true).eq('tenant_id', tenantId).order('name'),
         supabase.from('wo_items').select('item_data').eq('sbu_type', 'TRUCKING')
       ]);
       setCustomers(ct || []);
@@ -70,14 +86,68 @@ export default function SBUTruckingReportingPage() {
     } catch (e) {}
   };
 
+  // [AI] Enforce tenant scope: SBU Trucking roles (tenant-bound) + global/owner roles (with tenant fallback)
+  const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
+  const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
+  const [resolvedTenantId, setResolvedTenantId] = useState<string | null>(profile?.tenant_id || null);
+  const [tenantList, setTenantList] = useState<any[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+
+  // [AI] For owner/tenant-admin without a tenant_id in profile, resolve the first tenant (matches trucking dashboard)
+  useEffect(() => {
+    if (!profile) return;
+    if (profile.tenant_id) {
+      setResolvedTenantId(profile.tenant_id);
+      return;
+    }
+    if (isGlobalRole) {
+      supabase.from('tenants').select('id').limit(1).then(({ data }: any) => {
+        if (data && data.length > 0) setResolvedTenantId(data[0].id);
+      }).catch(() => {});
+    }
+  }, [profile, isGlobalRole]);
+
+  // [AI] Global roles (owner/tenant-admin) can pick which tenant to report on
+  useEffect(() => {
+    if (!isGlobalRole) return;
+    supabase
+      .from('tenants')
+      .select('id, tenant_code, name')
+      .order('tenant_code')
+      .then(({ data }: any) => {
+        if (data && data.length > 0) {
+          setTenantList(data);
+          // Default to the resolved tenant, else first in list
+          setSelectedTenantId((prev) => prev || resolvedTenantId || data[0].id);
+        }
+      })
+      .catch(() => {});
+  }, [isGlobalRole, resolvedTenantId]);
+
+  // [AI] Effective tenant: SBU users locked to their tenant; global roles use the selector
+  const tenantId = isGlobalRole ? (selectedTenantId || resolvedTenantId) : resolvedTenantId;
+  const canAccess = !!tenantId && (isTruckingSbu || isGlobalRole);
+
   // [AI] Fetch reporting data using exact aliased joins matching the database relations (customer_id -> md_entities, fleet_id -> md_fleets -> md_entities)
   const fetchReportData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: woData, error } = await supabase
+      // [AI] Hard tenant scope: refuse to run if not authorized for a tenant
+      if (!tenantId || !canAccess) {
+        toast.error("Akses ditolak: hanya SBU Trucking / Owner tenant terkait");
+        setLoading(false);
+        return;
+      }
+
+      let query = supabase
         .from('work_orders')
         .select(`*, customers:md_entities!customer_id (id, name, legal_name), wo_items (*, job_orders (*, fleets:fleet_id (id, plate_number, companies:md_entities (id, name))))`)
         .gte('order_date', startDate).lte('order_date', endDate).order('order_date', { ascending: false });
+      
+      // [AI] Mandatory per-tenant filter for SBU Trucking reporting
+      query = query.eq('tenant_id', tenantId);
+
+      const { data: woData, error } = await query;
 
       if (error) throw error;
       const flattened: any[] = [];
@@ -163,12 +233,16 @@ export default function SBUTruckingReportingPage() {
           });
         });
       });
-      setData(flattened);
+      
+      // [AI] Apply pagination after flattening
+      const totalRecords = flattened.length;
+      setTotalRecords(totalRecords);
+      setAllData(flattened);
     } catch (err: unknown) {
       console.error("[AI] Sync error: ", err);
       toast.error("Sync Failed");
     } finally { setLoading(false); }
-  }, [startDate, endDate, statusFilter, customerFilter, truckTypeFilter, transporterFilter]);
+  }, [startDate, endDate, statusFilter, customerFilter, truckTypeFilter, transporterFilter, tenantId, canAccess]);
 
   const handleExportExcel = async () => {
     if (data.length === 0) return toast.error("No data to export");
@@ -212,7 +286,11 @@ export default function SBUTruckingReportingPage() {
     } catch (err: unknown) { toast.error(`PDF Error: ${(err as Error).message}`, { id: tid }); }
   };
 
-  useEffect(() => { fetchMasterData(); fetchReportData(); }, [fetchReportData]);
+  useEffect(() => { 
+    fetchReportData();
+    fetchMasterData(); 
+    setPage(1); // Reset to page 1 when filters change
+  }, [fetchReportData]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowStatusDropdown(false); };
@@ -228,6 +306,28 @@ export default function SBUTruckingReportingPage() {
   const totalCost = data.reduce((sum, d) => sum + Number(d.total_cost || 0), 0);
   const totalGrossMargin = data.reduce((sum, d) => sum + Number(d.gross_margin || 0), 0);
   const marginRatio = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0;
+  
+  const totalPages = pageSize === 999999 ? 1 : Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startRecord = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRecord = Math.min(page * pageSize, totalRecords);
+
+  if (!canAccess) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24 flex items-center justify-center">
+        <Toaster position="top-right" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 shadow-sm text-center max-w-md">
+          <div className="mx-auto w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center mb-4">
+            <BarChart3 className="w-7 h-7 text-rose-500" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Akses Ditolak</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Halaman reporting SBU Trucking hanya dapat diakses oleh user SBU Trucking (tenant scope).
+            Silakan login dengan akun SBU Trucking yang terikat ke tenant Anda.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
@@ -242,10 +342,21 @@ export default function SBUTruckingReportingPage() {
                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Trucking Operational Reporting System</p>
             </div>
          </div>
-         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <button onClick={handleExportExcel} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-emerald-700 transition-all active:scale-95"><FileSpreadsheet className="w-4 h-4"/> EXCEL</button>
-            <button onClick={handleExportPDF} className="bg-rose-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-rose-700 transition-all active:scale-95"><FileText className="w-4 h-4"/> PDF</button>
-         </div>
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+             {isGlobalRole && tenantList.length > 0 && (
+                <select
+                  value={tenantId || ''}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-all shadow-sm"
+                >
+                  {tenantList.map((t) => (
+                    <option key={t.id} value={t.id}>{t.tenant_code} — {t.name}</option>
+                  ))}
+                </select>
+             )}
+             <button onClick={handleExportExcel} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-emerald-700 transition-all active:scale-95"><FileSpreadsheet className="w-4 h-4"/> EXCEL</button>
+             <button onClick={handleExportPDF} className="bg-rose-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-rose-700 transition-all active:scale-95"><FileText className="w-4 h-4"/> PDF</button>
+          </div>
       </header>
 
       {/* Mobile Filter Toggle */}
@@ -420,14 +531,85 @@ export default function SBUTruckingReportingPage() {
                          </tr>
                        </tfoot>
                      )}
-                  </table>
-                  
-                  {data.length === 0 && !loading && (
-                    <div className="py-24 text-center opacity-25 grayscale flex flex-col items-center justify-center">
-                      <Inbox className="w-16 h-16 mb-2 text-slate-400"/>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Trucking Matrix Empty</p>
-                    </div>
-                  )}
+                   </table>
+                   
+                   {/* Pagination Controls */}
+                   {data.length > 0 && (
+                     <div className="px-5 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white">
+                       <div className="flex items-center gap-3">
+                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                           Showing {startRecord}-{endRecord} of {totalRecords} records
+                         </span>
+                         <select 
+                           value={pageSize === 999999 ? 'all' : pageSize} 
+                           onChange={(e) => {
+                             const val = e.target.value;
+                             setPageSize(val === 'all' ? 999999 : Number(val));
+                             setPage(1);
+                           }}
+                           className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500"
+                         >
+                           <option value="10">10 / page</option>
+                           <option value="30">30 / page</option>
+                           <option value="all">All lines</option>
+                         </select>
+                       </div>
+                       
+                       <div className="flex items-center gap-2">
+                         <button 
+                           onClick={() => setPage(p => Math.max(1, p - 1))}
+                           disabled={page === 1}
+                           className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                         >
+                           <ChevronLeftIcon size={14} className="text-slate-600" />
+                         </button>
+                         
+                         <div className="flex items-center gap-1">
+                           {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                             let pageNum: number;
+                             if (totalPages <= 5) {
+                               pageNum = i + 1;
+                             } else if (page <= 3) {
+                               pageNum = i + 1;
+                             } else if (page >= totalPages - 2) {
+                               pageNum = totalPages - 4 + i;
+                             } else {
+                               pageNum = page - 2 + i;
+                             }
+                             
+                             return (
+                               <button
+                                 key={pageNum}
+                                 onClick={() => setPage(pageNum)}
+                                 className={`w-8 h-8 rounded-lg text-[10px] font-bold transition-all ${
+                                   page === pageNum 
+                                     ? 'bg-blue-600 text-white shadow-md' 
+                                     : 'hover:bg-slate-100 text-slate-600'
+                                 }`}
+                               >
+                                 {pageNum}
+                               </button>
+                             );
+                           })}
+                         </div>
+                         
+                         <button 
+                           onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                           disabled={page === totalPages}
+                           className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                         >
+                           <ChevronRightIcon size={14} className="text-slate-600" />
+                         </button>
+                       </div>
+                     </div>
+                   )}
+                   
+                   {data.length === 0 && !loading && (
+                     <div className="py-24 text-center opacity-25 grayscale flex flex-col items-center justify-center">
+                       <Inbox className="w-16 h-16 mb-2 text-slate-400"/>
+                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Trucking Matrix Empty</p>
+                     </div>
+                   )}
                </div>
             </div>
          </main>

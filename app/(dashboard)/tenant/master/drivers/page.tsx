@@ -9,6 +9,7 @@ import {
   Calendar, CreditCard, Phone, MessageSquare
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
 interface Driver {
   id: string;
@@ -104,23 +105,7 @@ export default function DriversPage() {
   }, [tenantId, fetchData, loadingAuth]);
 
   const generateDriverCode = async () => {
-    // [AI] Query ALL tenants' codes to avoid global unique constraint collision
-    try {
-      const { data } = await supabase
-        .from('md_drivers')
-        .select('driver_code')
-        .like('driver_code', 'DRI/%');
-
-      const numbers = (data || [])
-        .map((r) => parseInt(r.driver_code.split('/')[1]))
-        .filter((n) => !isNaN(n));
-
-      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-      const newNumber = (maxNum + 1).toString().padStart(3, '0');
-      return `DRI/${newNumber}`;
-    } catch (err) {
-      return `DRI/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    }
+    return await generateDriverCodeAction();
   };
 
   const handleSubmit = async () => {
@@ -153,8 +138,8 @@ export default function DriversPage() {
         if (error) throw error;
         toast.success('Data pengemudi berhasil diupdate');
       } else {
-        const code = await generateDriverCode();
-        const { error } = await supabase
+        let code = await generateDriverCode();
+        let { error } = await supabase
           .from('md_drivers')
           .insert({
             tenant_id: tenantId,
@@ -171,7 +156,31 @@ export default function DriversPage() {
             is_active: formData.is_active,
           });
 
-        if (error) throw error;
+        // [AI] Automatic retry on unique constraint collision
+        if (error && (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate'))) {
+          const fallbackCode = `DRI/${Date.now().toString().slice(-4)}`;
+          const retryRes = await supabase
+            .from('md_drivers')
+            .insert({
+              tenant_id: tenantId,
+              driver_code: fallbackCode,
+              entity_id: formData.entity_id,
+              name: formData.name,
+              phone: formData.phone,
+              whatsapp: formData.whatsapp,
+              address: formData.address,
+              sim_number: formData.sim_number,
+              sim_class: formData.sim_class,
+              sim_expiry: formData.sim_expiry,
+              status: formData.status,
+              is_active: formData.is_active,
+            });
+          if (retryRes.error) throw retryRes.error;
+          error = null;
+        } else if (error) {
+          throw error;
+        }
+
         toast.success('Pengemudi baru berhasil ditambahkan');
       }
 

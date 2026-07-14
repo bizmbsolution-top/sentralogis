@@ -458,62 +458,84 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
                       </div>
 
                       {stop.source_type === 'MD_LOCATION' && (
-                        <select
-                          value={stop.source_id}
-                          onChange={(e) => {
-                            const loc = masterLocations.find(l => l.id === e.target.value);
-                            if (loc) {
-                              updateStop(stop.id, {
-                                source_id: loc.id,
-                                location_name: loc.name,
-                                address: loc.address,
-                                latitude: loc.latitude,
-                                longitude: loc.longitude
-                              });
-                            }
-                          }}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none"
-                        >
-                          <option value="">Select Public Location...</option>
-                          {masterLocations.map(l => <option key={l.id} value={l.id}>{l.name} - {l.city}</option>)}
-                        </select>
+                        <div className="flex gap-2">
+                          <select
+                            value={stop.source_id}
+                            onChange={(e) => {
+                              const loc = masterLocations.find(l => l.id === e.target.value);
+                              if (loc) {
+                                updateStop(stop.id, {
+                                  source_id: loc.id,
+                                  location_name: loc.name,
+                                  address: loc.address,
+                                  latitude: loc.latitude,
+                                  longitude: loc.longitude
+                                });
+                              }
+                            }}
+                            className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none"
+                          >
+                            <option value="">Select Public Location...</option>
+                            {masterLocations.map(l => <option key={l.id} value={l.id}>{l.name} - {l.city}</option>)}
+                          </select>
+                          <a
+                            href="/hq/master/locations"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 px-4 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-1.5"
+                            title="Add new public master location"
+                          >
+                            <Plus size={14} /> New
+                          </a>
+                        </div>
                       )}
 
                       {stop.source_type === 'MD_CONTACT_ADDRESS' && (
-                        <select
-                          value={stop.source_id}
-                          disabled={loading}
-                          onChange={(e) => {
-                            const addr = contactAddresses.find(a => a.id === e.target.value);
-                            if (addr) {
-                              updateStop(stop.id, {
-                                source_id: addr.id,
-                                location_name: `${addr.md_entities.name} - ${addr.address_name || 'Warehouse'}`,
-                                address: addr.address,
-                                latitude: addr.latitude,
-                                longitude: addr.longitude,
-                                contact_name: addr.contact_person || '',
-                                contact_phone: addr.contact_phone || ''
-                              });
-                            }
-                          }}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none disabled:opacity-50"
-                        >
-                          {loading ? (
-                            <option>Syncing locations...</option>
-                          ) : contactAddresses.length === 0 ? (
-                            <option>No locations found. Add them in Contacts master.</option>
-                          ) : (
-                            <>
-                              <option value="">Select Customer Location...</option>
-                              {contactAddresses.map(a => (
-                                <option key={a.id} value={a.id}>
-                                  [{a.md_entities.name}] {a.address_name} - {a.city}
-                                </option>
-                              ))}
-                            </>
-                          )}
-                        </select>
+                        <div className="flex gap-2">
+                          <select
+                            value={stop.source_id}
+                            disabled={loading}
+                            onChange={(e) => {
+                              const addr = contactAddresses.find(a => a.id === e.target.value);
+                              if (addr) {
+                                updateStop(stop.id, {
+                                  source_id: addr.id,
+                                  location_name: `${addr.md_entities.name} - ${addr.address_name || 'Warehouse'}`,
+                                  address: addr.address,
+                                  latitude: addr.latitude,
+                                  longitude: addr.longitude,
+                                  contact_name: addr.contact_person || '',
+                                  contact_phone: addr.contact_phone || ''
+                                });
+                              }
+                            }}
+                            className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none disabled:opacity-50"
+                          >
+                            {loading ? (
+                              <option>Syncing locations...</option>
+                            ) : contactAddresses.length === 0 ? (
+                              <option value="">No locations yet. Click "New" to add.</option>
+                            ) : (
+                              <>
+                                <option value="">Select Customer Location...</option>
+                                {contactAddresses.map(a => (
+                                  <option key={a.id} value={a.id}>
+                                    [{a.md_entities.name}] {a.address_name} - {a.city}
+                                  </option>
+                                ))}
+                              </>
+                            )}
+                          </select>
+                          <a
+                            href="/hq/master/contacts"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 px-4 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center gap-1.5"
+                            title="Add new customer location"
+                          >
+                            <Plus size={14} /> New
+                          </a>
+                        </div>
                       )}
 
                       {stop.source_type === 'GOOGLE_MAPS' && (

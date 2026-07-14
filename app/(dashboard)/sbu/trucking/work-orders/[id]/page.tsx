@@ -23,9 +23,10 @@ import {
   Activity,
   FileText,
   Plus,
-  X,
   DollarSign,
   Search,
+  Printer,
+  Box,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -931,38 +932,63 @@ export default function WorkOrderDetailPage() {
                   {/* Job Orders List - More Compact */}
                   {item.job_orders && item.job_orders.length > 0 && (
                     <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {item.job_orders.map((jo) => (
-                        <div
-                          key={jo.id}
-                          className="bg-slate-50/50 border border-slate-100 p-3 rounded-xl space-y-2 hover:bg-white hover:shadow-md transition-all"
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="text-[9px] font-black text-slate-900 tracking-tighter">
-                              {jo.jo_number}
-                            </span>
-                            <div
-                              className={`w-1.5 h-1.5 rounded-full ${jo.status === "completed" ? "bg-emerald-500" : "bg-blue-500"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-700 uppercase">
-                              <Building2 size={10} className="text-slate-400" />
-                              <span className="truncate">
-                                {jo.transporter?.name || "Vendor"}
+                      {item.job_orders.map((jo) => {
+                        const containerNo = jo.container_number || (jo.sbu_metadata ? jo.sbu_metadata.container_number : null);
+                        return (
+                          <div
+                            key={jo.id}
+                            className="bg-slate-50/50 border border-slate-100 p-3 rounded-xl space-y-2 hover:bg-white hover:shadow-md transition-all"
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-[9px] font-black text-slate-900 tracking-tighter">
+                                {jo.jo_number}
                               </span>
-                              <span className="text-blue-600 bg-blue-50 px-1 rounded">
-                                {jo.md_fleets?.plate_number}
-                              </span>
+                              <div
+                                className={`w-1.5 h-1.5 rounded-full ${jo.status === "completed" ? "bg-emerald-500" : "bg-blue-500"}`}
+                              />
                             </div>
-                            <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase">
-                              <User size={10} className="text-slate-400" />
-                              <span className="truncate">
-                                {jo.md_drivers?.name || "No Pilot"}
-                              </span>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-700 uppercase">
+                                <Building2 size={10} className="text-slate-400" />
+                                <span className="truncate">
+                                  {jo.transporter?.name || "Vendor"}
+                                </span>
+                                <span className="text-blue-600 bg-blue-50 px-1 rounded">
+                                  {jo.md_fleets?.plate_number}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase">
+                                <User size={10} className="text-slate-400" />
+                                <span className="truncate">
+                                  {jo.md_drivers?.name || "No Pilot"}
+                                </span>
+                              </div>
+                              {containerNo && (
+                                <div className="flex items-center gap-1.5 text-[9px] font-mono font-black text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100">
+                                  <Box size={10} className="text-indigo-500 shrink-0" />
+                                  <span className="truncate">CONT: {containerNo}</span>
+                                </div>
+                              )}
+                              {jo.notes && (
+                                <div className="flex items-start gap-1.5 text-[9px] font-medium text-slate-600 italic bg-amber-50/60 p-1 rounded border border-amber-100/80">
+                                  <FileText size={10} className="text-amber-500 shrink-0 mt-0.5" />
+                                  <span className="line-clamp-2">"{jo.notes}"</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
+                              <Link
+                                href={`/sbu/trucking/delivery-note/${jo.id}`}
+                                target="_blank"
+                                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-md flex items-center gap-1 text-[9px] font-black transition-all shadow-sm"
+                                title="Cetak Surat Jalan untuk JO ini"
+                              >
+                                <Printer size={10} /> SURAT JALAN / DN
+                              </Link>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

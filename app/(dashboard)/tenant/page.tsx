@@ -8,7 +8,7 @@ import {
   Coins, Lock, Loader2, 
   ShieldCheck, Mail, Info, LayoutGrid,
   User, ArrowRight, RefreshCcw, Activity, Key, Shield,
-  History, ArrowUpRight, ArrowDownRight, Clock
+  History, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, Ban
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -176,20 +176,70 @@ export default function TenantDashboard() {
               <div className="absolute top-0 right-0 p-6 opacity-5">
                  <Coins className="w-24 h-24 rotate-12 text-blue-900" />
               </div>
-              <CardContent className="p-6 relative z-10">
-                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest italic mb-6">Available Energy Reserve</p>
-                 <div className="flex items-baseline gap-3 mb-8">
-                     <h2 className="text-2xl md:text-3xl font-semibold text-blue-900 tracking-tight italic">
-                       {(tenant?.token_balance || 0).toLocaleString('id-ID')}
-                    </h2>
-                    <span className="text-[10px] font-bold text-blue-400 uppercase">TKN</span>
-                 </div>
-                 <a href="/tenant/topup">
-                    <Button variant="primary" className="w-full !py-4 !rounded-xl !bg-blue-600 hover:!bg-blue-700 border-none group text-sm" icon={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}>
-                      Manage Liquidity
-                    </Button>
-                 </a>
-              </CardContent>
+               <CardContent className="p-6 relative z-10">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest italic mb-6">
+                    Available Energy Reserve
+                    {(tenant?.token_balance || 0) <= 5 && (
+                      <span className={`ml-2 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                        (tenant?.token_balance || 0) <= 0
+                          ? 'bg-red-500 text-white'
+                          : 'bg-yellow-400 text-yellow-900'
+                      }`}>
+                        {(tenant?.token_balance || 0) <= 0 ? 'HABIS' : 'KRITIS'}
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex items-baseline gap-3 mb-8">
+                      <h2 className={`text-2xl md:text-3xl font-semibold tracking-tight italic ${
+                        (tenant?.token_balance || 0) <= 0
+                          ? 'text-red-600'
+                          : (tenant?.token_balance || 0) <= 5
+                          ? 'text-yellow-600'
+                          : 'text-blue-900'
+                      }`}>
+                        {(tenant?.token_balance || 0).toLocaleString('id-ID')}
+                     </h2>
+                     <span className="text-[10px] font-bold text-blue-400 uppercase">TKN</span>
+                  </div>
+
+                  {/* Low balance warning */}
+                  {(tenant?.token_balance || 0) <= 5 && (
+                    <div className={`mb-4 p-3 rounded-xl flex items-start gap-2 ${
+                      (tenant?.token_balance || 0) <= 0
+                        ? 'bg-red-50 border border-red-200'
+                        : 'bg-yellow-50 border border-yellow-200'
+                    }`}>
+                      {(tenant?.token_balance || 0) <= 0
+                        ? <Ban size={16} className="text-red-500 shrink-0 mt-0.5" />
+                        : <AlertTriangle size={16} className="text-yellow-600 shrink-0 mt-0.5" />
+                      }
+                      <div>
+                        <p className={`text-xs font-bold ${
+                          (tenant?.token_balance || 0) <= 0 ? 'text-red-700' : 'text-yellow-700'
+                        }`}>
+                          {(tenant?.token_balance || 0) <= 0
+                            ? 'Token Balance Habis'
+                            : 'Token Hampir Habis'
+                          }
+                        </p>
+                        <p className={`text-[10px] mt-0.5 ${
+                          (tenant?.token_balance || 0) <= 0 ? 'text-red-600' : 'text-yellow-600'
+                        }`}>
+                          {(tenant?.token_balance || 0) <= 0
+                            ? 'Saldo token habis. JO baru tidak dapat berjalan hingga top-up dilakukan.'
+                            : `Sisa ${tenant?.token_balance} TKN. Segera lakukan top-up.`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <a href="/tenant/topup">
+                     <Button variant="primary" className="w-full !py-4 !rounded-xl !bg-blue-600 hover:!bg-blue-700 border-none group text-sm" icon={<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}>
+                       Manage Liquidity
+                     </Button>
+                  </a>
+               </CardContent>
            </Card>
 
            <Card>

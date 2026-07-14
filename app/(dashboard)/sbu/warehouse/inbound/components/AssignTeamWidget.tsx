@@ -101,9 +101,9 @@ export default function AssignTeamWidget({ receiptId, joId, tenantId, warehouseI
     return <div className="p-4 flex items-center justify-center"><Loader2 className="animate-spin text-slate-300" /></div>;
   }
 
-  const securityStaff = staff.filter(s => s.role === 'SECURITY');
-  const tallyStaff = staff.filter(s => s.role === 'TALLY');
-  const putawayStaff = staff.filter(s => s.role === 'PUTAWAY');
+  const securityStaff = staff.filter(s => (s.roles && s.roles.includes('SECURITY')) || s.role === 'SECURITY');
+  const tallyStaff = staff.filter(s => (s.roles && s.roles.includes('TALLY')) || s.role === 'TALLY');
+  const putawayStaff = staff.filter(s => (s.roles && s.roles.includes('PUTAWAY')) || s.role === 'PUTAWAY');
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-4">
@@ -123,9 +123,9 @@ export default function AssignTeamWidget({ receiptId, joId, tenantId, warehouseI
 
       <div className="space-y-3 text-sm">
         <div>
-          <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Gate Security</label>
+          <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Gate Control</label>
           <select value={selectedSecurity} onChange={e => setSelectedSecurity(e.target.value)} className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:ring-1 outline-none text-slate-900 bg-slate-50">
-            <option value="">-- Select Security --</option>
+            <option value="">-- Select Gate Control --</option>
             {securityStaff.map(s => <option key={s.id} value={s.id}>{s.name} ({s.whatsapp})</option>)}
           </select>
         </div>

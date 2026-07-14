@@ -22,6 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status';
 import Link from 'next/link';
 import RejectedViewModal from '../work-orders/components/RejectedViewModal';
+import HistoryModal from '@/components/shared/HistoryModal';
 
 const supabase = createClient();
 
@@ -55,6 +56,8 @@ export default function HQJobOrdersPage() {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showRejectedModal, setShowRejectedModal] = useState(false);
   const [selectedRejectedWo, setSelectedRejectedWo] = useState<any>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedEntityForHistory, setSelectedEntityForHistory] = useState<{id: string, type: 'work_order'|'job_order', title: string} | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
@@ -149,7 +152,44 @@ export default function HQJobOrdersPage() {
           };
         });
 
-        setJobOrders(enrichedJOs);
+        // [AI] Fetch latest audit log for each JO to get last user initials
+        const joIds = enrichedJOs.map(j => j.id);
+        let latestLogs: Record<string, any> = {};
+        if (joIds.length > 0) {
+          const { data: logs } = await supabase.from('wo_audit_logs')
+            .select(`
+              entity_id, performed_by,
+              user:tenant_users!performed_by (
+                profile:profiles!tenant_users_user_id_fkey(name, email)
+              )
+            `)
+            .in('entity_id', joIds)
+            .eq('entity_type', 'job_order')
+            .order('performed_at', { ascending: false });
+
+          if (logs) {
+            for (const log of logs) {
+              if (!latestLogs[log.entity_id]) {
+                latestLogs[log.entity_id] = log;
+              }
+            }
+          }
+        }
+
+        const hydratedJOs = enrichedJOs.map(jo => {
+          const latestLog = latestLogs[jo.id];
+          let initials = 'S'; // System fallback
+          if (latestLog?.user?.profile?.name) {
+            initials = latestLog.user.profile.name.substring(0, 2).toUpperCase();
+          } else if (latestLog?.user?.profile?.email) {
+            initials = latestLog.user.profile.email.substring(0, 2).toUpperCase();
+          } else if (jo.updated_by || jo.created_by) {
+            initials = 'U';
+          }
+          return { ...jo, lastInitials: initials };
+        });
+
+        setJobOrders(hydratedJOs);
       } else {
         setJobOrders([]);
       }
@@ -575,6 +615,24 @@ export default function HQJobOrdersPage() {
                         <span className="truncate max-w-[100px]">{jo.wo_item?.item_data?.destination_name || 'Destination'}</span>
                       </div>
                     </div>
+                    <div className="w-[1px] h-8 bg-slate-200 shrink-0"></div>
+                    <div className="flex flex-col shrink-0">
+                      <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Last Action</span>
+                      <div className="flex items-center gap-1.5 text-black font-black text-sm">
+                        <div className="w-5 h-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[9px] font-black border border-indigo-200">
+                          {jo.lastInitials || 'S'}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedEntityForHistory({ id: jo.id, type: 'job_order', title: `JO ${jo.jo_number} History` });
+                            setShowHistoryModal(true);
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+                        >
+                          View History
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -657,6 +715,18 @@ export default function HQJobOrdersPage() {
         <RejectedViewModal
           wo={selectedRejectedWo}
           onClose={() => setShowRejectedModal(false)}
+        />
+      )}
+
+      {showHistoryModal && selectedEntityForHistory && (
+        <HistoryModal
+          entityId={selectedEntityForHistory.id}
+          entityType={selectedEntityForHistory.type}
+          title={selectedEntityForHistory.title}
+          onClose={() => {
+            setShowHistoryModal(false);
+            setSelectedEntityForHistory(null);
+          }}
         />
       )}
     </div>

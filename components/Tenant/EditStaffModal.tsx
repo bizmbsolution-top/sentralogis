@@ -6,6 +6,50 @@ import { X, Shield, RefreshCcw, Power, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
+const hqRoles = [
+  { code: 'hq_commercial_director', name: 'HQ Commercial Director', division: 'Commercial & Sales', level: 'director' },
+  { code: 'hq_sales_manager', name: 'HQ Sales Manager', division: 'Commercial & Sales', level: 'manager' },
+  { code: 'hq_sales_staff', name: 'HQ Sales Staff', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_pricing_analyst', name: 'HQ Pricing Analyst', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_marketing_staff', name: 'HQ Marketing Staff', division: 'Commercial & Sales', level: 'staff' },
+  { code: 'hq_director_ops', name: 'Direktur Operasional', division: 'Operations', level: 'director' },
+  { code: 'hq_director_fin', name: 'Direktur Keuangan', division: 'Finance', level: 'director' },
+  { code: 'hq_director_bizdev', name: 'Direktur Business Development', division: 'General / Management', level: 'director' },
+  { code: 'hq_director_hrd', name: 'Direktur HRD', division: 'HR & Admin', level: 'director' },
+  { code: 'hq_director_cs', name: 'Direktur Customer Service', division: 'Operations', level: 'director' },
+  { code: 'hq_cs', name: 'Customer Service', division: 'Operations', level: 'staff' },
+  { code: 'hq_ops', name: 'Operations Staff', division: 'Operations', level: 'staff' },
+  { code: 'hq_finance', name: 'Finance Staff', division: 'Finance', level: 'staff' },
+  { code: 'tenant_admin', name: 'Tenant Admin / Management', division: 'General / Management', level: 'manager' },
+];
+
+const sbuRolesMap: any = {
+  tr: [
+    { code: 'sbu_manager_tr', name: 'Manager Trucking', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_tr', name: 'Admin Kantor Trucking', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_tr', name: 'Operations Trucking', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_tr', name: 'Finance Trucking', division: 'Finance', level: 'staff' },
+  ],
+  wh: [
+    { code: 'sbu_manager_wh', name: 'Manager Warehouse', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_wh', name: 'Admin Kantor Warehouse', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_wh', name: 'Operations Warehouse', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_wh', name: 'Finance Warehouse', division: 'Finance', level: 'staff' },
+  ],
+  ink: [
+    { code: 'sbu_manager_ink', name: 'Manager Clearance', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_ink', name: 'Admin Kantor Clearance', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_ink', name: 'Operations Clearance', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_ink', name: 'Finance Clearance', division: 'Finance', level: 'staff' },
+  ],
+  fwd: [
+    { code: 'sbu_manager_fwd', name: 'Manager Forwarding', division: 'General / Management', level: 'manager' },
+    { code: 'sbu_admin_fwd', name: 'Admin Kantor Forwarding', division: 'HR & Admin', level: 'staff' },
+    { code: 'sbu_ops_fwd', name: 'Operations Forwarding', division: 'Operations', level: 'staff' },
+    { code: 'sbu_fin_fwd', name: 'Finance Forwarding', division: 'Finance', level: 'staff' },
+  ],
+};
+
 export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus, warehouses }: any) {
   const [loading, setLoading] = useState(false);
   const [isActive, setIsActive] = useState(staff.is_active);
@@ -13,9 +57,47 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
   const [roleCode, setRoleCode] = useState(staff.role_code);
   const [sbuId, setSbuId] = useState(staff.sbu_id || '');
   const [warehouseId, setWarehouseId] = useState(staff.warehouse_id || '');
-  const [division, setDivision] = useState(staff.division || 'General');
+  const [division, setDivision] = useState(() => {
+    const allRoles = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
+    const found = allRoles.find((r: any) => r.code === staff.role_code);
+    return found ? found.division : (staff.division === 'General' ? 'General / Management' : (staff.division || ''));
+  });
+  const [jobLevel, setJobLevel] = useState(() => {
+    const allRoles = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
+    const found = allRoles.find((r: any) => r.code === staff.role_code);
+    return found ? found.level : '';
+  });
 
   if (!isOpen) return null;
+
+  const selectedSbu = sbus?.find((s: any) => s.id === sbuId);
+
+  const handleSbuChange = (newSbuId: string) => {
+    setSbuId(newSbuId);
+    setWarehouseId('');
+
+    if (!newSbuId) {
+      // Switched to Central HQ
+      if (roleCode.startsWith('sbu_') || !hqRoles.some(r => r.code === roleCode)) {
+        setRoleCode('hq_ops');
+        setJobLevel('staff');
+        setDivision('Operations');
+      }
+    } else {
+      // Switched to an SBU
+      const newSbu = sbus?.find((s: any) => s.id === newSbuId);
+      if (newSbu) {
+        const validRoles = sbuRolesMap[newSbu.sbu_type] || [];
+        if (!validRoles.some((r: any) => r.code === roleCode)) {
+          if (validRoles.length > 0) {
+            setRoleCode(validRoles[0].code);
+            setJobLevel(validRoles[0].level);
+            setDivision(validRoles[0].division);
+          }
+        }
+      }
+    }
+  };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +109,8 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
           full_name: fullName,
           role_code: roleCode,
           sbu_id: sbuId || null,
-          warehouse_id: warehouseId || null,
-          division: division || null,
+          warehouse_id: sbuId ? (warehouseId || null) : null,
+          division: sbuId ? null : (division || null),
           is_active: isActive,
           updated_at: new Date().toISOString()
         })
@@ -36,8 +118,11 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
 
       if (error) throw error;
       
-      // Also update profile full_name for consistency
-      await supabase.from('profiles').update({ full_name: fullName }).eq('id', staff.user_id);
+      // Also update profile full_name and role for consistency
+      await supabase.from('profiles').update({ 
+        full_name: fullName,
+        role: roleCode
+      }).eq('id', staff.user_id);
 
       toast.success('Staff updated successfully');
       onSuccess();
@@ -89,48 +174,113 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
                  />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Allocation</label>
-                    <select 
-                      value={sbuId}
-                      onChange={e => { setSbuId(e.target.value); setWarehouseId(''); }}
-                      className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
-                    >
-                       <option value="">Central HQ</option>
-                       {sbus?.map((s: any) => (
-                         <option key={s.id} value={s.id}>{s.sbu_name}</option>
-                       ))}
-                    </select>
-                 </div>
-                 {!sbuId && (
-                     <div className="space-y-1.5">
-                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Division</label>
-                        <select 
-                          value={division}
-                          onChange={e => setDivision(e.target.value)}
-                          className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
-                        >
-                          <option value="General">General / Management</option>
-                          <option value="Commercial & Sales">Commercial & Sales</option>
-                          <option value="Operations">Operations</option>
-                          <option value="Finance">Finance</option>
-                          <option value="HR & Admin">HR & Admin</option>
-                          <option value="IT">IT</option>
-                        </select>
-                     </div>
-                  )}
-                 <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Position Code</label>
-                    <input 
-                      type="text" 
-                      value={roleCode}
-                      onChange={e => setRoleCode(e.target.value)}
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold font-mono outline-none focus:ring-2 focus:ring-blue-500/10"
-                      required
-                    />
-                 </div>
-              </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Allocation</label>
+                     <select 
+                       value={sbuId}
+                       onChange={e => handleSbuChange(e.target.value)}
+                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                     >
+                        <option value="">Central HQ</option>
+                        {sbus?.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.sbu_name}</option>
+                        ))}
+                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Division (Divisi)</label>
+                     <select 
+                       value={division}
+                       onChange={e => {
+                         const newDiv = e.target.value;
+                         const rawRoles = !sbuId ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const filtered = rawRoles
+                           .filter((r: any) => !newDiv || r.division === newDiv)
+                           .filter((r: any) => !jobLevel || r.level === jobLevel);
+                         const valid = filtered.some((r: any) => r.code === roleCode);
+                         setDivision(newDiv);
+                         if (!valid && filtered.length === 1) {
+                           setRoleCode(filtered[0].code);
+                         }
+                       }}
+                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                     >
+                       <option value="">-- All Divisions --</option>
+                       {(!sbuId 
+                         ? ['General / Management', 'Commercial & Sales', 'Operations', 'Finance', 'HR & Admin', 'IT']
+                         : ['General / Management', 'Operations', 'Finance', 'HR & Admin']
+                       ).map(d => <option key={d} value={d}>{d}</option>)}
+                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Level / Jenjang</label>
+                     <select 
+                       value={jobLevel}
+                       onChange={e => {
+                         const newLvl = e.target.value;
+                         setJobLevel(newLvl);
+                         const rawRoles = !sbuId ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const filtered = rawRoles
+                           .filter((r: any) => !division || r.division === division)
+                           .filter((r: any) => !newLvl || r.level === newLvl);
+                         const valid = filtered.some((r: any) => r.code === roleCode);
+                         if (!valid && filtered.length === 1) {
+                           setRoleCode(filtered[0].code);
+                         }
+                       }}
+                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                     >
+                       <option value="">-- All Levels --</option>
+                       {(!sbuId
+                         ? [{ id: 'director', label: 'Direktur' }, { id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                         : [{ id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                       ).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                     </select>
+                  </div>
+                   <div className="space-y-1.5">
+                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Position / Role Code</label>
+                     <select 
+                       value={roleCode}
+                       onChange={e => {
+                         const newCode = e.target.value;
+                         const rawRoles = !sbuId ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const roleObj = rawRoles.find((r: any) => r.code === newCode);
+                         if (roleObj) {
+                           setJobLevel(roleObj.level);
+                           setRoleCode(newCode);
+                           setDivision(roleObj.division);
+                         } else {
+                           setRoleCode(newCode);
+                         }
+                       }}
+                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                       required
+                     >
+                       <option value="">Select Position...</option>
+                       {(() => {
+                         const rawRoles = !sbuId ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                         const filtered = rawRoles
+                           .filter((r: any) => !division || r.division === division)
+                           .filter((r: any) => !jobLevel || r.level === jobLevel);
+                         const listToShow = filtered.length > 0 ? filtered : rawRoles;
+                         return (
+                           <>
+                             {filtered.length === 0 && (division || jobLevel) && (
+                               <option value="" disabled>-- No exact match for filter (Showing all {rawRoles.length}) --</option>
+                             )}
+                             {listToShow.map((r: any) => (
+                               <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+                             ))}
+                           </>
+                         );
+                       })()}
+                       {roleCode && !(!sbuId ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || [])).some((r: any) => r.code === roleCode) && (
+                         <option value={roleCode}>{roleCode} (Current)</option>
+                       )}
+                     </select>
+                  </div>
+               </div>
 
               {sbuId && warehouses?.filter((w: any) => w.sbu_id === sbuId).length > 0 && (
                 <div className="space-y-1.5">

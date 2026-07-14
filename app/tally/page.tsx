@@ -6,11 +6,14 @@ import {
   downloadReceiptsToDevice, 
   getLocalReceipts, 
   syncTalliesToCloud,
-  OfflineReceipt 
+  OfflineReceipt,
+  incrementDataSent,
+  incrementDataReceived
 } from '@/lib/tallyStore';
 import { CloudDownload, CloudUpload, RefreshCw, AlertTriangle, PackageCheck, Truck, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
+import { DataUsageCard } from '@/components/shared/DataUsageCard';
 import Link from 'next/link';
 
 export default function TallyDashboard() {
@@ -19,6 +22,7 @@ export default function TallyDashboard() {
   const [receipts, setReceipts] = useState<OfflineReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -26,6 +30,10 @@ export default function TallyDashboard() {
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Load last sync time from localStorage
+    const savedSync = localStorage.getItem('tally_last_sync');
+    if (savedSync) setLastSync(savedSync);
 
     // Initial load from local
     loadLocalData();
@@ -35,6 +43,30 @@ export default function TallyDashboard() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Auto-download JO saat online & ada data baru
+  useEffect(() => {
+    if (isOnline && profile?.tenant_id && profile?.warehouse_id) {
+      handleDownloadAuto();
+    }
+  }, [isOnline, profile?.tenant_id, profile?.warehouse_id]);
+
+  const handleDownloadAuto = async () => {
+    if (!profile?.tenant_id || !profile?.warehouse_id) return;
+    setSyncing(true);
+    try {
+      const downloaded = await downloadReceiptsToDevice(profile.tenant_id, profile.warehouse_id);
+      await loadLocalData();
+      const now = new Date().toISOString();
+      localStorage.setItem('tally_last_sync', now);
+      setLastSync(now);
+      toast.success(`${downloaded.length} JO berhasil diperbarui!`);
+    } catch (e) {
+      // Silent fail - user is in offline mode or first time
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const loadLocalData = async () => {
     try {
@@ -104,37 +136,40 @@ export default function TallyDashboard() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-2xl mx-auto">
       
-      {/* Header Info */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <h1 className="text-xl font-black text-slate-900">Inbound Dashboard</h1>
-        <p className="text-sm text-slate-500 font-medium mt-1">
-          {profile?.email}
-        </p>
+{/* Header Info */}
+       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+         <h1 className="text-xl font-black text-slate-900">Inbound Dashboard</h1>
+         <p className="text-sm text-slate-500 font-medium mt-1">
+           {profile?.email}
+         </p>
 
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <button 
-            onClick={handleDownload}
-            disabled={syncing || !isOnline}
-            className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <CloudDownload size={20} className="mb-1" />
-            <span className="text-xs font-bold uppercase tracking-wider">Download JO</span>
-          </button>
-          <button 
-            onClick={handleSync}
-            disabled={syncing || !isOnline || pendingSyncs === 0}
-            className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 active:scale-95 transition-all disabled:opacity-50 relative"
-          >
-            {pendingSyncs > 0 && (
-              <span className="absolute -top-2 -right-2 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold">
-                {pendingSyncs}
-              </span>
-            )}
-            <RefreshCw size={20} className={`mb-1 ${syncing ? 'animate-spin' : ''}`} />
-            <span className="text-xs font-bold uppercase tracking-wider">Sync Cloud</span>
-          </button>
-        </div>
-      </div>
+         <div className="grid grid-cols-2 gap-3 mt-4">
+           <button 
+             onClick={handleDownload}
+             disabled={syncing || !isOnline}
+             className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 active:scale-95 transition-all disabled:opacity-50"
+           >
+             <CloudDownload size={20} className="mb-1" />
+             <span className="text-xs font-bold uppercase tracking-wider">Download JO</span>
+           </button>
+           <button 
+             onClick={handleSync}
+             disabled={syncing || !isOnline || pendingSyncs === 0}
+             className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 active:scale-95 transition-all disabled:opacity-50 relative"
+           >
+             {pendingSyncs > 0 && (
+               <span className="absolute -top-2 -right-2 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold">
+                 {pendingSyncs}
+               </span>
+             )}
+             <RefreshCw size={20} className={`mb-1 ${syncing ? 'animate-spin' : ''}`} />
+             <span className="text-xs font-bold uppercase tracking-wider">Sync Cloud</span>
+           </button>
+         </div>
+       </div>
+       
+       {/* Data Usage Card */}
+       <DataUsageCard />
 
       {/* Task List */}
       <div>

@@ -15,6 +15,7 @@ interface Profile {
   tenant_id?: string;
   tenant_code?: string;
   warehouse_id?: string;
+  customer_id?: string;
   whatsapp?: string;
   is_active: boolean;
   created_at: string;
@@ -23,6 +24,7 @@ interface Profile {
     tenant_code: string;
     name: string;
   };
+  [key: string]: any;
 }
 
 interface AuthContextType {
@@ -30,6 +32,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   profileLoading: boolean;
+  authReady: boolean;
   login: (email: string, password: string) => Promise<{ data: any; error: any }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -98,35 +101,44 @@ function resolveProfilePromise(profile: Profile | null) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // [AI] If cached profile exists, start with loading=false to avoid "Verifying Session..." flash
+  const hasCachedProfile = typeof window !== 'undefined' && !!getCachedProfile();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(hasCachedProfile ? getCachedProfile() : null);
+  const [loading, setLoading] = useState(!hasCachedProfile);
+  const [profileLoading, setProfileLoading] = useState(!hasCachedProfile);
+  const [authReady, setAuthReady] = useState(false);
   const [showLoginToast, setShowLoginToast] = useState(false);
   const router = useRouter();
-  const hasInitializedProfile = useRef(false);
+  const hasInitializedProfile = useRef(hasCachedProfile);
   const isFetchingProfile = useRef(false);
-  const profileCache = useRef<Profile | null>(null);
+  const profileCache = useRef<Profile | null>(hasCachedProfile ? getCachedProfile() : null);
 
   const fetchFullProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      const TIMEOUT_MS = 10000;
+      const TIMEOUT_MS = 5000;
+      const TIMEOUT_SYM = Symbol('timeout');
 
       const fetchWithTimeout = async (query: any) => {
         let timeoutId: NodeJS.Timeout;
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
+        const timeoutPromise = new Promise<typeof TIMEOUT_SYM>((resolve) => {
+          timeoutId = setTimeout(() => resolve(TIMEOUT_SYM), TIMEOUT_MS);
         });
 
         try {
           const result = await Promise.race([query, timeoutPromise]);
+          if (result === TIMEOUT_SYM) {
+            return { data: null, error: new Error('Query timed out') };
+          }
           return result;
+        } catch (e) {
+          return { data: null, error: e };
         } finally {
           clearTimeout(timeoutId!);
         }
       };
 
-      const [profileResult, tenantResult] = await Promise.all([
+      const [profileResult, tenantResult, customerResult] = await Promise.allSettled([
         fetchWithTimeout(
           supabase
             .from('profiles')
@@ -140,36 +152,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select('tenant_id, role_code, full_name, warehouse_id')
             .eq('user_id', userId)
             .maybeSingle()
+        ),
+        fetchWithTimeout(
+          supabase
+            .from('md_customer_users')
+            .select('id, tenant_id, customer_id, email, full_name, whatsapp, is_active, user_id')
+            .eq('user_id', userId)
+            .maybeSingle()
         )
       ]);
 
-      const profileData = (profileResult as any)?.data;
-      const profileError = (profileResult as any)?.error;
-      const tenantData = (tenantResult as any)?.data;
-      const tenantError = (tenantResult as any)?.error;
+      const profileVal = (profileResult as any)?.status === 'fulfilled' ? (profileResult as any).value : null;
+      const tenantVal = (tenantResult as any)?.status === 'fulfilled' ? (tenantResult as any).value : null;
+      const customerVal = (customerResult as any)?.status === 'fulfilled' ? (customerResult as any).value : null;
 
-      // If both fail, return null
-      if ((profileError || !profileData) && (!tenantData || tenantError)) {
-        console.error('[Auth] Both profile and tenant fetch failed:', { profileError, tenantError });
+      const profileData = (profileVal as any)?.data;
+      const profileError = (profileVal as any)?.error;
+      const tenantData = (tenantVal as any)?.data;
+      const tenantError = (tenantVal as any)?.error;
+      let customerData = (customerVal as any)?.data;
+      const customerError = (customerVal as any)?.error;
+
+      // Fallback check: if customer user_id is not set but email matches
+      if (!customerData && profileData?.email) {
+        try {
+          const { data: custByEmail } = await supabase
+            .from('md_customer_users')
+            .select('id, tenant_id, customer_id, email, full_name, whatsapp, is_active, user_id')
+            .ilike('email', profileData.email)
+            .maybeSingle();
+          if (custByEmail) {
+            customerData = custByEmail;
+            if (!custByEmail.user_id) {
+              supabase.from('md_customer_users').update({ user_id: userId }).eq('id', custByEmail.id).then();
+            }
+          }
+        } catch (e) {
+          console.warn('[Auth] Failed customer check by email', e);
+        }
+      }
+
+      // If all fail, return null
+      if ((profileError || !profileData) && (!tenantData || tenantError) && (!customerData || customerError)) {
+        console.warn('[Auth] All profile, tenant, and customer fetch failed/empty');
         return null;
       }
 
+      const roleFromCustomer = customerData ? 'warehouse_customer' : '';
       const roleFromProfiles = profileData?.role || '';
       const roleFromTenant = tenantData?.role_code || '';
-      const finalRole = roleFromTenant || roleFromProfiles;
+      const finalRole = roleFromTenant || roleFromProfiles || roleFromCustomer;
 
       const finalProfile: Profile = {
-        id: profileData?.id || tenantData?.user_id || userId,
-        email: profileData?.email || '',
-        full_name: profileData?.full_name || tenantData?.full_name || 'User',
+        id: profileData?.id || tenantData?.user_id || customerData?.user_id || userId,
+        email: profileData?.email || customerData?.email || '',
+        full_name: profileData?.full_name || tenantData?.full_name || customerData?.full_name || 'User',
         role: finalRole,
-        whatsapp: profileData?.whatsapp || '',
-        is_active: profileData?.is_active ?? true,
+        whatsapp: profileData?.whatsapp || customerData?.whatsapp || '',
+        is_active: profileData?.is_active ?? customerData?.is_active ?? true,
         created_at: profileData?.created_at || '',
         updated_at: profileData?.updated_at || ''
       };
 
-      if (!tenantError && tenantData) {
+      if (customerData) {
+        finalProfile.customer_id = customerData.customer_id;
+        finalProfile.role = 'warehouse_customer';
+        if (customerData.tenant_id) {
+          finalProfile.tenant_id = customerData.tenant_id;
+          finalProfile.tenant_code = customerData.tenant_id;
+        }
+      } else if (!tenantError && tenantData) {
         finalProfile.tenant_id = tenantData.tenant_id;
         finalProfile.tenant_code = tenantData.tenant_id;
         finalProfile.warehouse_id = tenantData.warehouse_id;
@@ -187,14 +239,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             finalProfile.tenant_code = ownerData.tenant_code || ownerData.id;
           }
         } catch (e) {
-          console.error('[Auth] Failed to fetch owner tenant_id', e);
+          console.warn('[Auth] Failed to fetch owner tenant_id', e);
         }
       }
 
       if (finalProfile.tenant_id) {
+        const BG_TIMEOUT_SYM = Symbol('bg_timeout');
         let bgTimeoutId: NodeJS.Timeout;
-        const bgTimeoutPromise = new Promise((_, reject) => {
-          bgTimeoutId = setTimeout(() => reject(new Error('timeout')), 5000);
+        const bgTimeoutPromise = new Promise<typeof BG_TIMEOUT_SYM>((resolve) => {
+          bgTimeoutId = setTimeout(() => resolve(BG_TIMEOUT_SYM), 5000);
         });
 
         Promise.race([
@@ -206,11 +259,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           bgTimeoutPromise
         ]).then((result: any) => {
           clearTimeout(bgTimeoutId);
-          if (result?.data) {
-            // [AI] Update profile in-place — this is safe because the profile object was already returned
+          if (result && result !== BG_TIMEOUT_SYM && result.data) {
             finalProfile.tenant_code = result.data.tenant_code;
             finalProfile.tenants = { tenant_code: result.data.tenant_code, name: result.data.name };
-            // Trigger a state update so UI reflects the tenant name
             setProfile({ ...finalProfile });
             profileCache.current = { ...finalProfile };
           }
@@ -219,7 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return finalProfile;
     } catch (err) {
-      console.error('[Auth] fetchFullProfile crashed:', err);
+      console.warn('[Auth] fetchFullProfile:', err);
       return null;
     }
   };
@@ -234,6 +285,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // [AI] Handle profile fetch result — shared logic for all auth events
   const handleProfileResult = useCallback((p: Profile | null, event: string) => {
+    const effectiveProfile = p || profileCache.current;
+
     if (!p && profileCache.current) {
       console.warn('[Auth] Profile fetch failed, using cached profile');
       setProfile(profileCache.current);
@@ -241,59 +294,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(p);
       profileCache.current = p;
     } else {
-      // No profile and no cache
-      console.error('[Auth] Profile is null');
+      if (event !== 'TOKEN_REFRESHED' && event !== 'INITIAL_SESSION') {
+        toast.error('Gagal memuat profil. Silakan refresh halaman.');
+      }
+      console.warn('[Auth] Profile is null on event:', event);
       isFetchingProfile.current = false;
       hasInitializedProfile.current = false;
       setLoading(false);
       setProfileLoading(false);
-      resolveProfilePromise(null);
+      // if (event !== 'TOKEN_REFRESHED') {
+      //   supabase.auth.signOut();
+      //   setUser(null);
+      //   setProfile(null);
+      //   resolveProfilePromise(null);
+      // }
       return;
     }
 
-    // Validate role
-    const role = p?.role || '';
+    const role = effectiveProfile?.role || '';
     if (!role) {
-      console.error('[Auth] Role is empty');
-      toast.error('Akun tidak memiliki role. Hubungi administrator.');
-      supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      hasInitializedProfile.current = false;
-      isFetchingProfile.current = false;
-      setLoading(false);
-      setProfileLoading(false);
-      resolveProfilePromise(null);
-      return;
+      console.warn('[Auth] Role is empty');
+      toast.error('Akun tidak memiliki role. (Log out dinonaktifkan untuk debug)');
+      // supabase.auth.signOut();
+      // setUser(null);
+      // setProfile(null);
+      // resolveProfilePromise(null);
+      // return;
     }
 
-    // Validate active
-    if (p?.is_active === false) {
-      console.error('[Auth] Account disabled');
-      toast.error('Akun Anda dinonaktifkan. Hubungi administrator.');
-      supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      hasInitializedProfile.current = false;
-      isFetchingProfile.current = false;
-      setLoading(false);
-      setProfileLoading(false);
-      resolveProfilePromise(null);
-      return;
+    if (effectiveProfile?.is_active === false) {
+      console.warn('[Auth] Account disabled');
+      toast.error('Akun Anda dinonaktifkan. (Log out dinonaktifkan untuk debug)');
+      // supabase.auth.signOut();
+      // setUser(null);
+      // setProfile(null);
+      // resolveProfilePromise(null);
+      // return;
     }
 
-    // Success
     hasInitializedProfile.current = true;
     isFetchingProfile.current = false;
     setLoading(false);
     setProfileLoading(false);
-    resolveProfilePromise(p);
+    resolveProfilePromise(effectiveProfile);
 
-    // Redirect on SIGNED_IN or INITIAL_SESSION (page reload)
     if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
       if (typeof window !== 'undefined' && window.location.pathname === '/login') {
-        const dashboardRoute = getDashboardRoute(role);
-        router.push(dashboardRoute);
+        const isMobile = window.innerWidth <= 768;
+        const dashboardRoute = getDashboardRoute(role, isMobile);
+        // [AI] Use router.replace for client-side nav — avoids full page reload & "Verifying Session" flash
+        router.replace(dashboardRoute);
       }
       if (event === 'SIGNED_IN') {
         setShowLoginToast(true);
@@ -308,28 +358,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [showLoginToast]);
 
+  // Listen for screen resize to dynamically switch between PWA and Desktop CRM
+  useEffect(() => {
+    if (!profile || profile.role !== 'hq_sales_staff') return;
+
+    let resizeTimer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const isMobile = window.innerWidth <= 768;
+        const currentPath = window.location.pathname;
+        const inPortal = currentPath.startsWith('/portal/sales');
+        const inCRM = currentPath.startsWith('/commercial');
+
+        // Note: We allow Desktop to view PWA pages (like Deal Details) if they intentionally navigate there,
+        // but if they are sitting on the root dashboard, we auto-redirect them based on width.
+        if (isMobile && inCRM) {
+          // If on mobile but viewing Desktop CRM -> redirect to Mobile PWA Home
+          router.push('/portal/sales');
+        } else if (!isMobile && inPortal && currentPath === '/portal/sales') {
+          // If on desktop but viewing Mobile PWA Home -> redirect to Desktop CRM
+          // We only redirect if they are on the root /portal/sales so they can still view specific PWA pages if linked
+          router.push('/commercial/leads');
+        }
+      }, 300);
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Check on mount
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [profile, router]);
+
+  // [AI] Tab refocus: prefetch profile when user comes back to this tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && user && hasInitializedProfile.current) {
+        // Tab became visible — background refresh profile silently
+        fetchFullProfile(user.id).then((p) => {
+          if (p) {
+            setProfile(p);
+            profileCache.current = p;
+            setCachedProfile(p);
+          }
+        }).catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [user]);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] Auth event:', event);
 
       if (session?.user) {
         setUser(session.user);
+        setAuthReady(true);
 
-        // [AI] If already initialized and this is just a token refresh, skip refetch
-        if (event === 'TOKEN_REFRESHED' && hasInitializedProfile.current) {
-          setLoading(false);
-          setProfileLoading(false);
+        // [AI] TOKEN_REFRESHED: never block UI — just silently refresh in background
+        if (event === 'TOKEN_REFRESHED') {
+          if (hasInitializedProfile.current) {
+            // Profile already loaded, background refresh only
+            fetchFullProfile(session.user.id).then((p) => {
+              if (p) {
+                setProfile(p);
+                profileCache.current = p;
+                setCachedProfile(p);
+              }
+            }).catch(() => {});
+          }
           return;
         }
 
         // [AI] If currently fetching, skip — let the existing fetch complete
         if (isFetchingProfile.current) {
-          setLoading(false);
           return;
         }
 
-        // [AI] On page reload (INITIAL_SESSION), use cached profile for instant load
-        if (event === 'INITIAL_SESSION' && !hasInitializedProfile.current) {
+        // [AI] INITIAL_SESSION: always use cache first, then background update
+        if (event === 'INITIAL_SESSION') {
           const cached = getCachedProfile();
           if (cached && cached.id === session.user.id) {
             console.log('[Auth] Using cached profile for instant load');
@@ -340,7 +452,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
             setProfileLoading(false);
             resolveProfilePromise(cached);
-            // [AI] Still refresh in background to get fresh data
+            // Background refresh — never block UI
             fetchFullProfile(session.user.id).then((p) => {
               if (p) {
                 setProfile(p);
@@ -350,6 +462,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }).catch(() => {});
             return;
           }
+
+          // [AI] No cache — show loading only if truly first time
+          isFetchingProfile.current = true;
+          setLoading(true);
+          setProfileLoading(true);
+
+          let p: Profile | null = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              p = await fetchFullProfile(session.user.id);
+              if (p) break;
+            } catch (e) {
+              console.warn(`[Auth] Profile fetch attempt ${attempt} failed:`, e);
+            }
+            if (attempt < 3) {
+              await new Promise(r => setTimeout(r, 1000 * attempt));
+            }
+          }
+
+          if (p) {
+            setCachedProfile(p);
+          }
+          handleProfileResult(p, event);
+          return;
+        }
+
+        // [AI] SIGNED_IN: fetch profile (login flow)
+        // [AI] If already initialized (tab refocus), never block UI — background refresh only
+        if (hasInitializedProfile.current) {
+          fetchFullProfile(session.user.id).then((p) => {
+            if (p) {
+              setProfile(p);
+              profileCache.current = p;
+              setCachedProfile(p);
+            }
+          }).catch(() => {});
+          return;
+        }
+
+        // [AI] Cache-first: if cached profile matches user, use it instantly — no blocking fetch
+        const cachedForLogin = getCachedProfile();
+        if (cachedForLogin && cachedForLogin.id === session.user.id) {
+          console.log('[Auth] SIGNED_IN: using cached profile for instant load');
+          setProfile(cachedForLogin);
+          profileCache.current = cachedForLogin;
+          hasInitializedProfile.current = true;
+          isFetchingProfile.current = false;
+          setLoading(false);
+          setProfileLoading(false);
+          resolveProfilePromise(cachedForLogin);
+          setShowLoginToast(true);
+          // Redirect immediately — no fetch needed
+          const role = cachedForLogin.role || '';
+          if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+            const isMobile = window.innerWidth <= 768;
+            const dashboardRoute = getDashboardRoute(role, isMobile);
+            router.replace(dashboardRoute);
+          }
+          // Background refresh — never block UI
+          fetchFullProfile(session.user.id).then((p) => {
+            if (p) {
+              setProfile(p);
+              profileCache.current = p;
+              setCachedProfile(p);
+            }
+          }).catch(() => {});
+          return;
         }
 
         isFetchingProfile.current = true;
@@ -358,10 +537,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         try {
           const p = await fetchFullProfile(session.user.id);
-          if (p) setCachedProfile(p); // [AI] Cache profile for next page load
+          if (p) setCachedProfile(p);
           handleProfileResult(p, event);
         } catch (fetchErr) {
-          console.error('[Auth] Profile fetch exception:', fetchErr);
+          console.warn('[Auth] Profile fetch exception:', fetchErr);
           isFetchingProfile.current = false;
           hasInitializedProfile.current = false;
           setLoading(false);
@@ -372,12 +551,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // No session
         setUser(null);
         setProfile(null);
+        setAuthReady(true);
         hasInitializedProfile.current = false;
         isFetchingProfile.current = false;
         setLoading(false);
         setProfileLoading(false);
         profileCache.current = null;
-        clearCachedProfile(); // [AI] Clear cache on logout
       }
     });
 
@@ -394,26 +573,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setProfileLoading(true);
 
+      // [AI] Create promise BEFORE signIn so onAuthStateChange can resolve it.
+      // Without this, onAuthStateChange fires during signInWithPassword and calls
+      // resolveProfilePromise() while profileResolve is still null — the resolve is lost.
+      // Save a local reference because resolveProfilePromise() clears the module var.
+      const waitForProfile = createProfilePromise();
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
+        // Clean up dangling promise on auth failure
+        profilePromise = null;
+        profileResolve = null;
         toast.error(error.message);
         setLoading(false);
         setProfileLoading(false);
         return { data: null, error };
       }
 
-      // [AI] Wait for profile to be fetched via onAuthStateChange — use promise, not polling
+      // [AI] Wait for profile via onAuthStateChange — use the pre-created promise
       const profileResult = await Promise.race([
-        createProfilePromise(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000))
+        waitForProfile,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000))
       ]);
 
       if (!profileResult) {
-        console.warn('[Auth] Profile not loaded after login, but session exists');
+        // [AI] Fallback: profile may already be loaded by onAuthStateChange
+        // even though the promise timed out (e.g. resolved before we awaited it)
+        if (profileCache.current || hasInitializedProfile.current) {
+          console.log('[Auth] Profile already loaded via onAuthStateChange, continuing');
+        } else {
+          // [AI] Silent retry — fetch profile directly instead of showing error
+          console.log('[Auth] Profile promise timed out, retrying fetch directly');
+          try {
+            const p = await fetchFullProfile(data.user!.id);
+            if (p) {
+              setProfile(p);
+              profileCache.current = p;
+              setCachedProfile(p);
+              hasInitializedProfile.current = true;
+              setProfileLoading(false);
+              resolveProfilePromise(p);
+            }
+          } catch (retryErr) {
+            console.warn('[Auth] Profile retry also failed:', retryErr);
+          }
+        }
       }
 
       setLoading(false);
+      setProfileLoading(false);
       return { data, error: null };
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');
@@ -471,6 +680,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     profileLoading,
+    authReady,
     login,
     logout,
     isAuthenticated: !!user,

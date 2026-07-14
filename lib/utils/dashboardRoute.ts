@@ -1,14 +1,30 @@
 // lib/utils/dashboardRoute.ts
-export const getDashboardRoute = (role: string) => {
-  // All director roles land on Executive Business Dashboard
+export const getDashboardRoute = (role: string, isMobile: boolean = false) => {
+  // Director roles land on their respective exception dashboards
+  if (role === 'hq_director_ops') return '/director/ops';
+  if (role === 'hq_director_fin') return '/director/finance';
+  if (role === 'hq_director_comm') return '/director/commercial';
+  if (role === 'hq_director_bizdev') return '/director/bizdev';
+  if (role === 'hq_director_hrd') return '/director/hrd';
+  if (role === 'hq_director_cs') return '/director/cs'; // Fallback for cs if any
+  
   if (role.startsWith('hq_director_')) {
-    return '/hq/business';
+    return '/hq/business'; // Generic fallback if new director roles are added
   }
   switch (role) {
     case 'owner_sentralogis':
       return '/owner';
     case 'tenant_superadmin':
       return '/tenant';
+    case 'hq_commercial_director':
+    case 'hq_sales_manager':
+    case 'hq_marketing_staff':
+      return '/commercial/leads';
+    case 'hq_sales_staff':
+      // Route Sales to Mobile PWA if on mobile, else to Desktop CRM
+      return isMobile ? '/portal/sales' : '/commercial/leads';
+    case 'hq_pricing_analyst':
+      return '/commercial/pipeline'; // or a billing/pricing dashboard
     case 'hq_cs':
       return '/hq/work-orders';
     case 'hq_ops':
@@ -33,6 +49,8 @@ export const getDashboardRoute = (role: string) => {
       return '/sbu/forwarding/finances';
     case 'driver':
       return '/driver/jobs';
+    case 'warehouse_customer':
+      return '/customer/warehouse';
     case 'tenant_admin':
       return '/tenant';
     default:

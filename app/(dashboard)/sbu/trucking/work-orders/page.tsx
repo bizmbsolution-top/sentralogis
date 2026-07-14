@@ -26,6 +26,10 @@ import RejectedViewModal from '../../../../(dashboard)/hq/work-orders/components
 export const filterItemByTab = (item: any, tabId: string) => {
   const s = item.status?.toUpperCase() || '';
   
+  if (tabId === 'pending' || tabId === 'all') {
+    console.log('[SBU-TRUCK] filterItemByTab:', { tabId, itemStatus: item.status, s, rawItemStatus: item.status });
+  }
+  
   // CRITICAL: Prevent PAID/INVOICED leakage
   if (['INVOICED', 'PAID'].includes(s)) return false;
 
@@ -56,7 +60,7 @@ export const filterItemByTab = (item: any, tabId: string) => {
   if (tabId === 'all') return true;
   
   if (tabId === 'pending') {
-    return (!hasAnyAssigned && (s === 'PENDING' || s === 'NEED_ASSIGNMENT')) || (s === 'PENDING' && !allAssigned);
+    return (!hasAnyAssigned && (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'DRAFT')) || (s === 'PENDING' && !allAssigned);
   }
   
   if (tabId === 'assigned_units') {
@@ -121,8 +125,8 @@ export default function WorkOrderPlanningPage() {
     const { data: baseItems, error: baseError } = await supabase
       .from('wo_items')
       .select(`
-        *, 
-        work_orders!inner(id, wo_number, execution_date, status, md_entities!customer_id(name, legal_name))
+        id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
+        work_orders!inner(id, wo_number, execution_date, md_entities!customer_id(name, legal_name))
       `)
       .eq('tenant_id', tenantId)
       .eq('sbu_type', 'TRUCKING')
@@ -153,6 +157,7 @@ export default function WorkOrderPlanningPage() {
         item_data: typeof item.item_data === 'string' ? JSON.parse(item.item_data) : (item.item_data || {}),
         job_orders: (joData || []).filter(jo => jo.wo_item_id === item.id)
       }));
+      console.log('[SBU-TRUCK] enrichedItems:', enrichedItems.map(i => ({ id: i.id, item_code: i.item_code, status: i.status, wo_status: i.work_orders?.status, joCount: i.job_orders?.length })));
       setItems(enrichedItems);
     } else {
       const parsedItems = itemsData.map(item => ({
@@ -593,51 +598,13 @@ const filteredItems = useMemo(() => {
                         );
                       }
 
-                      if (item.status?.toUpperCase() === 'ASSIGNED' || isHandoverApproved) {
-                        const allJOsAssigned = jos.length > 0 && jos.every((j: any) => j.fleet_id && j.driver_id);
-                        const isConfirmedAssigned = item.item_data?.confirmed_assigned === true;
-                        
-                        if (allJOsAssigned || isConfirmedAssigned) {
-                          return (
-                            <Button 
-                              onClick={() => {
-                                const assignedJOs = jos.filter((j: any) => j.fleet_id && j.driver_id);
-                                const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://www.sentralogis.com')).trim().replace(/[\r\n\s]+$/, '');
-                                for (const jo of assignedJOs) {
-                                  const driver = jo.driver;
-                                  const driverPhone = driver?.phone || '';
-                                  const driverName = driver?.name || 'Driver';
-                                  if (!driverPhone) continue;
-                                  let formattedPhone = driverPhone.replace(/\D/g, '');
-                                  if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.substring(1);
-                                  
-                                  const isInternal = driver?.md_entities?.is_vendor === false;
-                                  let link, msg;
-                                  
-                                  if (isInternal) {
-                                    link = `${baseUrl}/driver/portal`;
-                                    msg = `Halo ${driverName}, Anda mendapat tugas baru (${jo.jo_number || item.item_code}). Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
-                                  } else {
-                                    link = `${baseUrl}/jo/${jo.driver_link_token || jo.id}`;
-                                    msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number || item.item_code}): ${link}`;
-                                  }
-                                  
-                                  window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
-                                }
-                              }}
-                              className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
-                            >
-                              <MessageCircle size={14} /> LINK TO DRIVERS
-                            </Button>
-                          );
-                        }
-
+                      if (item.status?.toUpperCase() === 'ASSIGNED' || isHandoverApproved || jos.length > 0) {
                         return (
                           <Button 
                             onClick={() => { setSelectedItemForAssignment(item); setShowAssignmentModal(true); }}
-                            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2"
+                            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
                           >
-                            {isHandoverApproved ? `MANAGE ${maxJOCount} JO(S)` : 'MANAGE'} <ArrowRight size={14} />
+                            {`MANAGE (${jos.length || maxJOCount} JO)`} <ArrowRight size={14} />
                           </Button>
                         );
                       }

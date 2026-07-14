@@ -60,7 +60,7 @@ export default function RepackingPage() {
     if (!tId) return;
     setLoading(true);
     try {
-      let whId = profile?.warehouse_id;
+      let whId: string = profile?.warehouse_id || '';
       const { data: whData } = await supabase.from('md_warehouses').select('id, name').eq('tenant_id', tId);
       if (whData) setWarehouses(whData);
 
@@ -68,7 +68,7 @@ export default function RepackingPage() {
         if (selectedWarehouse) {
           whId = selectedWarehouse;
         } else if (whData && whData.length > 0) {
-          whId = whData[0].id;
+          whId = whData[0].id || '';
           setSelectedWarehouse(whId);
         } else {
           setLoading(false);

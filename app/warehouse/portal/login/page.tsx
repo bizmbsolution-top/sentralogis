@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { Loader2, Warehouse, Lock, Phone } from 'lucide-react';
+import { Loader2, Warehouse, Lock, Phone, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -57,15 +58,23 @@ export default function WarehouseLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-5 pt-safe-area-top pb-safe-area-bottom">
+    <div className="min-h-screen relative flex flex-col items-center justify-center p-5 pt-safe-area-top pb-safe-area-bottom">
+      {/* Back to Portal Hub Button */}
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50 pt-safe-area-top">
+        <Link href="/" className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors bg-slate-900/90 hover:bg-slate-800 px-4 py-2 rounded-full backdrop-blur-md border border-slate-700 shadow-lg active:scale-95">
+          <ArrowLeft className="w-4 h-4 text-cyan-400" />
+          <span className="text-xs font-bold uppercase tracking-wider">Kembali ke Portal Hub</span>
+        </Link>
+      </div>
+
       <div className="w-full max-w-sm space-y-8 relative z-10">
         
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-blue-600/30 mb-6">
-             <Warehouse size={32} className="text-white" />
+          <div className="mb-4 flex justify-center">
+            <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-16 w-auto drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Sentralogis <span className="text-blue-400">WH</span></h1>
-          <p className="text-sm font-medium text-slate-400">Warehouse Staff Portal</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">Welcome to Warehouse Portal</h1>
+          <p className="text-xs font-semibold text-slate-400">Enter your WhatsApp & Touch PIN to access inventory tools</p>
         </div>
 
         <form onSubmit={handleLogin} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-2xl space-y-5">

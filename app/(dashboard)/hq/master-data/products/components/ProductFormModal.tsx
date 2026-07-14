@@ -272,6 +272,7 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
         tenant_id: profile.tenant_id,
         sku_code: formData.sku_code,
         name: formData.name,
+        unit: formData.default_inbound_uom || formData.base_uom || 'PCS',
         customer_id: formData.customer_id || null,
         category_id: formData.category_id || null,
         brand_name: formData.brand_name,

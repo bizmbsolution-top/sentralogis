@@ -4,12 +4,14 @@ import {
     XCircle, Truck, Activity, Loader2, MapPin, 
     Clock, ImageIcon, ExternalLink, Banknote, 
     CheckCircle2, FileText, Send, Save, PlusCircle, X, ArrowRight, Receipt,
-    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation as NavIcon, History, AlertCircle, Printer
+    ShieldCheck, ScanLine, User, Phone, Map, List, Navigation as NavIcon, History, AlertCircle, Printer,
+    FolderGit2, Upload, Trash2, Eye, Download
 } from "lucide-react";
 import { GoogleMap, MarkerF, DirectionsRenderer, Polyline } from "@react-google-maps/api";
 import { formatThousand, getOperationalStatus, printCashAdvanceSlip } from "../utils";
 import { useState, useEffect } from "react";
 import { supabase } from '@/lib/supabase/client';
+import { toast } from 'react-hot-toast';
 
 interface JODetailDrawerProps {
     show: boolean;
@@ -40,9 +42,13 @@ export default function JODetailDrawer({
 }: JODetailDrawerProps) {
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [transporterName, setTransporterName] = useState<string | null>(null);
+    const [assignmentDocs, setAssignmentDocs] = useState<any[]>([]);
+    const [uploadingAssignDocs, setUploadingAssignDocs] = useState(false);
+    const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (show && jo) {
+            setAssignmentDocs(jo.assignment_documents || []);
             if (jo.transporter_id && !jo.transporter?.name) {
                 // Fallback to fetch from md_transporters if foreign key failed
                 supabase.from('md_transporters').select('transporter_name').eq('id', jo.transporter_id).single()
@@ -56,6 +62,96 @@ export default function JODetailDrawer({
             }
         }
     }, [show, jo]);
+
+    const handleUploadAssignDocDrawer = async (filesList: FileList | null) => {
+        if (!filesList || filesList.length === 0 || !jo?.id) return;
+        setUploadingAssignDocs(true);
+        try {
+            const currentDocs = [...assignmentDocs];
+            for (let i = 0; i < filesList.length; i++) {
+                const file = filesList[i];
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Math.random().toString(36).substring(7)}.${fileExt}`;
+                const filePath = `assignment-docs/${jo.id}/${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('documents')
+                    .upload(filePath, file);
+
+                if (uploadError) {
+                    toast.error(`Upload gagal (${file.name}): ` + uploadError.message);
+                    continue;
+                }
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('documents')
+                    .getPublicUrl(filePath);
+
+                currentDocs.push({
+                    id: `doc_${Math.random().toString(36).substring(2, 9)}`,
+                    name: file.name,
+                    type: 'SURAT_JALAN',
+                    file_url: publicUrl,
+                    file_type: file.type || 'application/octet-stream',
+                    file_size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+                    uploaded_at: new Date().toISOString(),
+                });
+            }
+
+            const { error: dbError } = await supabase
+                .from('job_orders')
+                .update({ assignment_documents: currentDocs })
+                .eq('id', jo.id);
+
+            if (dbError) throw dbError;
+
+            setAssignmentDocs(currentDocs);
+            jo.assignment_documents = currentDocs;
+            toast.success('Dokumen untuk supir berhasil disimpan!');
+        } catch (err: any) {
+            toast.error('Gagal mengunggah dokumen: ' + err.message);
+        } finally {
+            setUploadingAssignDocs(false);
+        }
+    };
+
+    const handleRemoveAssignDocDrawer = async (index: number) => {
+        if (!jo?.id) return;
+        const currentDocs = [...assignmentDocs];
+        currentDocs.splice(index, 1);
+        try {
+            const { error: dbError } = await supabase
+                .from('job_orders')
+                .update({ assignment_documents: currentDocs })
+                .eq('id', jo.id);
+
+            if (dbError) throw dbError;
+
+            setAssignmentDocs(currentDocs);
+            jo.assignment_documents = currentDocs;
+            toast.success('Dokumen dihapus');
+        } catch (err: any) {
+            toast.error('Gagal menghapus dokumen: ' + err.message);
+        }
+    };
+
+    const handleUpdateAssignDocTypeDrawer = async (index: number, newType: string) => {
+        if (!jo?.id) return;
+        const currentDocs = [...assignmentDocs];
+        if (currentDocs[index]) {
+            currentDocs[index].type = newType;
+            try {
+                await supabase
+                    .from('job_orders')
+                    .update({ assignment_documents: currentDocs })
+                    .eq('id', jo.id);
+                setAssignmentDocs(currentDocs);
+                jo.assignment_documents = currentDocs;
+            } catch (err: any) {
+                toast.error('Gagal memperbarui tipe dokumen: ' + err.message);
+            }
+        }
+    };
 
     useEffect(() => {
         if (show && jo && isLoaded) {
@@ -375,6 +471,87 @@ export default function JODetailDrawer({
                     {/* 🎫 EVIDENCE & FINANCIALS SECTION - BIGGER TEXT */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-6">
                         
+                        {/* Pre-Delivery Assignment Documents Widget (Khusus Supir) */}
+                        <div className="space-y-6 col-span-full">
+                            <div className="flex items-center justify-between px-2">
+                                <h4 className="text-[15px] font-black text-[#1E293B] uppercase italic tracking-widest flex items-center gap-4">
+                                    <FolderGit2 className="w-6 h-6 text-blue-600" /> Dokumen Pengantar & Manifest (Buka Di HP Supir)
+                                </h4>
+                                <label className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider cursor-pointer flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20">
+                                    {uploadingAssignDocs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                    {uploadingAssignDocs ? 'Mengunggah...' : '+ Upload Surat Jalan / Manifest'}
+                                    <input
+                                        type="file"
+                                        multiple
+                                        accept=".pdf,image/*"
+                                        className="hidden"
+                                        onChange={(e) => handleUploadAssignDocDrawer(e.target.files)}
+                                        disabled={uploadingAssignDocs}
+                                    />
+                                </label>
+                            </div>
+                            <div className="p-6 rounded-[2.5rem] bg-blue-50/50 border-2 border-blue-100/80">
+                                {assignmentDocs.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {assignmentDocs.map((doc: any, idx: number) => (
+                                            <div key={doc.id || idx} className="bg-white p-4 rounded-2xl border border-blue-200/80 shadow-sm flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                                                        {doc.name?.endsWith('.pdf') || doc.file_type?.includes('pdf') ? (
+                                                            <FileText className="w-6 h-6 text-red-500" />
+                                                        ) : (
+                                                            <ImageIcon className="w-6 h-6 text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-bold text-slate-800 truncate" title={doc.name}>{doc.name}</p>
+                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                            <select
+                                                                value={doc.type || 'SURAT_JALAN'}
+                                                                onChange={(e) => handleUpdateAssignDocTypeDrawer(idx, e.target.value)}
+                                                                className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                            >
+                                                                <option value="SURAT_JALAN">SURAT JALAN</option>
+                                                                <option value="MANIFEST_CARGO">MANIFEST MULTIDROP</option>
+                                                                <option value="POD_BLANKO">BLANKO POD</option>
+                                                                <option value="INSTRUKSI_KERJA">INSTRUKSI KERJA / K3</option>
+                                                                <option value="LAINNYA">LAINNYA</option>
+                                                            </select>
+                                                            <span className="text-[10px] text-slate-400 font-medium">{doc.file_size || ''}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewDocUrl(doc.file_url)}
+                                                        className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors border border-slate-200"
+                                                        title="Preview Dokumen"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveAssignDocDrawer(idx)}
+                                                        className="w-8 h-8 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-200"
+                                                        title="Hapus Dokumen"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="border border-dashed border-blue-200 rounded-2xl py-6 text-center bg-white/60">
+                                        <p className="text-xs font-bold text-slate-400 italic">
+                                            Belum ada dokumen pengantar yang diunggah untuk supir di Job Order ini.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         {/* Physical Doc Verification Widget */}
                         <div className="space-y-8 col-span-full">
                             <h4 className="text-[15px] font-black text-[#1E293B] uppercase italic tracking-widest flex items-center gap-4 px-2">
@@ -548,6 +725,42 @@ export default function JODetailDrawer({
                     </div>
                 </div>
             </div>
+
+            {/* Document Preview Modal inside Drawer */}
+            {previewDocUrl && (
+                <div className="fixed inset-0 z-[1300] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="relative bg-slate-900 rounded-3xl p-4 w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700 shadow-2xl">
+                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-white">
+                            <span className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                                <Eye className="text-blue-400" size={18} /> Preview Dokumen
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <a
+                                    href={previewDocUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all"
+                                >
+                                    <Download size={14} /> Download
+                                </a>
+                                <button
+                                    onClick={() => setPreviewDocUrl(null)}
+                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition-all"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto bg-slate-950 rounded-2xl flex items-center justify-center min-h-[60vh]">
+                            {previewDocUrl.toLowerCase().includes('.pdf') ? (
+                                <iframe src={previewDocUrl} className="w-full h-[75vh] rounded-xl border-0" title="PDF Preview" />
+                            ) : (
+                                <img src={previewDocUrl} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-xl" />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

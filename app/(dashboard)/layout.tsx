@@ -13,19 +13,25 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, profile, loading, isAuthenticated } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { user, profile, loading, authReady, isAuthenticated } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   // [AI] Redirect to login when auth is resolved and user is not authenticated
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (authReady && !isAuthenticated) {
       window.location.replace('/login');
     }
-  }, [loading, isAuthenticated]);
+  }, [authReady, isAuthenticated]);
 
-  // [AI] Show spinner only while auth is loading — no timeout fallback
-  if (loading) {
+  // [AI] Show spinner while auth is loading OR while auth session is not ready yet
+  if (loading || !authReady) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />

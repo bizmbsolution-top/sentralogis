@@ -157,22 +157,32 @@ async function upsertJobOrder(
   isInsert: boolean
 ): Promise<string> {
   if (assign.id && !isInsert) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('job_orders')
       .update({
         ...payload,
         driver_link_token: assign.driver_link_token || generateDriverLinkToken(),
       })
-      .eq('id', assign.id);
+      .eq('id', assign.id)
+      .select('id');
     if (error) throw error;
-    return assign.id;
+    if (data && data.length > 0) {
+      return data[0].id;
+    }
+    // If update matched 0 rows (row was deleted or ID not found), fall through to insert below
+  }
+
+  const insertPayload = { ...payload };
+  const isUuid = assign.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assign.id);
+  if (isUuid) {
+    insertPayload.id = assign.id;
   }
 
   const { data, error } = await supabase
     .from('job_orders')
     .insert({
-      ...payload,
-      driver_link_token: generateDriverLinkToken(),
+      ...insertPayload,
+      driver_link_token: assign.driver_link_token || generateDriverLinkToken(),
     })
     .select('id')
     .single();
@@ -228,6 +238,13 @@ export async function saveAssignments(
           wa_token: assign.wa_token || generateTrackingToken(),
           tracking_token: assign.tracking_token || generateTrackingToken(),
           total_stops: itemData.stops?.length || 0,
+          container_number: assign.container_number || null,
+          notes: assign.notes || null,
+          assignment_documents: assign.assignment_documents || [],
+          sbu_metadata: {
+            ...(assign.container_number ? { container_number: assign.container_number } : {}),
+            ...(assign.notes ? { notes: assign.notes } : {}),
+          },
           updated_at: new Date().toISOString(),
           status: 'pending',
         };
@@ -235,7 +252,7 @@ export async function saveAssignments(
         await upsertJobOrder(supabase, assign, payload, !assign.id);
       }
 
-      const currentItemData = parseItemData(woItem.item_data) as Record<string, unknown>;
+      const currentItemData = parseItemData(woItem.item_data) as unknown as Record<string, unknown>;
       const updatedItemData = { ...currentItemData };
       delete updatedItemData.confirmed_assigned;
       delete updatedItemData.confirmed_assigned_at;
@@ -257,14 +274,21 @@ export async function saveAssignments(
 
     // confirm | handover
     const filledAssignments = assignments.filter(isFilledAssignment);
+    const filledIds = filledAssignments.map((a) => a.id).filter(Boolean);
 
-    await supabase
+    let preDeleteQuery = supabase
       .from('job_orders')
       .delete()
       .eq('wo_item_id', woItem.id)
       .eq('status', 'pending')
+      .is('transporter_id', null)
       .is('driver_id', null)
       .is('fleet_id', null);
+
+    if (filledIds.length > 0) {
+      preDeleteQuery = preDeleteQuery.not('id', 'in', `(${filledIds.join(',')})`);
+    }
+    await preDeleteQuery;
 
     for (let i = 0; i < filledAssignments.length; i++) {
       const assign = filledAssignments[i];
@@ -316,8 +340,8 @@ export async function saveAssignments(
         jo_number: joNumber,
         transporter_id: assign.transporter_id || null,
         vendor_id: assign.transporter_id || null,
-        fleet_id: assign.fleet_id,
-        driver_id: assign.driver_id,
+        fleet_id: assign.fleet_id || null,
+        driver_id: assign.driver_id || null,
         driver_phone: assign.driver_phone || null,
         cost_account_id: assign.cost_account_id || null,
         purchase_price: Number(assign.purchase_price) || 0,
@@ -330,9 +354,16 @@ export async function saveAssignments(
         wa_token: assign.wa_token || generateTrackingToken(),
         tracking_token: assign.tracking_token || generateTrackingToken(),
         total_stops: itemData.stops?.length || 0,
+        container_number: assign.container_number || null,
+        notes: assign.notes || null,
+        assignment_documents: assign.assignment_documents || [],
+        sbu_metadata: {
+          ...(assign.container_number ? { container_number: assign.container_number } : {}),
+          ...(assign.notes ? { notes: assign.notes } : {}),
+        },
         updated_at: new Date().toISOString(),
         status:
-          assign.id && assign.status && assign.status !== 'pending'
+          assign.id && assign.status && assign.status !== 'pending' && assign.status !== 'draft'
             ? assign.status
             : 'assigned',
       };
@@ -355,6 +386,16 @@ export async function saveAssignments(
       await syncJobRoutes(supabase, joId, itemData);
     }
 
+    // [AI] Now that filled assignments have been upserted (and changed to assigned status), clean up any remaining unassigned skeleton rows
+    await supabase
+      .from('job_orders')
+      .delete()
+      .eq('wo_item_id', woItem.id)
+      .eq('status', 'pending')
+      .is('transporter_id', null)
+      .is('driver_id', null)
+      .is('fleet_id', null);
+
     const effectiveUnitCount = computeMaxJoCount(itemData);
     const { data: actualJOs } = await supabase
       .from('job_orders')
@@ -370,7 +411,7 @@ export async function saveAssignments(
         ? 'assigned'
         : 'pending';
 
-    const currentItemData = parseItemData(woItem.item_data) as Record<string, unknown>;
+    const currentItemData = parseItemData(woItem.item_data) as unknown as Record<string, unknown>;
     const updatePayload: { status: string; item_data?: Record<string, unknown> } = {
       status: newStatus,
     };
@@ -396,16 +437,32 @@ export async function saveAssignments(
       .eq('wo_id', woItem.wo_id);
 
     const allAssigned = siblingItems?.every((i) =>
-      ['assigned', 'active', 'in_progress', 'completed'].includes(
+      ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress', 'completed'].includes(
         (i.status || '').toLowerCase()
       )
     );
 
-    if (allAssigned) {
-      await supabase
+    const anyAssigned = siblingItems?.some((i) =>
+      ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress', 'completed'].includes(
+        (i.status || '').toLowerCase()
+      )
+    ) || newStatus === 'assigned' || successfulAssignments > 0;
+
+    if (allAssigned || anyAssigned) {
+      // Fetch current wo status so we sync out of draft/need_assignment when any units are assigned
+      const { data: parentWo } = await supabase
         .from('work_orders')
-        .update({ status: 'assigned' })
-        .eq('id', woItem.wo_id);
+        .select('status')
+        .eq('id', woItem.wo_id)
+        .single();
+
+      const currentParentStatus = (parentWo?.status || '').toLowerCase();
+      if (allAssigned || ['draft', 'pending', 'need_assignment'].includes(currentParentStatus)) {
+        await supabase
+          .from('work_orders')
+          .update({ status: allAssigned ? 'assigned' : 'assigned' })
+          .eq('id', woItem.wo_id);
+      }
     }
 
     return {

@@ -31,29 +31,18 @@ import {
   BarChart3,
   Truck,
   Package,
-  Warehouse,
-  ChevronDown
+  Warehouse
 } from 'lucide-react';
 import toast, { Toaster } from "react-hot-toast";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import type { Locale } from "@/lib/i18n/translations";
+import PortalAccessHubModal from "@/components/portal/PortalAccessHubModal";
+import LanguageSelector from '@/components/LanguageSelector';
 
 export default function SentralogisCosmicLanding() {
   const [copied, setCopied] = useState(false);
-  const [langOpen, setLangOpen] = useState(false);
-  const langRef = useRef<HTMLDivElement>(null);
+  const [portalHubOpen, setPortalHubOpen] = useState(false);
   const { locale, setLocale, t } = useLanguage();
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (langRef.current && !langRef.current.contains(e.target as Node)) {
-        setLangOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
   const copyEmail = () => {
     navigator.clipboard.writeText("info@sentralogis.com");
@@ -92,8 +81,8 @@ export default function SentralogisCosmicLanding() {
     // Spawn stars - reduced count on mobile for performance
     const isMobile = canvas.width < 768;
     const particleCount = isMobile
-      ? Math.min(80, Math.floor((canvas.width * canvas.height) / 8000))
-      : Math.min(500, Math.floor((canvas.width * canvas.height) / 2500));
+      ? Math.min(60, Math.floor((canvas.width * canvas.height) / 12000))
+      : Math.min(200, Math.floor((canvas.width * canvas.height) / 5000));
     const colors = ["#00E5FF", "#FF7043", "#00E676", "#818CF8", "#F8FAFC", "#E879F9", "#FBBF24", "#FB7185", "#34D399", "#60A5FA"];
 
     for (let i = 0; i < particleCount; i++) {
@@ -126,6 +115,19 @@ export default function SentralogisCosmicLanding() {
     window.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseleave", handleMouseLeave);
 
+    // Pre-render glow texture for fast drawing
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = 32;
+    glowCanvas.height = 32;
+    const gCtx = glowCanvas.getContext("2d");
+    if (gCtx) {
+      const grad = gCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+      grad.addColorStop(0, "rgba(255,255,255,0.15)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, 32, 32);
+    }
+
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -147,9 +149,9 @@ export default function SentralogisCosmicLanding() {
             const dx = particles[i].x - particles[j].x;
             const dy = particles[i].y - particles[j].y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 100) {
+            if (dist < 120) {
               ctx.save();
-              ctx.globalAlpha = (1 - dist / 100) * 0.08;
+              ctx.globalAlpha = (1 - dist / 120) * 0.06;
               ctx.strokeStyle = "#818CF8";
               ctx.lineWidth = 0.5;
               ctx.beginPath();
@@ -198,11 +200,9 @@ export default function SentralogisCosmicLanding() {
         // Maintain constant active speed
         const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
         if (speed > 2.5) {
-          // Clamp max speed
           p.vx = (p.vx / speed) * 2.5;
           p.vy = (p.vy / speed) * 2.5;
         } else if (speed < 0.5) {
-          // Give them a kick if they slow down too much
           p.vx += (Math.random() - 0.5) * 0.5;
           p.vy += (Math.random() - 0.5) * 0.5;
         }
@@ -211,18 +211,21 @@ export default function SentralogisCosmicLanding() {
         p.vx += (Math.random() - 0.5) * 0.05;
         p.vy += (Math.random() - 0.5) * 0.05;
 
-        // Draw the star with glow
-        ctx.save();
+        // Draw the star (no shadowBlur for performance)
         ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowBlur = p.size > 1.2 ? 15 : 6;
-        ctx.shadowColor = p.color;
         ctx.fill();
-        ctx.restore();
+
+        // Add glow only for bright stars using pre-rendered texture
+        if (p.size > 1.5) {
+          ctx.globalAlpha = p.alpha * 0.5;
+          ctx.drawImage(glowCanvas, p.x - 16, p.y - 16, 32, 32);
+        }
       });
 
+      ctx.globalAlpha = 1;
       animationFrameId = requestAnimationFrame(draw);
     };
 
@@ -245,32 +248,40 @@ export default function SentralogisCosmicLanding() {
         {/* Deep space base gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a0118] via-[#050d1a] to-[#030712]" />
         
-        {/* Massive colorful nebula clouds */}
-        <div className="absolute top-[-15%] left-[-10%] w-[55%] h-[55%] rounded-full bg-purple-700/20 blur-[180px] animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute top-[10%] right-[-15%] w-[50%] h-[50%] rounded-full bg-blue-600/15 blur-[160px] animate-pulse" style={{ animationDuration: '10s' }} />
-        <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[45%] rounded-full bg-pink-600/12 blur-[200px] animate-pulse" style={{ animationDuration: '12s' }} />
-        <div className="absolute bottom-[10%] right-[5%] w-[40%] h-[40%] rounded-full bg-cyan-500/10 blur-[150px] animate-pulse" style={{ animationDuration: '7s' }} />
-        <div className="absolute top-[40%] left-[30%] w-[35%] h-[30%] rounded-full bg-amber-500/8 blur-[140px] animate-pulse" style={{ animationDuration: '9s' }} />
-        <div className="absolute top-[5%] left-[50%] w-[25%] h-[25%] rounded-full bg-emerald-500/8 blur-[120px] animate-pulse" style={{ animationDuration: '11s' }} />
+        {/* Massive colorful nebula clouds (reduced from 6 to 3 for performance) */}
+        <div className="absolute top-[-10%] left-[-5%] w-[45%] h-[45%] rounded-full bg-purple-700/15 blur-[100px]" />
+        <div className="absolute top-[15%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/10 blur-[80px]" />
+        <div className="absolute bottom-[-10%] left-[15%] w-[50%] h-[40%] rounded-full bg-pink-600/10 blur-[100px]" />
       </div>
       
+      {/* Unified Operational Portal Hub Modal */}
+      <PortalAccessHubModal isOpen={portalHubOpen} onClose={() => setPortalHubOpen(false)} />
+
       {/* Interactive star canvas on top of galaxy */}
       <canvas id="cosmic-canvas" className="fixed inset-0 pointer-events-none z-[1]" />
 
       {/* 2. WORLD-CLASS GLASSMORPHIC NAVIGATION BAR (MOBILE-FIRST REDESIGN) */}
-      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/40 border-b border-white/[0.08] px-4 sm:px-6 pt-safe-area-top shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
-        <div className="flex justify-between items-center py-3 sm:py-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/30 via-purple-500/20 to-pink-500/30 blur-lg rounded-full animate-pulse" />
-              <img src="/sentralogis_logo.png" alt="Sentralogis" className="h-7 sm:h-9 w-auto relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/70 sm:bg-slate-950/40 border-b border-white/[0.08] px-3 sm:px-6 pt-safe-area-top shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+        <div className="flex flex-col sm:flex-row justify-between items-center py-2 sm:py-4 gap-2 sm:gap-0">
+          {/* Top Row on Mobile / Left Side on Desktop */}
+          <div className="flex justify-between items-center w-full sm:w-auto">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative flex items-center justify-center">
+                <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/30 via-purple-500/20 to-pink-500/30 blur-lg rounded-full" />
+                <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-7 sm:h-9 w-auto relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+              </div>
+              <span className="text-base sm:text-xl font-black tracking-wider uppercase text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+                Sentralogis
+              </span>
+              <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-purple-950/50 text-purple-300 px-2 py-0.5 border border-purple-500/30 rounded-full hidden md:inline-block shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                GALAXY ORBIT
+              </span>
             </div>
-            <span className="text-base sm:text-xl font-black tracking-wider uppercase text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
-              Sentralogis
-            </span>
-            <span className="text-[8px] sm:text-[9px] font-black tracking-widest bg-purple-950/50 text-purple-300 px-2 py-0.5 border border-purple-500/30 rounded-full hidden md:inline-block shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-              GALAXY ORBIT
-            </span>
+
+            {/* Language Selector on Mobile (top right corner opposite Logo) */}
+            <div className="flex sm:hidden items-center">
+              <LanguageSelector />
+            </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-8 text-xs font-bold tracking-widest uppercase text-slate-400">
@@ -279,68 +290,37 @@ export default function SentralogisCosmicLanding() {
             <a href="#contact" className="hover:text-slate-100 transition-colors">{t.nav.kontak}</a>
           </nav>
 
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            {/* Language Selector — Dropdown Flag */}
-            <div className="relative" ref={langRef}>
-              <button 
-                onClick={() => setLangOpen(!langOpen)}
-                className="flex items-center gap-1 border border-white/10 rounded-full px-2 py-1.5 bg-slate-900/60 hover:bg-slate-800/80 transition-colors"
-              >
-                <span className="text-base sm:text-lg">
-                  {locale === 'id' ? '🇮🇩' : locale === 'en' ? '🇬🇧' : '🇨🇳'}
-                </span>
-                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${langOpen ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {langOpen && (
-                <div className="absolute right-0 top-full mt-2 w-40 py-1.5 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50">
-                  {([
-                    { code: 'id' as Locale, flag: '🇮🇩', label: 'Indonesia' },
-                    { code: 'en' as Locale, flag: '🇬🇧', label: 'English' },
-                    { code: 'zh' as Locale, flag: '🇨🇳', label: '中文' },
-                  ]).map(l => (
-                    <button 
-                      key={l.code} 
-                      onClick={() => { setLocale(l.code); setLangOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                        locale === l.code 
-                          ? 'bg-cyan-500/15 text-cyan-300' 
-                          : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <span className="text-lg">{l.flag}</span>
-                      <span className="font-medium">{l.label}</span>
-                      {locale === l.code && <span className="ml-auto text-cyan-400 text-xs">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
+          {/* Right Side on Desktop / Bottom Row on Mobile (Dual Action Bar) */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-white/10 sm:border-none">
+            {/* Language Selector on Desktop */}
+            <div className="hidden sm:block relative">
+              <LanguageSelector />
             </div>
 
-            {/* 1. PORTAL GUDANG — Icon only on mobile, full text on desktop */}
-            <a 
-              href="/warehouse/portal/login"
-              title="Portal Gudang (PIN)"
-              className="relative group overflow-hidden border border-emerald-400/60 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.8)] transition-all active:scale-95 flex items-center justify-center sm:gap-2 shrink-0"
+            {/* 1. LOGIN PORTAL */}
+            <button 
+              onClick={() => setPortalHubOpen(true)}
+              title="Akses Login Portal (Gudang, Supir, Forwarding)"
+              className="flex-1 sm:flex-initial relative group overflow-hidden border border-cyan-400/60 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 text-slate-950 px-3 py-2.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:shadow-[0_0_30px_rgba(6,182,212,0.9)] transition-all active:scale-95 flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 min-h-[42px] sm:min-h-0"
             >
-              <Warehouse className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" />
-              <span className="hidden sm:inline font-black text-xs tracking-wider uppercase">⚡ Portal Gudang (PIN)</span>
-            </a>
+              <Zap className="w-4 h-4 sm:w-4 sm:h-4 shrink-0 animate-bounce text-white" />
+              <span className="font-black text-xs sm:text-xs tracking-wider uppercase text-white">Login Portal</span>
+            </button>
 
-            {/* 2. BACKOFFICE ADMIN LOGIN */}
+            {/* 2. LOGIN MANAGEMENT */}
             <a 
               href="/login"
-              className="relative group overflow-hidden border border-slate-700/60 bg-slate-900/80 hover:border-cyan-500/40 text-slate-200 hover:text-white px-3 sm:px-4 py-2.5 sm:py-2 text-xs sm:text-xs font-bold tracking-wider uppercase rounded-full transition-all active:scale-95 flex items-center gap-2 shrink-0"
+              className="flex-1 sm:flex-initial relative group overflow-hidden border border-cyan-500/40 sm:border-slate-700/60 bg-slate-900/95 sm:bg-slate-900/80 hover:border-cyan-500 text-cyan-300 sm:text-slate-200 hover:text-white px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-black sm:font-bold tracking-wider uppercase rounded-xl sm:rounded-full transition-all active:scale-95 flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 min-h-[42px] sm:min-h-0 shadow-lg sm:shadow-none"
             >
               <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="font-bold">Login</span>
+              <span className="font-black sm:font-bold">Login Manajemen</span>
             </a>
           </div>
         </div>
       </header>
 
       {/* 3. HERO & TELEMETRY SECTION */}
-      <section className="relative z-10 pt-28 sm:pt-40 pb-16 sm:pb-20 px-5 sm:px-6 max-w-5xl mx-auto flex flex-col items-center justify-center text-center min-h-[85vh] sm:min-h-[90vh]">
+      <section className="relative z-10 pt-32 sm:pt-40 pb-16 sm:pb-20 px-5 sm:px-6 max-w-5xl mx-auto flex flex-col items-center justify-center text-center min-h-[85vh] sm:min-h-[90vh]">
         
         <div className="space-y-10 w-full flex flex-col items-center">
           <motion.div 
@@ -779,7 +759,7 @@ export default function SentralogisCosmicLanding() {
           <div className="flex flex-col items-center justify-center gap-4 pt-16 border-t border-white/5 mt-24 text-slate-500">
             <div className="relative">
               <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/20 via-purple-500/10 to-pink-500/20 blur-md rounded-full" />
-              <img src="/sentralogis_logo.png" alt="Sentralogis" className="h-8 w-auto relative z-10 opacity-70 drop-shadow-[0_0_8px_rgba(6,182,212,0.3)] hover:opacity-100 transition-opacity" />
+              <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-8 w-auto relative z-10 opacity-70 drop-shadow-[0_0_8px_rgba(6,182,212,0.3)] hover:opacity-100 transition-opacity" />
             </div>
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-600">
               © 2026 Sentralogis.com | Powered by MBsolutions. All Rights Reserved.

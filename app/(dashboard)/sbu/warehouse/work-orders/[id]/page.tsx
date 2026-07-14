@@ -437,9 +437,11 @@ function AllocationEditorModal({
   zones,
   dbAssignments = [],
   profile,
+  warehouseId,
   onClose,
   onRefresh,
   isOutbound = false,
+  isTransfer = false,
 }: any) {
   const router = useRouter();
 
@@ -636,15 +638,65 @@ function AllocationEditorModal({
         if (insErr) throw insErr;
       }
 
-      // 3. Create wh_outbound_shipments if Outbound
-      if (isOutbound) {
+      // 3. Create wh_outbound_shipments or wh_transfer_orders
+      const actualWarehouseId = jo.assigned_warehouse_id || warehouseId;
+      if (isTransfer) {
+        const { data: existingTransferShipment } = await supabase.from('wh_outbound_shipments').select('transfer_id').eq('wo_item_id', jo.wo_item_id).not('transfer_id', 'is', null).limit(1).maybeSingle();
+        if (!existingTransferShipment && actualWarehouseId) {
+           const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
+           
+           const { data: rawWoItem } = await supabase.from('wo_items').select('item_data').eq('id', jo.wo_item_id).single();
+           const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+
+           const { data: newTransfer, error: trfErr } = await supabase.from('wh_transfer_orders').insert({
+              tenant_id: profile?.tenant_id,
+              from_warehouse_id: actualWarehouseId, 
+              to_warehouse_id: toWarehouseId,
+              transfer_number: transferNumber,
+              status: 'CREATED',
+              notes: `Transfer shipment for JO ${jo.jo_number}`,
+              created_by: profile?.id || null
+           }).select('id').single();
+
+           if (newTransfer && !trfErr) {
+             // We do not create wh_transfer_details here because picking hasn't happened yet
+             // and inventory_id is not known. We only create wh_outbound_shipment_items.
+
+             // Also create the wh_outbound_shipment linking the transfer to the wo_item
+             const { data: newShipment } = await supabase.from('wh_outbound_shipments').insert({
+                tenant_id: profile?.tenant_id,
+                warehouse_id: actualWarehouseId, 
+                transfer_id: newTransfer.id,
+                wo_item_id: jo.wo_item_id,
+                shipment_number: `OUT-${transferNumber}`,
+                status: 'PLANNED',
+                notes: `Outbound shipment for Transfer JO ${jo.jo_number}`,
+                created_by: profile?.id || null
+             }).select('id').single();
+
+             if (newShipment) {
+               const shipItemPayloads = manifestItems.map((m: any) => ({
+                 tenant_id: profile?.tenant_id,
+                 shipment_id: newShipment.id,
+                 product_sku_id: m.product_sku_id,
+                 requested_qty: Number(m.quantity) || 0,
+                 picked_qty: 0,
+                 loaded_qty: 0
+               }));
+               if (shipItemPayloads.length > 0) {
+                 await supabase.from('wh_outbound_shipment_items').insert(shipItemPayloads);
+               }
+             }
+           }
+        }
+      } else if (isOutbound) {
         const { data: existingShipment } = await supabase.from('wh_outbound_shipments').select('id').eq('wo_item_id', jo.wo_item_id).single();
-        if (!existingShipment && jo.assigned_warehouse_id) {
+        if (!existingShipment && actualWarehouseId) {
            const shipmentNumber = jo.jo_number || `OUT-S${Date.now()}`;
            
            const { data: newShipment, error: shipErr } = await supabase.from('wh_outbound_shipments').insert({
               tenant_id: profile?.tenant_id,
-              warehouse_id: jo.assigned_warehouse_id, 
+              warehouse_id: actualWarehouseId, 
               wo_item_id: jo.wo_item_id,
               shipment_number: shipmentNumber,
               status: 'PLANNED',
@@ -654,6 +706,7 @@ function AllocationEditorModal({
 
            if (newShipment && !shipErr) {
              const itemsPayload = manifestItems.map((m: any) => ({
+               tenant_id: profile?.tenant_id,
                shipment_id: newShipment.id,
                product_sku_id: m.product_sku_id,
                requested_qty: Number(m.quantity) || 0,
@@ -664,6 +717,32 @@ function AllocationEditorModal({
                await supabase.from('wh_outbound_shipment_items').insert(itemsPayload);
              }
            }
+        }
+      } else if (!isOutbound && !isTransfer && actualWarehouseId) {
+        const { data: existingReceipt } = await supabase.from('wh_inbound_receipts').select('id').eq('wo_item_id', jo.wo_item_id).limit(1).maybeSingle();
+        if (!existingReceipt) {
+          const receiptNumber = jo.jo_number ? `RCV-${jo.jo_number}` : `RCV-S${Date.now()}`;
+          const { data: newReceipt, error: recErr } = await supabase.from('wh_inbound_receipts').insert({
+            tenant_id: profile?.tenant_id,
+            warehouse_id: actualWarehouseId,
+            wo_item_id: jo.wo_item_id,
+            receipt_number: receiptNumber,
+            status: 'EXPECTED',
+            notes: `Inbound receipt for JO ${jo.jo_number}`,
+            created_by: profile?.id || null,
+          }).select('id').single();
+
+          if (newReceipt && !recErr) {
+            const itemsPayload = manifestItems.map((m: any) => ({
+              receipt_id: newReceipt.id,
+              product_sku_id: m.product_sku_id,
+              expected_qty: Number(m.quantity) || 0,
+              actual_good_qty: 0,
+            }));
+            if (itemsPayload.length > 0) {
+              await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+            }
+          }
         }
       }
 
@@ -1148,9 +1227,35 @@ function JOCard({
   profile,
   onRefresh,
   isOutbound,
+  isTransfer,
+  direction,
+  woItemData,
 }: any) {
   const [showManifestEditor, setShowManifestEditor] = useState(false);
   const [showAllocationEditor, setShowAllocationEditor] = useState(false);
+  const [generatingTask, setGeneratingTask] = useState(false);
+  const [hasPortalTask, setHasPortalTask] = useState(false);
+  const [checkingPortalTask, setCheckingPortalTask] = useState(true);
+
+  // [AI] Check if portal task already exists (from hybrid auto-generate or manual)
+  useEffect(() => {
+    const checkExisting = async () => {
+      if (!jo.wo_item_id) { setCheckingPortalTask(false); return; }
+      try {
+        if (isTransfer && direction !== 'INBOUND') {
+          const { data } = await supabase.from('wh_outbound_shipments').select('transfer_id').eq('wo_item_id', jo.wo_item_id).not('transfer_id', 'is', null).limit(1).maybeSingle();
+          setHasPortalTask(!!data);
+        } else if (isOutbound) {
+          const { data } = await supabase.from('wh_outbound_shipments').select('id').eq('wo_item_id', jo.wo_item_id).limit(1).maybeSingle();
+          setHasPortalTask(!!data);
+        } else if (!isOutbound && !isTransfer) {
+          const { data } = await supabase.from('wh_inbound_receipts').select('id').eq('wo_item_id', jo.wo_item_id).limit(1).maybeSingle();
+          setHasPortalTask(!!data);
+        }
+      } catch {} finally { setCheckingPortalTask(false); }
+    };
+    checkExisting();
+  }, [jo.wo_item_id, isTransfer, isOutbound, direction]);
 
   // Compute manifest totals
   const manifests = jo.wo_item_manifests?.length > 0 ? jo.wo_item_manifests : jo.wo_item?.wo_item_manifests || [];
@@ -1179,6 +1284,178 @@ function JOCard({
     return s + (Number(a.quantity) || 0) * unitVol;
   }, 0);
 
+  const handleGeneratePortalTask = async () => {
+    setGeneratingTask(true);
+    try {
+      if (isTransfer) {
+        const { data: existingTransferShipment } = await supabase.from('wh_outbound_shipments').select('transfer_id').eq('wo_item_id', jo.wo_item_id).not('transfer_id', 'is', null).limit(1).maybeSingle();
+        if (existingTransferShipment) {
+          toast.error("Tugas transfer sudah ter-generate sebelumnya.");
+          return;
+        }
+        const actualWarehouseId = jo.assigned_warehouse_id || warehouseId;
+        if (!actualWarehouseId) {
+          toast.error("Gudang asal belum terdefinisi untuk JO ini.");
+          return;
+        }
+
+        // We need to fetch the original to_warehouse_id from wo_items since the item_data processing might have deleted it
+        const { data: rawWoItem } = await supabase.from('wo_items').select('item_data').eq('id', jo.wo_item_id).single();
+        const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+
+        if (!toWarehouseId) {
+          toast.error("Gudang tujuan belum ditentukan di WO ini. Silakan edit Manifest/Alokasi untuk menetapkan tujuan.");
+          setGeneratingTask(false);
+          return;
+        }
+
+        const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
+        const { data: newTransfer, error: trfErr } = await supabase.from('wh_transfer_orders').insert({
+            tenant_id: profile?.tenant_id,
+            from_warehouse_id: actualWarehouseId,
+            to_warehouse_id: toWarehouseId,
+            transfer_number: transferNumber,
+            status: 'CREATED',
+            notes: `Transfer shipment for JO ${jo.jo_number}`,
+            created_by: profile?.id || null
+        }).select('id').single();
+
+        if (trfErr) throw trfErr;
+
+        if (newTransfer) {
+          // We do not create wh_transfer_details here because picking hasn't happened yet
+          // and inventory_id is not known. We only create wh_outbound_shipment_items.
+
+          // Also create the wh_outbound_shipment linking the transfer to the wo_item
+          const { data: newShipment, error: shipErr } = await supabase.from('wh_outbound_shipments').insert({
+            tenant_id: profile?.tenant_id,
+            warehouse_id: actualWarehouseId, 
+            transfer_id: newTransfer.id,
+            wo_item_id: jo.wo_item_id,
+            shipment_number: `OUT-${transferNumber}`,
+            status: 'PLANNED',
+            notes: `Outbound shipment for Transfer JO ${jo.jo_number}`,
+            created_by: profile?.id || null
+          }).select('id').single();
+          
+          if (shipErr) throw shipErr;
+
+          if (newShipment) {
+            const shipItemPayloads = manifests.map((m: any) => ({
+              tenant_id: profile?.tenant_id,
+              shipment_id: newShipment.id,
+              product_sku_id: m.product_sku_id,
+              requested_qty: Number(m.quantity) || 0,
+              picked_qty: 0,
+              loaded_qty: 0
+            }));
+            if (shipItemPayloads.length > 0) {
+              const { error: shipItemErr } = await supabase.from('wh_outbound_shipment_items').insert(shipItemPayloads);
+              if (shipItemErr) throw shipItemErr;
+            }
+          }
+        }
+        toast.success("Tugas Transfer berhasil di-generate ke Portal WH!");
+      } else if (isOutbound) {
+        const { data: existingShipment } = await supabase.from('wh_outbound_shipments').select('id').eq('wo_item_id', jo.wo_item_id).single();
+        if (existingShipment) {
+          toast.error("Tugas portal (shipment) sudah ter-generate sebelumnya.");
+          return;
+        }
+        const actualWarehouseId = jo.assigned_warehouse_id || warehouseId;
+        if (!actualWarehouseId) {
+          toast.error("Gudang asal belum terdefinisi untuk JO ini.");
+          return;
+        }
+        
+        const shipmentNumber = jo.jo_number || `OUT-S${Date.now()}`;
+        const { data: newShipment, error: shipErr } = await supabase.from('wh_outbound_shipments').insert({
+            tenant_id: profile?.tenant_id,
+            warehouse_id: actualWarehouseId, 
+            wo_item_id: jo.wo_item_id,
+            shipment_number: shipmentNumber,
+            status: 'PLANNED',
+            notes: `Outbound shipment for JO ${jo.jo_number}`,
+            created_by: profile?.id || null
+        }).select('id').single();
+
+        if (shipErr) throw shipErr;
+
+        if (newShipment) {
+          const itemsPayload = manifests.map((m: any) => ({
+            tenant_id: profile?.tenant_id,
+            shipment_id: newShipment.id,
+            product_sku_id: m.product_sku_id,
+            requested_qty: Number(m.quantity) || 0,
+            picked_qty: 0,
+            loaded_qty: 0
+          }));
+          if (itemsPayload.length > 0) {
+            const { error: itemErr } = await supabase.from('wh_outbound_shipment_items').insert(itemsPayload);
+            if (itemErr) throw itemErr;
+          }
+        }
+        toast.success("Tugas Outbound berhasil di-generate ke Portal WH!");
+      } else {
+        // Standard Inbound
+        const { data: existingReceipt } = await supabase.from('wh_inbound_receipts').select('id').eq('wo_item_id', jo.wo_item_id).limit(1).maybeSingle();
+        if (existingReceipt) {
+          toast.error("Tugas inbound sudah ter-generate sebelumnya.");
+          return;
+        }
+        const actualWarehouseId = jo.assigned_warehouse_id || warehouseId;
+        if (!actualWarehouseId) {
+          toast.error("Gudang tujuan belum terdefinisi untuk JO ini.");
+          return;
+        }
+
+        let expectedArrival = null;
+        const execDate = woItemData?.wo?.execution_date;
+        const execTime = woItemData?.wo?.execution_time || '00:00:00';
+        if (execDate) {
+          try {
+            expectedArrival = new Date(`${execDate}T${execTime}`).toISOString();
+          } catch (e) {
+            console.error("Invalid date/time format", e);
+          }
+        }
+
+        const receiptNumber = jo.jo_number ? `RCV-${jo.jo_number}` : `RCV-S${Date.now()}`;
+        const { data: newReceipt, error: recErr } = await supabase.from('wh_inbound_receipts').insert({
+          tenant_id: profile?.tenant_id,
+          warehouse_id: actualWarehouseId,
+          wo_item_id: jo.wo_item_id,
+          receipt_number: receiptNumber,
+          status: 'EXPECTED',
+          expected_arrival: expectedArrival,
+          notes: `Inbound receipt for JO ${jo.jo_number}`,
+          created_by: profile?.id || null,
+        }).select('id').single();
+
+        if (recErr) throw recErr;
+
+        if (newReceipt) {
+          const itemsPayload = manifests.map((m: any) => ({
+            receipt_id: newReceipt.id,
+            product_sku_id: m.product_sku_id,
+            expected_qty: Number(m.quantity) || 0,
+            actual_good_qty: 0,
+          }));
+          if (itemsPayload.length > 0) {
+            const { error: itemErr } = await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+            if (itemErr) throw itemErr;
+          }
+        }
+        toast.success("Tugas Inbound berhasil di-generate ke Portal WH!");
+        setHasPortalTask(true);
+      }
+    } catch (err: any) {
+      toast.error("Gagal generate tugas portal: " + err.message);
+    } finally {
+      setGeneratingTask(false);
+    }
+  };
+
   return (
     <Card className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
       <div className="p-6 md:p-8">
@@ -1188,7 +1465,7 @@ function JOCard({
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
               Job Order
             </p>
-            <h3 className="text-xl font-black text-slate-900 italic tracking-tighter">
+            <h3 className="text-lg font-black text-slate-900 italic tracking-tighter">
               {jo.jo_number || "N/A"}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
@@ -1199,6 +1476,24 @@ function JOCard({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {hasPortalTask ? (
+              <span className="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-2">
+                <CheckCircle2 size={12} /> Task Sudah Dibuat
+              </span>
+            ) : checkingPortalTask ? (
+              <span className="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-slate-100 text-slate-400 flex items-center gap-2">
+                <Loader2 size={12} className="animate-spin" /> Checking...
+              </span>
+            ) : (
+              <button
+                onClick={handleGeneratePortalTask}
+                disabled={generatingTask}
+                className="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center gap-2 transition-all"
+              >
+                {generatingTask ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} 
+                Aktifasi Job Order
+              </button>
+            )}
             <span
               className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${
                 jo.status === "completed" || jo.status === "done"
@@ -1216,20 +1511,27 @@ function JOCard({
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {/* Manifest Summary */}
-          <div className="bg-slate-50 rounded-2xl p-5 space-y-3">
+          <div className={`rounded-2xl p-5 space-y-3 ${totalManifestItems > 0 && hasPortalTask ? 'bg-emerald-50/70 border border-emerald-200' : 'bg-slate-50'}`}>
             <div className="flex items-center justify-between">
               <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <FileText size={14} /> Manifest Barang
               </h4>
-              <button
-                onClick={() => setShowManifestEditor(true)}
-                className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-1"
-              >
-                <Edit2 size={12} /> Edit
-              </button>
+              <div className="flex items-center gap-2">
+                {totalManifestItems > 0 && hasPortalTask && (
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={10} /> Terisi dari HQ
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowManifestEditor(true)}
+                  className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-1"
+                >
+                  <Edit2 size={12} /> {totalManifestItems > 0 && hasPortalTask ? 'Lihat' : 'Edit'}
+                </button>
+              </div>
             </div>
             <div className="text-center">
-              <span className="text-3xl font-black text-slate-900 italic">
+              <span className="text-2xl font-black text-slate-900 italic">
                 {totalManifestItems}
               </span>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
@@ -1238,35 +1540,42 @@ function JOCard({
             </div>
             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-200/50">
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs font-bold text-slate-900">
                   {totalManifestKg.toFixed(2)}{" "}
-                  <span className="text-[10px] text-slate-400">KG</span>
+                  <span className="text-[9px] text-slate-400">KG</span>
                 </p>
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs font-bold text-slate-900">
                   {totalManifestCbm.toFixed(3)}{" "}
-                  <span className="text-[10px] text-slate-400">CBM</span>
+                  <span className="text-[9px] text-slate-400">CBM</span>
                 </p>
               </div>
             </div>
           </div>
 
           {/* Allocation Summary */}
-          <div className="bg-emerald-50/50 rounded-2xl p-5 space-y-3">
+          <div className={`rounded-2xl p-5 space-y-3 ${totalAllocLocations > 0 && hasPortalTask ? 'bg-emerald-100/70 border border-emerald-300' : 'bg-emerald-50/50'}`}>
             <div className="flex items-center justify-between">
               <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
                 <MapPin size={14} /> Alokasi Lokasi
               </h4>
-              <button
-                onClick={() => setShowAllocationEditor(true)}
-                className="text-[10px] font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest flex items-center gap-1"
-              >
-                <Eye size={12} /> Lihat
-              </button>
+              <div className="flex items-center gap-2">
+                {totalAllocLocations > 0 && hasPortalTask && (
+                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1 bg-emerald-200 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={10} /> Auto dari HQ
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowAllocationEditor(true)}
+                  className="text-[10px] font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest flex items-center gap-1"
+                >
+                  <Eye size={12} /> Lihat
+                </button>
+              </div>
             </div>
             <div className="text-center">
-              <span className="text-3xl font-black text-emerald-600 italic">
+              <span className="text-2xl font-black text-emerald-600 italic">
                 {totalAllocLocations}
               </span>
               <span className="text-[10px] font-black text-emerald-700/60 uppercase tracking-widest ml-2">
@@ -1275,15 +1584,15 @@ function JOCard({
             </div>
             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-emerald-100/50">
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs font-bold text-slate-900">
                   {totalAllocKg.toFixed(2)}{" "}
-                  <span className="text-[10px] text-slate-400">KG</span>
+                  <span className="text-[9px] text-slate-400">KG</span>
                 </p>
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-xs font-bold text-slate-900">
                   {totalAllocCbm.toFixed(3)}{" "}
-                  <span className="text-[10px] text-slate-400">CBM</span>
+                  <span className="text-[9px] text-slate-400">CBM</span>
                 </p>
               </div>
             </div>
@@ -1308,9 +1617,11 @@ function JOCard({
           zones={zones}
           dbAssignments={dbAssignments}
           profile={profile}
+          warehouseId={warehouseId}
           onClose={() => setShowAllocationEditor(false)}
           onRefresh={onRefresh}
           isOutbound={isOutbound}
+          isTransfer={isTransfer}
         />
       )}
     </Card>
@@ -1344,7 +1655,7 @@ export default function WarehouseExecutionPage() {
           *,
           wo_item_manifests (*, md_product_skus(sku_code, name, brand_name, unit, weight_kg, volume_m3)),
           wo:work_orders!wo_id (
-            id, wo_number, order_date, execution_date, customer_id,
+            id, wo_number, order_date, execution_date, execution_time, customer_id,
             customer:md_entities!customer_id ( name, legal_name, phone )
           )
         `,
@@ -1353,6 +1664,55 @@ export default function WarehouseExecutionPage() {
         .single();
 
       if (itemErr) throw itemErr;
+
+      if (itemData.item_data) {
+         const resolved = { ...itemData.item_data };
+         
+         const fetchName = async (table: string, id: string) => {
+            if (!id || id === 'null') return null;
+            const { data } = await supabase.from(table).select('name').eq('id', id).maybeSingle();
+            return data ? data.name : null;
+         };
+
+         if (resolved.to_warehouse_id) {
+            const name = await fetchName('md_warehouses', resolved.to_warehouse_id);
+            if (name) resolved.to_warehouse_name = name;
+            delete resolved.to_warehouse_id;
+         }
+         
+         if (resolved.origin_location_id) {
+            const name = await fetchName('md_locations', resolved.origin_location_id);
+            if (name) resolved.origin_location_name = name;
+            delete resolved.origin_location_id;
+         }
+
+         if (resolved.to_location_id) {
+            const name = await fetchName('md_locations', resolved.to_location_id);
+            if (name) resolved.to_location_name = name;
+            delete resolved.to_location_id;
+         }
+
+         if (resolved.shipper_id) {
+            const name = await fetchName('md_entities', resolved.shipper_id);
+            if (name) resolved.shipper_name = name;
+            delete resolved.shipper_id;
+         }
+
+         if (resolved.consignee_id) {
+            const name = await fetchName('md_entities', resolved.consignee_id);
+            if (name) resolved.consignee_name = name;
+            delete resolved.consignee_id;
+         }
+
+         Object.keys(resolved).forEach(k => {
+            if (resolved[k] === null || resolved[k] === 'null' || resolved[k] === '') {
+               delete resolved[k];
+            }
+         });
+
+         itemData.item_data = resolved;
+      }
+
       setWoItemData(itemData);
 
       const { data: joData, error: joErr } = await supabase
@@ -1368,6 +1728,80 @@ export default function WarehouseExecutionPage() {
         .order("created_at", { ascending: true });
 
       if (joErr) throw joErr;
+
+      // --- AUTO HEAL: If no job order exists for this WO item ---
+      if (joData && joData.length === 0) {
+        const unitCount = itemData.item_data?.unit_count || 1;
+        const newJos = [];
+        for (let i = 1; i <= unitCount; i++) {
+          const joNumber = `${itemData.item_code}-${i.toString().padStart(2, '0')}`;
+          newJos.push({
+            tenant_id: itemData.tenant_id,
+            jo_number: joNumber,
+            wo_item_id: itemData.id,
+            warehouse_id: itemData.item_data?.warehouse_id || null,
+            status: itemData.status || 'pending',
+            sbu_type: 'WAREHOUSE',
+            tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+          });
+        }
+        
+        const { error: createJoErr } = await supabase.from('job_orders').insert(newJos);
+        if (!createJoErr) {
+          return fetchData();
+        }
+      }
+      // --- END AUTO HEAL ---
+
+      // --- AUTO HEAL 2: If status is in_progress but no inbound receipt exists for standard inbound ---
+      const opType = String(itemData?.item_data?.operation_type || itemData?.item_data?.task_type || "").toUpperCase();
+      const woType = String(itemData?.wo?.wo_type || "").toUpperCase();
+      const isTransfer = opType.includes("TRANSFER") || woType.includes("TRANSFER");
+      const isInbound = (opType.includes("INBOUND") || woType.includes("INBOUND")) && !isTransfer;
+
+      if (isInbound && itemData.status === 'in_progress' && joData && joData.length > 0) {
+        const { data: existingReceipt } = await supabase
+          .from('wh_inbound_receipts')
+          .select('id')
+          .eq('wo_item_id', itemData.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingReceipt) {
+          const firstJo = joData[0];
+          const actualWhId = firstJo.warehouse_id || itemData.item_data?.warehouse_id || profile?.warehouse_id;
+          if (actualWhId) {
+            const receiptNumber = firstJo.jo_number ? `RCV-${firstJo.jo_number}` : `RCV-S${Date.now()}`;
+            const { data: newReceipt, error: recErr } = await supabase
+              .from('wh_inbound_receipts')
+              .insert({
+                tenant_id: itemData.tenant_id,
+                warehouse_id: actualWhId,
+                wo_item_id: itemData.id,
+                receipt_number: receiptNumber,
+                status: 'EXPECTED',
+                notes: `Auto-healed inbound receipt for JO ${firstJo.jo_number}`,
+                created_by: profile?.id || null,
+              })
+              .select('id')
+              .single();
+
+            if (newReceipt && !recErr) {
+              const manifests = itemData.wo_item_manifests || [];
+              const itemsPayload = manifests.map((m: any) => ({
+                receipt_id: newReceipt.id,
+                product_sku_id: m.product_sku_id,
+                expected_qty: Number(m.quantity) || 0,
+                actual_good_qty: 0,
+              }));
+              if (itemsPayload.length > 0) {
+                await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+              }
+            }
+          }
+        }
+      }
+      // --- END AUTO HEAL 2 ---
 
       const injectedJos = joData?.map((j: any) => ({
         ...j,
@@ -1402,6 +1836,62 @@ export default function WarehouseExecutionPage() {
         setLocations(locData || []);
         setZones(areaData || []);
 
+        // [AI] AUTO HYBRID ALLOCATION
+        // If manifest already has location_code, but jo_warehouse_assignments is missing it, insert it.
+        const manifestsToAutoAssign: any[] = [];
+        for (const jo of injectedJos) {
+           const existingManifestIds = new Set((jo.jo_warehouse_assignments || []).map((a: any) => a.wo_item_manifest_id));
+           const manifests = jo.wo_item?.wo_item_manifests || [];
+           for (const m of manifests) {
+              if (!existingManifestIds.has(m.id)) {
+                 const locCode = (m.location_code && m.location_code !== '-') ? m.location_code : (m.custom_fields?.location_code && m.custom_fields.location_code !== '-' ? m.custom_fields.location_code : null);
+                 if (locCode) {
+                    const matchedLoc = locData?.find((l: any) => l.code === locCode);
+                    if (matchedLoc) {
+                       manifestsToAutoAssign.push({
+                          tenant_id: profile?.tenant_id || itemData?.tenant_id,
+                          job_order_id: jo.id,
+                          warehouse_location_id: matchedLoc.id,
+                          wo_item_manifest_id: m.id,
+                          quantity: Number(m.quantity) || 0,
+                          allocated_kg: (Number(m.quantity) || 0) * (Number(m.unit_weight_kg) || 0),
+                          allocated_cbm: (Number(m.quantity) || 0) * (Number(m.unit_volume_m3) || 0)
+                       });
+                    }
+                 }
+              }
+           }
+        }
+
+        if (manifestsToAutoAssign.length > 0) {
+           const { error: insertErr } = await supabase.from('jo_warehouse_assignments').insert(manifestsToAutoAssign);
+           if (!insertErr) {
+              const { data: updatedJoData } = await supabase
+                .from("job_orders")
+                .select(`
+                  *,
+                  wo_item_manifests (*, md_product_skus(sku_code, name, brand_name, unit, weight_kg, volume_m3)),
+                  jo_warehouse_assignments (*, md_warehouse_locations(code, area:md_warehouse_areas!area_id(area_code, area_name)))
+                `)
+                .eq("wo_item_id", itemId)
+                .order("created_at", { ascending: true });
+                
+              if (updatedJoData) {
+                 const newInjectedJos = updatedJoData.map((j: any) => ({
+                    ...j,
+                    wo_item: { 
+                      wo: itemData.wo,
+                      wo_item_manifests: itemData.wo_item_manifests 
+                    },
+                 }));
+                 setJos(newInjectedJos);
+                 // Override injectedJos reference so locIds logic below uses updated assignments
+                 injectedJos.length = 0;
+                 injectedJos.push(...newInjectedJos);
+              }
+           }
+        }
+
         // Query occupied capacity of these locations across other JOs in the warehouse
         const locIds = locData?.map((l: any) => l.id) || [];
         if (locIds.length > 0) {
@@ -1415,6 +1905,30 @@ export default function WarehouseExecutionPage() {
           setDbAssignments(assignData || []);
         } else {
           setDbAssignments([]);
+        }
+
+        // [AI] AUTO-HEAL: If status is still 'need_assignment' but all manifests are fully assigned (hybrid), upgrade to 'menunggu_wh_eksekusi'
+        if (itemData.status === 'need_assignment') {
+           const manifests = itemData.wo_item_manifests || [];
+           if (manifests.length > 0) {
+              const allAssigned = injectedJos.every((jo: any) => {
+                 const assignments = jo.jo_warehouse_assignments || [];
+                 return manifests.every((m: any) => assignments.some((a: any) => a.wo_item_manifest_id === m.id));
+              });
+              
+              if (allAssigned) {
+                 await supabase.from('wo_items').update({ status: 'menunggu_wh_eksekusi' }).eq('id', itemId);
+                 await supabase.from('job_orders').update({ status: 'menunggu_wh_eksekusi' }).eq('wo_item_id', itemId).eq('status', 'pending');
+                 itemData.status = 'menunggu_wh_eksekusi';
+                 setWoItemData({...itemData});
+                 
+                 const updatedJos = injectedJos.map((j: any) => ({
+                    ...j,
+                    status: j.status === 'pending' ? 'menunggu_wh_eksekusi' : j.status
+                 }));
+                 setJos(updatedJos);
+              }
+           }
         }
       }
     } catch (e) {
@@ -1430,6 +1944,254 @@ export default function WarehouseExecutionPage() {
 
   const handleUpdateItemStatus = async (newStatus: string) => {
     try {
+      // [AI] Auto-generate transfer/outbound portal records when activating to in_progress
+      // This ensures activated WOs automatically appear on their respective job order pages
+      if (newStatus === 'in_progress') {
+        const opType = String(woItemData?.item_data?.operation_type || woItemData?.item_data?.task_type || "").toUpperCase();
+        const woType = String(woItemData?.wo?.wo_type || "").toUpperCase();
+        const isTransferType = opType.includes("TRANSFER") || woType.includes("TRANSFER");
+        const isOutboundType = opType.includes("OUTBOUND") || woType.includes("OUTBOUND");
+
+        for (const jo of jos) {
+          if (!jo.assigned_warehouse_id) continue;
+
+          // Fetch manifests for this JO
+          const { data: manifestData } = await supabase
+            .from('wo_item_manifests')
+            .select('*, md_product_skus(sku_code, name)')
+            .eq('wo_item_id', jo.wo_item_id);
+          const manifests = manifestData || [];
+
+          if (isTransferType) {
+            // [AI] Check if transfer records already exist for this JO
+            const { data: existingTransfer } = await supabase
+              .from('wh_outbound_shipments')
+              .select('transfer_id')
+              .eq('wo_item_id', jo.wo_item_id)
+              .not('transfer_id', 'is', null)
+              .limit(1)
+              .maybeSingle();
+
+            if (!existingTransfer) {
+              // [AI] reading from wo_items to get to_warehouse_id
+              const { data: rawWoItem } = await supabase
+                .from('wo_items')
+                .select('item_data')
+                .eq('id', jo.wo_item_id)
+                .single();
+              const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+
+              if (!toWarehouseId) {
+                 console.warn("Skipping auto-generate transfer for JO", jo.jo_number, "because to_warehouse_id is missing");
+                 continue;
+              }
+
+              const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
+              const { data: newTransfer, error: trfErr } = await supabase
+                .from('wh_transfer_orders')
+                .insert({
+                  tenant_id: profile?.tenant_id,
+                  from_warehouse_id: jo.assigned_warehouse_id,
+                  to_warehouse_id: toWarehouseId,
+                  transfer_number: transferNumber,
+                  status: 'CREATED',
+                  notes: `Transfer shipment for JO ${jo.jo_number}`,
+                  created_by: profile?.id || null,
+                })
+                .select('id')
+                .single();
+
+              if (newTransfer && !trfErr) {
+                // Create transfer detail items
+                // We do not create wh_transfer_details here because picking hasn't happened yet
+                // and inventory_id is not known. We only create wh_outbound_shipment_items.
+
+                // Create linking outbound shipment
+                const { data: newShipment } = await supabase
+                  .from('wh_outbound_shipments')
+                  .insert({
+                    tenant_id: profile?.tenant_id,
+                    warehouse_id: jo.assigned_warehouse_id,
+                    transfer_id: newTransfer.id,
+                    wo_item_id: jo.wo_item_id,
+                    shipment_number: `OUT-${transferNumber}`,
+                    status: 'PLANNED',
+                    notes: `Outbound shipment for Transfer JO ${jo.jo_number}`,
+                    created_by: profile?.id || null,
+                  })
+                  .select('id')
+                  .single();
+
+                if (newShipment) {
+                  const shipItemPayloads = manifests.map((m: any) => ({
+                    tenant_id: profile?.tenant_id,
+                    shipment_id: newShipment.id,
+                    product_sku_id: m.product_sku_id,
+                    requested_qty: Number(m.quantity) || 0,
+                    picked_qty: 0,
+                    loaded_qty: 0,
+                  }));
+                  if (shipItemPayloads.length > 0) {
+                    await supabase.from('wh_outbound_shipment_items').insert(shipItemPayloads);
+                  }
+                }
+
+                // [AI] CREATE INBOUND SIDE FOR DESTINATION WAREHOUSE
+                // Create inbound WO Item for destination warehouse
+                const inboundWoItemNumber = `WO-${transferNumber}-IN`;
+                const { data: newInboundWoItem } = await supabase
+                  .from('wo_items')
+                  .insert({
+                    tenant_id: profile?.tenant_id,
+                    wo_id: jo.wo_id,
+                    sbu_type: 'WAREHOUSE',
+                    item_data: {
+                      transfer_id: newTransfer.id,
+                      direction: 'INBOUND',
+                      warehouse_id: toWarehouseId,
+                      operation_type: 'STOCK_TRANSFER'
+                    },
+                    status: 'need_assignment',
+                  })
+                  .select('id')
+                  .single();
+
+                if (newInboundWoItem) {
+                  // Create inbound Job Order for destination warehouse
+                  const inboundJoNumber = `JO-${transferNumber}-IN`;
+                  const { data: newInboundJo } = await supabase
+                    .from('job_orders')
+                    .insert({
+                      tenant_id: profile?.tenant_id,
+                      wo_item_id: newInboundWoItem.id,
+                      jo_number: inboundJoNumber,
+                      status: 'pending',
+                      sbu_type: 'WAREHOUSE',
+                      warehouse_id: toWarehouseId,
+                      notes: `Transfer IN: ${transferNumber} for ${jo.jo_number}`,
+                    })
+                    .select('id')
+                    .single();
+
+                  if (newInboundJo) {
+                    // Create inbound receipt for destination warehouse
+                    const { data: newInboundReceipt } = await supabase
+                      .from('wh_inbound_receipts')
+                      .insert({
+                        tenant_id: profile?.tenant_id,
+                        warehouse_id: toWarehouseId,
+                        transfer_id: newTransfer.id,
+                        wo_item_id: newInboundWoItem.id,
+                        receipt_number: `RCV-${transferNumber}`,
+                        status: 'EXPECTED',
+                        notes: `Inbound receipt for Transfer ${transferNumber} (JO ${jo.jo_number})`,
+                        created_by: profile?.id || null,
+                      })
+                      .select('id')
+                      .single();
+
+                    if (newInboundReceipt) {
+                      // Create inbound receipt items
+                      const receiptItemPayloads = manifests.map((m: any) => ({
+                        receipt_id: newInboundReceipt.id,
+                        product_sku_id: m.product_sku_id,
+                        expected_qty: Number(m.quantity) || 0,
+                        actual_good_qty: 0,
+                      }));
+                      if (receiptItemPayloads.length > 0) {
+                        await supabase.from('wh_inbound_receipt_items').insert(receiptItemPayloads);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } else if (isOutboundType) {
+            // [AI] Check if outbound shipment already exists for this JO
+            const { data: existingShipment } = await supabase
+              .from('wh_outbound_shipments')
+              .select('id')
+              .eq('wo_item_id', jo.wo_item_id)
+              .limit(1)
+              .maybeSingle();
+
+            if (!existingShipment) {
+              const shipmentNumber = jo.jo_number || `OUT-S${Date.now()}`;
+              const { data: newShipment, error: shipErr } = await supabase
+                .from('wh_outbound_shipments')
+                .insert({
+                  tenant_id: profile?.tenant_id,
+                  warehouse_id: jo.assigned_warehouse_id,
+                  wo_item_id: jo.wo_item_id,
+                  shipment_number: shipmentNumber,
+                  status: 'PLANNED',
+                  notes: `Outbound shipment for JO ${jo.jo_number}`,
+                  created_by: profile?.id || null,
+                })
+                .select('id')
+                .single();
+
+              if (newShipment && !shipErr) {
+                const itemsPayload = manifests.map((m: any) => ({
+                  tenant_id: profile?.tenant_id,
+                  shipment_id: newShipment.id,
+                  product_sku_id: m.product_sku_id,
+                  requested_qty: Number(m.quantity) || 0,
+                  picked_qty: 0,
+                  loaded_qty: 0,
+                }));
+                if (itemsPayload.length > 0) {
+                  await supabase.from('wh_outbound_shipment_items').insert(itemsPayload);
+                }
+              }
+            }
+          } else {
+            // Standard Inbound
+            const opType = String(woItemData?.item_data?.operation_type || woItemData?.item_data?.task_type || "").toUpperCase();
+            const woType = String(woItemData?.wo?.wo_type || "").toUpperCase();
+            const isInbound = opType.includes("INBOUND") || woType.includes("INBOUND");
+
+            if (isInbound) {
+              const { data: existingReceipt } = await supabase
+                .from('wh_inbound_receipts')
+                .select('id')
+                .eq('wo_item_id', jo.wo_item_id)
+                .limit(1)
+                .maybeSingle();
+
+              if (!existingReceipt) {
+                const receiptNumber = jo.jo_number ? `RCV-${jo.jo_number}` : `RCV-S${Date.now()}`;
+                const { data: newReceipt, error: recErr } = await supabase
+                  .from('wh_inbound_receipts')
+                  .insert({
+                    tenant_id: profile?.tenant_id,
+                    warehouse_id: jo.assigned_warehouse_id,
+                    wo_item_id: jo.wo_item_id,
+                    receipt_number: receiptNumber,
+                    status: 'EXPECTED',
+                    notes: `Inbound receipt for JO ${jo.jo_number}`,
+                    created_by: profile?.id || null,
+                  })
+                  .select('id')
+                  .single();
+
+                if (newReceipt && !recErr) {
+                  const itemsPayload = manifests.map((m: any) => ({
+                    receipt_id: newReceipt.id,
+                    product_sku_id: m.product_sku_id,
+                    expected_qty: Number(m.quantity) || 0,
+                    actual_good_qty: 0,
+                  }));
+                  if (itemsPayload.length > 0) {
+                    await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       const { error: err1 } = await supabase
         .from("wo_items")
         .update({ status: newStatus })
@@ -1602,6 +2364,96 @@ export default function WarehouseExecutionPage() {
         </div>
       </Card>
 
+      {/* Master WO Manifest & Logistics Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="p-6 bg-white border border-slate-200 shadow-sm rounded-[2rem]">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Package size={16} className="text-amber-500" /> Manifest Barang (Master)
+          </h3>
+          <div className="space-y-3">
+            {woItemData.wo_item_manifests?.length > 0 ? (
+              woItemData.wo_item_manifests.map((m: any, idx: number) => (
+                <div key={m.id || idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-slate-900">{m.md_product_skus?.name || '-'}</p>
+                    <p className="text-[10px] font-medium text-slate-500">SKU: {m.md_product_skus?.sku_code || '-'}</p>
+                    {(() => {
+                      console.log('Manifest debug item:', m);
+                      const locations = jos.flatMap(jo => jo.jo_warehouse_assignments || [])
+                        .filter(a => a?.wo_item_manifest_id === m.id)
+                        .map(a => a?.md_warehouse_locations?.code);
+                      
+                      if (m.location_code && m.location_code !== '-') {
+                        locations.push(m.location_code);
+                      }
+                      if (m.custom_fields?.location_code && m.custom_fields.location_code !== '-') {
+                        locations.push(m.custom_fields.location_code);
+                      }
+                      
+                      const uniqueLocations = Array.from(new Set(locations)).filter(Boolean);
+
+                      return uniqueLocations.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center">
+                            <MapPin size={12} className="mr-0.5" /> Lokasi:
+                          </span>
+                          {uniqueLocations.map(loc => (
+                            <span key={loc as string} className="text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded uppercase font-black shadow-sm">
+                              {loc as string}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center">
+                            <MapPin size={12} className="mr-0.5" /> Lokasi:
+                          </span>
+                          <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded uppercase font-bold shadow-sm">
+                            Belum Dialokasi
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="text-sm font-black text-slate-900">{m.quantity}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">{m.md_product_skus?.unit || 'Unit'}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic">Belum ada manifest tercatat.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6 bg-white border border-slate-200 shadow-sm rounded-[2rem]">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Truck size={16} className="text-amber-500" /> Kebutuhan Logistik / SLA
+          </h3>
+          <div className="space-y-4">
+             {woItemData.item_data && Object.keys(woItemData.item_data).length > 0 ? (
+               <div className="grid grid-cols-2 gap-4">
+                 {Object.entries(woItemData.item_data)
+                   .filter(([k]) => !['warehouse_id', 'warehouse_name', 'destination_location_id', 'assigned_warehouse_id', 'unit_count', 'operation_type', 'task_type'].includes(k))
+                   .map(([key, val]) => (
+                     <div key={key} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{key.replace(/_/g, ' ')}</p>
+                       <p className="text-xs font-bold text-slate-900 break-words">{String(val)}</p>
+                     </div>
+                   ))
+                 }
+                 {Object.entries(woItemData.item_data).filter(([k]) => !['warehouse_id', 'warehouse_name', 'destination_location_id', 'assigned_warehouse_id', 'unit_count', 'operation_type', 'task_type'].includes(k)).length === 0 && (
+                   <p className="text-xs text-slate-500 italic col-span-2">Tidak ada detail logistik khusus.</p>
+                 )}
+               </div>
+             ) : (
+               <p className="text-xs text-slate-500 italic">Tidak ada spesifikasi logistik tambahan.</p>
+             )}
+          </div>
+        </Card>
+      </div>
+
       <div>
         <div className="flex items-center gap-3 mb-6 pl-2">
           <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center">
@@ -1632,9 +2484,15 @@ export default function WarehouseExecutionPage() {
                 profile={profile}
                 onRefresh={fetchData}
                 isOutbound={
-                  (woItemData.item_data?.operation_type || woItemData.item_data?.task_type || "").toUpperCase() === "OUTBOUND" ||
-                  woItemData.wo?.wo_type === "OUTBOUND"
+                  String(woItemData.item_data?.operation_type || woItemData.item_data?.task_type || "").toUpperCase().includes("OUTBOUND") ||
+                  String(woItemData.wo?.wo_type || "").toUpperCase().includes("OUTBOUND")
                 }
+                isTransfer={
+                  String(woItemData.item_data?.operation_type || woItemData.item_data?.task_type || "").toUpperCase().includes("TRANSFER") ||
+                  String(woItemData.wo?.wo_type || "").toUpperCase().includes("TRANSFER")
+                }
+                direction={woItemData.item_data?.direction}
+                woItemData={woItemData}
               />
             ))}
           </div>

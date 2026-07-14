@@ -392,10 +392,10 @@ export default function CostAuditDetail({
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-900 uppercase">
-                              {item.cost_type.replace(/_/g, " ")}
+                              {item.cost_type?.replace(/_/g, " ")}
                             </p>
                             <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                              {item.name || "No description"}
+                              {item.name || (item.description && !item.description.startsWith("http") ? item.description : null) || item.cost_type?.replace(/_/g, " ") || "No description"}
                             </p>
                           </div>
                         </div>

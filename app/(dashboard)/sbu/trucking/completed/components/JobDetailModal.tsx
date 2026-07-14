@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, ShieldCheck, CheckCircle, FileText, Clock, Banknote, Receipt, TrendingUp, TrendingDown, Save, Eye, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle, FileText, Clock, Banknote, Receipt, TrendingUp, TrendingDown, Save, Eye, Loader2, CheckCircle2, Upload, Trash2, ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +28,7 @@ interface Props {
   onFinalizeGate: (joId: string, field: 'is_doc_finished' | 'is_cost_finished', value: boolean) => void;
   onAddCost: (job: any) => void;
   onOpenFinanceHub: (job: any) => void;
+  onUpdate?: (job: any) => void;
 }
 
 const fmt = (v: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -56,7 +57,7 @@ const statusColor = (job: CompletedJob) => {
   return 'text-gray-600 bg-gray-100';
 };
 
-export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, onAddCost, onOpenFinanceHub }: Props) {
+export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, onAddCost, onOpenFinanceHub, onUpdate }: Props) {
   const [tab, setTab] = useState<'operations' | 'finances'>('operations');
   const [editing, setEditing] = useState({ revenue: false, purchasePrice: false, driverSharePct: false, advanceAmount: false, pelunasanAmount: false });
   const [revenue, setRevenue] = useState(job.wo_items?.total_revenue || job.wo_items?.unit_price || job.base_price || 0);
@@ -70,6 +71,9 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
   const [paymentModal, setPaymentModal] = useState<{
     type: string; label: string; maxAmount: number;
   } | null>(null);
+  const [assignDocs, setAssignDocs] = useState<any[]>(job.assignment_documents || []);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayments();
@@ -156,6 +160,69 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
     if (error) toast.error('Gagal simpan: ' + error.message);
     else { toast.success('Tersimpan'); setEditing(prev => ({ ...prev, pelunasanAmount: false })); }
     setSaving(false);
+  };
+
+  const handleUploadDoc = async (filesList: FileList | null) => {
+    if (!filesList || filesList.length === 0 || !job?.id) return;
+    setUploadingDoc(true);
+    try {
+      const currentDocs = [...assignDocs];
+      for (let i = 0; i < filesList.length; i++) {
+        const file = filesList[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `assignment-docs/${job.id}/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+        if (uploadError) {
+          toast.error(`Upload gagal (${file.name}): ` + uploadError.message);
+          continue;
+        }
+        const { data: { publicUrl } } = supabase.storage
+          .from('documents')
+          .getPublicUrl(filePath);
+        currentDocs.push({
+          id: `doc_${Math.random().toString(36).substring(2, 9)}`,
+          name: file.name,
+          type: 'SURAT_JALAN',
+          file_url: publicUrl,
+          file_type: file.type || 'application/octet-stream',
+          file_size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+          uploaded_at: new Date().toISOString(),
+        });
+      }
+      const { error: dbError } = await supabase
+        .from('job_orders')
+        .update({ assignment_documents: currentDocs })
+        .eq('id', job.id);
+      if (dbError) throw dbError;
+      setAssignDocs(currentDocs);
+      onUpdate?.({ ...job, assignment_documents: currentDocs });
+      toast.success('Dokumen berhasil diunggah!');
+    } catch (err: any) {
+      toast.error('Gagal mengunggah dokumen: ' + err.message);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const handleRemoveDoc = async (index: number) => {
+    if (!job?.id) return;
+    const currentDocs = [...assignDocs];
+    currentDocs.splice(index, 1);
+    try {
+      const { error: dbError } = await supabase
+        .from('job_orders')
+        .update({ assignment_documents: currentDocs })
+        .eq('id', job.id);
+      if (dbError) throw dbError;
+      setAssignDocs(currentDocs);
+      onUpdate?.({ ...job, assignment_documents: currentDocs });
+      toast.success('Dokumen dihapus');
+    } catch (err: any) {
+      toast.error('Gagal menghapus dokumen: ' + err.message);
+    }
   };
 
   return (
@@ -259,51 +326,84 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
                 </div>
               </div>
 
-              {/* Gates */}
+              {/* Upload Documents */}
+              <div className="border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-bold text-gray-700 uppercase">Job Documents</p>
+                  <label className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition-colors">
+                    {uploadingDoc ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {uploadingDoc ? 'Uploading' : 'Add Document'}
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,image/*"
+                      className="hidden"
+                      onChange={(e) => handleUploadDoc(e.target.files)}
+                      disabled={uploadingDoc}
+                    />
+                  </label>
+                </div>
+                {assignDocs.length > 0 ? (
+                  <div className="space-y-2">
+                    {assignDocs.map((doc: any, idx: number) => (
+                      <div key={doc.id || idx} className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-100 rounded-lg p-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                            {doc.name?.endsWith('.pdf') || (doc.file_type || '').includes('pdf') ? (
+                              <FileText size={15} className="text-red-500" />
+                            ) : (
+                              <ImageIcon size={15} className="text-blue-500" />
+                            )}
+                          </div>
+                          <a
+                            href={doc.file_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-semibold text-gray-800 hover:text-gray-900 truncate"
+                            title={doc.name}
+                          >
+                            {doc.name}
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocUrl(doc.file_url)}
+                            className="w-7 h-7 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                            title="Preview"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDoc(idx)}
+                            className="w-7 h-7 rounded bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors"
+                            title="Hapus"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Belum ada dokumen diunggah.</p>
+                )}
+              </div>
+
+              {/* Gate: Docs Finished (Operations tab) */}
               <div className="space-y-3">
-                {['completed', 'done', 'pekerjaan selesai', 'awaiting_audit', 'ready_for_billing', 'verified', 'VERIFIED'].includes(job.status) && (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => onFinalizeGate(job.id, 'is_doc_finished', !job.is_doc_finished)}
-                        disabled={isReadyForBilling}
-                        className={`h-12 border flex items-center justify-center gap-2 text-xs font-bold uppercase transition-colors ${
-                          job.is_doc_finished ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
-                        } ${isReadyForBilling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {job.is_doc_finished ? <CheckCircle size={15} /> : <div className="w-3.5 h-3.5 border-2 border-gray-300" />}
-                        Docs Finished
-                      </button>
-                      <button
-                        onClick={() => onFinalizeGate(job.id, 'is_cost_finished', !job.is_cost_finished)}
-                        disabled={isReadyForBilling}
-                        className={`h-12 border flex items-center justify-center gap-2 text-xs font-bold uppercase transition-colors ${
-                          job.is_cost_finished ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
-                        } ${isReadyForBilling ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {job.is_cost_finished ? <CheckCircle size={15} /> : <div className="w-3.5 h-3.5 border-2 border-gray-300" />}
-                        Cost Finished
-                      </button>
-                    </div>
-
-                    {job.has_draft_costs && !job.is_cost_finished && (
-                      <button
-                        onClick={() => onAddCost(job)}
-                        className="w-full h-11 border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center gap-2 text-xs font-bold uppercase text-amber-700 hover:bg-amber-100 transition-colors"
-                      >
-                        <FileText size={14} /> Add Extra Cost
-                      </button>
-                    )}
-
-                    {job.is_doc_finished && job.is_cost_finished && !isReadyForBilling && (
-                      <button
-                        onClick={() => onFinalizeGate(job.id, 'is_doc_finished', false)}
-                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors"
-                      >
-                        <CheckCircle size={16} /> Close & Bill
-                      </button>
-                    )}
-                  </>
+                {!isReadyForBilling && (
+                  <button
+                    onClick={() => onFinalizeGate(job.id, 'is_doc_finished', !job.is_doc_finished)}
+                    disabled={isReadyForBilling}
+                    className={`w-full h-12 border flex items-center justify-center gap-2 text-xs font-bold uppercase transition-colors ${
+                      job.is_doc_finished ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                    } ${isReadyForBilling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {job.is_doc_finished ? <CheckCircle size={15} /> : <div className="w-3.5 h-3.5 border-2 border-gray-300" />}
+                    Docs Finished
+                  </button>
                 )}
 
                 {['accepted', 'order diterima', 'diterima'].includes(job.status?.toLowerCase() || '') && job.advance_status !== 'paid' && (
@@ -384,6 +484,39 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
                 </div>
               )}
 
+              {/* Gate: Cost Finished + Close & Bill (Finances tab) */}
+              {!isReadyForBilling && (
+                <div className="mt-5 space-y-3">
+                  <button
+                    onClick={() => onFinalizeGate(job.id, 'is_cost_finished', !job.is_cost_finished)}
+                    className={`w-full h-12 border flex items-center justify-center gap-2 text-xs font-bold uppercase transition-colors ${
+                      job.is_cost_finished ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    {job.is_cost_finished ? <CheckCircle size={15} /> : <div className="w-3.5 h-3.5 border-2 border-gray-300" />}
+                    Cost Finished
+                  </button>
+
+                  {!job.is_cost_finished && (
+                    <button
+                      onClick={() => onAddCost(job)}
+                      className="w-full h-11 border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center gap-2 text-xs font-bold uppercase text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      <FileText size={14} /> Add Extra Cost
+                    </button>
+                  )}
+
+                  {job.is_doc_finished && job.is_cost_finished && (
+                    <button
+                      onClick={() => onFinalizeGate(job.id, 'is_doc_finished', false)}
+                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <CheckCircle size={16} /> Close & Bill
+                    </button>
+                  )}
+                </div>
+              )}
+
               {paymentModal && (
                 <PaymentModal
                   jo={job}
@@ -399,6 +532,30 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
           )}
         </div>
       </div>
+
+      {previewDocUrl && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setPreviewDocUrl(null)}
+        >
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <span className="text-xs font-bold text-gray-700 uppercase">Document Preview</span>
+              <button onClick={() => setPreviewDocUrl(null)} className="p-1 text-gray-500 hover:text-gray-900">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-2">
+              {previewDocUrl.match(/\.(png|jpe?g|gif|webp)$/i) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewDocUrl} alt="preview" className="max-w-full max-h-[80vh] object-contain" />
+              ) : (
+                <iframe src={previewDocUrl} title="preview" className="w-full h-[80vh] border-0" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

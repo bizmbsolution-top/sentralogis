@@ -6,11 +6,12 @@ import {
   Truck, MapPin, Navigation as NavIcon, Phone, 
   CheckCircle2, Clock, ChevronRight, AlertCircle, 
   Loader2, Play, Check, X, Camera, Calendar, Activity,
-  Expand, Image as ImageIcon, Lock
+  Expand, Image as ImageIcon, Lock, Box, FileText, Download, Eye, FolderGit2
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
 
 interface RouteStop {
   id: string;
@@ -30,6 +31,11 @@ interface JobOrder {
   id: string;
   jo_number: string;
   status: string;
+  container_number?: string;
+  sbu_metadata?: {
+    seal_number?: string;
+    [key: string]: any;
+  };
   customer?: {
     name: string;
     address: string;
@@ -48,6 +54,7 @@ interface JobOrder {
   completed_at?: string;
   advance_amount?: number;
   advance_status?: string;
+  assignment_documents?: any[];
   routes: RouteStop[];
 }
 
@@ -64,10 +71,30 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const [lastError, setLastError] = useState<string | null>(null);
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
 
+  const [containerNo, setContainerNo] = useState('');
+  const [sealNo, setSealNo] = useState('');
+  const [savingContainer, setSavingContainer] = useState(false);
+
+  const [geofenceBanner, setGeofenceBanner] = useState<{ arrived_stop: string | null; distance_m: number | null } | null>(null);
+  const [panicModalOpen, setPanicModalOpen] = useState(false);
+  const [panicType, setPanicType] = useState<'swap_fleet' | 'swap_driver' | 'general'>('swap_fleet');
+  const [panicReason, setPanicReason] = useState('');
+  const [panicHasCargo, setPanicHasCargo] = useState<boolean>(true);
+  const [panicSending, setPanicSending] = useState(false);
+
+  const [readyConfirmOpen, setReadyConfirmOpen] = useState(false);
+
   useEffect(() => {
     if (!token) return;
     fetchJobOrder();
   }, [token]);
+
+  useDriverGpsPing(token, jobOrder?.status, !!jobOrder, (evt) => {
+    if (evt.geofence_triggered) {
+      setGeofenceBanner({ arrived_stop: evt.arrived_stop, distance_m: evt.distance_m });
+      fetchJobOrder();
+    }
+  });
 
   const fetchJobOrder = async () => {
     try {
@@ -85,6 +112,8 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
       }
       
       setJobOrder(result.data);
+      setContainerNo(result.data?.container_number || '');
+      setSealNo(result.data?.sbu_metadata?.seal_number || '');
       setError(null);
     } catch (err: any) {
       console.error('Error fetching job order:', err);
@@ -110,6 +139,29 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
         { enableHighAccuracy: true, timeout: 5000 }
       );
     });
+  };
+
+  const saveContainerInfo = async () => {
+    try {
+      setSavingContainer(true);
+      const response = await fetch(`/api/jo/${token}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_container',
+          container_number: containerNo,
+          seal_number: sealNo
+        })
+      });
+      const res = await response.json();
+      if (!response.ok) throw new Error(res.error || 'Gagal menyimpan data kontainer');
+      toast.success('Nomor Kontainer & Seal berhasil disimpan!');
+      await fetchJobOrder();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingContainer(false);
+    }
   };
 
   const updateStatus = async (newStatus: string) => {
@@ -226,7 +278,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
 
     setPhotoLoading(routeId);
     try {
-      // Convert file to base64
+      const location = await getLocation();
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -234,14 +286,15 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
         reader.readAsDataURL(file);
       });
 
-      // Upload via API
       const response = await fetch(`/api/jo/${token}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           route_id: routeId, 
           pod_photo_base64: base64,
-          pod_photo_name: file.name
+          pod_photo_name: file.name,
+          lat: location?.lat,
+          lng: location?.lng
         })
       });
 
@@ -265,7 +318,6 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`, '_blank');
   };
 
-  // Format date & time
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -276,7 +328,6 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Hitung progress & Milestones
   const milestones = jobOrder ? [
     { id: 'start', label: 'TERIMA', status: jobOrder.accepted_at ? 'completed' : 'pending' },
     { id: 'depart', label: 'BERANGKAT', status: (jobOrder.started_at || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU')) ? 'completed' : (jobOrder.accepted_at || jobOrder.status === 'MENUNGGU MULAI / START' || jobOrder.status === 'ORDER DITERIMA' ? 'current' : 'pending') },
@@ -296,13 +347,26 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     
     let base = (reached / total) * 100;
     if (current !== -1) {
-      base = (current / total) * 100 + (1 / total * 50); // halfway to current
+      base = (current / total) * 100 + (1 / total * 50);
     }
     return Math.min(base, 100);
   })();
 
   const totalStops = jobOrder?.routes?.length || 0;
-  const completedStops = jobOrder?.routes?.filter((r: any) => r.status === 'completed').length || 0;
+  const completedStops = jobOrder?.routes?.filter((r: any) => {
+    const s = (r.status || '').toLowerCase();
+    return s === 'completed' || s === 'arrived' || !!r.actual_arrival;
+  }).length || 0;
+
+  const activeStop = jobOrder?.routes?.find((r: any) => r.status === 'arrived' || r.status === 'pending');
+  const activeStopMarker = activeStop ? (() => {
+    const lat = activeStop.latitude ? Number((activeStop as any).latitude) : null;
+    const lng = activeStop.longitude ? Number((activeStop as any).longitude) : null;
+    if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng, label: activeStop.location_name };
+    }
+    return null;
+  })() : null;
 
   const mapMarkers = (jobOrder?.routes || []).map((stop: any) => {
     const lat = stop.latitude ? Number(stop.latitude) : null;
@@ -314,7 +378,18 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   }).filter(Boolean) as { lat: number; lng: number; sequence: number; label: string }[];
 
   const polylinePath = mapMarkers.map(m => ({ lat: m.lat, lng: m.lng }));
-  const mapCenter = mapMarkers.length > 0 ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng } : { lat: -6.2, lng: 106.816666 };
+  const mapCenter = activeStopMarker
+    ? { lat: activeStopMarker.lat, lng: activeStopMarker.lng }
+    : mapMarkers.length > 0
+      ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
+      : { lat: -6.2, lng: 106.816666 };
+
+  const isGreeting = jobOrder?.driver_response !== 'accepted';
+  const isPendingStart = jobOrder?.driver_response === 'accepted' && !jobOrder?.started_at && !['in_progress', 'DALAM PERJALANAN'].includes(jobOrder?.status || '') && !jobOrder?.status?.startsWith('MENUJU');
+  const isActive = !isGreeting && !isPendingStart && !['completed', 'PEKERJAAN SELESAI', 'SELESAI', 'PAID', 'ready_for_billing', 'verified'].includes(jobOrder?.status || '');
+  const isCompleted = ['completed', 'PEKERJAAN SELESAI', 'SELESAI', 'PAID', 'ready_for_billing', 'verified'].includes(jobOrder?.status || '');
+
+  const nextStopName = activeStop?.location_name?.toUpperCase() || 'LOKASI TUJUAN';
 
   if (loading) {
     return (
@@ -342,460 +417,606 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     <div className="min-h-screen bg-[#f8fafc] pb-32">
       <Toaster position="top-center" />
 
-      {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-6 pt-8 pb-6 shadow-sm">
-        <div className="max-w-xl mx-auto">
-          {/* Advance Payment Notification */}
-          {jobOrder.advance_status === 'paid' && (
-            <div className="mb-6 bg-emerald-600 text-white p-5 rounded-[2rem] shadow-xl shadow-emerald-600/20 flex items-center gap-5 animate-in slide-in-from-top-4 duration-700">
-               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                  <Check size={24} className="text-white" />
-               </div>
-               <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">DANA OPERASIONAL CAIR</p>
-                  <h3 className="text-lg font-black tracking-tight leading-none">
-                     Uang jalan Rp. {new Intl.NumberFormat('id-ID').format(jobOrder.advance_amount || 0)} telah ditransfer.
-                  </h3>
-                  <p className="text-[9px] font-bold text-emerald-100/60 uppercase mt-1">Silakan memulai perjalanan Anda.</p>
-               </div>
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* PHASE 1: GREETING SCREEN (Before Accept)                     */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {isGreeting && (
+        <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
+          <div className="max-w-sm w-full space-y-6">
+            {/* Greeting */}
+            <div className="text-center">
+              <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30">
+                <Truck size={36} />
+              </div>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Selamat Datang</p>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                Halo, {jobOrder.driver?.name || 'Driver'} 👋
+              </h1>
+              <p className="text-base font-semibold text-slate-500 mt-3 leading-relaxed">
+                Anda mendapat tugas baru
+              </p>
             </div>
-          )}
-          <div className="flex justify-between items-start mb-2">
-            <p className="text-sm font-black text-blue-900 uppercase tracking-tight">JO: {jobOrder.jo_number}</p>
-            <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] italic">
-               {(() => {
-                 const s = jobOrder.status?.toUpperCase() || '';
-                 if (s === 'ACCEPTED') return 'ORDER DITERIMA';
-                 if (s === 'IN_PROGRESS') return 'DALAM PERJALANAN';
-                 if (s === 'COMPLETED') return 'PEKERJAAN SELESAI';
-                 return s.replace('_', ' ');
-               })()}
-            </div>
-          </div>
-          
-          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100/50 shadow-inner mb-4">
-            <h1 className="text-2xl font-black text-slate-800 leading-tight mb-2 tracking-tighter">
-               {jobOrder.tenant_name || jobOrder.customer?.name || 'SENTRALOGIS'}
-            </h1>
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-rose-600" />
-              <span className="text-sm text-rose-600 font-black tracking-tight">
-                {formatDate(jobOrder.wo_details?.execution_date || new Date().toISOString())}
-              </span>
-              {jobOrder.wo_details?.execution_time && (
-                <>
-                  <span className="text-slate-300 mx-1">|</span>
-                  <Clock size={16} className="text-rose-600" />
-                  <span className="text-sm text-rose-600 font-black tracking-tight">
-                    {jobOrder.wo_details.execution_time}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
 
-          {/* New Driver & Fleet Info */}
-          <div className="grid grid-cols-2 gap-3">
-             <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
-                   <Phone size={18} />
+            {/* Job Info Card */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Job Order</span>
+                <span className="bg-slate-900 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{jobOrder.jo_number}</span>
+              </div>
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
+                    <Calendar size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tanggal</p>
+                    <p className="text-sm font-black text-slate-800">{formatDate(jobOrder.wo_details?.execution_date || new Date().toISOString())}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Driver</p>
-                   <p className="text-xs font-black text-slate-800 truncate uppercase italic">{jobOrder.driver?.name || '-'}</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+                    <MapPin size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tujuan</p>
+                    <p className="text-sm font-black text-slate-800">{jobOrder.routes[0]?.location_name || '-'}</p>
+                    <p className="text-[10px] font-medium text-slate-400 mt-0.5">{jobOrder.routes.length} titik lokasi</p>
+                  </div>
                 </div>
-             </div>
-             <div className="bg-white border border-slate-100 rounded-xl p-3 flex items-center gap-3 shadow-sm">
-                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
-                   <Truck size={18} />
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 shrink-0">
+                    <Truck size={14} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Armada</p>
+                    <p className="text-sm font-black text-slate-800">{jobOrder.fleet?.plate_number || '-'}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{jobOrder.fleet?.type_name || 'Fleet'}</p>
-                   <p className="text-xs font-black text-slate-800 truncate uppercase italic">{jobOrder.fleet?.plate_number || '-'}</p>
+              </div>
+            </div>
+
+            {/* Advance Payment */}
+            {jobOrder.advance_status === 'paid' && (
+              <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 flex items-center gap-4">
+                <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shrink-0">
+                  <Check size={20} />
                 </div>
-             </div>
+                <div>
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Dana Operasional Cair</p>
+                  <p className="text-sm font-black text-emerald-800">Rp. {new Intl.NumberFormat('id-ID').format(jobOrder.advance_amount || 0)}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Accept/Reject Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={() => updateStatus('accepted')}
+                disabled={updating !== null}
+                className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all uppercase tracking-widest"
+              >
+                {updating === 'accepted' ? <Loader2 className="animate-spin" /> : <><Check size={22} /> TERIMA TUGAS</>}
+              </button>
+              <button
+                onClick={() => updateStatus('rejected')}
+                disabled={updating !== null}
+                className="w-full h-14 bg-white hover:bg-rose-50 text-rose-600 border-2 border-rose-200 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                {updating === 'rejected' ? <Loader2 className="animate-spin" size={18} /> : <><X size={18} /> TOLAK</>}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <main className="max-w-xl mx-auto px-6 pt-6 space-y-6">
-        
-        {/* Job Completed Success Screen */}
-        {(jobOrder.status === 'completed' || jobOrder.status === 'PEKERJAAN SELESAI' || jobOrder.status === 'ready_for_billing' || jobOrder.status === 'verified') && (
-          <div className="bg-white rounded-[2.5rem] p-10 text-center shadow-xl border-4 border-emerald-500/20 animate-in zoom-in duration-500">
-             <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-500/40">
-                <CheckCircle2 size={48} />
-             </div>
-             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">PEKERJAAN SELESAI</h2>
-             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-8">Terima kasih atas dedikasi Anda di lapangan!</p>
-             
-             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span>
-                   <span className="text-sm font-black text-slate-900">{jobOrder.completed_at ? formatTime(jobOrder.completed_at) : '-'}</span>
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* PHASE 2: READY TO DEPART (After accept, before start)        */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {isPendingStart && (
+        <div className="min-h-screen flex flex-col">
+          {/* Compact Header */}
+          <div className="bg-white border-b border-slate-100 px-6 py-4 shadow-sm">
+            <div className="max-w-xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
+                  <Check size={16} />
                 </div>
-                <div className="flex justify-between items-center">
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tanggal</span>
-                   <span className="text-sm font-black text-slate-900">{jobOrder.completed_at ? formatDate(jobOrder.completed_at) : '-'}</span>
+                <div>
+                  <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">Diterima</p>
+                  <p className="text-[10px] font-bold text-slate-400">{jobOrder.jo_number}</p>
                 </div>
-             </div>
-
-             <div className="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                <p className="text-[11px] font-black text-emerald-700 uppercase tracking-tight">Status: Menunggu Verifikasi Dokumen oleh HQ</p>
-             </div>
-          </div>
-        )}
-
-        {/* Debug Section if Error */}
-        {lastError && (
-          <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 animate-bounce">
-            <div className="flex items-center gap-2 text-rose-700 mb-1">
-              <AlertCircle size={18} />
-              <p className="text-xs font-black uppercase tracking-widest">Update Gagal!</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Driver</p>
+                <p className="text-xs font-black text-slate-800 uppercase">{jobOrder.driver?.name}</p>
+              </div>
             </div>
-            <p className="text-sm font-bold text-rose-600">{lastError}</p>
-            <p className="text-[10px] text-rose-400 mt-2 italic">Coba refresh halaman atau cek koneksi internet Anda.</p>
           </div>
-        )}
-        
-        {/* Journey Pipeline - HANYA TAMPIL JIKA BELUM SELESAI */}
-        {totalStops > 0 && !['completed', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified'].includes(jobOrder.status) && (
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-               <NavIcon size={12} /> JOURNEY PIPELINE
-            </h2>
-            <div className="relative px-2">
-              {/* Line background */}
-              <div className="absolute top-4 left-4 right-4 h-[2px] bg-slate-100 rounded-full" />
-              {/* Line progress */}
-              <div 
-                className="absolute top-4 left-4 h-[2px] bg-emerald-500 rounded-full transition-all duration-700"
-                style={{ width: progress > 0 ? `calc(${progress}% - 32px)` : '0px' }}
-              />
-              
-              <div className="relative flex justify-between">
+
+          {/* Milestones (compact) */}
+          <div className="px-6 py-4">
+            <div className="max-w-xl mx-auto">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
                 {milestones.map((m, idx) => (
-                  <div key={m.id} className="flex flex-col items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black z-10 transition-all duration-500 shadow-sm ${
-                      m.status === 'completed' ? 'bg-emerald-500 text-white' : 
-                      m.status === 'current' ? 'bg-blue-600 text-white animate-pulse' : 
-                      'bg-white border-2 border-slate-100 text-slate-300'
+                  <div key={m.id} className="flex items-center gap-2 shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${
+                      m.status === 'completed' ? 'bg-emerald-500 text-white' :
+                      m.status === 'current' ? 'bg-blue-600 text-white' :
+                      'bg-slate-100 text-slate-400'
                     }`}>
-                      {idx + 1}
+                      {m.status === 'completed' ? <Check size={12} /> : idx + 1}
                     </div>
-                    <p className="text-[9px] font-bold text-slate-500 mt-2 text-center max-w-[60px] truncate uppercase tracking-tighter">
-                      {m.label}
-                    </p>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{m.label}</span>
+                    {idx < milestones.length - 1 && <ChevronRight size={10} className="text-slate-300" />}
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
 
-        {/* Interactive Google Map ("Peta Petunjuk") */}
-        {isLoaded && mapMarkers.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm overflow-hidden">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-               <NavIcon size={12} className="text-indigo-600 animate-pulse" /> PETA PETUNJUK RUTE
-            </h2>
-            <div className="h-64 rounded-xl overflow-hidden border border-slate-100 relative">
-              <GoogleMap
-                mapContainerStyle={{ width: '100%', height: '100%' }}
-                center={mapCenter}
-                zoom={11}
-                options={{
-                  disableDefaultUI: false,
-                  zoomControl: true,
-                  mapTypeControl: false,
-                  streetViewControl: false,
-                }}
-              >
-                {mapMarkers.map((marker) => (
-                  <MarkerF
-                    key={marker.sequence}
-                    position={{ lat: marker.lat, lng: marker.lng }}
-                    label={{
-                      text: String(marker.sequence),
-                      color: '#ffffff',
-                      fontWeight: 'black',
-                    }}
-                  />
-                ))}
-                {polylinePath.length > 1 && (
-                  <PolylineF
-                    path={polylinePath}
-                    options={{
-                      strokeColor: '#3b82f6',
-                      strokeOpacity: 0.8,
-                      strokeWeight: 4,
-                    }}
-                  />
-                )}
-              </GoogleMap>
-            </div>
-          </div>
-        )}
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col items-center justify-center px-6">
+            <div className="max-w-sm w-full text-center space-y-8">
+              <div>
+                <div className="w-24 h-24 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-bounce">
+                  <Truck size={48} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
+                  Siap Berangkat?
+                </h2>
+                <p className="text-sm font-semibold text-slate-500 leading-relaxed">
+                  Konfirmasi bahwa Anda sudah siap menuju lokasi pengambilan
+                </p>
+                <div className="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tujuan Pertama</p>
+                  <p className="text-sm font-black text-slate-800">{nextStopName}</p>
+                </div>
+              </div>
 
-        {/* Action Section - HANYA TAMPIL JIKA BELUM SELESAI */}
-        {!['completed', 'PEKERJAAN SELESAI', 'ready_for_billing', 'verified'].includes(jobOrder.status) && (
-          <div className="space-y-4">
-            {/* Phase 1: Confirmation (Accept/Reject) */}
-            {jobOrder.driver_response !== 'accepted' && (
-            <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={() => updateStatus('accepted')}
+                onClick={() => updateStatus('in_progress')}
                 disabled={updating !== null}
-                className="h-16 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20 active:scale-95 transition-all uppercase tracking-widest"
               >
-                {updating === 'accepted' ? <Loader2 className="animate-spin" /> : <><Check size={20} /> TERIMA</>}
-              </button>
-              <button
-                onClick={() => updateStatus('rejected')}
-                disabled={updating !== null}
-                className={`h-16 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${
-                  jobOrder.driver_response === 'rejected' 
-                    ? 'bg-rose-50 text-rose-600 border-2 border-rose-200' 
-                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                }`}
-              >
-                {updating === 'rejected' ? <Loader2 className="animate-spin" /> : (
+                {updating === 'in_progress' ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
                   <>
-                    <X size={20} /> 
-                    {jobOrder.driver_response === 'rejected' ? 'TUGAS DITOLAK' : 'TOLAK'}
+                    <Play size={20} /> YA, BERANGKAT!
                   </>
                 )}
               </button>
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* Phase 2: Accepted (Start Journey) */}
-          {jobOrder.driver_response === 'accepted' && (jobOrder.status === 'accepted' || jobOrder.status === 'assigned' || jobOrder.status === 'MENUNGGU BERANGKAT' || jobOrder.status === 'MENUNGGU MULAI / START' || jobOrder.status === 'ORDER DITERIMA') && (
-            <button
-              onClick={() => updateStatus('in_progress')}
-              disabled={updating !== null}
-              className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20 active:scale-95 transition-all uppercase tracking-widest"
-            >
-              {updating === 'in_progress' ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  <Truck size={22} /> 
-                  BERANGKAT MENUJU {jobOrder.routes[0]?.location_name?.toUpperCase() || 'LOKASI'}
-                </>
-              )}
-            </button>
-          )}
-
-          {/* Daftar Lokasi - TAMPILKAN SEBAGAI PREVIEW JIKA PENDING */}
-          {totalStops > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
-                 <MapPin size={12} /> RUTE PERJALANAN
-              </h2>
-            {jobOrder.routes.map((stop) => (
-                <div key={stop.id} className={`bg-white rounded-2xl p-5 border shadow-sm transition-all ${
-                   stop.status === 'completed' ? 'border-emerald-100 opacity-75' : 
-                   stop.status === 'arrived' ? 'border-blue-200 ring-2 ring-blue-50' : 
-                   'border-slate-100'
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* PHASE 3: ACTIVE TRACKING (In progress / journey)             */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {(isActive || isCompleted) && (
+        <>
+          {/* Sticky Header */}
+          <div className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-40">
+            <div className="max-w-xl mx-auto px-6 py-4">
+              {/* Top Row: Recipient + Status */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-black text-slate-900 truncate tracking-tight">
+                    {jobOrder.tenant_name || jobOrder.customer?.name || 'SENTRALOGIS'}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{jobOrder.jo_number}</p>
+                </div>
+                <div className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shrink-0 ml-3 ${
+                  isCompleted ? 'bg-emerald-100 text-emerald-700' :
+                  'bg-slate-900 text-white'
                 }`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex gap-4 flex-1">
+                  {(() => {
+                    const s = jobOrder.status?.toUpperCase() || '';
+                    if (s === 'ACCEPTED') return 'DITERIMA';
+                    if (s === 'IN_PROGRESS') return 'DALAM PERJALANAN';
+                    if (s === 'COMPLETED' || s === 'PEKERJAAN SELESAI') return 'SELESAI';
+                    if (s.startsWith('MENUJU')) return 'MENUJU';
+                    if (s.startsWith('TIBA')) return 'TIBA';
+                    return s.replace(/_/g, ' ');
+                  })()}
+                </div>
+              </div>
+
+              {/* Milestone Dots */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {milestones.map((m, idx) => (
+                  <div key={m.id} className="flex items-center gap-1.5 shrink-0">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 transition-all ${
+                      m.status === 'completed' ? 'bg-emerald-500 text-white' :
+                      m.status === 'current' ? 'bg-blue-600 text-white animate-pulse' :
+                      'bg-slate-100 text-slate-400'
+                    }`}>
+                      {m.status === 'completed' ? <Check size={10} /> : idx + 1}
+                    </div>
+                    {idx < milestones.length - 1 && (
+                      <div className={`w-4 h-[2px] rounded-full ${m.status === 'completed' ? 'bg-emerald-300' : 'bg-slate-200'}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <main className="max-w-xl mx-auto space-y-0">
+            {/* Geofence Banner */}
+            {geofenceBanner && (
+              <div className="mx-6 mt-4 bg-emerald-600 text-white rounded-2xl p-5 shadow-2xl border-2 border-emerald-400 animate-in fade-in slide-in-from-top-4 duration-500 relative">
+                <button 
+                  onClick={() => setGeofenceBanner(null)} 
+                  className="absolute top-3 right-3 text-white/80 hover:text-white p-1 bg-black/20 rounded-full"
+                >
+                  <X size={14} />
+                </button>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl animate-bounce">📍</span>
+                  <div className="pr-4">
+                    <h3 className="text-sm font-black tracking-tight uppercase leading-tight mb-0.5">
+                      TIBA DI {geofenceBanner.arrived_stop || 'LOKASI'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-emerald-100 leading-relaxed">
+                      Terverifikasi via Geofence ({geofenceBanner.distance_m || '< 500'}m). Status rute diperbarui!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {lastError && (
+              <div className="mx-6 mt-4 bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 animate-bounce">
+                <div className="flex items-center gap-2 text-rose-700 mb-1">
+                  <AlertCircle size={16} />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Update Gagal!</p>
+                </div>
+                <p className="text-xs font-bold text-rose-600">{lastError}</p>
+              </div>
+            )}
+
+            {/* Single Map — Shows current active route */}
+            {isLoaded && mapMarkers.length > 0 && (
+              <div className="relative">
+                <div className="h-[45vh] min-h-[280px] w-full">
+                  <GoogleMap
+                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                    center={mapCenter}
+                    zoom={13}
+                    options={{
+                      disableDefaultUI: false,
+                      zoomControl: true,
+                      mapTypeControl: false,
+                      streetViewControl: false,
+                      fullscreenControl: false,
+                    }}
+                  >
+                    {mapMarkers.map((marker) => (
+                      <MarkerF
+                        key={marker.sequence}
+                        position={{ lat: marker.lat, lng: marker.lng }}
+                        label={{
+                          text: String(marker.sequence),
+                          color: '#ffffff',
+                          fontWeight: 'black',
+                          fontSize: '11px',
+                        }}
+                      />
+                    ))}
+                    {polylinePath.length > 1 && (
+                      <PolylineF
+                        path={polylinePath}
+                        options={{
+                          strokeColor: '#3b82f6',
+                          strokeOpacity: 0.8,
+                          strokeWeight: 4,
+                        }}
+                      />
+                    )}
+                  </GoogleMap>
+                </div>
+
+                {/* Map overlay: current destination */}
+                {activeStop && !isCompleted && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-10 pb-4 px-6">
+                    <div className="flex items-center gap-3 bg-white rounded-2xl p-4 shadow-xl border border-slate-100">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                        stop.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 
-                        stop.status === 'arrived' ? 'bg-blue-50 text-blue-600' : 
+                        activeStop.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                        activeStop.status === 'arrived' ? 'bg-blue-50 text-blue-600' :
                         'bg-slate-50 text-slate-400'
                       }`}>
-                        {stop.sequence}
+                        {activeStop.sequence}
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
-                            stop.stop_type === 'PICKUP' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
-                          }`}>
-                            {stop.stop_type}
-                          </span>
-                        </div>
-                        <h3 className="font-bold text-slate-800 text-base mt-1 uppercase tracking-tight leading-none truncate">{stop.location_name}</h3>
-                        <p className="text-[11px] font-medium text-slate-400 leading-relaxed mt-1 break-words">{stop.address}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => openInGoogleMaps(stop.address)}
-                        className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border border-blue-100"
-                        title="Buka Navigasi"
-                      >
-                        <NavIcon size={18} fill="currentColor" className="opacity-80" />
-                      </button>
-
-                      <div className="relative">
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          capture="environment"
-                          className="hidden"
-                          id={`photo-${stop.id}`}
-                          onChange={(e) => handlePhotoUpload(stop.id, e)}
-                        />
-                        <label 
-                          htmlFor={`photo-${stop.id}`}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border cursor-pointer ${
-                            stop.pod_photo_url ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                          }`}
-                        >
-                          {photoLoading === stop.id ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : stop.pod_photo_url ? (
-                            <Check size={18} />
-                          ) : (
-                            <Camera size={18} />
+                          <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                            activeStop.stop_type === 'PICKUP' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
+                          }`}>{activeStop.stop_type}</span>
+                          {activeStop.status === 'arrived' && (
+                            <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Tiba</span>
                           )}
-                        </label>
+                        </div>
+                        <p className="text-sm font-black text-slate-800 truncate mt-0.5">{activeStop.location_name}</p>
+                        <p className="text-[10px] font-medium text-slate-400 truncate">{activeStop.address}</p>
+                      </div>
+                      <button
+                        onClick={() => openInGoogleMaps(activeStop.address)}
+                        className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-lg shadow-blue-600/30"
+                      >
+                        <NavIcon size={20} fill="currentColor" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Route Stops */}
+            {totalStops > 0 && (
+              <div className="px-6 py-6 space-y-3">
+                <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <MapPin size={12} /> RUTE PERJALANAN ({completedStops}/{totalStops})
+                </h2>
+                {jobOrder.routes.map((stop) => (
+                  <div key={stop.id} className={`bg-white rounded-2xl p-4 border shadow-sm transition-all ${
+                    stop.status === 'completed' ? 'border-emerald-100 bg-emerald-50/30' :
+                    stop.status === 'arrived' ? 'border-blue-200 ring-2 ring-blue-100' :
+                    'border-slate-100'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                        stop.status === 'completed' ? 'bg-emerald-500 text-white' :
+                        stop.status === 'arrived' ? 'bg-blue-500 text-white' :
+                        'bg-slate-100 text-slate-400'
+                      }`}>
+                        {stop.status === 'completed' ? <Check size={14} /> : stop.sequence}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                            stop.stop_type === 'PICKUP' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
+                          }`}>{stop.stop_type}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{stop.contact_name}</span>
+                        </div>
+                        <h3 className="font-bold text-slate-800 text-sm mt-0.5 truncate">{stop.location_name}</h3>
+                        <p className="text-[10px] font-medium text-slate-400 truncate">{stop.address}</p>
+
+                        {/* Arrival time */}
+                        {(stop.actual_arrival || stop.actual_departure) && (
+                          <div className="flex items-center gap-4 mt-2">
+                            {stop.actual_arrival && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] font-bold text-slate-400 uppercase">Tiba</span>
+                                <span className="text-[10px] font-black text-slate-700">{formatTime(stop.actual_arrival)}</span>
+                              </div>
+                            )}
+                            {stop.actual_departure && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] font-bold text-slate-400 uppercase">Berangkat</span>
+                                <span className="text-[10px] font-black text-slate-700">{formatTime(stop.actual_departure)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Geofence status */}
+                        {isActive && (
+                          <div className="mt-2">
+                            {stop.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 uppercase tracking-widest">
+                                <CheckCircle2 size={11} /> Selesai
+                              </span>
+                            ) : stop.status === 'arrived' ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
+                                <MapPin size={11} /> Tiba (Geofence)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                                Menunggu (&lt;500m)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <button 
+                          onClick={() => openInGoogleMaps(stop.address)}
+                          className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center active:scale-95 transition-all border border-blue-100"
+                          title="Navigasi"
+                        >
+                          <NavIcon size={16} fill="currentColor" className="opacity-80" />
+                        </button>
+                        <div className="relative">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            capture="environment"
+                            className="hidden"
+                            id={`photo-${stop.id}`}
+                            onChange={(e) => handlePhotoUpload(stop.id, e)}
+                          />
+                          <label 
+                            htmlFor={`photo-${stop.id}`}
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all border cursor-pointer ${
+                              stop.pod_photo_url ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                            }`}
+                          >
+                            {photoLoading === stop.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : stop.pod_photo_url ? (
+                              <Check size={14} />
+                            ) : (
+                              <Camera size={14} />
+                            )}
+                          </label>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Photo POD Preview Thumbnail */}
+                    {/* POD Photo Thumbnail */}
                     {stop.pod_photo_url && (
-                      <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
-                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block leading-none">Foto Bukti POD</span>
-                         <div 
-                           onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
-                           className="relative w-24 h-24 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer active:scale-95 transition-all group shadow-sm bg-slate-100"
-                         >
-                           <img src={stop.pod_photo_url} alt="POD Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                             <Expand size={16} />
-                           </div>
-                         </div>
+                      <div 
+                        onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
+                        className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
+                      >
+                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                          <img src={stop.pod_photo_url} alt="POD" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Foto POD</p>
+                          <p className="text-[10px] font-bold text-blue-600 flex items-center gap-1"><Eye size={10} /> Lihat Foto</p>
+                        </div>
                       </div>
                     )}
                   </div>
+                ))}
+              </div>
+            )}
 
-                  {/* Arrival/Departure info */}
-                  {(stop.actual_arrival || stop.actual_departure) && (
-                    <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-50">
-                       <div className="text-center">
-                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Tiba</p>
-                          <p className="text-xs font-black text-slate-700">{formatTime(stop.actual_arrival)}</p>
-                       </div>
-                       <div className="text-center">
-                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Berangkat</p>
-                          <p className="text-xs font-black text-slate-700">{formatTime(stop.actual_departure)}</p>
-                       </div>
-                    </div>
-                  )}
-
-                  {/* Contextual Buttons - TAMPILKAN JIKA MISSION SEDANG BERJALAN */}
-                  {(jobOrder.status === 'in_progress' || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU') || jobOrder.status.startsWith('TIBA')) && (
-                    <div className="mt-5">
-                      {stop.status === 'pending' && (
-                        (() => {
-                          const firstUncompleted = jobOrder.routes.find((r: any) => r.status !== 'completed');
-                          const isNext = firstUncompleted?.id === stop.id;
-                          
-                          if (isNext) {
-                            return (
-                              <button
-                                onClick={() => updateRouteStatus(stop.id, 'arrived')}
-                                disabled={updating !== null}
-                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
-                              >
-                                {updating === stop.id ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
-                              </button>
-                            );
-                          } else {
-                            return (
-                              <button
-                                disabled
-                                className="w-full py-4 bg-slate-100 text-slate-400 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-200 cursor-not-allowed"
-                              >
-                                <Lock size={14} /> SELESAIKAN STOP SEBELUMNYA DULU
-                              </button>
-                            );
-                          }
-                        })()
-                      )}
-
-                      {stop.status === 'arrived' && stop.stop_type === 'PICKUP' && (
-                        <button
-                          onClick={() => updateRouteStatus(stop.id, 'completed')}
-                          disabled={updating !== null}
-                          className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
-                        >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN MUAT ({stop.location_name?.toUpperCase()})</>}
-                        </button>
-                      )}
-
-                      {stop.status === 'arrived' && stop.stop_type === 'DROPOFF' && (
-                        <button
-                          onClick={() => updateRouteStatus(stop.id, 'completed')}
-                          disabled={updating !== null}
-                          className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
-                        >
-                          {updating === stop.id ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN BONGKAR ({stop.location_name?.toUpperCase()})</>}
-                        </button>
-                      )}
-                    </div>
+            {/* Container & Seal Input */}
+            <div className="px-6 pb-4">
+              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Box size={16} className="text-indigo-600" />
+                    <p className="text-xs font-black text-slate-800 uppercase tracking-tight">Kontainer & Seal</p>
+                  </div>
+                  {(jobOrder.container_number || jobOrder.sbu_metadata?.seal_number) && (
+                    <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-emerald-200">TERISI</span>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-          </div>
-        )}
-
-        {/* Final Job Completion Actions */}
-        {(jobOrder.status === 'in_progress' || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU') || jobOrder.status.startsWith('TIBA') || jobOrder.status === 'MENUNGGU SELESAI') && (
-          <div className="pt-6 pb-12 border-t border-slate-200 mt-8">
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl shadow-slate-900/30 relative overflow-hidden">
-               <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                     <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                        <CheckCircle2 size={20} className="text-emerald-400" />
-                     </div>
-                     <div>
-                        <h4 className="text-white font-black text-sm uppercase tracking-widest">Konfirmasi Selesai</h4>
-                        <p className="text-white/40 text-[10px] font-bold uppercase tracking-tight">Pastikan semua dokumen & foto POD sudah diunggah</p>
-                     </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Kontainer</label>
+                    <input 
+                      type="text" 
+                      placeholder="TGHU-123456-7"
+                      value={containerNo}
+                      onChange={(e) => setContainerNo(e.target.value.toUpperCase())}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold uppercase text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    />
                   </div>
-
-                  {completedStops < totalStops && (
-                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 flex items-center gap-3">
-                       <AlertCircle size={18} className="text-amber-400 shrink-0" />
-                       <p className="text-[10px] font-bold text-amber-200 uppercase leading-tight">
-                          Masih ada {totalStops - completedStops} lokasi yang belum ditandai selesai. Lanjutkan?
-                       </p>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      const confirmMsg = completedStops < totalStops 
-                        ? 'Masih ada rute yang belum selesai. Apakah Anda yakin ingin mengakhiri tugas ini sekarang?'
-                        : 'Apakah Anda yakin ingin menyelesaikan seluruh tugas ini?';
-                      if (window.confirm(confirmMsg)) {
-                        updateStatus('completed');
-                      }
-                    }}
-                    disabled={updating !== null}
-                    className="w-full h-16 bg-white text-slate-900 hover:bg-slate-50 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 group"
-                  >
-                    {updating === 'completed' ? (
-                       <Loader2 className="animate-spin" />
-                    ) : (
-                       <>PEKERJAAN SELESAI <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
-                    )}
-                  </button>
-               </div>
-               <Activity className="absolute -bottom-6 -right-6 w-32 h-32 text-white/5 rotate-12" />
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Seal</label>
+                    <input 
+                      type="text" 
+                      placeholder="SL-98765"
+                      value={sealNo}
+                      onChange={(e) => setSealNo(e.target.value.toUpperCase())}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold uppercase text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={saveContainerInfo}
+                  disabled={savingContainer || (!containerNo && !sealNo)}
+                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                >
+                  {savingContainer ? <Loader2 size={14} className="animate-spin" /> : <><Check size={14} /> SIMPAN</>}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
 
-      {/* 🖼️ PHOTO OVERLAY MODAL */}
+            {/* Documents */}
+            {jobOrder.assignment_documents && jobOrder.assignment_documents.length > 0 && (
+              <div className="px-6 pb-4">
+                <div className="bg-white rounded-2xl p-5 border border-blue-100 shadow-sm space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FolderGit2 size={16} className="text-blue-600" />
+                    <p className="text-xs font-black text-slate-800 uppercase tracking-tight">Dokumen</p>
+                  </div>
+                  <div className="space-y-2">
+                    {jobOrder.assignment_documents.map((doc: any, idx: number) => (
+                      <a
+                        key={doc.id || idx}
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 bg-blue-50/50 border border-blue-200/60 rounded-xl p-3 active:scale-[0.98] transition-all"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0 border border-blue-100">
+                          {doc.name?.endsWith('.pdf') || doc.file_type?.includes('pdf') ? (
+                            <FileText size={16} className="text-red-500" />
+                          ) : (
+                            <ImageIcon size={16} className="text-blue-500" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold text-slate-800 truncate">{doc.name}</p>
+                          <p className="text-[9px] text-slate-400">{doc.file_size || ''}</p>
+                        </div>
+                        <Eye size={14} className="text-blue-500 shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Completion Button */}
+            {isActive && (
+              <div className="px-6 pb-8 pt-4">
+                <div className="bg-slate-900 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle2 size={18} className="text-emerald-400" />
+                      <p className="text-xs font-black text-white uppercase tracking-widest">Selesai</p>
+                    </div>
+                    {completedStops < totalStops && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4 flex items-center gap-2">
+                        <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                        <p className="text-[9px] font-bold text-amber-200 uppercase leading-tight">
+                          {totalStops - completedStops} lokasi belum selesai
+                        </p>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (completedStops < totalStops && totalStops > 0) {
+                          const unvisited = totalStops - completedStops;
+                          if (!window.confirm(`⚠️ Masih ada ${unvisited} lokasi belum selesai. Tetap selesaikan?`)) return;
+                        } else {
+                          if (!window.confirm('Selesaikan seluruh pekerjaan?')) return;
+                        }
+                        updateStatus('completed');
+                      }}
+                      disabled={updating !== null}
+                      className="w-full h-14 bg-white text-slate-900 hover:bg-slate-50 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      {updating === 'completed' ? <Loader2 className="animate-spin" /> : <>PEKERJAAN SELESAI <ChevronRight size={16} /></>}
+                    </button>
+                  </div>
+                  <Activity className="absolute -bottom-4 -right-4 w-24 h-24 text-white/5 rotate-12" />
+                </div>
+              </div>
+            )}
+
+            {/* Completed Screen */}
+            {isCompleted && (
+              <div className="px-6 pb-8 pt-4">
+                <div className="bg-emerald-50 border-4 border-emerald-500 rounded-2xl p-8 text-center shadow-xl">
+                  <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg shadow-emerald-500/30">
+                    🏁
+                  </div>
+                  <h2 className="text-xl font-black text-emerald-800 uppercase tracking-tight mb-2">PEKERJAAN SELESAI</h2>
+                  <p className="text-xs font-bold text-slate-600 mb-4">Tugas telah ditutup oleh sistem.</p>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-emerald-200 text-emerald-700 font-black text-xs uppercase tracking-widest">
+                    <CheckCircle2 size={14} /> {jobOrder.status.toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        </>
+      )}
+
+      {/* Photo Overlay Modal */}
       {selectedPhotoPreview && (
         <div 
           className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4" 
@@ -815,7 +1036,136 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
         </div>
       )}
 
-      </main>
+      {/* Floating SOS Button */}
+      {isActive && (
+        <button
+          onClick={() => setPanicModalOpen(true)}
+          className="fixed bottom-6 right-6 z-50 w-16 h-16 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex flex-col items-center justify-center shadow-2xl shadow-rose-600/50 border-4 border-rose-300 active:scale-90 transition-all animate-pulse"
+          title="Tombol Darurat SOS"
+        >
+          <span className="text-xl leading-none">🚨</span>
+          <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">SOS</span>
+        </button>
+      )}
+
+      {/* Panic Modal */}
+      {panicModalOpen && (
+        <div 
+          className="fixed inset-0 z-[1100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300 overflow-y-auto"
+          onClick={() => !panicSending && setPanicModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-[2.5rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border-4 border-rose-500 relative my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl animate-bounce">
+              🚨
+            </div>
+            <h3 className="text-lg font-black text-center text-slate-900 uppercase tracking-tight mb-1">Sinyal Darurat SOS</h3>
+            <p className="text-[11px] text-center font-bold text-slate-500 mb-5 leading-relaxed">
+              GPS & status muatan langsung terkirim ke Head Ops HQ!
+            </p>
+
+            <div className="space-y-2 mb-4">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">1. Apa yang Anda Butuhkan?</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'swap_fleet', label: 'Ganti Armada', icon: '🚛' },
+                  { id: 'swap_driver', label: 'Ganti Supir', icon: '🧑‍✈️' },
+                  { id: 'general', label: 'Darurat Lain', icon: '🚨' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setPanicType(item.id as any);
+                      if (!panicReason) {
+                        setPanicReason(
+                          item.id === 'swap_fleet' ? 'Mesin mogok / radiator bocor tidak bisa jalan' :
+                          item.id === 'swap_driver' ? 'Sakit demam / kecapekan tidak kuat lanjut nyetir' :
+                          'Kendala keamanan / hadangan di perjalanan'
+                        );
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center gap-1 transition-all ${
+                      panicType === item.id
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 font-black shadow-sm ring-2 ring-rose-200'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 font-bold hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[10px] uppercase tracking-tight leading-tight">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                2. {panicType === 'swap_fleet' ? 'Kenapa Minta Ganti Armada?' : panicType === 'swap_driver' ? 'Kenapa Minta Ganti Supir?' : 'Keterangan Situasi:'}
+              </label>
+              <textarea
+                value={panicReason}
+                onChange={(e) => setPanicReason(e.target.value)}
+                placeholder="Tulis alasan singkat..."
+                rows={2}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">3. Ada Muatan?</label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button type="button" onClick={() => setPanicHasCargo(true)} className={`py-3 rounded-xl border text-xs font-black transition-all uppercase tracking-wider ${panicHasCargo ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}>
+                  ⚠️ YA, ADA MUATAN
+                </button>
+                <button type="button" onClick={() => setPanicHasCargo(false)} className={`py-3 rounded-xl border text-xs font-black transition-all uppercase tracking-wider ${!panicHasCargo ? 'bg-slate-800 text-white border-slate-900 shadow-md ring-2 ring-slate-400' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}>
+                  ✖️ TIDAK / KOSONG
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setPanicModalOpen(false)} disabled={panicSending} className="py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs uppercase tracking-wider transition-all">
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={panicSending}
+                onClick={async () => {
+                  setPanicSending(true);
+                  try {
+                    const location = await getLocation();
+                    const res = await fetch(`/api/jo/${token}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'panic_button',
+                        panic_type: panicType,
+                        reason: panicReason || (panicType === 'swap_fleet' ? 'Minta Ganti Armada' : panicType === 'swap_driver' ? 'Minta Ganti Supir' : 'Darurat SOS'),
+                        has_cargo: panicHasCargo,
+                        lat: location?.lat,
+                        lng: location?.lng
+                      })
+                    });
+                    if (!res.ok) throw new Error('Gagal mengirim sinyal darurat');
+                    toast.error('🚨 SINYAL DARURAT TERKIRIM KE HEAD OPS HQ!', { duration: 8000 });
+                    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]);
+                    setPanicModalOpen(false);
+                  } catch (err: any) {
+                    toast.error(err.message);
+                  } finally {
+                    setPanicSending(false);
+                  }
+                }}
+                className="py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 active:scale-95"
+              >
+                {panicSending ? <Loader2 size={16} className="animate-spin" /> : 'KIRIM SOS NOW'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

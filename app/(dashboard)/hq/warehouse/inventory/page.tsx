@@ -42,7 +42,7 @@ export default function HQWarehouseInventory() {
           id, inventory_code, quantity, reserved_quantity,
           available_quantity, batch_number, expiry_date, status,
           product_sku:md_product_skus!product_sku_id (sku_code, name),
-          location:md_warehouse_locations!location_id (code),
+          location:md_warehouse_locations!location_id (code, area:md_warehouse_areas!area_id (area_name, area_code), zone:md_warehouse_zones!zone_id (zone_code)),
           warehouse:md_warehouses!warehouse_id (name)
         `)
         .eq("tenant_id", profile.tenant_id)
@@ -51,7 +51,7 @@ export default function HQWarehouseInventory() {
 
       setItems((data || []).map((i: any) => ({
         id: i.id,
-        inventory_code: i.inventory_code || "-",
+        inventory_code: i.inventory_code || i.location?.area?.area_code || i.location?.area?.area_name || "-",
         sku_code: i.product_sku?.sku_code || "-",
         product_name: i.product_sku?.name || "-",
         quantity: i.quantity,
@@ -61,6 +61,9 @@ export default function HQWarehouseInventory() {
         expiry_date: i.expiry_date || "-",
         status: i.status,
         location_code: i.location?.code || "-",
+        zone_code: i.location?.zone?.zone_code || "-",
+        area_name: i.location?.area?.area_name || "-",
+        area_code: i.location?.area?.area_code || "-",
         warehouse_name: i.warehouse?.name || "-",
       })));
     } catch (err) { console.error(err); }
@@ -84,7 +87,8 @@ export default function HQWarehouseInventory() {
       return i.sku_code.toLowerCase().includes(q) ||
              i.product_name.toLowerCase().includes(q) ||
              i.batch_number.toLowerCase().includes(q) ||
-             i.inventory_code.toLowerCase().includes(q);
+             i.inventory_code.toLowerCase().includes(q) ||
+             i.area_name.toLowerCase().includes(q);
     }
     return true;
   });
@@ -97,16 +101,16 @@ export default function HQWarehouseInventory() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cari SKU, nama produk, batch..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-          />
-        </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cari SKU, nama produk, batch, lokasi, area..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
+          </div>
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
@@ -131,34 +135,36 @@ export default function HQWarehouseInventory() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Inventory Code</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Location Code</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Area</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Zone</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">SKU</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Product</th>
                   <th className="text-right px-4 py-3 font-semibold text-slate-600">Qty</th>
                   <th className="text-right px-4 py-3 font-semibold text-slate-600">Available</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Batch</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Expiry</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Location</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-slate-400">No inventory items found</td></tr>
-                ) : filtered.map((i) => (
-                  <tr key={i.id} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.inventory_code}</td>
-                    <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700">{i.sku_code}</td>
-                    <td className="px-4 py-3 text-slate-600">{i.product_name}</td>
-                    <td className="px-4 py-3 text-right font-medium">{i.quantity}</td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-600">{i.available_quantity}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.batch_number}</td>
-                    <td className="px-4 py-3 text-xs">{i.expiry_date}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.location_code}</td>
-                    <td className="px-4 py-3">{statusBadge(i.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
+                    {filtered.length === 0 ? (
+                      <tr><td colSpan={10} className="text-center py-12 text-slate-400">No inventory items found</td></tr>
+                    ) : filtered.map((i) => (
+                      <tr key={i.id} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.location_code}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.area_code || i.area_name}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.zone_code}</td>
+                        <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700">{i.sku_code}</td>
+                        <td className="px-4 py-3 text-slate-600">{i.product_name}</td>
+                        <td className="px-4 py-3 text-right font-medium">{i.quantity}</td>
+                        <td className="px-4 py-3 text-right font-medium text-emerald-600">{i.available_quantity}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{i.batch_number}</td>
+                        <td className="px-4 py-3 text-xs">{i.expiry_date}</td>
+                        <td className="px-4 py-3">{statusBadge(i.status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
             </table>
           </div>
         </Card>

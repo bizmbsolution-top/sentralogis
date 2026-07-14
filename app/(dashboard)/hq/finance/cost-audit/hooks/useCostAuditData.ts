@@ -163,11 +163,8 @@ export function useCostAuditData() {
       }
 
       // [AI] Added driver_share_percentage, driver_id, fleet_id, transporter_id for internal/transporter model checks
-      const { data: jos, error: josError } = await supabase
-        .from("job_orders")
-        .select(
-          `
-          id, jo_number, base_price, purchase_price, driver_phone, pod_status, status, created_at,
+      const joSelectQuery = `
+          id, jo_number, sbu_type, base_price, purchase_price, driver_phone, pod_status, status, created_at,
           driver_share_percentage, driver_id, fleet_id, transporter_id,
           advance_amount, driver_payment_amount,
           is_doc_finished, is_cost_finished, pod_photo_url, advance_receipt_url, transfer_proof_url,
@@ -181,8 +178,12 @@ export function useCostAuditData() {
               customer:md_entities!customer_id(name, legal_name, billing_method, phone)
             )
           )
-        `
-        )
+        `;
+
+      const costJoIds = Array.from(new Set(costs.map((c) => c.jo_id).filter(Boolean)));
+      const { data: josByStatus, error: josError } = await supabase
+        .from("job_orders")
+        .select(joSelectQuery)
         .eq("tenant_id", profile?.tenant_id)
         .in("status", [
           "pekerjaan selesai",
@@ -202,6 +203,19 @@ export function useCostAuditData() {
         ]);
 
       if (josError) throw josError;
+      let jos = [...(josByStatus || [])];
+
+      const existingJoIds = new Set(jos.map((j) => j.id));
+      const missingJoIds = costJoIds.filter((id) => !existingJoIds.has(id));
+      if (missingJoIds.length > 0) {
+        const { data: josByCost } = await supabase
+          .from("job_orders")
+          .select(joSelectQuery)
+          .in("id", missingJoIds);
+        if (josByCost && josByCost.length > 0) {
+          jos = [...jos, ...josByCost];
+        }
+      }
 
       const normalizedJos = (jos || []).map((jo) => {
         const woItem = Array.isArray(jo.wo_item) ? jo.wo_item[0] : jo.wo_item;
@@ -210,7 +224,19 @@ export function useCostAuditData() {
             ? woItem.wo[0]
             : woItem.wo
           : null;
-        return { ...jo, wo_item: woItem ? { ...woItem, wo } : null };
+        const fallbackWo = wo || {
+          id: `standalone-${jo.id}`,
+          wo_number: jo.jo_number || "Direct JO",
+          customer: { name: "Direct / Non-WO Customer", legal_name: "Direct / Non-WO Customer" },
+        };
+        const fallbackWoItem = woItem || {
+          id: `item-${jo.id}`,
+          unit_price: jo.base_price || 0,
+          total_revenue: jo.base_price || 0,
+          sbu_type: jo.sbu_type || "TRUCKING",
+          wo: fallbackWo,
+        };
+        return { ...jo, wo_item: fallbackWoItem };
       });
 
       const seen = new Set();
@@ -251,6 +277,8 @@ export function useCostAuditData() {
         amount: 0,
         cost_type: "PENDING_SBU_SUBMISSION",
         name: "Waiting for SBU to finalize Doc & Cost",
+        description: "Waiting for SBU to finalize Doc & Cost",
+        charge_type: "PENDING",
         created_at: jo.created_at,
         billing_proof_url: null,
         job_orders: jo,
@@ -277,6 +305,8 @@ export function useCostAuditData() {
         amount: 0,
         cost_type: "BASE_COST_AUDIT",
         name: "Document & Base Cost Audit",
+        description: "Document & Base Cost Audit",
+        charge_type: "BASE AUDIT",
         created_at: jo.created_at,
         billing_proof_url: null,
         job_orders: jo,
@@ -478,7 +508,8 @@ export function useCostAuditData() {
       const avgDriverSharePct =
         joList.length > 0 ? totalDriverSharePct / joList.length : 0;
 
-      const isApSettled = totalTarget > 0 && totalPaid >= totalTarget;
+      const hasPendingOrProcessing = group.costs.some((c: any) => c.status === "need_approval" || c.status === "sbu_processing");
+      const isApSettled = totalTarget > 0 && totalPaid >= totalTarget && !hasPendingOrProcessing;
 
       group.jo_list = joList;
       group.vendor_breakdown = Array.from(vendorBreakdown.values()).sort(
@@ -507,7 +538,7 @@ export function useCostAuditData() {
   const getGroupSbuTypes = useCallback((group: any) => {
     const types = new Set<string>();
     group.jo_list?.forEach((joGroup: any) => {
-      const sbu = joGroup.jo?.wo_item?.sbu_type;
+      const sbu = joGroup.jo?.sbu_type || joGroup.jo?.wo_item?.sbu_type;
       if (sbu) types.add(sbu.toUpperCase());
     });
     return Array.from(types);
@@ -573,7 +604,7 @@ export function useCostAuditData() {
             (c: any) => c.status === "sbu_processing"
           );
         else if (statusFilter === "new_request")
-          matchesStatus = !group.isApSettled && group.costs.some(
+          matchesStatus = group.costs.some(
             (c: any) => c.status === "need_approval"
           );
         else if (statusFilter === "audit_done")
@@ -660,6 +691,26 @@ export function useCostAuditData() {
         const item = data.find((d) => d.id === itemId);
         if (!item) return;
 
+        if (itemId.startsWith("audit-")) {
+          if (newStatus === "approved") {
+            const { error } = await supabase
+              .from("job_orders")
+              .update({ status: "ready_for_billing" })
+              .eq("id", item.jo_id);
+            if (error) throw error;
+            toast.success("Audit Dokumen & Base Cost disetujui");
+            fetchData();
+          } else {
+            toast.error("Audit dasar tidak dapat di-reject di sini");
+          }
+          return;
+        }
+
+        if (itemId.startsWith("dummy-")) {
+          toast.error("Masih menunggu pemrosesan dari SBU");
+          return;
+        }
+
         let finalStatus: any = newStatus;
         let isBillable = newStatus === "approved";
         let paidBySbu = false;
@@ -718,6 +769,15 @@ export function useCostAuditData() {
     async (pendingCosts: any[]) => {
       try {
         for (const c of pendingCosts) {
+          if (c.id.startsWith("audit-")) {
+            await supabase
+              .from("job_orders")
+              .update({ status: "ready_for_billing" })
+              .eq("id", c.jo_id);
+            continue;
+          }
+          if (c.id.startsWith("dummy-")) continue;
+
           await supabase
             .from("extra_costs")
             .update({

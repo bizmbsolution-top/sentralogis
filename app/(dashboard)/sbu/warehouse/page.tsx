@@ -13,6 +13,9 @@ export default function SBUWarehouseDashboard() {
   const supabase = createClient()!;
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
+
   const [stats, setStats] = useState({
     totalSku: 0,
     totalStock: 0,
@@ -37,32 +40,54 @@ export default function SBUWarehouseDashboard() {
         if (tenantData?.length) tenantId = tenantData[0].id;
       }
       if (!tenantId) { setLoading(false); return; }
+      
+      let whId = profile?.warehouse_id;
+      
+      // Fetch warehouses for this tenant
+      const { data: whData } = await supabase.from('md_warehouses').select('id, name').eq('tenant_id', tenantId);
+      if (whData) setWarehouses(whData);
+
+      if (!whId) {
+        if (selectedWarehouse) {
+          whId = selectedWarehouse;
+        } else if (whData && whData.length > 0) {
+          whId = whData[0].id;
+          setSelectedWarehouse(whId);
+        } else {
+          setLoading(false);
+          return;
+        }
+      } else {
+        setSelectedWarehouse(whId);
+      }
 
       const [
-        skuRes, invRes, taskRes, taskTodayRes, quarantineRes, expiryRes
+        invRes, taskRes, taskTodayRes, quarantineRes, expiryRes
       ] = await Promise.all([
-        supabase.from('md_product_skus').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
-        supabase.from('wh_inventory').select('quantity').eq('tenant_id', tenantId),
-        supabase.from('wh_tasks').select('id').eq('tenant_id', tenantId).in('status', ['PENDING', 'ASSIGNED', 'IN_PROGRESS']),
-        supabase.from('wh_tasks').select('id').eq('tenant_id', tenantId).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
-        supabase.from('wh_inventory').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'QUARANTINE'),
-        supabase.from('wh_inventory').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).lte('expiry_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]),
+        supabase.from('wh_inventory').select('quantity, product_sku_id').eq('tenant_id', tenantId).eq('warehouse_id', whId),
+        supabase.from('wh_tasks').select('id').eq('tenant_id', tenantId).eq('warehouse_id', whId).in('status', ['PENDING', 'ASSIGNED', 'IN_PROGRESS']),
+        supabase.from('wh_tasks').select('id').eq('tenant_id', tenantId).eq('warehouse_id', whId).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+        supabase.from('wh_inventory').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('warehouse_id', whId).eq('status', 'QUARANTINE'),
+        supabase.from('wh_inventory').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('warehouse_id', whId).lte('expiry_date', new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]),
       ]);
 
       const totalStock = (invRes.data || []).reduce((sum: number, i: any) => sum + Number(i.quantity || 0), 0);
+      const totalSku = new Set((invRes.data || []).filter((i: any) => i.product_sku_id).map((i: any) => i.product_sku_id)).size;
       const totalPending = (taskRes.data || []).length;
       const totalToday = (taskTodayRes.data || []).length;
 
       const { data: areas } = await supabase
         .from('md_warehouse_areas')
         .select('id, area_name, area_type, total_capacity')
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .eq('warehouse_id', whId);
 
       const areaUtil = await Promise.all((areas || []).map(async (a) => {
         const { count } = await supabase
           .from('wh_inventory')
           .select('id', { count: 'exact', head: true })
           .eq('tenant_id', tenantId)
+          .eq('warehouse_id', whId)
           .in('status', ['AVAILABLE', 'RESERVED']);
 
         const zoneIdsRes = await supabase.from('md_warehouse_zones').select('id').eq('area_id', a.id);
@@ -78,7 +103,7 @@ export default function SBUWarehouseDashboard() {
       }));
 
       setStats({
-        totalSku: skuRes.count || 0,
+        totalSku,
         totalStock,
         inboundPending: totalPending,
         inboundToday: totalToday,
@@ -94,9 +119,9 @@ export default function SBUWarehouseDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [profile, supabase]);
+  }, [profile, supabase, selectedWarehouse]);
 
-  useEffect(() => { if (profile) fetchStats(); }, [profile, fetchStats]);
+  useEffect(() => { if (profile) fetchStats(); }, [profile, fetchStats, selectedWarehouse]);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[50vh]">
@@ -115,9 +140,22 @@ export default function SBUWarehouseDashboard() {
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Warehouse Operations</h1>
-        <p className="text-slate-500 text-sm mt-1">SBU Operational Dashboard</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Warehouse Operations</h1>
+          <p className="text-slate-500 text-sm mt-1">SBU Operational Dashboard</p>
+        </div>
+        {!profile?.warehouse_id && warehouses.length > 0 && (
+          <select
+            value={selectedWarehouse}
+            onChange={(e) => setSelectedWarehouse(e.target.value)}
+            className="px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-slate-900/10"
+          >
+            {warehouses.map(w => (
+              <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

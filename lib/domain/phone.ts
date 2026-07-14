@@ -18,12 +18,14 @@ export function buildDriverAssignmentMessage(params: {
   driverName: string;
   isInternal: boolean;
   link: string;
+  joNumber?: string;
 }): string {
-  const { driverName, isInternal, link } = params;
+  const { driverName, isInternal, link, joNumber } = params;
+  const joText = joNumber ? ` (${joNumber})` : '';
   if (isInternal) {
-    return `Halo ${driverName}, Anda mendapat tugas baru. Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
+    return `Halo ${driverName}, Anda mendapat tugas baru${joText}. Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
   }
-  return `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda: ${link}`;
+  return `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda${joText}: ${link}`;
 }
 
 export function buildCustomerTrackingMessage(params: {

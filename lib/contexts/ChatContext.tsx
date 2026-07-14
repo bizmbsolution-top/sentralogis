@@ -21,7 +21,7 @@ interface Participant {
 
 export interface Channel {
   id: string;
-  channel_type: 'job_order' | 'work_order' | 'direct' | 'group';
+  channel_type: 'job_order' | 'work_order' | 'direct' | 'group' | 'lead';
   channel_id: string;
   title: string | null;
   created_at: string;
@@ -41,15 +41,16 @@ interface Attachment {
   file_size: number;
 }
 
-interface Message {
+export interface Message {
   id: string;
   channel_id: string;
-  sender_id: string;
+  sender_id: string | null;
+  guest_sender_name?: string | null;
   message: string;
   parent_id: string | null;
   created_at: string;
   updated_at: string;
-  sender: Profile;
+  sender: Profile | null;
   replies?: Message[];
   context_type?: string | null;
   context_id?: string | null;

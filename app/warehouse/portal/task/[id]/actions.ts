@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 export async function fetchReceiptAdmin(receiptId: string) {
   const { data, error } = await supabaseAdmin
     .from('wh_inbound_receipts')
-    .select('*, transporter:transporter_id(name), fleet:fleet_id(plate_number), driver:driver_id(name, phone)')
+    .select('*, transfer_id, wo_item_id, transporter:transporter_id(name), fleet:fleet_id(plate_number), driver:driver_id(name, phone)')
     .eq('id', receiptId)
     .maybeSingle();
     

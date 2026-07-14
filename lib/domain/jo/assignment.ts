@@ -17,6 +17,10 @@ export interface AssignmentSlot {
   tracking_token?: string;
   driver_link_token?: string;
   save_to_master?: boolean;
+  container_number?: string;
+  notes?: string;
+  sbu_metadata?: any;
+  assignment_documents?: any[];
 }
 
 export interface WoItemContext {
@@ -90,7 +94,7 @@ export function buildJoNumber(woNumber: string, slotIndex: number): string {
 }
 
 export function isFilledAssignment(slot: AssignmentSlot): boolean {
-  return !!(slot.fleet_id && slot.driver_id);
+  return Boolean(slot.fleet_id || slot.driver_id || slot.transporter_id);
 }
 
 export function isEmptySlot(slot: AssignmentSlot): boolean {
@@ -244,7 +248,7 @@ export function buildInitialAssignmentSlots(
   const maxJOCount = computeMaxJoCount(item);
   const isHandoverApproved = item.handover_approved === true;
 
-  const existingAssignments: AssignmentSlot[] = existingJos.map((existing) => ({
+  const existingAssignments: AssignmentSlot[] = existingJos.map((existing: any) => ({
     id: existing.id,
     transporter_id: existing.transporter_id ?? null,
     fleet_id: existing.fleet_id ?? null,
@@ -258,6 +262,9 @@ export function buildInitialAssignmentSlots(
     tracking_token: existing.tracking_token,
     wa_token: existing.wa_token,
     status: existing.status || "assigned",
+    container_number: existing.container_number || (existing.sbu_metadata ? existing.sbu_metadata.container_number : "") || "",
+    notes: existing.notes || "",
+    assignment_documents: existing.assignment_documents || [],
   }));
 
   const emptySlotsNeeded = isHandoverApproved
@@ -276,6 +283,9 @@ export function buildInitialAssignmentSlots(
     driver_share_percentage: 0,
     advance_amount: 0,
     status: "draft",
+    container_number: "",
+    assignment_documents: [],
+    notes: "",
   }));
 
   return [...existingAssignments, ...emptySlots];

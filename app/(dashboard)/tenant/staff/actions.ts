@@ -92,3 +92,18 @@ export async function createStaffAdmin(payload: {
     return { success: false, message: err.message };
   }
 }
+
+export async function deleteStaffAdmin(userId: string) {
+  try {
+    // Attempt to delete user via Admin Auth. 
+    // Supabase will cascade delete to profiles and tenant_users if foreign keys have ON DELETE CASCADE.
+    // If not, it will throw an error, which we catch.
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+    
+    return { success: true, message: 'Staff deleted successfully' };
+  } catch (err: any) {
+    console.error('[deleteStaffAdmin] Fatal Error:', err.message);
+    return { success: false, message: err.message };
+  }
+}

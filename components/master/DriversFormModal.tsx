@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { X, Loader2, User } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
 interface DriversFormModalProps {
   isOpen: boolean;
@@ -65,10 +66,22 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
         if (error) throw error;
         toast.success('Driver updated');
       } else {
-        const { error } = await supabase
+        let codeToUse = formData.driver_code || await generateDriverCodeAction();
+        let { error } = await supabase
           .from('md_drivers')
-          .insert([payload]);
-        if (error) throw error;
+          .insert([{ ...payload, driver_code: codeToUse }]);
+
+        if (error && (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate'))) {
+          const fallbackCode = `DRI/${Date.now().toString().slice(-4)}`;
+          const retryRes = await supabase
+            .from('md_drivers')
+            .insert([{ ...payload, driver_code: fallbackCode }]);
+          if (retryRes.error) throw retryRes.error;
+          error = null;
+        } else if (error) {
+          throw error;
+        }
+
         toast.success('Driver created');
       }
       onSuccess();

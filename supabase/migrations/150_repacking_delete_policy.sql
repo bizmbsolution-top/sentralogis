@@ -1,0 +1,2 @@
+CREATE POLICY "wh_repacking_orders_tenant_users_delete" ON wh_repacking_orders FOR DELETE USING (tenant_id = (SELECT tenant_id FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "wh_repacking_items_order_access_delete" ON wh_repacking_items FOR DELETE USING (repacking_order_id IN (SELECT id FROM wh_repacking_orders WHERE tenant_id = (SELECT tenant_id FROM profiles WHERE id = auth.uid())));

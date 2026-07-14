@@ -28,15 +28,16 @@ interface ContactFormModalProps {
   onClose: () => void;
   onSuccess: (newContact: any) => void;
   tenantId: string;
+  initialName?: string;
 }
 
-export default function ContactFormModal({ onClose, onSuccess, tenantId }: ContactFormModalProps) {
+export default function ContactFormModal({ onClose, onSuccess, tenantId, initialName }: ContactFormModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
   const [parents, setParents] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    name: '',
-    legal_name: '',
+    name: initialName || '',
+    legal_name: initialName || '',
     tax_id: '',
     email: '',
     phone: '',

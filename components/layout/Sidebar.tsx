@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
-import { Building, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Building, ChevronDown, ChevronRight, ChevronLeft, X } from 'lucide-react';
 
 interface MenuItem {
   label: string;
@@ -39,6 +39,8 @@ const MOD_WAREHOUSE_HQ: MenuItem = {
     { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
     { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
     { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+    { label: 'Movements', icon: '🔄', href: '/hq/warehouse/movements' },
+    { label: 'Transfers', icon: '🚛', href: '/hq/warehouse/transfers' },
     { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
     { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
   ]
@@ -49,6 +51,7 @@ const MOD_MASTER_DATA_HQ: MenuItem = {
   submenu: [
     { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
     { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
+    { label: 'Services & Charges', icon: '🏷️', href: '/hq/master/services' },
     { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types', requiresSbu: 'tr' },
     { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets', requiresSbu: 'tr' },
     { label: 'Drivers', icon: '👤', href: '/hq/master/drivers', requiresSbu: 'tr' },
@@ -75,6 +78,17 @@ const MOD_DIRECTOR_HQ: MenuItem[] = [
   { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   { label: 'Organization', icon: '👥', href: '/tenant/staff' },
 ];
+
+const MOD_COMMERCIAL: MenuItem = {
+  label: 'Commercial & CRM', icon: '💼', href: '#',
+  submenu: [
+    { label: 'Sales Pipeline', icon: '📈', href: '/commercial/pipeline' },
+    { label: 'Leads & Clients', icon: '👥', href: '/commercial/leads' },
+    { label: 'Activity Logs', icon: '📝', href: '/commercial/activities' },
+    { label: 'Quotations', icon: '📄', href: '/commercial/quotations' },
+  ]
+};
+
 
 // ============================================
 // MENU DEFINITIONS BY ROLE
@@ -147,10 +161,13 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Inbound', icon: '📥', href: '/hq/warehouse/inbound' },
         { label: 'Outbound', icon: '📤', href: '/hq/warehouse/outbound' },
         { label: 'Inventory', icon: '📦', href: '/hq/warehouse/inventory' },
+        { label: 'Movements', icon: '🔄', href: '/hq/warehouse/movements' },
+        { label: 'Transfers', icon: '🚛', href: '/hq/warehouse/transfers' },
         { label: 'Customer Stock', icon: '👁️', href: '/hq/warehouse/customer-stock' },
         { label: 'Contract & Billing', icon: '💰', href: '/hq/warehouse/billing' },
       ]
     },
+    MOD_COMMERCIAL,
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
@@ -184,40 +201,79 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
   ],
 
-  // Executive Directors - Using the unified MOD_DIRECTOR_HQ
-  hq_director_ops: MOD_DIRECTOR_HQ,
-  hq_director_fin: MOD_DIRECTOR_HQ,
-  hq_director_cs: MOD_DIRECTOR_HQ,
-  hq_director_comm: MOD_DIRECTOR_HQ,
-  hq_director_bizdev: MOD_DIRECTOR_HQ,
+  // Executive Directors - Specific Exception Dashboards
+  hq_director_ops: [
+    { label: 'Ops Exceptions', icon: '🚨', href: '/director/ops' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  ],
+  hq_director_fin: [
+    { label: 'Finance Exceptions', icon: '🚨', href: '/director/finance' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  ],
+  hq_commercial_director: [
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    MOD_COMMERCIAL,
+    { label: 'Commercial Exceptions', icon: '🚨', href: '/director/commercial' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  ],
+  hq_sales_manager: [
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    MOD_COMMERCIAL,
+  ],
+  hq_sales_staff: [
+    MOD_COMMERCIAL,
+  ],
+  hq_marketing_staff: [
+    MOD_COMMERCIAL,
+  ],
+  hq_director_comm: [
+    MOD_COMMERCIAL,
+    { label: 'Commercial Exceptions', icon: '🚨', href: '/director/commercial' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  ],
+  hq_director_bizdev: [
+    { label: 'BizDev Exceptions', icon: '🚨', href: '/director/bizdev' },
+    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+  ],
+  hq_director_hrd: [
+    { label: 'HRD Exceptions', icon: '🚨', href: '/director/hrd' },
+    { label: 'Organization', icon: '👥', href: '/tenant/staff' },
+  ],
+  hq_director_cs: MOD_DIRECTOR_HQ, // Fallback for CS director as it's not defined in new plan
 
   // SBU Roles (Manager, Ops, Admin, Finances)
   sbu_manager_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/trucking/approvals' },
     { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_ops_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/trucking/approvals' },
     { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
   ],
   sbu_admin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/trucking/approvals' },
     { label: 'Work Order', icon: '📋', href: '/sbu/trucking/work-orders' },
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
@@ -228,6 +284,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
@@ -238,6 +295,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Job Order', icon: '🚛', href: '/sbu/trucking/assignments' },
     { label: 'Intelligence Tower', icon: '📍', href: '/sbu/trucking/tracking' },
     { label: 'Documents & Finances', icon: '🧾', href: '/sbu/trucking/completed' },
+    { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
@@ -246,34 +304,90 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   // SBU Warehouse (Manager, Ops, Admin)
   sbu_manager_wh: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/warehouse/approvals' },
     { label: 'Attendance', icon: '📍', href: '/sbu/warehouse/attendance' },
-    { label: 'Work Order', icon: '📋', href: '/sbu/warehouse/work-orders' },
-    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
-    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
-    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Work Orders', icon: '📋', href: '/sbu/warehouse/work-orders' },
+    { 
+      label: 'Job Orders', icon: '🚛', href: '#',
+      submenu: [
+        { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+        { label: 'Repacking & Bundling', icon: '📦', href: '/sbu/warehouse/repacking' },
+        { label: 'Parcel Consolidation', icon: '📑', href: '/sbu/warehouse/consolidation' },
+        { label: 'Movements', icon: '🔄', href: '/sbu/warehouse/movements' },
+        { label: 'Transfers (JO)', icon: '🚛', href: '/sbu/warehouse/transfers' },
+        { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+      ]
+    },
+    { label: 'Inventory Report', icon: '📊', href: '#',
+      submenu: [
+        { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory-report/inventory' },
+        { label: 'Stock Card', icon: '📋', href: '/sbu/warehouse/inventory-report/stock-card' },
+      ]
+    },
+
+    { label: 'Stock Opname', icon: '📋', href: '/sbu/warehouse/stock-opname' },
+    { label: 'Movement Log', icon: '📜', href: '/sbu/warehouse/movement-log' },
     { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
     { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
+    { label: 'B2B Client Portal Access', icon: '🔑', href: '/sbu/warehouse/clients' },
   ],
   sbu_ops_wh: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/warehouse/approvals' },
     { label: 'Attendance', icon: '📍', href: '/sbu/warehouse/attendance' },
-    { label: 'Work Order', icon: '📋', href: '/sbu/warehouse/work-orders' },
-    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
-    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
-    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Work Orders', icon: '📋', href: '/sbu/warehouse/work-orders' },
+    { 
+      label: 'Job Orders', icon: '🚛', href: '#',
+      submenu: [
+        { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+        { label: 'Repacking & Bundling', icon: '📦', href: '/sbu/warehouse/repacking' },
+        { label: 'Parcel Consolidation', icon: '📑', href: '/sbu/warehouse/consolidation' },
+        { label: 'Movements', icon: '🔄', href: '/sbu/warehouse/movements' },
+        { label: 'Transfers (JO)', icon: '🚛', href: '/sbu/warehouse/transfers' },
+        { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+      ]
+    },
+    { label: 'Inventory Report', icon: '📊', href: '#',
+      submenu: [
+        { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory-report/inventory' },
+        { label: 'Stock Card', icon: '📋', href: '/sbu/warehouse/inventory-report/stock-card' },
+      ]
+    },
+
+    { label: 'Stock Opname', icon: '📋', href: '/sbu/warehouse/stock-opname' },
+    { label: 'Movement Log', icon: '📜', href: '/sbu/warehouse/movement-log' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
   ],
   sbu_admin_wh: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/warehouse' },
+    { label: 'Quotations', icon: '📄', href: '/sbu/warehouse/approvals' },
     { label: 'Attendance', icon: '📍', href: '/sbu/warehouse/attendance' },
-    { label: 'Work Order', icon: '📋', href: '/sbu/warehouse/work-orders' },
-    { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
-    { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
-    { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory' },
+    { label: 'Work Orders', icon: '📋', href: '/sbu/warehouse/work-orders' },
+    { 
+      label: 'Job Orders', icon: '🚛', href: '#',
+      submenu: [
+        { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+        { label: 'Repacking & Bundling', icon: '📦', href: '/sbu/warehouse/repacking' },
+        { label: 'Parcel Consolidation', icon: '📑', href: '/sbu/warehouse/consolidation' },
+        { label: 'Movements', icon: '🔄', href: '/sbu/warehouse/movements' },
+        { label: 'Transfers (JO)', icon: '🚛', href: '/sbu/warehouse/transfers' },
+        { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+      ]
+    },
+    { label: 'Inventory Report', icon: '📊', href: '#',
+      submenu: [
+        { label: 'Inventory', icon: '📦', href: '/sbu/warehouse/inventory-report/inventory' },
+        { label: 'Stock Card', icon: '📋', href: '/sbu/warehouse/inventory-report/stock-card' },
+      ]
+    },
+
+    { label: 'Stock Opname', icon: '📋', href: '/sbu/warehouse/stock-opname' },
+    { label: 'Movement Log', icon: '📜', href: '/sbu/warehouse/movement-log' },
     { label: 'Finances', icon: '💰', href: '/sbu/warehouse/finances' },
     { label: 'Documents', icon: '📄', href: '/sbu/warehouse/documents' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/warehouse/staff' },
+    { label: 'B2B Client Portal Access', icon: '🔑', href: '/sbu/warehouse/clients' },
   ],
 
   // SBU Finance Warehouse
@@ -315,6 +429,20 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
         { label: 'Master Categories', icon: '🗂️', href: '/hq/master-data/categories' },
         { label: 'Master Products', icon: '📦', href: '/hq/master-data/products' },
         { label: 'Locations & Zones', icon: '🗺️', href: '/tenant/warehouse/locations' },
+        { label: 'Work Orders', icon: '📋', href: '/sbu/warehouse/work-orders' },
+        { 
+          label: 'Job Orders', icon: '🚛', href: '#',
+          submenu: [
+            { label: 'Inbound', icon: '📥', href: '/sbu/warehouse/inbound' },
+            { label: 'Repacking & Bundling', icon: '📦', href: '/sbu/warehouse/repacking' },
+            { label: 'Parcel Consolidation', icon: '📑', href: '/sbu/warehouse/consolidation' },
+            { label: 'Movements', icon: '🔄', href: '/sbu/warehouse/movements' },
+            { label: 'Transfers', icon: '🚛', href: '/sbu/warehouse/transfers' },
+            { label: 'Outbound', icon: '📤', href: '/sbu/warehouse/outbound' },
+          ]
+        },
+        { label: 'Stock Opname', icon: '📋', href: '/sbu/warehouse/stock-opname' },
+        { label: 'Movement Log', icon: '📜', href: '/sbu/warehouse/movement-log' },
       ]
     },
     {
@@ -413,116 +541,112 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar Container (Slide Out / Slide In across all Sentralogis dashboards) */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:inset-0 flex flex-col
+        fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0
+        ${isOpen 
+          ? 'translate-x-0 w-64 opacity-100' 
+          : '-translate-x-full lg:translate-x-0 w-0 lg:w-0 opacity-0 overflow-hidden border-none pointer-events-none'
+        }
+        ${isOpen ? 'lg:static lg:inset-0' : 'lg:static'}
       `}>
-        <div className="flex items-center justify-between p-6 border-b border-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm shrink-0">
-              {tenantLogo ? <img src={tenantLogo} alt="Logo" className="w-full h-full object-cover" /> : <Building className="w-5 h-5 text-slate-400" />}
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm font-black tracking-tighter text-slate-900 uppercase line-clamp-1 leading-tight">
-                {profile?.full_name || 'Admin'}
-              </h1>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
-                {profile?.tenants?.name || 'Tenant'}
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg lg:hidden"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {menuItems.map((item) => {
-            const hasSubmenu = item.submenu && item.submenu.length > 0;
-            const isSubmenuOpen = openSubmenus.includes(item.label);
-            const isActive = pathname === item.href || (hasSubmenu && item.submenu?.some(sub => pathname === sub.href));
-
-            return (
-              <div key={item.label} className="space-y-1">
-                {hasSubmenu ? (
-                  <button
-                    onClick={() => toggleSubmenu(item.label)}
-                    className={`
-                      w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all
-                      ${isActive ? 'bg-slate-50 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
-                    `}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{item.icon}</span>
-                      <span className="text-sm">{item.label}</span>
-                    </div>
-                    {isSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </button>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={() => {
-                      if (window.innerWidth < 1024) onClose();
-                      if (onLinkClick) onLinkClick();
-                    }}
-                    className={`
-                      flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all
-                      ${isActive 
-                        ? 'bg-slate-900 text-white font-medium shadow-md' 
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      }
-                    `}
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span className="text-sm">{item.label}</span>
-                  </Link>
-                )}
-
-                {hasSubmenu && isSubmenuOpen && (
-                  <div className="ml-4 pl-4 border-l border-slate-100 space-y-1 mt-1">
-                    {item.submenu?.map((sub) => {
-                      const isSubActive = pathname === sub.href;
-                      return (
-                        <Link
-                          key={sub.label}
-                          href={sub.href}
-                          onClick={() => {
-                            if (window.innerWidth < 1024) onClose();
-                            if (onLinkClick) onLinkClick();
-                          }}
-                          className={`
-                            flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all
-                            ${isSubActive 
-                              ? 'text-slate-900 font-semibold bg-slate-50' 
-                              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50/50'
-                            }
-                          `}
-                        >
-                          <span>{sub.icon}</span>
-                          <span>{sub.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
+        <div className="w-64 h-full flex flex-col">
+          <div className="flex items-center justify-between p-6 border-b border-slate-50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm shrink-0">
+                {tenantLogo ? <img src={tenantLogo} alt="Logo" className="w-full h-full object-cover" /> : <Building className="w-5 h-5 text-slate-400" />}
               </div>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-bold">
-              {profile?.full_name?.charAt(0) || 'U'}
+              <div className="flex flex-col">
+                <h1 className="text-sm font-black tracking-tighter text-slate-900 uppercase line-clamp-1 leading-tight">
+                  {profile?.full_name || 'Admin'}
+                </h1>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                  {profile?.tenants?.name || 'Tenant'}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">{profile?.full_name}</p>
-              <p className="text-[10px] text-slate-500 truncate uppercase">{role.replace('_', ' ')}</p>
+            <button 
+              onClick={onClose}
+              className="p-2 text-slate-500 hover:bg-slate-100 hover:text-rose-600 rounded-lg transition-all flex items-center justify-center"
+              title="Sembunyikan Menu Sidebar"
+            >
+              <ChevronLeft size={20} className="hidden lg:block" />
+              <X size={20} className="block lg:hidden" />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+            {menuItems.map((item) => {
+              const renderMenuNode = (node: MenuItem, depth: number = 0) => {
+                const hasSubmenu = node.submenu && node.submenu.length > 0;
+                const isSubmenuOpen = openSubmenus.includes(node.label);
+                
+                const checkActive = (n: MenuItem): boolean => {
+                  if (pathname === n.href) return true;
+                  if (n.submenu) return n.submenu.some(checkActive);
+                  return false;
+                };
+                const isActive = checkActive(node);
+
+                return (
+                  <div key={node.label} className="space-y-1">
+                    {hasSubmenu ? (
+                      <button
+                        onClick={() => toggleSubmenu(node.label)}
+                        className={`
+                          w-full flex items-center justify-between py-2 rounded-lg transition-all
+                          ${depth === 0 ? 'px-3 mt-1' : 'px-2'}
+                          ${isActive ? 'bg-slate-50 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                        `}
+                      >
+                        <div className="flex items-center gap-3">
+                          {node.icon && <span className={depth === 0 ? 'text-lg' : 'text-base'}>{node.icon}</span>}
+                          <span className="text-sm">{node.label}</span>
+                        </div>
+                        {isSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </button>
+                    ) : (
+                      <Link
+                        href={node.href}
+                        onClick={() => {
+                          if (window.innerWidth < 1024) onClose();
+                          if (onLinkClick) onLinkClick();
+                        }}
+                        className={`
+                          flex items-center gap-3 py-2 rounded-lg transition-all
+                          ${depth === 0 ? 'px-3' : 'px-2'}
+                          ${isActive 
+                            ? (depth === 0 ? 'bg-slate-900 text-white font-medium shadow-md' : 'text-slate-900 font-semibold bg-slate-50')
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          }
+                        `}
+                      >
+                        {node.icon && <span className={depth === 0 ? 'text-lg' : 'text-base'}>{node.icon}</span>}
+                        <span className="text-sm">{node.label}</span>
+                      </Link>
+                    )}
+
+                    {hasSubmenu && isSubmenuOpen && (
+                      <div className={`${depth === 0 ? 'ml-4 pl-4 border-l border-slate-100' : 'ml-3 pl-3 border-l border-slate-100'} space-y-1 mt-1`}>
+                        {node.submenu!.map(sub => renderMenuNode(sub, depth + 1))}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+              return renderMenuNode(item, 0);
+            })}
+          </nav>
+
+          <div className="p-4 border-t border-slate-100">
+            <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-xl">
+              <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-xs font-bold">
+                {profile?.full_name?.charAt(0) || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate">{profile?.full_name}</p>
+                <p className="text-[10px] text-slate-500 truncate uppercase">{role.replace('_', ' ')}</p>
+              </div>
             </div>
           </div>
         </div>

@@ -1,263 +1,621 @@
-'use client'
+"use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { useChat } from '@/lib/contexts/ChatContext'
-import { Menu, LogOut, User as UserIcon, ChevronDown, Bell, Clock, ArrowRight, XCircle, MessageSquare } from 'lucide-react'
-import { toast } from 'react-hot-toast'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
-import ChatInbox from '@/components/chat/ChatInbox'
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useChat } from "@/lib/contexts/ChatContext";
+import {
+  Menu,
+  LogOut,
+  User as UserIcon,
+  ChevronDown,
+  Bell,
+  Clock,
+  ArrowRight,
+  XCircle,
+  MessageSquare,
+  Bot,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import ChatInbox from "@/components/chat/ChatInbox";
+import HelpChatDrawer from "@/components/help/HelpChatDrawer";
 
 interface TopNavbarProps {
-  onMenuClick: () => void
+  onMenuClick: () => void;
 }
 
 const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
-  const { profile, logout } = useAuth()
-  const { totalUnread } = useChat()
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showChatInbox, setShowChatInbox] = useState(false)
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const fetchRef = useRef(false)
+  const { profile, logout } = useAuth();
+  const { totalUnread } = useChat();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showChatInbox, setShowChatInbox] = useState(false);
+  const [showHelpDrawer, setShowHelpDrawer] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const fetchRef = useRef(false);
 
   const fetchNotifications = useCallback(async () => {
-    if (!profile?.tenant_id || !profile?.role || fetchRef.current) return
-    
-    fetchRef.current = true
-    const roleUpper = profile.role.toUpperCase()
-    setLoading(true)
-    
-    const { data: systemNotifs } = await supabase
-      .from('notifications')
-      .select('*')
-      .or(`role.eq.${profile.role},user_id.eq.${profile.id}`)
-      .eq('is_read', false)
-      .order('created_at', { ascending: false })
-      .limit(20)
+    if (!profile?.tenant_id || !profile?.role || fetchRef.current) return;
 
-    let legacyNotifs: any[] = []
-    if (roleUpper.includes('HQ') || roleUpper.includes('ADMIN') || roleUpper.includes('CS')) {
+    fetchRef.current = true;
+    const roleUpper = profile.role.toUpperCase();
+    setLoading(true);
+
+    const { data: systemNotifs } = await supabase
+      .from("notifications")
+      .select("*")
+      .or(`role.eq.${profile.role},user_id.eq.${profile.id}`)
+      .eq("is_read", false)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    let legacyNotifs: any[] = [];
+    if (
+      roleUpper.includes("HQ") ||
+      roleUpper.includes("ADMIN") ||
+      roleUpper.includes("CS")
+    ) {
       const { data, error } = await supabase
-        .from('wo_items')
-        .select('id, item_code, status, item_data, work_orders!inner(wo_number)')
-        .eq('tenant_id', profile.tenant_id)
-        .eq('status', 'handover_pending')
-        .order('created_at', { ascending: false })
-        .limit(10)
+        .from("wo_items")
+        .select(
+          "id, item_code, status, sbu_type, created_at, item_data, work_orders!inner(wo_number)",
+        )
+        .eq("tenant_id", profile.tenant_id)
+        .eq("status", "handover_pending")
+        .order("created_at", { ascending: false })
+        .limit(10);
 
       if (!error && data) {
         legacyNotifs = data
           .filter((n) => !(n.item_data?.read_by || []).includes(profile.id))
           .map((n) => ({
             id: `wo_${n.id}`,
-            type: 'handover',
-            title: 'Handover Request',
+            type: "handover",
+            title: "Handover Request",
             message: `New handover for ${n.item_code}`,
             link: `/hq/work-orders?status=handover_pending&itemId=${n.id}`,
             created_at: n.created_at,
-          }))
+          }));
       }
-    } else if (roleUpper.includes('SBU') || roleUpper.includes('OPS') || roleUpper.includes('MANAGER')) {
+    } else if (
+      roleUpper.includes("SBU") ||
+      roleUpper.includes("OPS") ||
+      roleUpper.includes("MANAGER")
+    ) {
       const { data, error } = await supabase
-        .from('wo_items')
-        .select('id, item_code, status, item_data, work_orders!inner(wo_number)')
-        .eq('tenant_id', profile.tenant_id)
-        .in('status', ['handover_rejected', 'pending', 'need_assignment'])
-        .order('created_at', { ascending: false })
-        .limit(10)
+        .from("wo_items")
+        .select(
+          "id, item_code, status, sbu_type, created_at, item_data, work_orders!inner(id, wo_number)",
+        )
+        .eq("tenant_id", profile.tenant_id)
+        .in("status", [
+          "handover_rejected",
+          "pending",
+          "need_assignment",
+          "menunggu_wh_eksekusi",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(10);
 
       if (!error && data) {
+        let userWhId = profile.warehouse_id || null;
+        if (!userWhId && profile.id) {
+          try {
+            const { data: orgUser } = await supabase
+              .from("wo_organization_users")
+              .select("assigned_warehouse_id")
+              .eq("user_id", profile.id)
+              .maybeSingle();
+            if (orgUser) userWhId = orgUser.assigned_warehouse_id;
+          } catch (e) {}
+        }
+
         legacyNotifs = data
           .filter((n) => !(n.item_data?.read_by || []).includes(profile.id))
+          .filter((n) => {
+            const isWhRole =
+              roleUpper.includes("WH") ||
+              roleUpper.includes("WAREHOUSE") ||
+              Boolean(userWhId);
+            const isTrRole =
+              roleUpper.includes("TRUCK") ||
+              roleUpper.includes("TRUCKING") ||
+              roleUpper.includes("FLEET");
+            const isClearanceRole =
+              roleUpper.includes("CLEAR") || roleUpper.includes("CUSTOMS");
+            const isFwdRole =
+              roleUpper.includes("FWD") || roleUpper.includes("FORWARDING");
+
+            if (isWhRole && !isTrRole) {
+              if (n.sbu_type && n.sbu_type !== "WAREHOUSE") return false;
+              if (
+                n.item_code?.startsWith("TR") ||
+                n.item_code?.startsWith("JO")
+              )
+                return false;
+              if (
+                userWhId &&
+                n.item_data?.warehouse_id &&
+                n.item_data.warehouse_id !== userWhId
+              )
+                return false;
+              return true;
+            }
+            if (isTrRole && !isWhRole) {
+              if (n.sbu_type && n.sbu_type !== "TRUCKING") return false;
+              if (n.item_code?.startsWith("WH")) return false;
+              return true;
+            }
+            if (isClearanceRole) return n.sbu_type === "CLEARANCE";
+            if (isFwdRole) return n.sbu_type === "FORWARDING";
+
+            if (userWhId) {
+              if (n.sbu_type === "TRUCKING") return false;
+              return (
+                !n.item_data?.warehouse_id ||
+                n.item_data?.warehouse_id === userWhId
+              );
+            }
+            return true;
+          })
           .map((n) => ({
             id: `wo_${n.id}`,
-            type: n.status === 'handover_rejected' ? 'rejected' : 'assignment',
-            title: n.status === 'handover_rejected' ? 'Handover Rejected' : 'New Assignment',
+            type: n.status === "handover_rejected" ? "rejected" : "assignment",
+            title:
+              n.status === "handover_rejected"
+                ? "Handover Rejected"
+                : "New Assignment",
             message: `${n.work_orders?.wo_number} - ${n.item_code}`,
-            link: `/sbu/trucking/work-orders?status=${n.status}&itemId=${n.id}`,
+            link:
+              n.sbu_type === "WAREHOUSE"
+                ? `/sbu/warehouse/work-orders/${n.work_orders?.id}?itemId=${n.id}`
+                : `/sbu/trucking/work-orders?status=${n.status}&itemId=${n.id}`,
             created_at: n.created_at,
-          }))
+          }));
       }
     }
 
-    let completedJoNotifs: any[] = []
+    let completedJoNotifs: any[] = [];
     const { data: acks } = await supabase
-      .from('notifications')
-      .select('metadata')
-      .eq('user_id', profile.id)
-      .eq('title', 'MISSION_ACK')
-    
-    const ackedJoIds = (acks || []).map((a: any) => a.metadata?.jo_id).filter(Boolean)
+      .from("notifications")
+      .select("metadata")
+      .eq("user_id", profile.id)
+      .eq("title", "MISSION_ACK");
+
+    const ackedJoIds = (acks || [])
+      .map((a: any) => a.metadata?.jo_id)
+      .filter(Boolean);
 
     let joQuery = supabase
-      .from('job_orders')
-      .select('id, jo_number, status, created_at')
-      .eq('tenant_id', profile.tenant_id)
-      .in('status', ['SELESAI', 'COMPLETED', 'PEKERJAAN SELESAI'])
-    
+      .from("job_orders")
+      .select("id, jo_number, status, created_at, sbu_type")
+      .eq("tenant_id", profile.tenant_id)
+      .in("status", ["SELESAI", "COMPLETED", "PEKERJAAN SELESAI"]);
+
     if (ackedJoIds.length > 0) {
-      const quotedIds = ackedJoIds.map((id: string) => `'${id}'`).join(',')
-      joQuery = joQuery.not('id', 'in', `(${quotedIds})`)
+      const quotedIds = ackedJoIds.map((id: string) => `'${id}'`).join(",");
+      joQuery = joQuery.not("id", "in", `(${quotedIds})`);
     }
 
     const { data: completedJos, error: joError } = await joQuery
-      .order('created_at', { ascending: false })
-      .limit(10)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
     if (!joError && completedJos) {
-      completedJoNotifs = completedJos.map((jo) => ({
-        id: `jo_${jo.id}`,
-        type: 'jo_completed',
-        title: 'Mission Completed',
-        message: `${jo.jo_number} is ready for docs & audit`,
-        link: roleUpper.includes('HQ')
-          ? `/hq/job-orders?q=${jo.jo_number}`
-          : `/sbu/trucking/completed?jo=${jo.jo_number}`,
-        created_at: jo.created_at,
-      }))
+      const isWhRole =
+        roleUpper.includes("WH") || roleUpper.includes("WAREHOUSE");
+      const isTrRole =
+        roleUpper.includes("TRUCK") ||
+        roleUpper.includes("TRUCKING") ||
+        roleUpper.includes("FLEET");
+      const isClearanceRole =
+        roleUpper.includes("CLEAR") || roleUpper.includes("CUSTOMS");
+      const isFwdRole =
+        roleUpper.includes("FWD") || roleUpper.includes("FORWARDING");
+
+      const filteredJos = completedJos.filter((jo) => {
+        if (isWhRole && !isTrRole) return jo.sbu_type === "WAREHOUSE";
+        if (isTrRole && !isWhRole)
+          return !jo.sbu_type || jo.sbu_type === "TRUCKING";
+        if (isClearanceRole) return jo.sbu_type === "CLEARANCE";
+        if (isFwdRole) return jo.sbu_type === "FORWARDING";
+        return true;
+      });
+
+      completedJoNotifs = filteredJos.map((jo) => {
+        const isWhJo = jo.sbu_type === "WAREHOUSE";
+        return {
+          id: `jo_${jo.id}`,
+          type: "jo_completed",
+          title: "Mission Completed",
+          message: `${jo.jo_number} is ready for docs & audit`,
+          link: roleUpper.includes("HQ")
+            ? `/hq/job-orders?q=${jo.jo_number}`
+            : isWhJo
+              ? `/sbu/warehouse/inbound`
+              : `/sbu/trucking/completed?jo=${jo.jo_number}`,
+          created_at: jo.created_at,
+        };
+      });
     }
 
-    const allNotifs = [...(systemNotifs || []), ...legacyNotifs, ...completedJoNotifs]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 20)
+    let extraCostNotifs: any[] = [];
+    if (
+      (roleUpper.includes("HQ") ||
+        roleUpper.includes("ADMIN") ||
+        roleUpper.includes("CS") ||
+        roleUpper.includes("FIN") ||
+        roleUpper.includes("OWNER")) &&
+      !roleUpper.includes("SBU") &&
+      !roleUpper.includes("WH") &&
+      !roleUpper.includes("TRUCK")
+    ) {
+      const { data: acksEc } = await supabase
+        .from("notifications")
+        .select("metadata")
+        .eq("user_id", profile.id)
+        .eq("title", "EXTRA_COST_ACK");
+      const ackedEcIds = (acksEc || [])
+        .map((a: any) => a.metadata?.ec_id)
+        .filter(Boolean);
 
-    setNotifications(allNotifs)
-    setLoading(false)
-    fetchRef.current = false
-  }, [profile?.tenant_id, profile?.role, profile?.id])
+      const { data: ecData, error: ecError } = await supabase
+        .from("extra_costs")
+        .select("id, cost_type, amount, created_at, jo_id")
+        .eq("status", "need_approval")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (!ecError && ecData && ecData.length > 0) {
+        const unackedEc = ecData.filter(
+          (ec: any) => !ackedEcIds.includes(ec.id),
+        );
+        if (unackedEc.length > 0) {
+          const joIds = Array.from(
+            new Set(unackedEc.map((ec: any) => ec.jo_id).filter(Boolean)),
+          );
+          const { data: ecJos } = await supabase
+            .from("job_orders")
+            .select("id, jo_number, sbu_type, tenant_id")
+            .in("id", joIds)
+            .eq("tenant_id", profile.tenant_id);
+
+          const joMap = Object.fromEntries(
+            (ecJos || []).map((j: any) => [j.id, j]),
+          );
+
+          extraCostNotifs = unackedEc
+            .filter((ec: any) => joMap[ec.jo_id])
+            .map((ec: any) => {
+              const jo = joMap[ec.jo_id];
+              const sbuParam = jo?.sbu_type
+                ? `?sbu=${jo.sbu_type.toUpperCase()}`
+                : "";
+              return {
+                id: `ec_${ec.id}`,
+                type: "add_cost",
+                title: "Need Approval Add Cost",
+                message: `${jo?.jo_number || "JO"} - ${ec.cost_type ? ec.cost_type.toUpperCase() : "EXTRA COST"}: Rp ${Number(ec.amount).toLocaleString("id-ID")}`,
+                link: `/hq/finance/cost-audit${sbuParam}`,
+                created_at: ec.created_at,
+              };
+            });
+        }
+      }
+    }
+
+    const isWhRoleNav =
+      roleUpper.includes("WH") || roleUpper.includes("WAREHOUSE");
+    const isTrRoleNav =
+      roleUpper.includes("TRUCK") ||
+      roleUpper.includes("TRUCKING") ||
+      roleUpper.includes("FLEET");
+
+    const cleanSystemNotifs = (systemNotifs || []).filter((n: any) => {
+      if (isWhRoleNav && !isTrRoleNav) {
+        if (
+          n.link?.includes("/trucking") ||
+          n.metadata?.sbu_type === "TRUCKING" ||
+          n.title?.toUpperCase().includes("TRUCK")
+        )
+          return false;
+      }
+      if (isTrRoleNav && !isWhRoleNav) {
+        if (
+          n.link?.includes("/warehouse") ||
+          n.metadata?.sbu_type === "WAREHOUSE" ||
+          n.title?.toUpperCase().includes("WAREHOUSE")
+        )
+          return false;
+      }
+      return true;
+    });
+
+    const allNotifs = [
+      ...cleanSystemNotifs,
+      ...legacyNotifs,
+      ...completedJoNotifs,
+      ...extraCostNotifs,
+    ]
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )
+      .slice(0, 20);
+
+    setNotifications(allNotifs);
+    setLoading(false);
+    fetchRef.current = false;
+  }, [profile?.tenant_id, profile?.role, profile?.id]);
 
   useEffect(() => {
-    if (!profile?.tenant_id || !profile?.role) return
-    
-    fetchNotifications()
-    
+    if (!profile?.tenant_id || !profile?.role) return;
+
+    fetchNotifications();
+
     const systemChannel = supabase
-      .channel('system-notifications')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
-        fetchNotifications()
-      })
-      .subscribe()
+      .channel("system-notifications")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        () => {
+          fetchNotifications();
+        },
+      )
+      .subscribe();
 
     const woChannel = supabase
-      .channel('handover-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wo_items', filter: `tenant_id=eq.${profile?.tenant_id}` }, () => {
-        fetchNotifications()
-      })
-      .subscribe()
+      .channel("handover-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "wo_items",
+          filter: `tenant_id=eq.${profile?.tenant_id}`,
+        },
+        () => {
+          fetchNotifications();
+        },
+      )
+      .subscribe();
+
+    const ecChannel = supabase
+      .channel("extra-costs-updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "extra_costs" },
+        () => {
+          fetchNotifications();
+        },
+      )
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(systemChannel)
-      supabase.removeChannel(woChannel)
-    }
-  }, [profile?.tenant_id, profile?.role, fetchNotifications])
+      supabase.removeChannel(systemChannel);
+      supabase.removeChannel(woChannel);
+      supabase.removeChannel(ecChannel);
+    };
+  }, [profile?.tenant_id, profile?.role, fetchNotifications]);
 
   const handleMarkAllAsRead = async () => {
-    if (!profile?.id) return
-    setNotifications([])
-    
-    try {
-      await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile.id).eq('is_read', false)
+    if (!profile?.id) return;
+    setNotifications([]);
 
-      const woIds = notifications.filter((n) => n.type === 'handover' || n.type === 'rejected' || n.type === 'assignment').map((n) => n.id.replace('wo_', ''))
-      
+    try {
+      await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("user_id", profile.id)
+        .eq("is_read", false);
+
+      const woIds = notifications
+        .filter(
+          (n) =>
+            n.type === "handover" ||
+            n.type === "rejected" ||
+            n.type === "assignment",
+        )
+        .map((n) => n.id.replace("wo_", ""));
+
       for (const itemId of woIds) {
-        const { data: currentItem } = await supabase.from('wo_items').select('item_data').eq('id', itemId).single()
-        const currentReadBy = currentItem?.item_data?.read_by || []
+        const { data: currentItem } = await supabase
+          .from("wo_items")
+          .select("item_data")
+          .eq("id", itemId)
+          .single();
+        const currentReadBy = currentItem?.item_data?.read_by || [];
         if (!currentReadBy.includes(profile.id)) {
-          await supabase.from('wo_items').update({ item_data: { ...currentItem?.item_data, read_by: [...currentReadBy, profile.id] } }).eq('id', itemId)
+          await supabase
+            .from("wo_items")
+            .update({
+              item_data: {
+                ...currentItem?.item_data,
+                read_by: [...currentReadBy, profile.id],
+              },
+            })
+            .eq("id", itemId);
         }
       }
 
-      const joIds = notifications.filter((n) => n.type === 'jo_completed').map((n) => n.id.replace('jo_', ''))
+      const joIds = notifications
+        .filter((n) => n.type === "jo_completed")
+        .map((n) => n.id.replace("jo_", ""));
       for (const joId of joIds) {
-        await supabase.from('notifications').insert({ tenant_id: profile.tenant_id, user_id: profile.id, title: 'MISSION_ACK', message: `ACK for JO ${joId}`, metadata: { jo_id: joId }, is_read: true, role: profile.role })
+        await supabase.from("notifications").insert({
+          tenant_id: profile.tenant_id,
+          user_id: profile.id,
+          title: "MISSION_ACK",
+          message: `ACK for JO ${joId}`,
+          metadata: { jo_id: joId },
+          is_read: true,
+          role: profile.role,
+        });
       }
 
-      toast.success('All notifications marked as read')
+      const ecIds = notifications
+        .filter((n) => n.type === "add_cost")
+        .map((n) => n.id.replace("ec_", ""));
+      for (const ecId of ecIds) {
+        await supabase.from("notifications").insert({
+          tenant_id: profile.tenant_id,
+          user_id: profile.id,
+          title: "EXTRA_COST_ACK",
+          message: `ACK for EC ${ecId}`,
+          metadata: { ec_id: ecId },
+          is_read: true,
+          role: profile.role,
+        });
+      }
+
+      toast.success("All notifications marked as read");
     } catch (err) {
-      console.error('[TopNavbar] Failed to mark all as read:', err)
-      toast.error('Failed to clear notifications')
-      fetchNotifications()
+      console.error("[TopNavbar] Failed to mark all as read:", err);
+      toast.error("Failed to clear notifications");
+      fetchNotifications();
     }
-  }
+  };
 
   const handleNotificationClick = async (n: any) => {
-    const targetLink = n.link || n.metadata?.link
-    setNotifications((prev) => prev.filter((item) => item.id !== n.id))
-    setShowNotifications(false)
-    
+    const targetLink = n.link || n.metadata?.link;
+    setNotifications((prev) => prev.filter((item) => item.id !== n.id));
+    setShowNotifications(false);
+
     try {
-      if (n.type === 'handover' || n.type === 'rejected' || n.type === 'assignment') {
-        const itemId = n.id.replace('wo_', '')
-        const { data: currentItem } = await supabase.from('wo_items').select('item_data').eq('id', itemId).single()
-        const currentReadBy = currentItem?.item_data?.read_by || []
+      if (
+        n.type === "handover" ||
+        n.type === "rejected" ||
+        n.type === "assignment"
+      ) {
+        const itemId = n.id.replace("wo_", "");
+        const { data: currentItem } = await supabase
+          .from("wo_items")
+          .select("item_data")
+          .eq("id", itemId)
+          .single();
+        const currentReadBy = currentItem?.item_data?.read_by || [];
         if (!currentReadBy.includes(profile?.id)) {
-          await supabase.from('wo_items').update({ item_data: { ...currentItem?.item_data, read_by: [...currentReadBy, profile?.id] } }).eq('id', itemId)
+          await supabase
+            .from("wo_items")
+            .update({
+              item_data: {
+                ...currentItem?.item_data,
+                read_by: [...currentReadBy, profile?.id],
+              },
+            })
+            .eq("id", itemId);
         }
-      } else if (n.type === 'jo_completed') {
-        const joId = n.id.replace('jo_', '')
-        await supabase.from('notifications').insert({ tenant_id: profile?.tenant_id, user_id: profile?.id, title: 'MISSION_ACK', message: `ACK for JO ${joId}`, metadata: { jo_id: joId }, is_read: true, role: profile?.role })
+      } else if (n.type === "jo_completed") {
+        const joId = n.id.replace("jo_", "");
+        await supabase.from("notifications").insert({
+          tenant_id: profile?.tenant_id,
+          user_id: profile?.id,
+          title: "MISSION_ACK",
+          message: `ACK for JO ${joId}`,
+          metadata: { jo_id: joId },
+          is_read: true,
+          role: profile?.role,
+        });
+      } else if (n.type === "add_cost") {
+        const ecId = n.id.replace("ec_", "");
+        await supabase.from("notifications").insert({
+          tenant_id: profile?.tenant_id,
+          user_id: profile?.id,
+          title: "EXTRA_COST_ACK",
+          message: `ACK for EC ${ecId}`,
+          metadata: { ec_id: ecId },
+          is_read: true,
+          role: profile?.role,
+        });
       } else {
-        await supabase.from('notifications').update({ is_read: true }).eq('id', n.id)
+        await supabase
+          .from("notifications")
+          .update({ is_read: true })
+          .eq("id", n.id);
       }
     } catch (err) {
-      console.error('[TopNavbar] Failed to mark as read:', err)
+      console.error("[TopNavbar] Failed to mark as read:", err);
     }
 
-    if (targetLink) router.push(targetLink)
-  }
+    if (targetLink) router.push(targetLink);
+  };
 
   const handleLogout = async () => {
     try {
-      await logout()
+      await logout();
     } catch (error) {
-      toast.error('Failed to logout')
+      toast.error("Failed to logout");
     }
-  }
+  };
 
   const initials = profile?.full_name
-    ? profile.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'U'
+    ? profile.full_name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "U";
 
   const getNotifIcon = (type: string) => {
     switch (type) {
-      case 'handover': return '📋'
-      case 'rejected': return '⚠️'
-      case 'assignment': return '🚛'
-      case 'jo_completed': return '✅'
-      default: return '🔔'
+      case "handover":
+        return "📋";
+      case "rejected":
+        return "⚠️";
+      case "assignment":
+        return "🚛";
+      case "jo_completed":
+        return "✅";
+      case "add_cost":
+        return "💰";
+      default:
+        return "🔔";
     }
-  }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
       <div className="flex items-center justify-between px-4 md:px-6 py-3">
         <div className="flex items-center gap-4">
-          <button onClick={onMenuClick} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg lg:hidden">
+          <button
+            onClick={onMenuClick}
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-all"
+            title="Tampilkan / Sembunyikan Menu Sidebar"
+          >
             <Menu size={20} />
           </button>
           <div className="hidden sm:flex flex-col">
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest">System Online</span>
+              <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest">
+                System Online
+              </span>
             </div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Powered by Sentralogis</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+              Powered by Sentralogis
+            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-3 md:gap-5">
           {/* Chat Icon */}
           <div className="relative">
-            <button onClick={() => setShowChatInbox(!showChatInbox)} className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group">
-              <MessageSquare size={20} className="group-hover:scale-110 transition-transform" />
+            <button
+              onClick={() => setShowChatInbox(!showChatInbox)}
+              className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group"
+            >
+              <MessageSquare
+                size={20}
+                className="group-hover:scale-110 transition-transform"
+              />
               {totalUnread > 0 && (
                 <>
                   <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-blue-600 border-2 border-white rounded-full text-[9px] font-black text-white flex items-center justify-center px-1 shadow-sm">
-                    {totalUnread > 99 ? '99+' : totalUnread}
+                    {totalUnread > 99 ? "99+" : totalUnread}
                   </span>
                   <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-blue-600 rounded-full animate-ping opacity-20" />
                 </>
@@ -266,12 +624,30 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           </div>
 
           <div className="relative">
-            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group">
-              <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+            <button
+              onClick={() => setShowHelpDrawer(true)}
+              className="relative flex items-center gap-2 min-w-[110px] rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600 hover:border-slate-300 hover:bg-white transition-all"
+            >
+              <Bot size={18} className="text-slate-700" />
+              <span className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-700">
+                Robot Chat
+              </span>
+            </button>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors group"
+            >
+              <Bell
+                size={20}
+                className="group-hover:rotate-12 transition-transform"
+              />
               {notifications.length > 0 && (
                 <>
                   <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-rose-600 border-2 border-white rounded-full text-[9px] font-black text-white flex items-center justify-center px-1 shadow-sm">
-                    {notifications.length > 99 ? '99+' : notifications.length}
+                    {notifications.length > 99 ? "99+" : notifications.length}
                   </span>
                   <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] bg-rose-600 rounded-full animate-ping opacity-20" />
                 </>
@@ -280,20 +656,33 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
 
             {showNotifications && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowNotifications(false)}
+                />
                 <div className="absolute right-0 mt-2 w-[480px] sm:w-[520px] bg-white border border-slate-200 rounded-2xl shadow-2xl z-20 overflow-hidden">
                   <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                     <div>
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide leading-none">Notifications</h3>
-                      <span className="text-[10px] font-bold text-rose-600 mt-1 block uppercase tracking-tight">{notifications.length} NEW</span>
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide leading-none">
+                        Notifications
+                      </h3>
+                      <span className="text-[10px] font-bold text-rose-600 mt-1 block uppercase tracking-tight">
+                        {notifications.length} NEW
+                      </span>
                     </div>
                     {notifications.length > 0 && (
-                      <button onClick={(e) => { e.stopPropagation(); handleMarkAllAsRead() }} className="text-[10px] font-bold bg-slate-900 text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-all shadow-sm flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAllAsRead();
+                        }}
+                        className="text-[10px] font-bold bg-slate-900 text-white px-4 py-2 rounded-xl hover:bg-slate-800 transition-all shadow-sm flex items-center gap-2"
+                      >
                         <XCircle size={14} /> Mark All Read
                       </button>
                     )}
                   </div>
-                  
+
                   <div className="max-h-[560px] overflow-y-auto">
                     {loading ? (
                       <div className="py-16 text-center">
@@ -304,22 +693,39 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                         <div className="w-14 h-14 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto">
                           <Bell size={28} />
                         </div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">No new notifications</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                          No new notifications
+                        </p>
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-50">
                         {notifications.map((n) => (
-                          <div key={n.id} onClick={() => handleNotificationClick(n)} className="p-5 hover:bg-slate-50 transition-colors group/item cursor-pointer border-l-4 border-transparent hover:border-slate-900">
+                          <div
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            className="p-5 hover:bg-slate-50 transition-colors group/item cursor-pointer border-l-4 border-transparent hover:border-slate-900"
+                          >
                             <div className="flex items-start justify-between gap-4">
                               <div className="space-y-1.5 min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-base">{getNotifIcon(n.type)}</span>
-                                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">{n.title}</span>
+                                  <span className="text-base">
+                                    {getNotifIcon(n.type)}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                                    {n.title}
+                                  </span>
                                 </div>
-                                <p className="text-sm font-medium text-slate-600 line-clamp-2">{n.message}</p>
+                                <p className="text-sm font-medium text-slate-600 line-clamp-2">
+                                  {n.message}
+                                </p>
                                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-tight pt-1 text-slate-400">
                                   <Clock size={12} />
-                                  {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                                  {n.created_at
+                                    ? new Date(n.created_at).toLocaleTimeString(
+                                        [],
+                                        { hour: "2-digit", minute: "2-digit" },
+                                      )
+                                    : "Just now"}
                                 </div>
                               </div>
                               <div className="p-2 rounded-lg opacity-0 group-hover/item:opacity-100 transition-all shadow-lg bg-slate-900 shadow-slate-900/20 text-white shrink-0">
@@ -331,9 +737,19 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                       </div>
                     )}
                   </div>
-                  
+
                   {notifications.length > 0 && (
-                    <button onClick={() => { setShowNotifications(false); router.push(profile?.role?.toUpperCase().includes('HQ') ? '/hq/work-orders?status=handover_pending' : '/sbu/trucking/work-orders') }} className="w-full p-4 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wide hover:bg-slate-100 transition-colors border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setShowNotifications(false);
+                        router.push(
+                          profile?.role?.toUpperCase().includes("HQ")
+                            ? "/hq/work-orders?status=handover_pending"
+                            : "/sbu/trucking/work-orders",
+                        );
+                      }}
+                      className="w-full p-4 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wide hover:bg-slate-100 transition-colors border-t border-slate-100"
+                    >
                       View All Notifications
                     </button>
                   )}
@@ -345,26 +761,50 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           <div className="h-8 w-px bg-slate-100 hidden md:block" />
 
           <div className="relative">
-            <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3 p-1 rounded-full hover:bg-slate-50 transition-colors focus:outline-none">
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center gap-3 p-1 rounded-full hover:bg-slate-50 transition-colors focus:outline-none"
+            >
               <div className="flex items-center gap-3 pr-2">
-                <div className="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-semibold">{initials}</div>
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium text-slate-900 leading-none">{profile?.full_name || 'User'}</p>
-                  <p className="text-xs text-slate-500 mt-1 capitalize">{profile?.role?.replace('_', ' ') || 'Member'}</p>
+                <div className="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-semibold">
+                  {initials}
                 </div>
-                <ChevronDown size={14} className={`text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                <div className="hidden md:block text-left">
+                  <p className="text-sm font-medium text-slate-900 leading-none">
+                    {profile?.full_name || "User"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 capitalize">
+                    {profile?.role?.replace("_", " ") || "Member"}
+                  </p>
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+                />
               </div>
             </button>
 
             {dropdownOpen && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setDropdownOpen(false)}
+                />
                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-20 overflow-hidden">
-                  <button onClick={() => { setDropdownOpen(false); router.push('/tenant/profile') }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      router.push("/tenant/profile");
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
                     <UserIcon size={16} /> Profile Settings
                   </button>
                   <div className="border-t border-slate-100 my-1" />
-                  <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                  <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
                     <LogOut size={16} /> Logout
                   </button>
                 </div>
@@ -383,8 +823,13 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           onClose={() => setShowChatInbox(false)}
         />
       )}
-    </header>
-  )
-}
 
-export default TopNavbar
+      <HelpChatDrawer
+        open={showHelpDrawer}
+        onClose={() => setShowHelpDrawer(false)}
+      />
+    </header>
+  );
+};
+
+export default TopNavbar;

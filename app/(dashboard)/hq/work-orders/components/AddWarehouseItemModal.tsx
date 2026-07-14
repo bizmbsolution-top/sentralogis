@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Package, Building, Search, Plus, Trash2, Loader2 } from 'lucide-react';
+import { X, Package, Building, Search, Plus, Trash2, Loader2, ChevronDown } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -22,7 +22,9 @@ export default function AddWarehouseItemModal({
 }: AddWarehouseItemModalProps) {
   const [formData, setFormData] = useState({
     operationType: initialData?.item_data?.operation_type || 'INBOUND',
-    warehouseId: initialData?.item_data?.destination_location_id || initialData?.item_data?.origin_location_id || '',
+    warehouseId: initialData?.item_data?.destination_location_id || initialData?.item_data?.origin_location_id || initialData?.item_data?.warehouse_id || '',
+    toWarehouseId: initialData?.item_data?.to_warehouse_id || '',
+    toLocationId: initialData?.item_data?.to_location_id || '',
     unitCount: initialData?.item_data?.unit_count || 1,
     vehicleType: initialData?.item_data?.vehicle_type_name || 'Fuso',
     estVolumeCBM: initialData?.item_data?.est_volume_cbm || '',
@@ -37,8 +39,10 @@ export default function AddWarehouseItemModal({
   const [skuResults, setSkuResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
   const [relatedContacts, setRelatedContacts] = useState<any[]>([]);
-  const isInitialMount = useRef(true); // [AI] Track first mount to skip clearing manifests
+  const [activeAccordion, setActiveAccordion] = useState<'operation' | 'manifest' | 'logistics' | ''>('operation');
+  const prevOperationType = useRef(formData.operationType); // [AI] Track previous operation to prevent Strict Mode clearing manifests
 
   // Fetch Warehouses
   useEffect(() => {
@@ -48,6 +52,24 @@ export default function AddWarehouseItemModal({
     };
     fetchWarehouses();
   }, []);
+
+  // Fetch Locations for INTERNAL_MOVEMENT
+  useEffect(() => {
+    const fetchLocations = async () => {
+      if (!formData.warehouseId || formData.operationType !== 'INTERNAL_MOVEMENT') {
+        setLocations([]);
+        return;
+      }
+      const { data } = await supabase
+        .from('md_locations')
+        .select('id, code, name, type')
+        .eq('warehouse_id', formData.warehouseId)
+        .eq('is_active', true)
+        .order('code');
+      if (data) setLocations(data);
+    };
+    fetchLocations();
+  }, [formData.warehouseId, formData.operationType]);
 
   // Fetch Related Contacts (Shipper/Consignee)
   useEffect(() => {
@@ -71,16 +93,15 @@ export default function AddWarehouseItemModal({
     fetchContacts();
   }, [customerId]);
 
-  // Clear manifests when operation type changes (skip initial mount)
+  // Clear manifests when operation type changes
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return; // [AI] Skip clearing manifests on first render (edit mode)
-    }
-    if (manifests.length > 0) {
-      setManifests([]);
-      setSkuSearch('');
-      setSkuResults([]);
+    if (prevOperationType.current !== formData.operationType) {
+      prevOperationType.current = formData.operationType;
+      if (manifests.length > 0) {
+        setManifests([]);
+        setSkuSearch('');
+        setSkuResults([]);
+      }
     }
   }, [formData.operationType]);
 
@@ -94,18 +115,21 @@ export default function AddWarehouseItemModal({
       
       setIsSearching(true);
       try {
-        if (formData.operationType === 'OUTBOUND') {
-          // [AI] OUTBOUND: search from wh_inventory filtered by customer + warehouse
+        const isStockOp = formData.operationType === 'OUTBOUND' || formData.operationType === 'STOCK_TRANSFER' || formData.operationType === 'INTERNAL_MOVEMENT';
+        
+        if (isStockOp) {
+          // [AI] OUTBOUND/TRANSFER/MOVEMENT: search from wh_inventory filtered by customer + warehouse
           let query = supabase
             .from('wh_inventory')
             .select(`
-              id, available_quantity, batch_number, expiry_date,
-              product_sku:product_sku_id(id, sku_code, name, brand_name, unit, volume_m3, weight_kg, storage_rule, customer_id),
+              id, available_quantity, batch_number, expiry_date, created_at,
+              product_sku:product_sku_id(id, sku_code, name, brand_name, unit, base_uom, default_inbound_uom, default_outbound_uom, uom_conversions, volume_m3, weight_kg, storage_rule, customer_id),
               location:location_id(code)
             `)
             .eq('status', 'AVAILABLE')
             .gt('available_quantity', 0)
-            .order('expiry_date', { ascending: true });
+            .order('expiry_date', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: true });
 
           // [AI] Filter by customer's products only (via product_sku.customer_id)
           if (customerId) {
@@ -121,7 +145,7 @@ export default function AddWarehouseItemModal({
 
           if (!error && data) {
             // Filter by search term on product name or SKU code
-            const filtered = data.filter((item: any) => {
+            let filtered = data.filter((item: any) => {
               const sku = item.product_sku;
               if (!sku) return false;
               const q = skuSearch.toLowerCase();
@@ -129,43 +153,45 @@ export default function AddWarehouseItemModal({
                 (sku.name || '').toLowerCase().includes(q) ||
                 (sku.sku_code || '').toLowerCase().includes(q)
               );
-            }).slice(0, 8);
-
-            // Group by SKU to show total available per product
-            const grouped = new Map<string, any>();
-            filtered.forEach((item: any) => {
-              const sku = item.product_sku;
-              if (!sku) return;
-              if (!grouped.has(sku.id)) {
-                grouped.set(sku.id, {
-                  id: sku.id,
-                  sku_code: sku.sku_code,
-                  name: sku.name,
-                  brand_name: sku.brand_name,
-                  unit: sku.unit,
-                  volume_m3: sku.volume_m3,
-                  weight_kg: sku.weight_kg,
-                  storage_rule: sku.storage_rule,
-                  total_available: 0,
-                  batches: 0,
-                  earliest_expiry: null,
-                });
-              }
-              const g = grouped.get(sku.id);
-              g.total_available += item.available_quantity;
-              g.batches += 1;
-              if (item.expiry_date && (!g.earliest_expiry || item.expiry_date < g.earliest_expiry)) {
-                g.earliest_expiry = item.expiry_date;
-              }
             });
 
-            setSkuResults(Array.from(grouped.values()));
+            // Map results individually to show location breakdown
+            const mappedResults = filtered.map(item => {
+              const sku = item.product_sku;
+              return {
+                inventory_id: item.id,
+                id: sku.id,
+                sku_code: sku.sku_code,
+                name: sku.name,
+                brand_name: sku.brand_name,
+                unit: sku.unit,
+                base_uom: sku.base_uom,
+                default_inbound_uom: sku.default_inbound_uom,
+                default_outbound_uom: sku.default_outbound_uom,
+                uom_conversions: sku.uom_conversions,
+                volume_m3: sku.volume_m3,
+                weight_kg: sku.weight_kg,
+                storage_rule: sku.storage_rule,
+                available_qty: item.available_quantity,
+                batch_number: item.batch_number,
+                expiry_date: item.expiry_date,
+                location_code: item.location?.code || 'Unassigned'
+              };
+            });
+
+            // Re-sort mapped results to group identical SKUs together while maintaining priority
+            mappedResults.sort((a, b) => {
+               if (a.id === b.id) return 0;
+               return a.name.localeCompare(b.name);
+            });
+
+            setSkuResults(mappedResults.slice(0, 15));
           }
         } else {
           // [AI] INBOUND / CROSS_DOCKING / VAS: search from master product filtered by customer
           let query = supabase
             .from('md_product_skus')
-            .select('id, sku_code, name, brand_name, unit, volume_m3, weight_kg')
+            .select('id, sku_code, name, brand_name, unit, base_uom, default_inbound_uom, default_outbound_uom, uom_conversions, volume_m3, weight_kg')
             .ilike('name', `%${skuSearch}%`);
 
           // [AI] Filter by customer's products only
@@ -207,27 +233,39 @@ export default function AddWarehouseItemModal({
     }
   }, [manifests]);
 
-  const addManifestItem = (sku: any) => {
-    const exists = manifests.find(m => m.product_sku_id === sku.id);
-    if (exists) return; // Prevent duplicate row, they should just increase qty
+  const addManifestItem = (item: any) => {
+    const isFromStock = formData.operationType === 'OUTBOUND' || formData.operationType === 'STOCK_TRANSFER' || formData.operationType === 'INTERNAL_MOVEMENT';
 
-    const isOutbound = formData.operationType === 'OUTBOUND';
+    const existsIndex = manifests.findIndex(m => {
+      if (isFromStock) {
+        return m.product_sku_id === item.id && m.location_code === item.location_code && m.batch_number === item.batch_number;
+      }
+      return m.product_sku_id === item.id;
+    });
+
+    if (existsIndex >= 0) return; // Prevent duplicate row, they should just increase qty if same
+
+    const displayUom = formData.operationType === 'INBOUND'
+      ? (item.default_inbound_uom || item.unit || 'PCS')
+      : (item.default_outbound_uom || item.unit || 'PCS');
 
     setManifests([...manifests, {
-      product_sku_id: sku.id,
-      sku_code: sku.sku_code,
-      name: sku.name,
-      brand_name: sku.brand_name,
-      unit: sku.unit,
+      product_sku_id: item.id,
+      sku_code: item.sku_code,
+      name: item.name,
+      brand_name: item.brand_name,
+      unit: displayUom,
       quantity: 1,
-      unit_weight_kg: sku.weight_kg || 0,
-      unit_volume_m3: sku.volume_m3 || 0,
-      // OUTBOUND-specific fields
-      ...(isOutbound ? {
-        storage_rule: sku.storage_rule || 'FIFO',
-        available_qty: sku.total_available || 0,
-        batches: sku.batches || 0,
-        earliest_expiry: sku.earliest_expiry || null,
+      unit_weight_kg: item.weight_kg || 0,
+      unit_volume_m3: item.volume_m3 || 0,
+      // Stock-sourced fields (OUTBOUND / STOCK_TRANSFER)
+      ...(isFromStock ? {
+        storage_rule: item.storage_rule || 'FIFO',
+        available_qty: item.available_qty || 0,
+        batch_number: item.batch_number || '-',
+        location_code: item.location_code || '-',
+        earliest_expiry: item.expiry_date || null,
+        inventory_id: item.inventory_id || null,
       } : {})
     }]);
     setSkuSearch('');
@@ -264,6 +302,8 @@ export default function AddWarehouseItemModal({
         shipper_id: formData.operationType === 'INBOUND' ? formData.contactId || null : null,
         consignee_id: formData.operationType === 'OUTBOUND' ? formData.contactId || null : null,
         warehouse_id: formData.warehouseId || null,
+        to_warehouse_id: formData.toWarehouseId || null,
+        to_location_id: formData.toLocationId || null,
         warehouse_name: selectedWh ? `${selectedWh.code} - ${selectedWh.name}` : null,
         unit_count: Number(formData.unitCount),
         vehicle_type_name: formData.vehicleType,
@@ -276,6 +316,8 @@ export default function AddWarehouseItemModal({
     
     onAdd(payload);
   };
+
+  const isStockOp = formData.operationType === 'OUTBOUND' || formData.operationType === 'STOCK_TRANSFER' || formData.operationType === 'INTERNAL_MOVEMENT';
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
@@ -296,335 +338,484 @@ export default function AddWarehouseItemModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col md:flex-row gap-8">
-          {/* LEFT: Operation Info */}
-          <div className="flex-1 space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] italic border-b border-slate-100 pb-2">Operation Details</h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operation Type</label>
-                  <select 
-                    value={formData.operationType}
-                    onChange={(e) => setFormData({...formData, operationType: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  >
-                    <option value="INBOUND">Inbound (Receiving)</option>
-                    <option value="OUTBOUND">Outbound (Dispatch)</option>
-                    <option value="CROSS_DOCKING">Cross-Docking</option>
-                    <option value="VAS">Value Added Service (VAS)</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Warehouse</label>
-                  <select 
-                    value={formData.warehouseId}
-                    onChange={(e) => setFormData({...formData, warehouseId: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  >
-                    <option value="">-- Select Warehouse --</option>
-                    {warehouses.map(wh => (
-                      <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
-                    ))}
-                  </select>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30 custom-scrollbar">
+          {/* ACCORDION 1: OPERATION & LOCATION */}
+          <div className={`border rounded-2xl overflow-hidden bg-white shadow-sm transition-colors duration-300 ${activeAccordion === 'operation' ? 'border-amber-200' : 'border-slate-200'}`}>
+            <button 
+              type="button"
+              onClick={() => setActiveAccordion(activeAccordion === 'operation' ? (manifests.length > 0 ? 'manifest' : 'operation') : 'operation')}
+              className="w-full flex items-center justify-between p-5 bg-white hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black transition-colors ${activeAccordion === 'operation' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>1</div>
+                <div className="text-left">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Detail Operasi & Lokasi</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">Tentukan tipe operasi dan gudang</p>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="space-y-2 col-span-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    {formData.operationType === 'INBOUND' ? 'Shipper (Pengirim)' : 
-                     formData.operationType === 'OUTBOUND' ? 'Consignee (Penerima)' : 'Contact (Pengirim/Penerima)'}
-                  </label>
-                  <select 
-                    value={formData.contactId}
-                    onChange={(e) => setFormData({...formData, contactId: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  >
-                    <option value="">-- Select Contact --</option>
-                    {relatedContacts.map(contact => (
-                      <option key={contact.id} value={contact.id}>{contact.entity_code ? `[${contact.entity_code}] ` : ''}{contact.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expected Vehicle Type</label>
-                  <select 
-                    value={formData.vehicleType}
-                    onChange={(e) => setFormData({...formData, vehicleType: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  >
-                    <option value="Container 20ft">Container 20ft</option>
-                    <option value="Container 40ft">Container 40ft</option>
-                    <option value="Fuso">Fuso</option>
-                    <option value="CDD">CDD</option>
-                    <option value="CDE">CDE</option>
-                    <option value="Blind Van">Blind Van</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Number of Units/Trucks</label>
-                  <input 
-                    type="number"
-                    min="1"
-                    required
-                    value={formData.unitCount}
-                    onChange={(e) => setFormData({...formData, unitCount: Number(e.target.value)})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated Revenue (IDR)</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    value={formData.estRevenue}
-                    onChange={(e) => setFormData({...formData, estRevenue: e.target.value})}
-                    placeholder="e.g. 5000000"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Est Volume (CBM) {manifests.length > 0 && <span className="text-amber-500 lowercase ml-1">(auto-calculated)</span>}</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    readOnly={manifests.length > 0}
-                    value={formData.estVolumeCBM}
-                    onChange={(e) => setFormData({...formData, estVolumeCBM: e.target.value})}
-                    className={`w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 ${manifests.length > 0 ? 'bg-slate-100 text-slate-500' : 'bg-slate-50'}`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Est Tonnage (Ton) {manifests.length > 0 && <span className="text-amber-500 lowercase ml-1">(auto-calculated)</span>}</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    readOnly={manifests.length > 0}
-                    value={formData.estTonnage}
-                    onChange={(e) => setFormData({...formData, estTonnage: e.target.value})}
-                    className={`w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 ${manifests.length > 0 ? 'bg-slate-100 text-slate-500' : 'bg-slate-50'}`}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2 mt-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operational Notes / Special Handling</label>
-                  <textarea 
-                    rows={2}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    placeholder="Fragile items, specific bay needed, etc..."
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                  />
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT: SKU Manifests */}
-          <div className="flex-1 space-y-4 border-l border-slate-100 pl-0 md:pl-8">
-            <div className="flex justify-between items-end border-b border-slate-100 pb-2">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] italic">
-                {formData.operationType === 'OUTBOUND' ? 'Stock Products' : 'Product Manifests'}
-              </h3>
-              <div className="flex items-center gap-2">
-                {formData.operationType === 'OUTBOUND' && (
-                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
-                    Dari Inventory Stock
-                  </span>
-                )}
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">{manifests.length} items</span>
-              </div>
-            </div>
-
-            {/* SKU Search */}
-            <div className="relative">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input 
-                  type="text"
-                  placeholder={formData.operationType === 'OUTBOUND' ? 'Search stock product name or SKU...' : 'Search product name or SKU...'}
-                  value={skuSearch}
-                  onChange={e => setSkuSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 shadow-sm"
-                />
-                {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={16} />}
-              </div>
-
-              {/* Dropdown Results */}
-              {skuResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                  {formData.operationType === 'OUTBOUND' ? (
-                    // OUTBOUND: show stock info (available qty, batches, expiry)
-                    skuResults.map((sku: any) => (
-                      <div 
-                        key={sku.id} 
-                        onClick={() => addManifestItem(sku)}
-                        className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 flex justify-between items-center group"
+              <ChevronDown className={`text-slate-400 transition-transform duration-300 ${activeAccordion === 'operation' ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {activeAccordion === 'operation' && (
+              <div className="p-6 border-t border-slate-100 space-y-6 animate-in slide-in-from-top-2 fade-in duration-300">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operation Type</label>
+                    <select 
+                      value={formData.operationType}
+                      onChange={(e) => {
+                         setFormData({...formData, operationType: e.target.value});
+                         // Auto switch to next accordion if simple outbound/inbound? 
+                         // No, user still needs to pick warehouse
+                      }}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                    >
+                       <option value="INBOUND">Inbound (Receiving)</option>
+                       <option value="OUTBOUND">Outbound (Dispatch)</option>
+                       <option value="STOCK_TRANSFER">Transfer (DC to DC/Store)</option>
+                       <option value="INTERNAL_MOVEMENT">Internal Movement (Rack to Rack)</option>
+                       <option value="CROSS_DOCKING">Cross-Docking</option>
+                       <option value="VAS">Value Added Service (VAS)</option>
+                    </select>
+                  </div>
+                  
+                  {formData.operationType !== 'STOCK_TRANSFER' && formData.operationType !== 'INTERNAL_MOVEMENT' && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Warehouse</label>
+                      <select 
+                        value={formData.warehouseId}
+                        onChange={(e) => setFormData({...formData, warehouseId: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">{sku.name}</div>
-                          <div className="text-[10px] font-bold text-blue-600 mb-1">{sku.brand_name || 'Generic Brand'}</div>
-                          <div className="text-xs text-slate-500 flex gap-2 flex-wrap">
-                            <span className="font-mono">{sku.sku_code}</span>
-                            <span>&bull;</span>
-                            <span className="font-bold text-blue-700">{sku.total_available} tersedia</span>
-                            <span>&bull;</span>
-                            <span>{sku.batches} batch</span>
-                            {sku.storage_rule && (
-                              <>
-                                <span>&bull;</span>
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  sku.storage_rule === 'FEFO' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                                }`}>{sku.storage_rule}</span>
-                              </>
-                            )}
-                            {sku.earliest_expiry && (
-                              <>
-                                <span>&bull;</span>
-                                <span className="text-[10px]">Exp: {new Date(sku.earliest_expiry).toLocaleDateString('id-ID')}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <button type="button" className="text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    // INBOUND/CROSS_DOCKING/VAS: show master product info
-                    skuResults.map((sku: any) => (
-                      <div 
-                        key={sku.id} 
-                        onClick={() => addManifestItem(sku)}
-                        className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 flex justify-between items-center group"
-                      >
-                        <div>
-                          <div className="text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors">{sku.name}</div>
-                          <div className="text-[10px] text-amber-600 font-bold mb-1">{sku.brand_name || 'Generic Brand'}</div>
-                          <div className="text-xs text-slate-500 flex gap-2">
-                            <span>{sku.sku_code}</span>
-                            <span>&bull;</span>
-                            <span>{sku.volume_m3} CBM / {sku.unit}</span>
-                          </div>
-                        </div>
-                        <button type="button" className="text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    ))
+                        <option value="">-- Select Warehouse --</option>
+                        {warehouses.map(wh => (
+                          <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Manifest List */}
-            {manifests.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                <Package size={32} className="text-slate-300 mb-2" />
-                <p className="text-xs font-bold text-slate-500">No products added yet</p>
-                <p className="text-[10px] text-slate-400 text-center mt-1">
-                  {formData.operationType === 'OUTBOUND'
-                    ? 'Search and select stock products to build the outbound manifest.'
-                    : 'Search and select products above to build the inbound/outbound manifest.'}
-                </p>
+                {(formData.operationType === 'STOCK_TRANSFER' || formData.operationType === 'INTERNAL_MOVEMENT') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                    {formData.operationType === 'STOCK_TRANSFER' ? (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gudang Asal (Origin)</label>
+                          <select 
+                            value={formData.warehouseId}
+                            onChange={(e) => setFormData({...formData, warehouseId: e.target.value})}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="">-- Select Origin Warehouse --</option>
+                            {warehouses.map(wh => (
+                              <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gudang Tujuan (Destination)</label>
+                          <select 
+                            value={formData.toWarehouseId}
+                            onChange={(e) => setFormData({...formData, toWarehouseId: e.target.value})}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="">-- Select Destination Warehouse --</option>
+                            {warehouses.filter(wh => wh.id !== formData.warehouseId).map(wh => (
+                              <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lokasi Gudang</label>
+                          <select 
+                            value={formData.warehouseId}
+                            onChange={(e) => setFormData({...formData, warehouseId: e.target.value})}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="">-- Select Warehouse --</option>
+                            {warehouses.map(wh => (
+                              <option key={wh.id} value={wh.id}>{wh.code} - {wh.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tujuan Rak / Lokasi</label>
+                          <select 
+                            value={formData.toLocationId}
+                            onChange={(e) => setFormData({...formData, toLocationId: e.target.value})}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                          >
+                            <option value="">-- Select Destination Rack --</option>
+                            {locations.map(loc => (
+                              <option key={loc.id} value={loc.id}>{loc.code} - {loc.name} ({loc.type})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex justify-end pt-2">
+                   <button 
+                     type="button"
+                     onClick={() => setActiveAccordion('manifest')}
+                     className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                   >
+                     Continue to Manifest &rarr;
+                   </button>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                {manifests.map((m, idx) => (
-                  <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center gap-3 shadow-sm hover:border-amber-200 transition-colors">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      formData.operationType === 'OUTBOUND' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      <Package size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-900 truncate">{m.name}</div>
-                      <div className={`text-[10px] font-bold truncate ${
-                        formData.operationType === 'OUTBOUND' ? 'text-blue-600' : 'text-amber-600'
-                      }`}>{m.brand_name || 'Generic Brand'}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5 font-medium flex gap-2 flex-wrap">
-                        <span className="font-mono">{m.sku_code}</span>
-                        <span>|</span>
-                        <span>{m.unit_weight_kg}kg / {m.unit}</span>
-                        {formData.operationType === 'OUTBOUND' && m.available_qty > 0 && (
-                          <>
-                            <span>|</span>
-                            <span className="font-bold text-blue-700">{m.available_qty} tersedia</span>
-                          </>
-                        )}
-                        {formData.operationType === 'OUTBOUND' && m.storage_rule && (
-                          <>
-                            <span>|</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              m.storage_rule === 'FEFO' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                            }`}>{m.storage_rule}</span>
-                          </>
-                        )}
-                        {formData.operationType === 'OUTBOUND' && m.earliest_expiry && (
-                          <>
-                            <span>|</span>
-                            <span className="text-[10px]">Exp: {new Date(m.earliest_expiry).toLocaleDateString('id-ID')}</span>
-                          </>
-                        )}
+            )}
+          </div>
+
+          {/* ACCORDION 2: MANIFEST & BARANG */}
+          <div className={`border rounded-2xl overflow-hidden bg-white shadow-sm transition-colors duration-300 ${activeAccordion === 'manifest' ? 'border-amber-200' : 'border-slate-200'}`}>
+            <button 
+              type="button"
+              onClick={() => setActiveAccordion(activeAccordion === 'manifest' ? '' : 'manifest')}
+              className="w-full flex items-center justify-between p-5 bg-white hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black transition-colors ${activeAccordion === 'manifest' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>2</div>
+                <div className="text-left">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Manifest Barang</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">{manifests.length} item(s) ditambahkan</p>
+                </div>
+              </div>
+              <ChevronDown className={`text-slate-400 transition-transform duration-300 ${activeAccordion === 'manifest' ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {activeAccordion === 'manifest' && (
+              <div className="p-6 border-t border-slate-100 space-y-6 animate-in slide-in-from-top-2 fade-in duration-300">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] italic">
+                    {isStockOp ? 'Cari Produk di Stok Inventory' : 'Pilih Produk Master'}
+                  </h3>
+                  {isStockOp && (
+                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                      Mode Tarik Stok Aktif
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text"
+                    placeholder={isStockOp ? 'Ketik nama barang atau SKU untuk ditarik dari rak...' : 'Ketik nama barang master atau SKU...'}
+                    value={skuSearch}
+                    onChange={e => setSkuSearch(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-4 focus:ring-amber-600/10 transition-all shadow-sm"
+                  />
+                  {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-500 animate-spin" size={18} />}
+                </div>
+
+                {/* Dropdown Results */}
+                {skuResults.length > 0 && (
+                  <div className="mt-2 bg-white border-2 border-amber-200 rounded-2xl shadow-xl overflow-hidden divide-y divide-slate-100">
+                    {isStockOp ? (
+                      skuResults.map((sku: any, idx: number) => {
+                        const isFirstForSku = idx === 0 || skuResults[idx-1].id !== sku.id;
+                        return (
+                        <div 
+                          key={sku.inventory_id || idx} 
+                          onClick={() => addManifestItem(sku)}
+                          className={`p-4 hover:bg-amber-50/50 cursor-pointer flex justify-between items-center group relative overflow-hidden transition-colors ${isFirstForSku ? 'bg-amber-50/30' : ''}`}
+                        >
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                            <div className="md:col-span-5">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="text-sm font-black text-slate-900 group-hover:text-amber-700 transition-colors truncate">{sku.name}</div>
+                                {isFirstForSku && (
+                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase tracking-widest rounded-md animate-pulse shrink-0">
+                                    Rek: {sku.storage_rule || 'FIFO'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{sku.brand_name || 'Generic Brand'} | {sku.sku_code}</div>
+                            </div>
+                            
+                            <div className="md:col-span-7 flex flex-wrap gap-2 items-center text-xs">
+                              <span className="font-black text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">{sku.available_qty} <span className="font-medium text-[10px]">Tersedia</span></span>
+                              <span className="font-black text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">Rak: {sku.location_code}</span>
+                              
+                              {sku.batch_number && sku.batch_number !== '-' && (
+                                 <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 text-[10px]">Batch: {sku.batch_number}</span>
+                              )}
+
+                              {sku.storage_rule && (
+                                <span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase tracking-widest ${
+                                  sku.storage_rule === 'FEFO' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}>{sku.storage_rule}</span>
+                              )}
+                              
+                              {sku.expiry_date && (
+                                <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100">Exp: {new Date(sku.expiry_date).toLocaleDateString('id-ID')}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button type="button" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-amber-600 group-hover:text-white transition-all shrink-0 ml-4 shadow-sm group-hover:shadow-amber-600/30">
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      )})
+                    ) : (
+                      skuResults.map((sku: any) => (
+                        <div 
+                          key={sku.id} 
+                          onClick={() => addManifestItem(sku)}
+                          className="p-4 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors"
+                        >
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="text-sm font-black text-slate-900 group-hover:text-amber-600 transition-colors">{sku.name}</div>
+                              <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">{sku.brand_name || 'Generic Brand'} | {sku.sku_code}</div>
+                            </div>
+                            <div className="flex items-center text-xs font-bold text-slate-600">
+                              <span className="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">{sku.volume_m3} CBM / {sku.unit}</span>
+                            </div>
+                          </div>
+                          <button type="button" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-amber-600 group-hover:text-white transition-all shrink-0 ml-4 shadow-sm">
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Manifest Cart List */}
+                <div className="mt-6">
+                  {manifests.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                      <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4">
+                        <Package size={24} className="text-slate-300" />
                       </div>
+                      <p className="text-sm font-black text-slate-700 mb-1">Belum ada barang di manifest</p>
+                      <p className="text-xs font-bold text-slate-400 text-center max-w-sm">
+                        {isStockOp
+                          ? 'Gunakan bar pencarian di atas untuk menarik barang dari rak.'
+                          : 'Cari produk master untuk ditambahkan ke daftar manifest operasi ini.'}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="flex items-center">
-                        <input 
-                          type="number" 
-                          min="1"
-                          max={formData.operationType === 'OUTBOUND' ? (m.available_qty || 9999) : undefined}
-                          value={m.quantity}
-                          onChange={(e) => updateManifestQty(idx, Number(e.target.value))}
-                          className={`w-16 py-1.5 px-2 text-center text-sm font-bold border rounded-lg outline-none focus:border-amber-500 ${
-                            formData.operationType === 'OUTBOUND' && m.quantity > (m.available_qty || 0)
-                              ? 'bg-red-50 border-red-300 text-red-600'
-                              : 'bg-slate-50 border-slate-200'
-                          }`}
-                        />
-                        <span className="ml-2 text-xs font-bold text-slate-400">{m.unit}</span>
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={() => removeManifestItem(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                  ) : (
+                    <div className="space-y-3">
+                      {manifests.map((m, idx) => (
+                        <div key={idx} className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center gap-4 shadow-sm hover:border-amber-300 transition-all">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${
+                            isStockOp ? 'bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700' : 'bg-gradient-to-br from-amber-50 to-amber-100 text-amber-700'
+                          }`}>
+                            <Package size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                            <div className="md:col-span-5">
+                              <div className="text-sm font-black text-slate-900 truncate" title={m.name}>{m.name}</div>
+                              <div className={`text-[10px] font-black uppercase tracking-widest truncate mt-0.5 ${
+                                isStockOp ? 'text-blue-600' : 'text-amber-600'
+                              }`}>{m.brand_name || 'Generic Brand'} | {m.sku_code}</div>
+                            </div>
+                            
+                            <div className="md:col-span-4 flex flex-wrap gap-2 items-center">
+                              {isStockOp && m.available_qty !== undefined && (
+                                <span className="font-black text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 text-[10px]">{m.available_qty} <span className="font-medium">Tersedia</span></span>
+                              )}
+                              {isStockOp && m.location_code && (
+                                <span className="font-black text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 text-[10px]">Rak: {m.location_code}</span>
+                              )}
+                              {isStockOp && m.batch_number && m.batch_number !== '-' && (
+                                <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 text-[10px]">Batch: {m.batch_number}</span>
+                              )}
+                              {isStockOp && m.earliest_expiry && (
+                                <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100">Exp: {new Date(m.earliest_expiry).toLocaleDateString('id-ID')}</span>
+                              )}
+                            </div>
+                            
+                            <div className="md:col-span-3 flex items-center justify-end">
+                              <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-200 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
+                                <input 
+                                  type="number" 
+                                  min="1"
+                                  max={isStockOp ? (m.available_qty || 9999) : undefined}
+                                  value={m.quantity}
+                                  onChange={(e) => updateManifestQty(idx, Number(e.target.value))}
+                                  className={`w-16 py-1.5 px-2 text-center text-sm font-black bg-transparent outline-none ${
+                                    isStockOp && m.quantity > (m.available_qty || 0)
+                                      ? 'text-red-600'
+                                      : 'text-slate-900'
+                                  }`}
+                                />
+                                <span className="pr-3 pl-1 text-[10px] font-black text-slate-400 uppercase">{m.unit}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => removeManifestItem(idx)}
+                            className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+                            title="Hapus item"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-4">
+                   <button 
+                     type="button"
+                     onClick={() => setActiveAccordion('logistics')}
+                     className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                   >
+                     Continue to Logistics &rarr;
+                   </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ACCORDION 3: LOGISTICS & COMMERCIAL */}
+          <div className={`border rounded-2xl overflow-hidden bg-white shadow-sm transition-colors duration-300 ${activeAccordion === 'logistics' ? 'border-amber-200' : 'border-slate-200'}`}>
+            <button 
+              type="button"
+              onClick={() => setActiveAccordion(activeAccordion === 'logistics' ? '' : 'logistics')}
+              className="w-full flex items-center justify-between p-5 bg-white hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black transition-colors ${activeAccordion === 'logistics' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>3</div>
+                <div className="text-left">
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Logistik & Komersial</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">Armada, revenue, dan catatan tambahan</p>
+                </div>
+              </div>
+              <ChevronDown className={`text-slate-400 transition-transform duration-300 ${activeAccordion === 'logistics' ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {activeAccordion === 'logistics' && (
+              <div className="p-6 border-t border-slate-100 space-y-6 animate-in slide-in-from-top-2 fade-in duration-300">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      {formData.operationType === 'INBOUND' ? 'Shipper (Pengirim)' : 
+                       formData.operationType === 'OUTBOUND' ? 'Consignee (Penerima)' : 'Contact (Pengirim/Penerima)'}
+                    </label>
+                    <select 
+                      value={formData.contactId}
+                      onChange={(e) => setFormData({...formData, contactId: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                    >
+                      <option value="">-- Asumsikan sama dengan Customer (Default) --</option>
+                      {relatedContacts.map(contact => (
+                        <option key={contact.id} value={contact.id}>{contact.entity_code ? `[${contact.entity_code}] ` : ''}{contact.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expected Vehicle Type</label>
+                    <select 
+                      value={formData.vehicleType}
+                      onChange={(e) => setFormData({...formData, vehicleType: e.target.value})}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                    >
+                      <option value="Container 20ft">Container 20ft</option>
+                      <option value="Container 40ft">Container 40ft</option>
+                      <option value="Fuso">Fuso</option>
+                      <option value="CDD">CDD</option>
+                      <option value="CDE">CDE</option>
+                      <option value="Blind Van">Blind Van</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Number of Units/Trucks</label>
+                    <input 
+                      type="number"
+                      min="1"
+                      required
+                      value={formData.unitCount}
+                      onChange={(e) => setFormData({...formData, unitCount: Number(e.target.value)})}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimated Revenue (IDR)</label>
+                    <div className="relative">
+                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">Rp</span>
+                       <input 
+                         type="number"
+                         min="0"
+                         value={formData.estRevenue}
+                         onChange={(e) => setFormData({...formData, estRevenue: e.target.value})}
+                         placeholder="0"
+                         className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                       />
                     </div>
                   </div>
-                ))}
+                  
+                  <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operational Notes / Special Handling</label>
+                      <textarea 
+                        rows={3}
+                        value={formData.notes}
+                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                        placeholder="Fragile items, specific bay needed, instruksi ke tim gudang..."
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                      />
+                  </div>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end gap-3">
-          <button 
-            type="button" 
-            onClick={onClose}
-            className="px-6 py-3 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={handleSubmit}
-            className="px-8 py-3 bg-amber-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-amber-500 shadow-xl shadow-amber-600/20 active:scale-95 transition-all flex items-center gap-2"
-          >
-            <Package size={16} /> 
-            {initialData ? 'Update Item' : 'Save to Manifest'}
-          </button>
+        {/* STICKY FOOTER */}
+        <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex items-center justify-between shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative z-10">
+          <div className="hidden md:flex items-center gap-8">
+             <div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">Total Items</span>
+                <span className="font-black text-slate-900 text-lg leading-none">{manifests.length} <span className="text-xs text-slate-500 font-bold ml-1">SKU</span></span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">Est. Volume</span>
+                <span className="font-black text-amber-600 text-lg leading-none">{formData.estVolumeCBM} <span className="text-xs font-bold ml-1">CBM</span></span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">Est. Tonase</span>
+                <span className="font-black text-amber-600 text-lg leading-none">{formData.estTonnage} <span className="text-xs font-bold ml-1">Ton</span></span>
+             </div>
+          </div>
+          
+          {/* Mobile view summary */}
+          <div className="md:hidden text-xs font-black text-slate-500 uppercase tracking-widest">
+            {manifests.length} Items | {formData.estVolumeCBM} CBM
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={onClose}
+              className="px-6 py-3.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSubmit}
+              className="px-8 py-3.5 bg-amber-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-amber-500 shadow-xl shadow-amber-600/20 active:scale-95 transition-all flex items-center gap-3"
+            >
+              <Package size={18} /> 
+              {initialData ? 'Update Manifest' : 'Save Manifest'}
+            </button>
+          </div>
         </div>
       </Card>
     </div>

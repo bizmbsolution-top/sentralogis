@@ -23,6 +23,13 @@ import {
   TrendingDown,
   BarChart3,
   RefreshCw,
+  AlertTriangle,
+  Ban,
+  Truck,
+  Warehouse,
+  ShieldCheck,
+  Globe,
+  Loader2,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -188,8 +195,21 @@ export default function TenantTokenPage() {
           <Card className="md:col-span-2 p-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0 shadow-lg">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-blue-100 uppercase tracking-wide mb-2">Current Balance</p>
-                <h2 className="text-4xl font-bold tracking-tight">
+                <p className="text-xs font-medium text-blue-100 uppercase tracking-wide mb-2">
+                  Current Balance
+                  {(tenant?.token_balance || 0) <= 5 && (
+                    <span className={`ml-2 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                      (tenant?.token_balance || 0) <= 0
+                        ? 'bg-red-500 text-white'
+                        : 'bg-yellow-400 text-yellow-900'
+                    }`}>
+                      {(tenant?.token_balance || 0) <= 0 ? 'HABIS' : 'KRITIS'}
+                    </span>
+                  )}
+                </p>
+                <h2 className={`text-4xl font-bold tracking-tight ${
+                  (tenant?.token_balance || 0) <= 0 ? 'text-red-300' : ''
+                }`}>
                   {(tenant?.token_balance || 0).toLocaleString('id-ID')}
                   <span className="text-lg font-medium text-blue-200 ml-2">TKN</span>
                 </h2>
@@ -199,6 +219,38 @@ export default function TenantTokenPage() {
                 <Zap size={24} className="text-white" />
               </div>
             </div>
+
+            {/* Low balance warning */}
+            {(tenant?.token_balance || 0) <= 5 && (
+              <div className={`mt-4 p-3 rounded-xl flex items-start gap-2 ${
+                (tenant?.token_balance || 0) <= 0
+                  ? 'bg-red-500/20 border border-red-400/30'
+                  : 'bg-yellow-400/20 border border-yellow-400/30'
+              }`}>
+                {(tenant?.token_balance || 0) <= 0
+                  ? <Ban size={16} className="text-red-300 shrink-0 mt-0.5" />
+                  : <AlertTriangle size={16} className="text-yellow-300 shrink-0 mt-0.5" />
+                }
+                <div>
+                  <p className={`text-xs font-bold ${
+                    (tenant?.token_balance || 0) <= 0 ? 'text-red-200' : 'text-yellow-200'
+                  }`}>
+                    {(tenant?.token_balance || 0) <= 0
+                      ? 'Token Balance Habis'
+                      : 'Token Hampir Habis'
+                    }
+                  </p>
+                  <p className={`text-[10px] mt-0.5 ${
+                    (tenant?.token_balance || 0) <= 0 ? 'text-red-300' : 'text-yellow-300'
+                  }`}>
+                    {(tenant?.token_balance || 0) <= 0
+                      ? 'Segera lakukan top-up agar JO dapat berjalan.'
+                      : `Sisa ${tenant?.token_balance} TKN. Segera top-up.`
+                    }
+                  </p>
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Stats */}
@@ -340,6 +392,9 @@ export default function TenantTokenPage() {
           </Card>
         </div>
 
+        {/* Token Consumption History */}
+        <ConsumptionHistory tenantCode={tenant?.tenant_code} />
+
         {/* History Table */}
         <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
           <div className="p-5 border-b border-slate-100">
@@ -417,7 +472,116 @@ export default function TenantTokenPage() {
             </div>
           )}
         </Card>
+
+        {/* Token Consumption History */}
+        <ConsumptionHistory tenantCode={tenant?.tenant_code} />
       </div>
     </div>
+  );
+}
+
+function ConsumptionHistory({ tenantCode }: { tenantCode: string }) {
+  const supabase = createClient()!;
+  const [consumptions, setConsumptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!tenantCode) return;
+    const fetchData = async () => {
+      const { data } = await supabase
+        .from('token_transactions')
+        .select('*')
+        .eq('tenant_code', tenantCode)
+        .eq('transaction_type', 'CONSUME')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setConsumptions(data || []);
+      setLoading(false);
+    };
+    fetchData();
+  }, [tenantCode]);
+
+  const SBU_ICON: Record<string, any> = {
+    TRUCKING: Truck,
+    WAREHOUSE: Warehouse,
+    CLEARANCE: ShieldCheck,
+    FORWARDING: Globe,
+  };
+
+  return (
+    <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Riwayat Konsumsi Token</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Token terpakai per penyelesaian Job Order</p>
+          </div>
+          {consumptions.length > 0 && (
+            <span className="text-xs font-bold text-slate-400">
+              Total: {consumptions.reduce((s, c) => s + (c.amount || 0), 0).toLocaleString()} TKN
+            </span>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="p-12 flex justify-center">
+          <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+        </div>
+      ) : consumptions.length === 0 ? (
+        <div className="p-12 flex flex-col items-center justify-center text-center">
+          <TrendingDown size={40} className="text-slate-300 mb-3" />
+          <p className="text-sm font-medium text-slate-600">Belum ada konsumsi token</p>
+          <p className="text-xs text-slate-400 mt-1">Konsumsi token akan muncul setelah JO pertama selesai</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-medium text-slate-500 uppercase tracking-wide border-b border-slate-100">
+                <th className="px-5 py-3">Tanggal</th>
+                <th className="px-5 py-3">SBU</th>
+                <th className="px-5 py-3">Deskripsi</th>
+                <th className="px-5 py-3 text-center">Token</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {consumptions.map((tx) => {
+                const sbu = tx.description?.split(' - ')[0] || '';
+                const Icon = SBU_ICON[sbu] || Coins;
+                return (
+                  <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-5 py-4">
+                      <p className="text-xs font-medium text-slate-900">
+                        {new Date(tx.created_at).toLocaleDateString('id-ID')}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(tx.created_at).toLocaleTimeString('id-ID')}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center">
+                          <Icon size={14} className="text-slate-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-slate-700">{sbu}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-xs text-slate-500 truncate max-w-[200px]">{tx.description}</p>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <span className="text-sm font-bold text-rose-600">
+                        -{tx.amount?.toLocaleString('id-ID')} TKN
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

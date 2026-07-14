@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { SBU_MAP, type SBUType } from '@/lib/utils/sbuMapping';
@@ -8,7 +8,8 @@ import { toast } from 'react-hot-toast';
 import { 
   Plus, Trash2, ArrowLeft, Loader2, Send, Save, Edit2, 
   MapPin, Truck, ChevronRight, User, ShieldCheck,
-  Building2, Calendar, MessageSquare, Package, Globe, Warehouse
+  Building2, Calendar, MessageSquare, Package, Globe, Warehouse,
+  ChevronDown, Check, Search, X
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +32,9 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
   
   // [AI] Build SBU options from active tenant_sbus records
   const SBU_OPTIONS = useMemo(() => {
@@ -53,10 +57,17 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     notes: '',
   });
   const [woStatus, setWoStatus] = useState<string | null>(null);
-  const isReadOnly = woStatus === 'handover_rejected' || woStatus === 'assigned' || woStatus === 'in_progress' || woStatus === 'completed';
-
   const [woItems, setWoItems] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+
+  const hasAcceptedOrInProgressJO = woItems.some((item) =>
+    (item.job_orders || []).some((jo: any) =>
+      jo.driver_response === 'accepted' ||
+      ['in_progress', 'ACCEPTED', 'ON ROAD', 'MENUJU LOKASI', 'RECEIVED', 'DONE', 'COMPLETED'].includes((jo.status || '').toUpperCase())
+    )
+  );
+
+  const isReadOnly = woStatus === 'handover_rejected' || woStatus === 'in_progress' || woStatus === 'completed' || woStatus === 'cancelled' || hasAcceptedOrInProgressJO;
 
   // [AI] Fetch active SBU types from tenant_sbus
   useEffect(() => {
@@ -70,6 +81,33 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         if (data) setActiveSbuTypes(new Set(data.map((s: any) => s.sbu_type)));
       });
   }, [profile?.tenant_id]);
+
+  // Close customer dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setIsCustomerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered customers for combobox search
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return customers;
+    const q = customerSearch.toLowerCase();
+    return customers.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.entity_code?.toLowerCase().includes(q) ||
+      c.legal_name?.toLowerCase().includes(q)
+    );
+  }, [customers, customerSearch]);
+
+  // Selected customer display label
+  const selectedCustomer = useMemo(() => {
+    return customers.find(c => c.id === formData.customer_id);
+  }, [customers, formData.customer_id]);
 
   // Load data for editing
   useEffect(() => {
@@ -254,14 +292,14 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       let woNumber = '';
       let woId = editId;
 
-      const tenantInitial = (profile?.tenants as any)?.name || profile?.tenant_code || 'HQ';
+      const tenantInitial = profile?.tenant_code || (profile?.tenants as any)?.tenant_code || (profile?.tenants as any)?.name || 'HQ';
 
       if (editId) {
         const { data: existingWO } = await supabase.from('work_orders').select('wo_number').eq('id', editId).single();
         woNumber = existingWO?.wo_number || '';
       } else {
         const customer = customers.find(c => c.id === formData.customer_id);
-        const customerInitial = customer?.name || 'CUS';
+        const customerInitial = customer?.entity_code || customer?.name || 'CUS';
         woNumber = await generateWONumber(profile.tenant_id, tenantInitial, customerInitial);
       }
       
@@ -274,7 +312,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         execution_time: formData.execution_time,
         notes: formData.notes,
         status,
-        created_by: profile?.id
+        updated_by: profile?.id
       };
 
       if (editId) {
@@ -285,8 +323,22 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         if (error) throw error;
         woId = wo?.id;
       }
+      // STEP 1: If editId is present, check existing wo_items in database
+      let existingDbItemIds: string[] = [];
+      if (editId) {
+        const { data: dbItems } = await supabase.from('wo_items').select('id').eq('wo_id', woId);
+        existingDbItemIds = (dbItems || []).map(i => i.id);
 
-      await supabase.from('wo_items').delete().eq('wo_id', woId);
+        // Delete items from DB that are no longer in woItems state
+        const currentItemIds = new Set(woItems.map(i => i.id).filter(id => id && !id.toString().includes('random') && !id.toString().includes('.')));
+        for (const oldId of existingDbItemIds) {
+          if (!currentItemIds.has(oldId)) {
+            await supabase.from('wo_items').delete().eq('id', oldId);
+          }
+        }
+      } else {
+        await supabase.from('wo_items').delete().eq('wo_id', woId);
+      }
 
       const sbuCounts: Record<string, number> = {};
 
@@ -299,97 +351,276 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         sbuCounts[sbuKey] = (sbuCounts[sbuKey] || 0) + 1;
         const itemCode = `${woNumber}/${sbuKey}${sbuCounts[sbuKey].toString().padStart(2, '0')}`;
         
-        const { data: woItem, error: itemError } = await supabase
-          .from('wo_items')
-          .insert({
-            tenant_id: profile.tenant_id,
-            wo_id: woId,
-            item_code: itemCode,
-            sbu_type: item.sbu_type,
-            max_jo_count: item.quantity || item.item_data?.unit_count || 1,
-            unit_price: item.unit_price || 0,
-            total_revenue: item.total_revenue || 0,
-            item_data: item.item_data,
-            status: status === 'draft' ? 'draft' : 'need_assignment'
-          })
-          .select()
-          .single();
-        if (itemError) throw itemError;
+        const isExistingItem = Boolean(editId && item.id && existingDbItemIds.includes(item.id));
+        let woItemId = item.id;
 
-        // INSERT MANIFESTS IF ANY
-        if (item.manifests && Array.isArray(item.manifests) && item.manifests.length > 0) {
-          const manifestPayloads = item.manifests.map((m: any) => ({
-            wo_item_id: woItem.id,
-            tenant_id: profile.tenant_id,
-            product_sku_id: m.product_sku_id,
-            quantity: m.quantity || 1,
-            unit_weight_kg: m.unit_weight_kg || 0,
-            unit_volume_m3: m.unit_volume_m3 || 0,
-            notes: m.notes || null
-          }));
-          const { error: manifestError } = await supabase.from('wo_item_manifests').insert(manifestPayloads);
-          if (manifestError) console.error('Error inserting manifests:', manifestError);
+        if (isExistingItem) {
+          // UPDATE existing wo_item cleanly without deleting or resetting child job orders!
+          const { error: updateItemError } = await supabase
+            .from('wo_items')
+            .update({
+              item_code: itemCode,
+              sbu_type: item.sbu_type,
+              max_jo_count: item.quantity || item.item_data?.unit_count || 1,
+              unit_price: item.unit_price || 0,
+              total_revenue: item.total_revenue || 0,
+              item_data: item.item_data,
+              status: status === 'draft' ? 'draft' : 'need_assignment'
+            })
+            .eq('id', item.id);
+          if (updateItemError) throw updateItemError;
+          woItemId = item.id;
+        } else {
+          // INSERT new wo_item
+          const { data: woItem, error: itemError } = await supabase
+            .from('wo_items')
+            .insert({
+              tenant_id: profile.tenant_id,
+              wo_id: woId,
+              item_code: itemCode,
+              sbu_type: item.sbu_type,
+              max_jo_count: item.quantity || item.item_data?.unit_count || 1,
+              unit_price: item.unit_price || 0,
+              total_revenue: item.total_revenue || 0,
+              item_data: item.item_data,
+              status: status === 'draft' ? 'draft' : 'need_assignment'
+            })
+            .select()
+            .single();
+          if (itemError) throw itemError;
+          woItemId = woItem.id;
+        }
+
+        // INSERT / UPDATE MANIFESTS IF ANY
+        if (item.manifests && Array.isArray(item.manifests)) {
+          if (isExistingItem) {
+            await supabase.from('wo_item_manifests').delete().eq('wo_item_id', woItemId);
+          }
+          if (item.manifests.length > 0) {
+            const manifestPayloads = item.manifests.map((m: any) => ({
+              wo_item_id: woItemId,
+              tenant_id: profile.tenant_id,
+              product_sku_id: m.product_sku_id,
+              quantity: m.quantity || 1,
+              unit_weight_kg: m.unit_weight_kg || 0,
+              unit_volume_m3: m.unit_volume_m3 || 0,
+              notes: m.notes || null,
+              custom_fields: {
+                location_code: m.location_code || null,
+                inventory_id: m.inventory_id || null,
+                batch_number: m.batch_number || null,
+                earliest_expiry: m.earliest_expiry || null
+              }
+            }));
+            const { error: manifestError } = await supabase.from('wo_item_manifests').insert(manifestPayloads);
+            if (manifestError) console.error('Error inserting manifests:', manifestError);
+          }
         }
 
         if (item.sbu_type === 'TRUCKING' && item.item_data.stops) {
           const unitCount = item.item_data.unit_count || 1;
+          let existingJOs: any[] = [];
+          if (isExistingItem) {
+            const { data: jos } = await supabase
+              .from('job_orders')
+              .select('id, jo_number, status, fleet_id, driver_id')
+              .eq('wo_item_id', woItemId)
+              .order('jo_number', { ascending: true });
+            existingJOs = jos || [];
+          }
+
           for (let i = 1; i <= unitCount; i++) {
             const joNumber = `${woNumber}-${i.toString().padStart(2, '0')}`;
-            
-            const { data: jobOrder, error: joError } = await supabase
-              .from('job_orders')
-              .insert({
-                tenant_id: profile.tenant_id,
-                jo_number: joNumber,
-                wo_item_id: woItem.id,
-                total_stops: item.item_data.stops.length,
-                status: status === 'draft' ? 'draft' : 'pending',
-                tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
-              })
-              .select()
-              .single();
+            let jobOrderId = null;
 
-            if (joError) throw joError;
+            if (i <= existingJOs.length) {
+              // EXISTING JOB ORDER: Preserve fleet_id, driver_id, and status! Only update total_stops and jo_number!
+              const existingJo = existingJOs[i - 1];
+              jobOrderId = existingJo.id;
+              const { error: joUpdateError } = await supabase
+                .from('job_orders')
+                .update({
+                  jo_number: joNumber,
+                  total_stops: item.item_data.stops.length
+                })
+                .eq('id', jobOrderId);
+              if (joUpdateError) throw joUpdateError;
+            } else {
+              // NEW JOB ORDER (if unit count was increased)
+              const { data: jobOrder, error: joError } = await supabase
+                .from('job_orders')
+                .insert({
+                  tenant_id: profile.tenant_id,
+                  jo_number: joNumber,
+                  wo_item_id: woItemId,
+                  total_stops: item.item_data.stops.length,
+                  status: status === 'draft' ? 'draft' : 'pending',
+                  sbu_type: 'TRUCKING',
+                  tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+                })
+                .select('id')
+                .single();
+              if (joError) throw joError;
+              jobOrderId = jobOrder.id;
+            }
 
-            const routePayloads = (item.item_data.stops || []).map((stop: any) => ({
-              job_order_id: jobOrder.id,
-              sequence: stop.sequence || 0,
-              stop_type: stop.stop_type || 'DROPOFF',
-              source_type: stop.source_type || 'MD_LOCATION',
-              source_id: String(stop.source_id || ''),
-              location_name: stop.location_name || 'Unknown Location',
-              address: stop.address || '',
-              latitude: stop.latitude,
-              longitude: stop.longitude,
-              contact_name: stop.contact_name || '',
-              contact_phone: stop.contact_phone || '',
-              status: status === 'draft' ? 'draft' : 'pending'
-            }));
+            // Update job_routes (Stops / Locations) for this Job Order so driver gets updated destination stop!
+            if (jobOrderId) {
+              await supabase.from('job_routes').delete().eq('job_order_id', jobOrderId);
+              const routePayloads = (item.item_data.stops || []).map((stop: any) => ({
+                job_order_id: jobOrderId,
+                sequence: stop.sequence || 0,
+                stop_type: stop.stop_type || 'DROPOFF',
+                source_type: stop.source_type || 'MD_LOCATION',
+                source_id: String(stop.source_id || ''),
+                location_name: stop.location_name || 'Unknown Location',
+                address: stop.address || '',
+                latitude: stop.latitude,
+                longitude: stop.longitude,
+                contact_name: stop.contact_name || '',
+                contact_phone: stop.contact_phone || '',
+                status: status === 'draft' ? 'draft' : 'pending'
+              }));
+              if (routePayloads.length > 0) {
+                const { error: routesError } = await supabase.from('job_routes').insert(routePayloads);
+                if (routesError) throw routesError;
+              }
+            }
+          }
 
-            if (routePayloads.length > 0) {
-              const { error: routesError } = await supabase.from('job_routes').insert(routePayloads);
-              if (routesError) throw routesError;
+          // If unitCount was decreased during edit, remove excess Job Orders from DB
+          if (unitCount < existingJOs.length) {
+            for (let k = unitCount; k < existingJOs.length; k++) {
+              await supabase.from('job_orders').delete().eq('id', existingJOs[k].id);
             }
           }
         }
 
-        // AUTO-SPLIT JOB ORDERS FOR WAREHOUSE
+        // AUTO-SPLIT JOB ORDERS FOR WAREHOUSE (HYBRID PATTERN)
         if (item.sbu_type === 'WAREHOUSE') {
-          const unitCount = item.item_data.unit_count || 1;
-          for (let i = 1; i <= unitCount; i++) {
-            const joNumber = `${itemCode}-${i.toString().padStart(2, '0')}`;
-            
-            const { error: joError } = await supabase
-              .from('job_orders')
-              .insert({
-                tenant_id: profile.tenant_id,
-                jo_number: joNumber,
-                wo_item_id: woItem.id,
-                status: status === 'draft' ? 'draft' : 'pending',
-                tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
-              });
+          const hasManifests = item.manifests && Array.isArray(item.manifests) && item.manifests.length > 0;
+          const allManifestsHaveLocation = hasManifests && item.manifests.every(
+            (m: any) => m.location_code && m.location_code !== '-' && m.location_code !== ''
+          );
+          const isHybridReady = hasManifests && allManifestsHaveLocation && status !== 'draft';
+          const opType = (item.item_data?.operation_type || '').toUpperCase();
+          const isTransferOp = opType.includes('TRANSFER');
+          const isOutboundOp = opType === 'OUTBOUND';
 
-            if (joError) console.error('Error creating WH Job Order:', joError);
+          if (isHybridReady && isExistingItem) {
+            await supabase.from('wo_items').update({ status: 'menunggu_wh_eksekusi' }).eq('id', woItemId);
+          } else if (isHybridReady) {
+            await supabase.from('wo_items').update({ status: 'menunggu_wh_eksekusi' }).eq('id', woItemId);
+          }
+
+          const unitCount = item.item_data.unit_count || 1;
+          let existingWhJOs: any[] = [];
+          if (isExistingItem) {
+            const { data: jos } = await supabase
+              .from('job_orders')
+              .select('id, jo_number, status')
+              .eq('wo_item_id', woItemId)
+              .order('jo_number', { ascending: true });
+            existingWhJOs = jos || [];
+          }
+
+          for (let i = 1; i <= unitCount; i++) {
+            const joNumber = `${itemCode}-${i.toString().padStart(2, '00')}`;
+            let jobOrder: any = null;
+
+            if (i <= existingWhJOs.length) {
+              jobOrder = existingWhJOs[i - 1];
+              await supabase
+                .from('job_orders')
+                .update({
+                  jo_number: joNumber,
+                  assigned_warehouse_id: item.item_data?.warehouse_id || null
+                })
+                .eq('id', jobOrder.id);
+            } else {
+              const { data: newJo, error: joError } = await supabase
+                .from('job_orders')
+                .insert({
+                  tenant_id: profile.tenant_id,
+                  jo_number: joNumber,
+                  wo_item_id: woItemId,
+                  assigned_warehouse_id: item.item_data?.warehouse_id || null,
+                  status: status === 'draft' ? 'draft' : (isHybridReady ? 'menunggu_wh_eksekusi' : 'pending'),
+                  sbu_type: 'WAREHOUSE',
+                  tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+                })
+                .select('id')
+                .single();
+
+              if (joError) {
+                console.error('Error creating WH Job Order:', joError);
+                continue;
+              }
+              jobOrder = newJo;
+            }
+
+            // HYBRID: Auto-generate portal task if manifests + locations are complete (only for new/uncreated tasks)
+            if (isHybridReady && jobOrder && (isOutboundOp || isTransferOp) && i > existingWhJOs.length) {
+              try {
+                if (isTransferOp) {
+                  const { data: newTransfer } = await supabase.from('wh_transfer_orders').insert({
+                    tenant_id: profile.tenant_id,
+                    from_warehouse_id: item.item_data?.warehouse_id || null,
+                    to_warehouse_id: item.item_data?.to_warehouse_id || null,
+                    transfer_number: joNumber,
+                    status: 'PLANNED',
+                    notes: `Auto-generated transfer for JO ${joNumber}`,
+                    created_by: profile?.id || null
+                  }).select('id').single();
+
+                  if (newTransfer) {
+                    const detailPayloads = item.manifests.map((m: any) => ({
+                      tenant_id: profile.tenant_id,
+                      transfer_order_id: newTransfer.id,
+                      product_sku_id: m.product_sku_id,
+                      requested_qty: Number(m.quantity) || 0,
+                      shipped_qty: 0,
+                      received_qty: 0
+                    }));
+                    if (detailPayloads.length > 0) {
+                      await supabase.from('wh_transfer_order_items').insert(detailPayloads);
+                    }
+                  }
+                } else {
+                  const { data: newShipment } = await supabase.from('wh_outbound_shipments').insert({
+                    tenant_id: profile.tenant_id,
+                    warehouse_id: item.item_data?.warehouse_id || null,
+                    wo_item_id: woItemId,
+                    shipment_number: joNumber,
+                    status: 'PLANNED',
+                    notes: `Auto-generated outbound for JO ${joNumber}`,
+                    created_by: profile?.id || null
+                  }).select('id').single();
+
+                  if (newShipment) {
+                    const shipItemPayloads = item.manifests.map((m: any) => ({
+                      tenant_id: profile.tenant_id,
+                      shipment_id: newShipment.id,
+                      product_sku_id: m.product_sku_id,
+                      requested_qty: Number(m.quantity) || 0,
+                      picked_qty: 0,
+                      loaded_qty: 0
+                    }));
+                    if (shipItemPayloads.length > 0) {
+                      await supabase.from('wh_outbound_shipment_items').insert(shipItemPayloads);
+                    }
+                  }
+                }
+              } catch (portalErr) {
+                console.error('Error auto-generating portal task:', portalErr);
+              }
+            }
+          }
+
+          if (unitCount < existingWhJOs.length) {
+            for (let k = unitCount; k < existingWhJOs.length; k++) {
+              await supabase.from('job_orders').delete().eq('id', existingWhJOs[k].id);
+            }
           }
         }
       }
@@ -434,26 +665,109 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                     <Building2 size={12} /> Client / Customer Selection *
                   </label>
-                  <select 
-                    value={formData.customer_id}
-                    disabled={isReadOnly}
-                    onChange={(e) => {
-                      if (e.target.value === 'ADD_NEW') {
-                        setIsQuickAddOpen(true);
-                      } else {
-                        setFormData({...formData, customer_id: e.target.value});
-                      }
-                    }}
-                    className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">Select Customer</option>
-                    <option value="ADD_NEW" className="text-blue-600 font-black">+ ADD NEW CUSTOMER</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        [{c.entity_code}] {c.name} {c.legal_name ? ` - ${c.legal_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={customerDropdownRef}>
+                    {/* Trigger Button */}
+                    <button
+                      type="button"
+                      disabled={isReadOnly}
+                      onClick={() => {
+                        if (!isReadOnly) {
+                          setIsCustomerDropdownOpen(!isCustomerDropdownOpen);
+                          setCustomerSearch('');
+                        }
+                      }}
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all cursor-pointer flex items-center justify-between disabled:opacity-70"
+                    >
+                      <span className={selectedCustomer ? 'text-black' : 'text-slate-400'}>
+                        {selectedCustomer
+                          ? `[${selectedCustomer.entity_code}] ${selectedCustomer.name}${selectedCustomer.legal_name ? ` - ${selectedCustomer.legal_name}` : ''}`
+                          : 'Select Customer'}
+                      </span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform ${isCustomerDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Dropdown */}
+                    {isCustomerDropdownOpen && !isReadOnly && (
+                      <div className="absolute z-50 top-full mt-2 w-full bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/60 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                        {/* Search Input */}
+                        <div className="p-3 border-b border-slate-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Search name, code, or legal name..."
+                              value={customerSearch}
+                              onChange={(e) => setCustomerSearch(e.target.value)}
+                              className="w-full h-10 pl-9 pr-8 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:bg-white transition-all"
+                            />
+                            {customerSearch && (
+                              <button
+                                onClick={() => setCustomerSearch('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Results */}
+                        <div className="max-h-[240px] overflow-y-auto">
+                          {filteredCustomers.length === 0 ? (
+                            <div className="px-4 py-6 text-center">
+                              <p className="text-xs text-slate-400 font-medium">No customer found</p>
+                            </div>
+                          ) : (
+                            filteredCustomers.map(c => {
+                              const isSelected = c.id === formData.customer_id;
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({ ...formData, customer_id: c.id });
+                                    setIsCustomerDropdownOpen(false);
+                                    setCustomerSearch('');
+                                  }}
+                                  className={`w-full px-5 py-3 text-left flex items-center justify-between hover:bg-blue-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">{c.entity_code}</span>
+                                      <span className="text-sm font-bold text-black truncate">{c.name}</span>
+                                    </div>
+                                    {c.legal_name && (
+                                      <p className="text-[11px] text-slate-400 font-medium mt-0.5 ml-[52px] truncate">{c.legal_name}</p>
+                                    )}
+                                  </div>
+                                  {isSelected && <Check size={16} className="text-blue-600 shrink-0 ml-2" />}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Add New Customer */}
+                        <div className="border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsQuickAddOpen(true);
+                              setIsCustomerDropdownOpen(false);
+                              setCustomerSearch('');
+                            }}
+                            className="w-full px-5 py-3 text-left flex items-center gap-3 hover:bg-emerald-50 transition-colors text-emerald-700"
+                          >
+                            <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                              <Plus size={14} />
+                            </div>
+                            <span className="text-sm font-bold">Add New Customer</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

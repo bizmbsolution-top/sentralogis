@@ -465,13 +465,14 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                     {channels
                       .filter((ch) => ch.channel_type !== 'direct')
                       .sort((a, b) => {
-                        // Groups first, then WO/JO
+                        // Groups first, then WO/JO/Lead
                         if (a.channel_type === 'group' && b.channel_type !== 'group') return -1;
                         if (a.channel_type !== 'group' && b.channel_type === 'group') return 1;
                         return 0;
                       })
                       .map((group) => {
                         const isWOJO = group.channel_type === 'work_order' || group.channel_type === 'job_order';
+                        const isLead = group.channel_type === 'lead';
                         const unreadCount = channelUnreadMap.get(group.id) || 0;
                         const isActive = activeChannel?.id === group.id;
                         const lastMsg = group.last_message;
@@ -515,7 +516,7 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                                 <p className="text-gray-500 text-xs">
                                   {isWOJO 
                                     ? (group.channel_type === 'work_order' ? 'Work Order' : 'Job Order')
-                                    : `${group.participants?.length || 0} members`
+                                    : isLead ? 'Guest Portal Chat' : `${group.participants?.length || 0} members`
                                   }
                                 </p>
                                 {lastMsg && (

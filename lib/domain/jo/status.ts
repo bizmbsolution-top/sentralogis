@@ -74,6 +74,9 @@ export function getAdvancedJobCategory(jo: {
   driver_response?: string;
   driver_id?: string;
   fleet_id?: string;
+  transporter_id?: string;
+  vendor_id?: string;
+  driver_phone?: string;
 }): 'rejected' | 'completed' | 'active' | 'assigned' | 'awaiting' {
   const s = (jo.status || '').toUpperCase();
   const dr = (jo.driver_response || '').toLowerCase();
@@ -84,7 +87,7 @@ export function getAdvancedJobCategory(jo: {
   
   if ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU')) return 'active';
   
-  if (jo.driver_id && jo.fleet_id && !(JO_DONE_STATUSES as readonly string[]).includes(s) && !(JO_ACTIVE_STATUSES as readonly string[]).includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
+  if ((jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone || s === 'ASSIGNED') && !(JO_DONE_STATUSES as readonly string[]).includes(s) && !(JO_ACTIVE_STATUSES as readonly string[]).includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
   
   return 'awaiting';
 }

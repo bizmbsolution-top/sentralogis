@@ -5,6 +5,21 @@ import { createJournalEntry } from '@/lib/finance/journaling'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+// [AI] Haversine formula helper to calculate distance between two coordinates in meters
+function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // [AI] Safe utility to find Job Order by any of the token columns or ID
 // Bypasses PostgREST type casting issues with mixed UUID and string columns
 async function findJobOrder(supabase: any, token: string) {
@@ -17,7 +32,7 @@ async function findJobOrder(supabase: any, token: string) {
     advance_amount, advance_status, advance_receipt_url, 
     driver_id, fleet_id, base_price, driver_share_percentage, driver_payment_amount,
     purchase_price, transporter_id, vendor_id,
-    accepted_at, started_at, rejection_note
+    accepted_at, started_at, rejection_note, container_number, sbu_metadata, notes, assignment_documents
   `;
 
   if (isUuid) {
@@ -196,12 +211,186 @@ export async function PATCH(
   try {
     const { token } = await params
     const body = await request.json()
-    const { action, status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note, route_notes } = body
+    const { action, status, route_id, route_status, pod_photo_url, pod_photo_base64, pod_photo_name, lat, lng, rejection_note, route_notes, container_number, seal_number } = body
     const supabase = createAdminClient()
 
     // [AI] Find Job Order securely using our unified look-up helper
     const jo = await findJobOrder(supabase, token);
     if (!jo) return NextResponse.json({ error: 'JO not found' }, { status: 404 })
+
+    if (action === 'update_container') {
+      const sbuMeta = jo.sbu_metadata && typeof jo.sbu_metadata === 'object' ? jo.sbu_metadata : {};
+      const updatedMeta = {
+        ...sbuMeta,
+        ...(seal_number !== undefined ? { seal_number } : {}),
+      };
+      
+      const updatePayload: any = {
+        sbu_metadata: updatedMeta,
+        updated_at: new Date().toISOString()
+      };
+      if (container_number !== undefined) updatePayload.container_number = container_number;
+
+      const { error: updErr } = await supabase
+        .from('job_orders')
+        .update(updatePayload)
+        .eq('id', jo.id);
+
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+      return NextResponse.json({ success: true, container_number, seal_number });
+    }
+
+    // [AI] GPS Ping — driver's phone sends lat/lng every 10 seconds while page is open (Dual-write & Geofence check)
+    if (action === 'gps_ping') {
+      if (!lat || !lng) return NextResponse.json({ error: 'Missing lat/lng' }, { status: 400 });
+
+      // 1. Dual-write to job_tracking AND tracking_updates so Ops LiveTrackingMap sees it real-time
+      const { error: pingErr } = await supabase.from('job_tracking').insert({
+        job_order_id: jo.id,
+        status_update: 'GPS_PING',
+        latitude: lat,
+        longitude: lng,
+        notes: 'Auto GPS ping dari driver (10-Sec Interval)'
+      });
+
+      await supabase.from('tracking_updates').insert({
+        job_order_id: jo.id,
+        latitude: lat,
+        longitude: lng,
+        status_update: 'GPS_PING',
+        whatsapp_sent: false
+      });
+
+      if (pingErr) return NextResponse.json({ error: pingErr.message }, { status: 500 });
+
+      // 2. Geofence Check (<= 500 meters from any pending stop)
+      const { data: pendingRoutes } = await supabase
+        .from('job_routes')
+        .select('*')
+        .eq('job_order_id', jo.id)
+        .eq('status', 'pending')
+        .order('sequence', { ascending: true });
+
+      let geofenceTriggered = false;
+      let arrivedStopName: string | null = null;
+      let geofenceDistanceM: number | null = null;
+
+      if (pendingRoutes && pendingRoutes.length > 0) {
+        for (const route of pendingRoutes) {
+          if (route.latitude && route.longitude) {
+            const distM = calculateHaversineDistance(Number(lat), Number(lng), Number(route.latitude), Number(route.longitude));
+            if (distM <= 500) {
+              geofenceTriggered = true;
+              arrivedStopName = route.location_name || `Stop #${route.sequence}`;
+              geofenceDistanceM = Math.round(distM);
+
+              // Auto-update route status to 'arrived'
+              await supabase
+                .from('job_routes')
+                .update({ status: 'arrived', actual_arrival: new Date().toISOString() })
+                .eq('id', route.id);
+
+              // Auto transition JO status for Pickup or Dropoff
+              let newJoStatus: string | null = null;
+              if (route.sequence === 1 || route.stop_type === 'PICKUP') {
+                newJoStatus = 'TIBA DI LOKASI MUAT';
+              } else if (route.sequence === pendingRoutes.length || route.stop_type === 'DROPOFF') {
+                newJoStatus = 'TIBA DI LOKASI BONGKAR';
+              }
+
+              if (newJoStatus) {
+                await supabase
+                  .from('job_orders')
+                  .update({ status: newJoStatus, updated_at: new Date().toISOString() })
+                  .eq('id', jo.id);
+              }
+
+              // Log Geofence Arrival
+              await supabase.from('job_tracking').insert({
+                job_order_id: jo.id,
+                job_route_id: route.id,
+                status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
+                latitude: lat,
+                longitude: lng,
+                notes: `Otomatis terdeteksi dalam radius ${geofenceDistanceM}m dari titik rute.`
+              });
+
+              await supabase.from('tracking_updates').insert({
+                job_order_id: jo.id,
+                latitude: lat,
+                longitude: lng,
+                status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
+                whatsapp_sent: false
+              });
+
+              // Push Notification to Ops Dashboard
+              await supabase.from('notifications').insert({
+                role: 'tenant_admin',
+                tenant_id: jo.tenant_id || null,
+                type: 'geofence_arrival',
+                title: `📍 Armada Tiba di ${arrivedStopName}`,
+                message: `Truk untuk JO ${jo.jo_number} otomatis terdeteksi tiba di ${arrivedStopName} (Radius ${geofenceDistanceM}m via Geofence).`,
+                link: `/sbu/trucking/work-orders/${jo.id}`
+              });
+
+              break;
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        geofence_triggered: geofenceTriggered,
+        arrived_stop: arrivedStopName,
+        distance_m: geofenceDistanceM
+      });
+    }
+
+    // [AI] Action: Panic Button SOS Emergency Alert (Structured Auto-Questions)
+    if (action === 'panic_button') {
+      const panicType = body.panic_type || 'general';
+      const reason = body.reason || 'Kondisi Darurat di Jalan';
+      const hasCargo = body.has_cargo !== undefined ? Boolean(body.has_cargo) : true;
+      const cargoText = hasCargo ? '⚠️ ADA MUATAN DI ATAS TRUK' : 'Kosong (Truk Tanpa Muatan)';
+
+      const typeLabel =
+        panicType === 'swap_fleet' ? 'MINTA GANTI ARMADA' :
+        panicType === 'swap_driver' ? 'MINTA GANTI SUPIR' :
+        'SINYAL DARURAT SOS';
+
+      const statusUpdateText = `🚨 ${typeLabel}: ${reason} (${cargoText})`;
+      const notesText = `[Auto-Question SOS] Kategori: ${typeLabel}. Alasan: "${reason}". Status Muatan: ${cargoText}. Kontak Driver: ${jo.driver_phone || '-'}`;
+
+      if (lat && lng) {
+        await supabase.from('job_tracking').insert({
+          job_order_id: jo.id,
+          status_update: statusUpdateText,
+          latitude: lat,
+          longitude: lng,
+          notes: notesText
+        });
+
+        await supabase.from('tracking_updates').insert({
+          job_order_id: jo.id,
+          latitude: lat,
+          longitude: lng,
+          status_update: statusUpdateText,
+          whatsapp_sent: false
+        });
+      }
+
+      await supabase.from('notifications').insert({
+        role: 'tenant_admin',
+        tenant_id: jo.tenant_id || null,
+        type: 'emergency_sos',
+        title: `🚨 ${typeLabel}: JO #${jo.jo_number}`,
+        message: `Driver mengajukan ${typeLabel}. Alasan: "${reason}". Status Muatan: ${cargoText}. Segera putuskan tindakan di Head Ops HQ!`,
+        link: `/sbu/trucking/work-orders/${jo.id}`
+      });
+
+      return NextResponse.json({ success: true, emergency_triggered: true, panic_type: panicType });
+    }
 
     // Handle photo upload via base64
     let uploadedPublicUrl = pod_photo_url;
@@ -243,16 +432,40 @@ export async function PATCH(
       }
     }
     
-    // NEW: Action for live timeline updates per route
+    // NEW: Action for live timeline updates per route (with Smart Geotagged Auto-Matching)
     if (action === 'add_timeline_event') {
       try {
-        // Find location name for better context
-        const { data: routeInfo } = await supabase.from('job_routes').select('location_name').eq('id', route_id).maybeSingle();
-        const locationName = routeInfo?.location_name || 'Lokasi';
-        
+        let matchedRouteId = route_id;
+        let locationName = 'Lokasi';
+
+        if (matchedRouteId) {
+          const { data: routeInfo } = await supabase.from('job_routes').select('location_name').eq('id', matchedRouteId).maybeSingle();
+          locationName = routeInfo?.location_name || 'Lokasi';
+        } else if (lat && lng) {
+          // [AI] Auto-match closest route using Haversine if route_id not explicitly selected
+          const { data: allRoutes } = await supabase.from('job_routes').select('id, location_name, latitude, longitude').eq('job_order_id', jo.id);
+          if (allRoutes && allRoutes.length > 0) {
+            let minDist = Infinity;
+            let closestRoute: any = null;
+            for (const r of allRoutes) {
+              if (r.latitude && r.longitude) {
+                const d = calculateHaversineDistance(Number(lat), Number(lng), Number(r.latitude), Number(r.longitude));
+                if (d < minDist) {
+                  minDist = d;
+                  closestRoute = r;
+                }
+              }
+            }
+            if (closestRoute && minDist <= 5000) { // within 5km threshold
+              matchedRouteId = closestRoute.id;
+              locationName = closestRoute.location_name || 'Lokasi Terdekat';
+            }
+          }
+        }
+
         const { error: insertError } = await supabase.from('job_tracking').insert({
           job_order_id: jo.id,
-          job_route_id: route_id, // Requires migration 098
+          job_route_id: matchedRouteId || null, // Requires migration 098
           status_update: `Laporan di ${locationName}`,
           latitude: lat,
           longitude: lng,
@@ -264,7 +477,7 @@ export async function PATCH(
           throw new Error(insertError.message || 'Database insert failed. Pastikan Migration SQL sudah dijalankan.');
         }
 
-        return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl })
+        return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl, matched_route_id: matchedRouteId })
       } catch (e: any) {
         console.error('[API] Timeline tracking log failed:', e)
         return NextResponse.json({ error: 'Gagal menyimpan laporan: ' + e.message }, { status: 500 })

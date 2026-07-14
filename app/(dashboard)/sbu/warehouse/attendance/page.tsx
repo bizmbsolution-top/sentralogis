@@ -6,62 +6,61 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { toast, Toaster } from "react-hot-toast";
 import { 
   MapPin, Clock, CheckCircle2, History, Warehouse, 
-  RefreshCw, LogOut, Loader2, Navigation, AlertCircle
+  RefreshCw, LogOut, Loader2, Navigation, AlertCircle,
+  Users, XCircle, Search
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import dayjs from "dayjs";
 
-type AttendanceRecord = {
+type StaffAttendance = {
   id: string;
-  check_in_time: string;
-  check_out_time: string | null;
-  status: 'CHECK_IN' | 'CHECK_OUT';
-  warehouse_id: string;
-  warehouses?: { name: string } | null;
+  name: string;
+  role: string;
+  staff_type: 'ground' | 'admin';
+  today_attendance: {
+    id: string;
+    check_in_time: string;
+    check_out_time: string | null;
+    status: 'CHECK_IN' | 'CHECK_OUT';
+  } | null;
 };
 
 export default function WarehouseAttendancePage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
-  const [currentAttendance, setCurrentAttendance] = useState<AttendanceRecord | null>(null);
-  const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [warehouseId, setWarehouseId] = useState<string>("");
+  const [warehouseName, setWarehouseName] = useState("");
+  const [currentAttendance, setCurrentAttendance] = useState<any>(null);
+  const [staffList, setStaffList] = useState<StaffAttendance[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // Location state
   const [location, setLocation] = useState<{ lat: number; lng: number; error: string | null; loading: boolean }>({
-    lat: 0,
-    lng: 0,
-    error: null,
-    loading: false
+    lat: 0, lng: 0, error: null, loading: false
   });
 
   const fetchData = useCallback(async () => {
     if (!profile?.id || !profile?.tenant_id) return;
     try {
       setLoading(true);
-      
-      // 1. Ambil Gudang Penugasan dari wo_organization_users
-      const { data: orgUser } = await supabase
-        .from('wo_organization_users')
-        .select('assigned_warehouse_id')
-        .eq('user_id', profile.id)
-        .maybeSingle();
 
-      const assignedId = orgUser?.assigned_warehouse_id;
+      let whId = profile.warehouse_id || null;
+      if (!whId) {
+        const { data: orgUser } = await supabase
+          .from('wo_organization_users')
+          .select('assigned_warehouse_id')
+          .eq('user_id', profile.id)
+          .maybeSingle();
+        whId = orgUser?.assigned_warehouse_id || null;
+      }
 
-      // 2. Ambil list gudang
-      let whQuery = supabase.from('md_warehouses').select('id, name').eq('tenant_id', profile.tenant_id).eq('is_active', true);
-      if (assignedId) whQuery = whQuery.eq('id', assignedId);
-      
-      const { data: whData } = await whQuery;
-      setWarehouses(whData || []);
-      
-      if (assignedId) setSelectedWarehouseId(assignedId);
-      else if (whData && whData.length === 1) setSelectedWarehouseId(whData[0].id);
+      if (whId) {
+        const { data: wh } = await supabase.from('md_warehouses').select('name').eq('id', whId).single();
+        if (wh) setWarehouseName(wh.name);
+      }
+      setWarehouseId(whId || "");
 
-      // 3. Cek Absensi Hari Ini yang masih CHECK_IN (belum CHECK_OUT)
+      // Cek absensi hari ini untuk user sendiri
       const { data: activeAtt } = await supabase
         .from('warehouse_staff_attendance')
         .select('*, warehouses:md_warehouses(name)')
@@ -70,25 +69,91 @@ export default function WarehouseAttendancePage() {
         .order('check_in_time', { ascending: false })
         .limit(1)
         .maybeSingle();
+      setCurrentAttendance(activeAtt);
 
-      setCurrentAttendance(activeAtt as unknown as AttendanceRecord);
+      if (!whId) { setLoading(false); return; }
 
-      // 4. Riwayat 10 terakhir
-      const { data: histData } = await supabase
+      // Ambil semua staff ground
+      const { data: groundStaff } = await supabase
+        .from('md_warehouse_staff')
+        .select('id, name, role')
+        .eq('warehouse_id', whId)
+        .eq('tenant_id', profile.tenant_id);
+
+      // Ambil semua admin staff (tenant_users) untuk warehouse ini
+      const { data: adminStaff } = await supabase
+        .from('tenant_users')
+        .select('id, user_id, full_name, role_code')
+        .eq('warehouse_id', whId)
+        .eq('tenant_id', profile.tenant_id)
+        .eq('is_active', true);
+
+      const today = dayjs().format('YYYY-MM-DD');
+
+      // Ambil attendance hari ini untuk warehouse ini
+      const { data: todayAtt } = await supabase
         .from('warehouse_staff_attendance')
-        .select('*, warehouses:md_warehouses(name)')
-        .eq('user_id', profile.id)
-        .order('check_in_time', { ascending: false })
-        .limit(10);
-        
-      setHistory((histData as unknown as AttendanceRecord[]) || []);
+        .select('id, user_id, check_in_time, check_out_time, status')
+        .eq('warehouse_id', whId)
+        .gte('check_in_time', `${today}T00:00:00`)
+        .lte('check_in_time', `${today}T23:59:59`);
 
+      const attMap: Record<string, any> = {};
+      if (todayAtt) {
+        for (const a of todayAtt) {
+          if (!attMap[a.user_id] || a.check_in_time > attMap[a.user_id].check_in_time) {
+            attMap[a.user_id] = a;
+          }
+        }
+      }
+
+      const combined: StaffAttendance[] = [];
+
+      // Ground staff — gunakan name sebagai user_id (karena md_warehouse_staff pake name, bukan auth id)
+      if (groundStaff) {
+        for (const s of groundStaff) {
+          const att = attMap[s.id] || null;
+          combined.push({
+            id: s.id,
+            name: s.name,
+            role: s.role || 'STAFF',
+            staff_type: 'ground',
+            today_attendance: att ? {
+              id: att.id,
+              check_in_time: att.check_in_time,
+              check_out_time: att.check_out_time,
+              status: att.status,
+            } : null,
+          });
+        }
+      }
+
+      // Admin staff
+      if (adminStaff) {
+        for (const s of adminStaff) {
+          const att = attMap[s.user_id] || null;
+          combined.push({
+            id: s.user_id,
+            name: s.full_name || 'Unknown',
+            role: s.role_code || 'ADMIN',
+            staff_type: 'admin',
+            today_attendance: att ? {
+              id: att.id,
+              check_in_time: att.check_in_time,
+              check_out_time: att.check_out_time,
+              status: att.status,
+            } : null,
+          });
+        }
+      }
+
+      setStaffList(combined);
     } catch (err: any) {
       toast.error('Gagal mengambil data absensi.');
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, profile?.tenant_id]);
+  }, [profile?.id, profile?.tenant_id, profile?.warehouse_id]);
 
   useEffect(() => {
     fetchData();
@@ -103,15 +168,12 @@ export default function WarehouseAttendancePage() {
         reject(new Error(err));
         return;
       }
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          setLocation({ lat, lng, error: null, loading: false });
-          resolve({ lat, lng });
+          setLocation({ lat: position.coords.latitude, lng: position.coords.longitude, error: null, loading: false });
+          resolve({ lat: position.coords.latitude, lng: position.coords.longitude });
         },
-        (error) => {
+        () => {
           const err = 'Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.';
           setLocation(prev => ({ ...prev, loading: false, error: err }));
           reject(new Error(err));
@@ -122,26 +184,20 @@ export default function WarehouseAttendancePage() {
   };
 
   const handleAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
-    if (!profile?.tenant_id || !profile?.id) return;
-    if (action === 'CHECK_IN' && !selectedWarehouseId) {
-      toast.error('Pilih lokasi gudang terlebih dahulu.');
-      return;
-    }
+    if (!profile?.tenant_id || !profile?.id || !warehouseId) return;
 
     setSubmitting(true);
     const loadingToast = toast.loading('Sedang mengambil koordinat GPS...');
 
     try {
-      // 1. Get GPS Location
       const coords = await getLocation();
       toast.loading('Menyimpan data absensi...', { id: loadingToast });
 
-      // 2. Simpan ke database
       if (action === 'CHECK_IN') {
         const { error } = await supabase.from('warehouse_staff_attendance').insert({
           tenant_id: profile.tenant_id,
           user_id: profile.id,
-          warehouse_id: selectedWarehouseId,
+          warehouse_id: warehouseId,
           latitude: coords.lat,
           longitude: coords.lng,
           status: 'CHECK_IN'
@@ -150,24 +206,28 @@ export default function WarehouseAttendancePage() {
         toast.success('Berhasil Clock In!', { id: loadingToast });
       } else if (action === 'CHECK_OUT' && currentAttendance) {
         const { error } = await supabase.from('warehouse_staff_attendance')
-          .update({
-            check_out_time: new Date().toISOString(),
-            status: 'CHECK_OUT'
-          })
+          .update({ check_out_time: new Date().toISOString(), status: 'CHECK_OUT' })
           .eq('id', currentAttendance.id);
         if (error) throw error;
         toast.success('Berhasil Clock Out. Terima kasih!', { id: loadingToast });
       }
 
-      // Refresh data
       fetchData();
     } catch (err: any) {
-      console.error(err);
       toast.error(err.message || `Gagal melakukan ${action}.`, { id: loadingToast });
     } finally {
       setSubmitting(false);
     }
   };
+
+  const checkedIn = staffList.filter(s => s.today_attendance?.status === 'CHECK_IN').length;
+  const checkedOut = staffList.filter(s => s.today_attendance?.status === 'CHECK_OUT').length;
+  const absent = staffList.filter(s => !s.today_attendance).length;
+
+  const filteredStaff = staffList.filter(s =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -181,135 +241,173 @@ export default function WarehouseAttendancePage() {
   const isCheckedIn = !!currentAttendance;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Toaster position="top-center" />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">WMS Staff Attendance</h1>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Sistem Absensi Gudang Berbasis GPS</p>
+          <h1 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">Attendance</h1>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">
+            {warehouseName || 'Pilih Gudang'} — {dayjs().format('DD MMM YYYY')}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* ACTION CARD */}
-        <Card className="p-8 border-slate-200 shadow-xl shadow-slate-200/50 !rounded-[2.5rem] bg-white relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600" />
-           
-           <div className="space-y-8">
-              {/* Status Info */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+
+        {/* LEFT: Clock In/Out Card */}
+        <div className="xl:col-span-1 space-y-4">
+          <Card className="p-6 border-slate-200 shadow-xl shadow-slate-200/50 !rounded-[2.5rem] bg-white relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600" />
+            <div className="space-y-6">
               <div className="text-center space-y-2">
-                 <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 transition-all duration-500 ${isCheckedIn ? 'bg-emerald-100 text-emerald-600 shadow-xl shadow-emerald-600/20' : 'bg-slate-100 text-slate-400'}`}>
-                    {isCheckedIn ? <CheckCircle2 size={40} /> : <Warehouse size={40} />}
-                 </div>
-                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">
-                    {isCheckedIn ? 'Status: Bekerja' : 'Status: Off-Duty'}
-                 </h2>
-                 {isCheckedIn && currentAttendance && (
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                       Check In: {dayjs(currentAttendance.check_in_time).format('DD MMM YYYY, HH:mm')}
-                       <br/>
-                       Lokasi: {currentAttendance.warehouses?.name || '-'}
-                    </p>
-                 )}
+                <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center transition-all duration-500 ${isCheckedIn ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                  {isCheckedIn ? <CheckCircle2 size={32} /> : <Warehouse size={32} />}
+                </div>
+                <h2 className="text-base font-black uppercase tracking-tight text-slate-900">
+                  {isCheckedIn ? 'Bekerja' : 'Off-Duty'}
+                </h2>
+                {isCheckedIn && currentAttendance && (
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                    {dayjs(currentAttendance.check_in_time).format('HH:mm')}
+                  </p>
+                )}
               </div>
 
-              {/* Warehouse Selection (Only if not checked in) */}
-              {!isCheckedIn && (
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                       <Warehouse size={12} /> Pilih Lokasi Gudang
-                    </label>
-                    <select
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-amber-500/10 outline-none transition-all"
-                      value={selectedWarehouseId}
-                      onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                    >
-                       <option value="">-- Pilih Lokasi --</option>
-                       {warehouses.map(w => (
-                         <option key={w.id} value={w.id}>{w.name}</option>
-                       ))}
-                    </select>
-                 </div>
-              )}
-
-              {/* GPS Info */}
-              {location.error && (
-                 <div className="flex items-start gap-3 p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100">
-                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    <p className="text-[10px] font-bold uppercase tracking-wider">{location.error}</p>
-                 </div>
-              )}
-
-              {/* Action Button */}
               <button
                 onClick={() => handleAction(isCheckedIn ? 'CHECK_OUT' : 'CHECK_IN')}
-                disabled={submitting || (!isCheckedIn && !selectedWarehouseId)}
-                className={`w-full h-20 rounded-[2rem] text-sm font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 text-white ${isCheckedIn ? 'bg-rose-600 hover:bg-rose-700 shadow-xl shadow-rose-600/30' : 'bg-amber-600 hover:bg-amber-700 shadow-xl shadow-amber-600/30 disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                disabled={submitting || !warehouseId}
+                className={`w-full h-14 rounded-[1.5rem] text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all active:scale-95 text-white ${isCheckedIn ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700 disabled:opacity-50'}`}
               >
-                 {submitting ? (
-                    <>
-                       <Loader2 className="w-6 h-6 animate-spin" />
-                       Memproses GPS...
-                    </>
-                 ) : isCheckedIn ? (
-                    <>
-                       <LogOut className="w-6 h-6" />
-                       Clock Out Sekarang
-                    </>
-                 ) : (
-                    <>
-                       <Clock className="w-6 h-6" />
-                       Clock In Sekarang
-                    </>
-                 )}
+                {submitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : isCheckedIn ? (
+                  <><LogOut className="w-5 h-5" /> Clock Out</>
+                ) : (
+                  <><Clock className="w-5 h-5" /> Clock In</>
+                )}
               </button>
-              
-              <p className="text-[9px] font-bold text-slate-400 text-center uppercase tracking-widest leading-relaxed">
-                Pastikan Anda berada di lokasi gudang. GPS akan diverifikasi secara otomatis oleh sistem saat tombol ditekan.
-              </p>
-           </div>
-        </Card>
 
-        {/* HISTORY */}
-        <Card className="p-8 border-slate-200 shadow-none !rounded-[2.5rem] bg-white">
-           <div className="flex items-center gap-3 mb-8">
-              <History className="w-5 h-5 text-slate-400" />
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em]">Riwayat Absensi (10 Terakhir)</h3>
-           </div>
-
-           <div className="space-y-4">
-              {history.length === 0 ? (
-                 <div className="text-center py-10 bg-slate-50 rounded-3xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Belum ada riwayat absensi.</p>
-                 </div>
-              ) : (
-                 history.map(record => (
-                   <div key={record.id} className="flex items-start justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div>
-                         <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">{record.warehouses?.name || 'Unknown Warehouse'}</p>
-                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mt-2">
-                            <span className="text-emerald-600">IN: {dayjs(record.check_in_time).format('DD MMM HH:mm')}</span>
-                         </div>
-                         {record.check_out_time && (
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mt-0.5">
-                               <span className="text-rose-600">OUT: {dayjs(record.check_out_time).format('DD MMM HH:mm')}</span>
-                            </div>
-                         )}
-                      </div>
-                      <div className="text-right">
-                         <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest ${record.status === 'CHECK_IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                            {record.status}
-                         </span>
-                      </div>
-                   </div>
-                 ))
+              {location.error && (
+                <div className="flex items-start gap-2 p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+                  <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                  <p className="text-[8px] font-bold uppercase">{location.error}</p>
+                </div>
               )}
-           </div>
-        </Card>
+            </div>
+          </Card>
 
+          {warehouseId && (
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="p-4 border-slate-200 rounded-2xl text-center bg-white">
+                <p className="text-2xl font-black text-slate-900">{checkedIn}</p>
+                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mt-1">Check In</p>
+              </Card>
+              <Card className="p-4 border-slate-200 rounded-2xl text-center bg-white">
+                <p className="text-2xl font-black text-slate-900">{checkedOut}</p>
+                <p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mt-1">Check Out</p>
+              </Card>
+              <Card className="p-4 border-slate-200 rounded-2xl text-center bg-white">
+                <p className="text-2xl font-black text-slate-900">{absent}</p>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Absent</p>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT: Staff List */}
+        <div className="xl:col-span-3">
+          <Card className="border-slate-200 shadow-sm !rounded-[2rem] bg-white overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Users size={16} /> Staff ({staffList.length})
+              </h3>
+              <div className="relative w-full sm:w-56">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text" placeholder="Cari staff..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-5 py-3">Staff</th>
+                    <th className="px-5 py-3">Role</th>
+                    <th className="px-5 py-3">Tipe</th>
+                    <th className="px-5 py-3">Check In</th>
+                    <th className="px-5 py-3">Check Out</th>
+                    <th className="px-5 py-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredStaff.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-12 text-center">
+                        <Users size={24} className="mx-auto text-slate-200 mb-2" />
+                        <p className="text-xs font-bold text-slate-400">Tidak ada staff ditemukan</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStaff.map(s => (
+                      <tr key={`${s.staff_type}-${s.id}`} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+                              {s.name.charAt(0)}
+                            </div>
+                            <span className="text-sm font-bold text-slate-900">{s.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className="text-[10px] font-bold text-slate-600 uppercase">{s.role}</span>
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${s.staff_type === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {s.staff_type === 'admin' ? 'Admin' : 'Ground'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          {s.today_attendance ? (
+                            <span className="text-xs font-bold text-emerald-600">
+                              {dayjs(s.today_attendance.check_in_time).format('HH:mm')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          {s.today_attendance?.check_out_time ? (
+                            <span className="text-xs font-bold text-rose-600">
+                              {dayjs(s.today_attendance.check_out_time).format('HH:mm')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {!s.today_attendance ? (
+                            <span className="text-[9px] font-black uppercase text-slate-300">Absent</span>
+                          ) : s.today_attendance.status === 'CHECK_IN' ? (
+                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">Active</span>
+                          ) : (
+                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded-full bg-slate-200 text-slate-600">Done</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

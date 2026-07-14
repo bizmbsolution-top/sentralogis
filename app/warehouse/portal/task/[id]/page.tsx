@@ -136,6 +136,7 @@ export default function WarehouseTaskExecutionPage() {
   const [quarantineEntries, setQuarantineEntries] = useState<Record<string, PutawayEntry[]>>({});
   const [activeScanItem, setActiveScanItem] = useState<{itemId: string, entryId: string, type: 'GOOD' | 'QUARANTINE'} | null>(null);
   const [joAssignments, setJoAssignments] = useState<any[]>([]);
+  const [mergedPutawayNext, setMergedPutawayNext] = useState(true);
 
   // Security form fields
   const [transporterName, setTransporterName] = useState('');
@@ -183,19 +184,24 @@ export default function WarehouseTaskExecutionPage() {
       }
 
       // Derive task logic from session role instead of wh_jo_staff_assignments
+      const userRoles = sess.roles && sess.roles.length > 0 ? sess.roles : (sess.role ? [sess.role] : ['GUEST']);
+      const isMultiTallyPutaway = userRoles.includes('TALLY') && userRoles.includes('PUTAWAY');
+      const activeRole = isMultiTallyPutaway ? 'TALLY_AND_PUTAWAY' : (userRoles[0] || sess.role || 'GUEST');
+
       const taskData = {
         id: taskId,
-        assigned_role: sess.role || 'GUEST',
+        assigned_role: activeRole,
+        assigned_roles: userRoles,
         receipt_id: taskId
       };
       setTask(taskData);
 
-        if (taskData.assigned_role === 'TALLY') {
+        if (userRoles.includes('TALLY') || taskData.assigned_role === 'TALLY' || taskData.assigned_role === 'TALLY_AND_PUTAWAY') {
           fetchUnloadingSessions(recData.id);
         }
 
         // Fetch Items if Role is Tally or Putaway
-        if (taskData.assigned_role === 'TALLY' || taskData.assigned_role === 'PUTAWAY') {
+        if (userRoles.includes('TALLY') || userRoles.includes('PUTAWAY') || ['TALLY', 'PUTAWAY', 'TALLY_AND_PUTAWAY'].includes(taskData.assigned_role)) {
           // [AI] Tambah storage_rule untuk menentukan tampilan expiry date (FIFO aging / FEFO remaining)
           const { data: itemsData } = await supabase
             .from('wh_inbound_receipt_items')
@@ -215,6 +221,9 @@ export default function WarehouseTaskExecutionPage() {
                   .from('jo_warehouse_assignments')
                   .select(`
                      warehouse_location_id,
+                     quantity,
+                     allocated_cbm,
+                     allocated_kg,
                      location:md_warehouse_locations(code),
                      wo_item_manifests!wo_item_manifest_id(product_sku_id)
                   `)
@@ -225,7 +234,7 @@ export default function WarehouseTaskExecutionPage() {
           }
           
           setItems(itemsData || []);
-          if (taskData.assigned_role === 'PUTAWAY' && itemsData) {
+          if ((userRoles.includes('PUTAWAY') || ['PUTAWAY', 'TALLY_AND_PUTAWAY'].includes(taskData.assigned_role)) && itemsData) {
             const initialGood: Record<string, PutawayEntry[]> = {};
             itemsData.forEach(item => {
               if (Number(item.actual_good_qty) > 0) {
@@ -241,7 +250,7 @@ export default function WarehouseTaskExecutionPage() {
         }
 
         // Fetch quarantine damage records for PUTAWAY role
-        if (taskData.assigned_role === 'PUTAWAY') {
+        if (userRoles.includes('PUTAWAY') || ['PUTAWAY', 'TALLY_AND_PUTAWAY'].includes(taskData.assigned_role)) {
           const { data: damageData } = await supabase
             .from('wh_inbound_damage_records')
             .select('*, location:md_warehouse_locations!planned_quarantine_location_id(code)')
@@ -263,7 +272,7 @@ export default function WarehouseTaskExecutionPage() {
           }
         }
 
-        if (taskData.assigned_role === 'SECURITY') {
+        if (userRoles.includes('SECURITY') || taskData.assigned_role === 'SECURITY') {
           const { data: vendorData } = await supabase.from('md_entities')
             .select('id, name')
             .eq('tenant_id', recData.tenant_id)
@@ -804,7 +813,11 @@ export default function WarehouseTaskExecutionPage() {
       }
 
 
-      await updateReceiptAdmin(receipt.id, { status: 'CHECKING_DONE' });
+      const currentUserRoles: string[] = task?.assigned_roles || (task?.assigned_role ? [task.assigned_role] : ['GUEST']);
+      const isMultiRoleUser = currentUserRoles.includes('TALLY') && currentUserRoles.includes('PUTAWAY');
+      const nextStatus = (isMultiRoleUser && mergedPutawayNext) ? 'PUTAWAY_IN_PROGRESS' : 'CHECKING_DONE';
+
+      await updateReceiptAdmin(receipt.id, { status: nextStatus });
 
       await supabase.from('wh_milestone_logs').insert({
         tenant_id: receipt.tenant_id,
@@ -831,6 +844,8 @@ export default function WarehouseTaskExecutionPage() {
     return <div className="p-10 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-300" /></div>;
   }
 
+  const userRoles: string[] = task?.assigned_roles || (task?.assigned_role ? [task.assigned_role] : ['GUEST']);
+  const hasRole = (r: string) => userRoles.includes(r);
   const role = task.assigned_role;
   const status = receipt.status;
 
@@ -881,11 +896,11 @@ export default function WarehouseTaskExecutionPage() {
         {/* ROLE GATING LOGIC */}
         {/* ---------------------------------------------------------------- */}
 
-         {/* ROLE: SECURITY */}
-         {role === 'SECURITY' && (
+         {/* ROLE: GATE CONTROL / SECURITY */}
+        {(hasRole('SECURITY') || role === 'SECURITY') && (
             <div className="space-y-4">
                 <div className="bg-rose-50 border border-rose-100 p-5 rounded-xl">
-                   <h3 className="text-base font-black text-rose-800 uppercase tracking-widest mb-2">Tugas Anda: Gate Security</h3>
+                   <h3 className="text-base font-black text-rose-800 uppercase tracking-widest mb-2">Tugas Anda: Gate Control</h3>
                    <p className="text-sm text-rose-600 font-bold">Harap periksa kecocokan plat nomor dan identitas supir sebelum mengizinkan masuk.</p>
                 </div>
 
@@ -1156,7 +1171,7 @@ export default function WarehouseTaskExecutionPage() {
          )}
 
         {/* ROLE: TALLY */}
-        {role === 'TALLY' && (
+        {(hasRole('TALLY') || role === 'TALLY' || role === 'TALLY_AND_PUTAWAY') && ['EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING'].includes(status) && (
            <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
                  <h3 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-1">Tugas Anda: Tally Checker</h3>
@@ -1373,9 +1388,31 @@ export default function WarehouseTaskExecutionPage() {
                              </Card>
                            );
                          })}
-                      </div>
+                       </div>
 
-                      {/* Submit with PIN */}
+                       {/* Merged One-Step Option if user has both roles */}
+                       {(hasRole('PUTAWAY') || role === 'TALLY_AND_PUTAWAY') && (
+                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-4 shadow-sm">
+                           <label className="flex items-start gap-3 cursor-pointer">
+                             <input
+                               type="checkbox"
+                               checked={mergedPutawayNext}
+                               onChange={(e) => setMergedPutawayNext(e.target.checked)}
+                               className="mt-1 w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                             />
+                             <div>
+                               <span className="text-xs font-black text-emerald-900 block flex items-center gap-1.5">
+                                 ⚡ Merged One-Step Execution (Tally + Putaway)
+                               </span>
+                               <span className="text-[11px] text-emerald-700 block mt-0.5 font-medium">
+                                 Karena Anda memiliki keahlian ganda (Tally & Putaway), centang opsi ini agar setelah konfirmasi Tally selesai, status langsung masuk ke <b>Putaway In Progress</b> tanpa perlu menunggu admin.
+                               </span>
+                             </div>
+                           </label>
+                         </div>
+                       )}
+
+                       {/* Submit with PIN */}
                       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm mt-4">
                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Konfirmasi PIN untuk Submit</label>
                         <input
@@ -1408,7 +1445,7 @@ export default function WarehouseTaskExecutionPage() {
         )}
 
          {/* ROLE: ADMIN */}
-         {role === 'ADMIN' && (
+        {(hasRole('ADMIN') || role === 'ADMIN') && (
             <div className="space-y-4">
                <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-xl">
                   <h3 className="text-base font-black text-indigo-800 uppercase tracking-widest mb-2">Tugas Anda: Admin Gudang</h3>
@@ -1467,8 +1504,7 @@ export default function WarehouseTaskExecutionPage() {
                         <Warehouse size={14} /> Alokasi Lokasi Putaway
                      </h3>
                      {items.filter(i => Number(i.actual_good_qty) > 0).map(item => {
-                        const assignment = joAssignments.find((a: any) => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
-                        const locCode = assignment?.location?.code || (item as any).location?.code;
+                        const assignments = joAssignments.filter((a: any) => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
                         const entries = putawayEntries[item.id] || [];
                         return (
                            <Card key={item.id} className="p-4 border-emerald-200 bg-white">
@@ -1483,11 +1519,27 @@ export default function WarehouseTaskExecutionPage() {
                                  </div>
                               </div>
                               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
-                                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Rencana Alokasi</p>
-                                 {locCode ? (
-                                    <p className="text-xl font-black font-mono text-blue-800 tracking-wider">{locCode}</p>
+                                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Rencana Alokasi Lokasi</p>
+                                 {assignments.length > 0 ? (
+                                    <div className="space-y-1.5 mt-1">
+                                       {assignments.map((asgn: any, aIdx: number) => (
+                                          <div key={aIdx} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-blue-200 shadow-2xs">
+                                             <div className="flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">#{aIdx + 1}</span>
+                                                <span className="text-base font-black font-mono text-blue-900 tracking-wider">{asgn.location?.code || '—'}</span>
+                                             </div>
+                                             {Number(asgn.quantity) > 0 && (
+                                                <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded border border-blue-100">
+                                                   Qty: {formatQtyWithConversion(Number(asgn.quantity), item.product)}
+                                                </span>
+                                             )}
+                                          </div>
+                                       ))}
+                                    </div>
+                                 ) : (item as any).location?.code ? (
+                                    <p className="text-xl font-black font-mono text-blue-800 tracking-wider mt-0.5">{(item as any).location.code}</p>
                                  ) : (
-                                    <p className="text-sm font-bold text-blue-600/70 italic">Belum di-assign</p>
+                                    <p className="text-sm font-bold text-blue-600/70 italic mt-0.5">Belum di-assign</p>
                                  )}
                               </div>
                               {entries.length > 0 && (
@@ -1518,22 +1570,23 @@ export default function WarehouseTaskExecutionPage() {
          )}
 
          {/* ROLE: PUTAWAY */}
-         {role === 'PUTAWAY' && (
+         {(hasRole('PUTAWAY') || role === 'PUTAWAY' || role === 'TALLY_AND_PUTAWAY') && ['CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(status) && (
             <div className="space-y-4">
                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
                   <h3 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-1">Tugas Anda: Putaway Operator</h3>
                   <p className="text-xs text-emerald-600 font-medium">Pindahkan barang dari Loading Dock ke dalam Rak penyimpanan.</p>
                </div>
 
-               {['EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING'].includes(status) && (
-                  <div className="p-6 bg-slate-100 text-slate-400 rounded-xl text-center text-xs font-bold flex flex-col items-center gap-2 border-2 border-dashed border-slate-200">
-                     <Clock size={24} /> Menunggu Proses Tally Selesai
-                  </div>
-               )}
-
                {status === 'CHECKING_DONE' && (
                   <div className="p-6 bg-emerald-50 text-emerald-600 rounded-xl text-center text-xs font-bold flex flex-col items-center gap-2 border-2 border-dashed border-emerald-200">
-                     <PackageCheck size={24} /> Barang Siap di-Putaway, Menunggu Admin Start
+                     <PackageCheck size={24} /> Barang Siap di-Putaway
+                     <Button 
+                       onClick={() => handleUpdateStatus('PUTAWAY_IN_PROGRESS')}
+                       loading={submitting}
+                       className="mt-2 !bg-emerald-600 text-white font-bold text-xs shadow-md"
+                     >
+                       ⚡ Mulai Putaway Sekarang
+                     </Button>
                   </div>
                )}
 
@@ -1547,8 +1600,7 @@ export default function WarehouseTaskExecutionPage() {
                            </h4>
                            <div className="space-y-3">
                               {items.filter(i => Number(i.actual_good_qty) > 0).map(item => {
-                                 const assignment = joAssignments.find(a => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
-                                 const locCode = assignment?.location?.code || item.location?.code;
+                                 const assignments = joAssignments.filter(a => a.wo_item_manifests?.product_sku_id === item.product_sku_id);
                                  return (
                                  <Card key={item.id} className="p-4 border-emerald-200 shadow-sm bg-white">
                                     <div className="flex justify-between items-center mb-4">
@@ -1562,18 +1614,32 @@ export default function WarehouseTaskExecutionPage() {
                                        </div>
                                     </div>
 
-                                     <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-3 mb-4 flex items-center justify-between">
-                                        <div>
-                                           <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Alokasi Lokasi</p>
-                                           {locCode ? (
-                                             <p className="text-2xl font-black font-mono text-blue-800 tracking-wider">{locCode}</p>
-                                           ) : (
-                                             <p className="text-sm font-bold text-blue-600/70 italic">Belum di-assign dari JO</p>
-                                           )}
+                                     <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-3 mb-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                           <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Alokasi Lokasi</p>
+                                           <PackageCheck size={20} className="text-blue-600 opacity-50" />
                                         </div>
-                                        <div className="text-right opacity-50">
-                                           <PackageCheck size={28} className="text-blue-600" />
-                                        </div>
+                                        {assignments.length > 0 ? (
+                                           <div className="space-y-1.5 mt-2">
+                                              {assignments.map((asgn: any, aIdx: number) => (
+                                                 <div key={aIdx} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-blue-200 shadow-2xs">
+                                                    <div className="flex items-center gap-2">
+                                                       <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">#{aIdx + 1}</span>
+                                                       <span className="text-base font-black font-mono text-blue-900 tracking-wider">{asgn.location?.code || '—'}</span>
+                                                    </div>
+                                                    {Number(asgn.quantity) > 0 && (
+                                                       <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded border border-blue-100">
+                                                          Ambil: {formatQtyWithConversion(Number(asgn.quantity), item.product)}
+                                                       </span>
+                                                    )}
+                                                 </div>
+                                              ))}
+                                           </div>
+                                        ) : item.location?.code ? (
+                                           <p className="text-2xl font-black font-mono text-blue-800 tracking-wider mt-1">{item.location.code}</p>
+                                        ) : (
+                                           <p className="text-sm font-bold text-blue-600/70 italic mt-1">Belum di-assign dari JO</p>
+                                        )}
                                      </div>
 
                                      {/* [AI] Expiry Date Section - selalu tampil dengan info aging/remaining */}

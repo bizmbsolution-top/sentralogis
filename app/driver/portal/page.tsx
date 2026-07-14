@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { 
   ShieldCheck, 
@@ -38,13 +38,15 @@ import {
   Download,
   ClipboardList,
   Expand,
-  Image as ImageIcon,
   Lock,
-  Send
+  Send,
+  FolderGit2,
+  FileText
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
 
 export default function DriverPortal() {
   const { isLoaded } = useGoogleMaps();
@@ -128,6 +130,14 @@ export default function DriverPortal() {
   const [isIOS, setIsIOS] = useState(false);
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(false);
   const [installTab, setInstallTab] = useState<'android' | 'ios'>('android');
+
+  // [AI] New States for Smart Geofencing & Panic Button SOS
+  const [geofenceBanner, setGeofenceBanner] = useState<{ arrived_stop: string | null; distance_m: number | null } | null>(null);
+  const [panicModalOpen, setPanicModalOpen] = useState(false);
+  const [panicType, setPanicType] = useState<'swap_fleet' | 'swap_driver' | 'general'>('swap_fleet');
+  const [panicReason, setPanicReason] = useState('');
+  const [panicHasCargo, setPanicHasCargo] = useState<boolean>(true);
+  const [panicSending, setPanicSending] = useState(false);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -272,6 +282,19 @@ export default function DriverPortal() {
       fetchAttendanceHistory();
     }
   }, [step, driver]);
+
+  const gpsPingJob = useMemo(
+    () => selectedJob ?? jobOrders.find(jo => jo.driver_response === 'accepted') ?? null,
+    [selectedJob, jobOrders],
+  );
+  const gpsPingToken = gpsPingJob?.driver_link_token || gpsPingJob?.id || null;
+  useDriverGpsPing(gpsPingToken, gpsPingJob?.status, step !== 'auth' && !!driver?.id, (evt) => {
+    if (evt.geofence_triggered) {
+      setGeofenceBanner({ arrived_stop: evt.arrived_stop, distance_m: evt.distance_m });
+      if (selectedJob) fetchJobDetails(selectedJob.id);
+      fetchJobOrders();
+    }
+  });
 
   const fetchTotalKM = async () => {
     if (!driver?.id) return;
@@ -1282,6 +1305,14 @@ export default function DriverPortal() {
         <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 text-white'} flex flex-col items-center justify-center p-6 font-sans relative transition-colors duration-300`}>
           <Toaster position="top-center" />
           
+          {/* Back to Portal Hub Button */}
+          <div className="absolute top-6 left-6 z-50 pt-safe-area-top">
+            <a href="/" className={`flex items-center gap-2 transition-colors px-4 py-2.5 rounded-full backdrop-blur-md border shadow-lg active:scale-95 ${isDark ? 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800' : 'bg-white/20 hover:bg-white/30 text-white border-white/30'}`}>
+              <ChevronLeft className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-bold uppercase tracking-wider">Kembali ke Portal Hub</span>
+            </a>
+          </div>
+
           <div className="absolute top-6 right-6 flex items-center gap-3">
             <button 
               type="button"
@@ -1307,12 +1338,12 @@ export default function DriverPortal() {
           </div>
 
           <div className="w-full max-w-md relative z-10">
-            <div className="text-center mb-10">
-              <div className={`w-28 h-28 ${isDark ? 'bg-slate-900 border-indigo-500/30' : 'bg-white/20 border-white/30'} backdrop-blur-xl rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-2xl border`}>
-                <ShieldCheck size={52} className="text-white" />
+            <div className="text-center mb-8 space-y-2">
+              <div className="mb-4 flex justify-center">
+                <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-16 w-auto drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]" />
               </div>
-              <h1 className="text-5xl font-black tracking-tight">SentraLogis</h1>
-              <p className="text-sm font-bold mt-3 uppercase tracking-widest opacity-80">Driver Portal</p>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Welcome to Trucking Portal</h1>
+              <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Enter your registered WhatsApp & PIN to start mission console</p>
             </div>
 
             <form onSubmit={handleLogin} className={`${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'} backdrop-blur-2xl p-8 rounded-3xl border shadow-2xl space-y-6`}>
@@ -1676,7 +1707,10 @@ export default function DriverPortal() {
   // [AI] Calculate progress & Milestones for Selected Job (aligned with vendor page)
   const selectedJobRoutes = (selectedJob?.routes || selectedJob?.job_routes || []).slice().sort((a: any, b: any) => a.sequence - b.sequence);
   const totalStops = selectedJobRoutes.length;
-  const completedStops = selectedJobRoutes.filter((r: any) => r.status === 'completed').length;
+  const completedStops = selectedJobRoutes.filter((r: any) => {
+    const s = (r.status || '').toLowerCase();
+    return s === 'completed' || s === 'arrived' || !!r.actual_arrival;
+  }).length;
   
   const mapMarkers = (selectedJobRoutes || []).map((stop: any) => {
     const lat = stop.latitude ? Number(stop.latitude) : null;
@@ -2120,6 +2154,32 @@ export default function DriverPortal() {
           </div>
 
           <main className="max-w-xl mx-auto px-6 pt-6 space-y-6">
+            {/* [AI] Smart Geofence Auto-Arrival Banner */}
+            {geofenceBanner && (
+              <div className="bg-emerald-600 text-white rounded-3xl p-6 shadow-2xl border-4 border-emerald-300 animate-in fade-in slide-in-from-top-4 duration-500 relative">
+                <button 
+                  onClick={() => setGeofenceBanner(null)} 
+                  className="absolute top-4 right-4 text-white/80 hover:text-white p-1.5 bg-black/20 rounded-full"
+                  title="Tutup Banner"
+                >
+                  <X size={18} />
+                </button>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white text-emerald-600 rounded-2xl flex items-center justify-center font-black shrink-0 shadow-lg text-xl animate-bounce">
+                    📍
+                  </div>
+                  <div className="pr-6">
+                    <h3 className="text-base font-black tracking-tight uppercase leading-tight mb-1">
+                      TIBA DI {geofenceBanner.arrived_stop || 'LOKASI TUJUAN'}
+                    </h3>
+                    <p className="text-xs font-bold text-emerald-100 leading-relaxed">
+                      Terverifikasi otomatis via Geofence (Radius {geofenceBanner.distance_m || '< 500'}m). HP bergetar & status rute telah diperbarui!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Advance Payment Notification */}
             {(selectedJob.advance_status === 'paid' || selectedJob.advance_status === 'completed') && (
               <div className="mb-6 bg-emerald-600 text-white p-5 rounded-[2rem] shadow-xl shadow-emerald-600/20 flex items-center gap-5 animate-in slide-in-from-top-4 duration-700">
@@ -2192,31 +2252,60 @@ export default function DriverPortal() {
               </div>
             </div>
 
-            {/* Job Completed Success Screen */}
-            {['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
-              <div className="bg-white rounded-[2.5rem] p-10 text-center shadow-xl border-4 border-emerald-500/20 animate-in zoom-in duration-500">
-                <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-500/40">
-                  <CheckCircle size={48} />
+            {/* Dokumen Pengantar / Manifest dari Kantor (Khusus Supir) */}
+            <div className="bg-white rounded-3xl p-5 border border-blue-100 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                  <FolderGit2 size={20} />
                 </div>
-                <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">PEKERJAAN SELESAI</h2>
-                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-8">Terima kasih atas dedikasi Anda di lapangan!</p>
-                
-                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col gap-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span>
-                    <span className="text-sm font-black text-slate-900">{selectedJob.completed_at ? formatTime(selectedJob.completed_at) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tanggal</span>
-                    <span className="text-sm font-black text-slate-900">{selectedJob.completed_at ? formatDate(selectedJob.completed_at) : '-'}</span>
-                  </div>
-                </div>
-
-                <div className="mt-8 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                  <p className="text-[11px] font-black text-emerald-700 uppercase tracking-tight">Status: Menunggu Verifikasi Dokumen oleh HQ</p>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight">DOKUMEN PENGANTAR & MANIFEST</h3>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Surat Jalan, Manifest & Instruksi Kerja</p>
                 </div>
               </div>
-            )}
+
+              {selectedJob.assignment_documents && selectedJob.assignment_documents.length > 0 ? (
+                <div className="space-y-3 pt-1">
+                  {selectedJob.assignment_documents.map((doc: any, idx: number) => (
+                    <div key={doc.id || idx} className="bg-blue-50/50 border border-blue-200/80 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-xl bg-white text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-sm">
+                          {doc.name?.endsWith('.pdf') || doc.file_type?.includes('pdf') ? (
+                            <FileText size={20} className="text-red-500" />
+                          ) : (
+                            <ImageIcon size={20} className="text-blue-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-blue-600 text-white font-black text-[8px] uppercase tracking-wider mb-1">
+                            {(doc.type || 'SURAT_JALAN').replace(/_/g, ' ')}
+                          </span>
+                          <p className="text-xs font-bold text-slate-800 truncate" title={doc.name}>
+                            {doc.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium">{doc.file_size || ''}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                        >
+                          <Eye size={14} /> BUKA
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border border-dashed border-blue-200 rounded-2xl p-4 text-center bg-blue-50/30">
+                  <p className="text-xs font-bold text-slate-500 mb-1">Belum ada dokumen digital yang dilampirkan admin.</p>
+                  <p className="text-[10px] text-slate-400">Surat Jalan fisik / manifest akan diserahkan oleh dispatcher sebelum armada berangkat.</p>
+                </div>
+              )}
+            </div>
 
             {/* Journey Pipeline - HANYA TAMPIL JIKA BELUM SELESAI */}
             {totalStops > 0 && !['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
@@ -2297,6 +2386,24 @@ export default function DriverPortal() {
               </div>
             )}
 
+            {/* [AI] Blocked Page When Job Order is Completed */}
+            {['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'READY_FOR_BILLING', 'VERIFIED'].includes((selectedJob.status || '').toUpperCase()) ? (
+              <div className="bg-rose-50 border-4 border-rose-500 rounded-[2.5rem] p-8 sm:p-12 text-center shadow-2xl my-8 relative overflow-hidden animate-in fade-in duration-500">
+                <div className="w-20 h-20 bg-rose-500 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 text-4xl shadow-lg shadow-rose-500/30 animate-bounce">
+                  🏁
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-rose-700 uppercase tracking-tight mb-3">
+                  PEKERJAAN TELAH SELESAI
+                </h2>
+                <p className="text-xs sm:text-sm font-bold text-slate-600 max-w-md mx-auto mb-6 leading-relaxed">
+                  Tugas pengiriman ini telah ditutup dan disahkan selesai. Seluruh akses tindakan supir pada halaman ini telah dikunci/diblokir oleh sistem.
+                </p>
+                <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-white rounded-xl border border-rose-200 text-rose-600 font-black text-xs uppercase tracking-widest shadow-sm">
+                  <CheckCircle2 size={16} className="text-emerald-500" /> STATUS: {selectedJob.status?.toUpperCase()}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Action Section - HANYA TAMPIL JIKA BELUM SELESAI */}
             {!['COMPLETED', 'PEKERJAAN SELESAI', 'SELESAI', 'DONE', 'INVOICED', 'PAID', 'ready_for_billing', 'verified'].includes((selectedJob.status || '').toUpperCase()) && (
               <div className="space-y-4">
@@ -2418,16 +2525,15 @@ export default function DriverPortal() {
                       
                       {/* Action Buttons */}
                       <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={() => {
-                            const encodedAddress = encodeURIComponent(stop.address);
-                            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`, '_blank');
-                          }}
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border border-blue-100"
                           title="Buka Navigasi"
                         >
                           <NavIcon size={18} fill="currentColor" className="opacity-80" />
-                        </button>
+                        </a>
 
                         <div className="relative">
                           <input 
@@ -2576,55 +2682,23 @@ export default function DriverPortal() {
                       )}
                     </div>
 
-                    {/* Stop Completion Contextual Buttons */}
+                    {/* Status Geofence Otomatis per Rute */}
                     {(['IN_PROGRESS', 'DALAM PERJALANAN', 'STARTED', 'START JOURNEY', 'LOADING', 'UNLOADING', 'MENUNGGU SELESAI'].includes((selectedJob.status || '').toUpperCase()) || (selectedJob.status || '').toUpperCase().startsWith('MENUJU') || (selectedJob.status || '').toUpperCase().startsWith('TIBA')) && (
-                      <div className="mt-5">
-                            {stop.status === 'pending' && (
-                          (() => {
-                            const firstUncompleted = selectedJobRoutes.find((r: any) => r.status !== 'completed');
-                            const isNext = firstUncompleted?.id === stop.id;
-                            
-                            if (isNext) {
-                              return (
-                                <button
-                                  onClick={() => updateRouteStatus(stop.id, 'arrived')}
-                                  disabled={loading}
-                                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
-                                >
-                                  {loading ? <Loader2 className="animate-spin" /> : <><MapPin size={16} /> TIBA DI {stop.location_name?.toUpperCase()}</>}
-                                </button>
-                              );
-                            } else {
-                              return (
-                                <button
-                                  disabled
-                                  className="w-full py-4 bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-500 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 cursor-not-allowed"
-                                >
-                                  <Lock size={14} /> SELESAIKAN STOP SEBELUMNYA DULU
-                                </button>
-                              );
-                            }
-                          })()
-                        )}
-
-                        {stop.status === 'arrived' && stop.stop_type === 'PICKUP' && (
-                          <button
-                            onClick={() => updateRouteStatus(stop.id, 'completed')}
-                            disabled={loading}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
-                          >
-                            {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN MUAT ({stop.location_name?.toUpperCase()})</>}
-                          </button>
-                        )}
-
-                        {stop.status === 'arrived' && stop.stop_type === 'DROPOFF' && (
-                          <button
-                            onClick={() => updateRouteStatus(stop.id, 'completed')}
-                            disabled={loading}
-                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
-                          >
-                            {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> SELESAIKAN BONGKAR ({stop.location_name?.toUpperCase()})</>}
-                          </button>
+                      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Status Kedatangan:</span>
+                        {stop.status === 'completed' ? (
+                          <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                            <CheckCircle2 size={13} /> Selesai ({stop.stop_type})
+                          </span>
+                        ) : stop.status === 'arrived' ? (
+                          <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                            <MapPin size={13} /> Tiba di Titik (Geofence Terverifikasi)
+                          </span>
+                        ) : (
+                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                            Menunggu Tiba Otomatis via Satelit (&lt; 500m)
+                          </span>
                         )}
                       </div>
                     )}
@@ -2659,12 +2733,18 @@ export default function DriverPortal() {
 
                       <button
                         onClick={() => {
-                          const confirmMsg = completedStops < totalStops 
-                            ? 'Masih ada rute yang belum selesai. Apakah Anda yakin ingin mengakhiri tugas ini sekarang?'
-                            : 'Apakah Anda yakin ingin menyelesaikan seluruh tugas ini?';
-                          if (window.confirm(confirmMsg)) {
-                            handleUpdateJobStatus(selectedJob.id, 'PEKERJAAN SELESAI');
+                          if (completedStops < totalStops && totalStops > 0) {
+                            const unvisited = totalStops - completedStops;
+                            if (!window.confirm(`⚠️ PERINGATAN: Masih ada ${unvisited} titik lokasi rute yang belum ditandai selesai/terverifikasi oleh satelit.\n\nApakah Anda YAKIN tetap ingin menyelesaikan pekerjaan ini sekarang?`)) {
+                              return;
+                            }
+                          } else {
+                            if (!window.confirm('Apakah Anda yakin ingin menyelesaikan seluruh pekerjaan dan menutup job ini?')) {
+                              return;
+                            }
                           }
+
+                          handleUpdateJobStatus(selectedJob.id, 'PEKERJAAN SELESAI');
                         }}
                         disabled={loading}
                         className="w-full h-16 bg-white text-slate-900 hover:bg-slate-50 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 group"
@@ -2679,6 +2759,8 @@ export default function DriverPortal() {
                    <Activity className="absolute -bottom-6 -right-6 w-32 h-32 text-white/5 rotate-12" />
                 </div>
               </div>
+            )}
+            </>
             )}
           </main>
         </div>
@@ -3257,6 +3339,169 @@ export default function DriverPortal() {
           </div>
         </div>
       )}
+
+      {/* [AI] Floating Panic Button SOS (Tampil Jika Ada Pekerjaan Aktif) */}
+      {gpsPingJob && (gpsPingJob.status === 'in_progress' || gpsPingJob.status === 'DALAM PERJALANAN' || (gpsPingJob.status || '').startsWith('MENUJU') || (gpsPingJob.status || '').startsWith('TIBA')) && step !== 'auth' && (
+        <button
+          onClick={() => setPanicModalOpen(true)}
+          className="fixed bottom-24 right-6 z-50 w-16 h-16 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex flex-col items-center justify-center shadow-2xl shadow-rose-600/50 border-4 border-rose-300 active:scale-90 transition-all animate-pulse"
+          title="Tombol Darurat SOS"
+        >
+          <span className="text-xl leading-none">🚨</span>
+          <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">SOS</span>
+        </button>
+      )}
+
+      {/* [AI] Panic Button SOS Modal - Structured Auto Questions */}
+      {panicModalOpen && gpsPingJob && (
+        <div 
+          className="fixed inset-0 z-[1100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300 overflow-y-auto"
+          onClick={() => !panicSending && setPanicModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-[2.5rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border-4 border-rose-500 relative my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl animate-bounce">
+              🚨
+            </div>
+            <h3 className="text-lg font-black text-center text-slate-900 uppercase tracking-tight mb-1">Pusat Sinyal Darurat SOS</h3>
+            <p className="text-[11px] text-center font-bold text-slate-500 mb-5 leading-relaxed">
+              Jawab pertanyaan cepat di bawah. Koordinat GPS &amp; status muatan langsung terkirim ke Head Ops Trucking HQ!
+            </p>
+
+            {/* Step 1: Request Category */}
+            <div className="space-y-2 mb-4">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">1. Apa yang Anda Butuhkan?</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'swap_fleet', label: 'Ganti Armada', icon: '🚛' },
+                  { id: 'swap_driver', label: 'Ganti Supir', icon: '🧑‍✈️' },
+                  { id: 'general', label: 'Darurat Lain', icon: '🚨' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setPanicType(item.id as any);
+                      if (!panicReason) {
+                        setPanicReason(
+                          item.id === 'swap_fleet' ? 'Mesin mogok / radiator bocor tidak bisa jalan' :
+                          item.id === 'swap_driver' ? 'Sakit demam / kecapekan tidak kuat lanjut nyetir' :
+                          'Kendala keamanan / hadangan di perjalanan'
+                        );
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center gap-1 transition-all ${
+                      panicType === item.id
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 font-black shadow-sm ring-2 ring-rose-200'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 font-bold hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[10px] uppercase tracking-tight leading-tight">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 2: Auto Question Free Text */}
+            <div className="mb-4">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                2. {panicType === 'swap_fleet' ? 'Kenapa Minta Ganti Armada?' : panicType === 'swap_driver' ? 'Kenapa Minta Ganti Supir?' : 'Keterangan Situasi Darurat:'}
+              </label>
+              <textarea
+                value={panicReason}
+                onChange={(e) => setPanicReason(e.target.value)}
+                placeholder="Tulis alasan singkat (misal: Sakit demam tidak sanggup / Truk patah as)..."
+                rows={2}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+              />
+            </div>
+
+            {/* Step 3: Cargo Status Check */}
+            <div className="mb-6">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                3. Apakah Ada Muatan di Dalam Truk Sekarang?
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPanicHasCargo(true)}
+                  className={`py-3 rounded-xl border text-xs font-black transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+                    panicHasCargo
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  ⚠️ YA, ADA MUATAN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPanicHasCargo(false)}
+                  className={`py-3 rounded-xl border text-xs font-black transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+                    !panicHasCargo
+                      ? 'bg-slate-800 text-white border-slate-900 shadow-md ring-2 ring-slate-400'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  ✖️ TIDAK / KOSONG
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPanicModalOpen(false)}
+                disabled={panicSending}
+                className="py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={panicSending}
+                onClick={async () => {
+                  setPanicSending(true);
+                  try {
+                    const pos: GeolocationPosition | null = await new Promise((resolve) => {
+                      if (!navigator.geolocation) return resolve(null);
+                      navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { timeout: 5000 });
+                    });
+                    const tokenToUse = gpsPingJob.driver_link_token || gpsPingJob.id;
+                    const res = await fetch(`/api/jo/${tokenToUse}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'panic_button',
+                        panic_type: panicType,
+                        reason: panicReason || (panicType === 'swap_fleet' ? 'Minta Ganti Armada' : panicType === 'swap_driver' ? 'Minta Ganti Supir' : 'Darurat SOS'),
+                        has_cargo: panicHasCargo,
+                        lat: pos?.coords?.latitude,
+                        lng: pos?.coords?.longitude
+                      })
+                    });
+                    if (!res.ok) throw new Error('Gagal mengirim sinyal darurat');
+                    toast.error('🚨 SINYAL DARURAT TERKIRIM KE HEAD OPS HQ!', { duration: 8000 });
+                    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]);
+                    setPanicModalOpen(false);
+                  } catch (err: any) {
+                    toast.error(err.message);
+                  } finally {
+                    setPanicSending(false);
+                  }
+                }}
+                className="py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 active:scale-95"
+              >
+                {panicSending ? <Loader2 size={16} className="animate-spin" /> : 'KIRIM SOS NOW'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Printer, X, ShieldCheck as Shield, FileText, User as UserIcon, Truck as TruckIcon, MapPin as MapIcon } from 'lucide-react';
+import { Printer, X, ShieldCheck as Shield, FileText, User as UserIcon, Truck as TruckIcon, MapPin as MapIcon, Box } from 'lucide-react';
 import { sendNotification } from '@/lib/supabase/notifications';
 import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewModal';
 // [AI] Import printCashAdvanceSlip utility to print cash advance slips for internal drivers directly from assignments list
@@ -33,27 +33,9 @@ import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status
 const DeliveryNoteModal = ({ jo, onClose, profile }: { jo: any; onClose: () => void; profile: any }) => {
   if (!jo) return null;
 
-  const [tenantLogo, setTenantLogo] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (profile?.tenant_id) {
-      supabase
-        .from('tenants')
-        .select('logo_url')
-        .eq('id', profile.tenant_id)
-        .single()
-        .then(({ data }) => {
-          if (data?.logo_url) setTenantLogo(data.logo_url);
-        });
-    }
-  }, [profile?.tenant_id]);
-
   const tenantName = profile?.tenants?.name || 'SENTRALOGIS';
-  const creatorName = profile?.full_name || 'Operational Staff';
   const customer = jo.wo_item?.wo?.customer || {};
   const customerName = customer.legal_name || customer.name || '-';
-  const billingParts = [customer.billing_address, customer.billing_city, customer.billing_province, customer.billing_postal_code].filter(Boolean);
-  const customerAddress = billingParts.length > 0 ? billingParts.join(', ') : '-';
   const plateNumber = jo.md_fleets?.plate_number || '-';
   const truckType = jo.md_fleets?.fleet_type?.type_name || '-';
   const driverName = jo.md_drivers?.name || '-';
@@ -67,12 +49,11 @@ const DeliveryNoteModal = ({ jo, onClose, profile }: { jo: any; onClose: () => v
   const destination = locations.length > 0 
     ? (locations[locations.length - 1].city || locations[locations.length - 1].name || locations[locations.length - 1].address || '-') 
     : (itemData.destination_name || itemData.recipient_name || itemData.recipient_city || itemData.delivery_location || '-');
-  const routeDisplay = locations.length > 2 
-    ? `${origin} → ... → ${destination} (${locations.length} stops)`
-    : `${origin} → ${destination}`;
   
   const joDate = format(new Date(jo.created_at), 'dd MMM yyyy', { locale: id });
-  const notes = itemData.notes || '-';
+  const containerNo = jo.container_number || jo.sbu_metadata?.container_number || '-';
+  const sealNo = jo.sbu_metadata?.seal_number || '-';
+  const notes = [jo.notes || jo.sbu_metadata?.notes, itemData.notes].filter(Boolean).join(' | ') || '-';
 
   const content = (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 overflow-y-auto" id="print-overlay">
@@ -85,149 +66,145 @@ const DeliveryNoteModal = ({ jo, onClose, profile }: { jo: any; onClose: () => v
               <span className="text-sm font-medium text-gray-700">Surat Jalan - {jo.jo_number}</span>
            </div>
            <div className="flex items-center gap-2">
-              <button onClick={() => window.print()} className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded flex items-center gap-1.5 transition-colors">
-                 <Printer size={14} /> Print
-              </button>
+              <Link
+                 href={`/sbu/trucking/delivery-note/${jo.id}`}
+                 target="_blank"
+                 className="px-3 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                 <Printer size={14} /> Full Page / Cetak Resmi
+              </Link>
               <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors">
                  <X size={16} />
               </button>
            </div>
         </div>
 
-        {/* Document Content */}
-        <div className="p-6" id="delivery-note-print">
+        {/* Document Content — Compact A5 Landscape Preview */}
+        <div className="p-4 font-mono text-black" id="delivery-note-print">
            <style dangerouslySetInnerHTML={{ __html: `
-              @page { size: A4 portrait; margin: 10mm; }
+              @page { size: A5 landscape; margin: 0; }
               @media print {
-                body > *:not(#print-overlay) {
-                  display: none !important;
-                }
-                #print-overlay {
-                  position: static !important;
-                  width: 100% !important;
-                  height: auto !important;
-                  background: white !important;
-                  padding: 0 !important;
-                  margin: 0 !important;
-                  overflow: visible !important;
-                  z-index: auto !important;
-                }
-                #print-container {
-                  width: 100% !important;
-                  max-width: none !important;
-                  box-shadow: none !important;
-                  border: none !important;
-                  border-radius: 0 !important;
-                  margin: 0 !important;
-                }
-                .print\\:hidden {
-                  display: none !important;
-                }
-                #delivery-note-print {
-                  padding: 0 !important;
-                  margin: 0 !important;
-                }
-                table, tr, td, th, div {
-                  page-break-inside: avoid !important;
-                }
-                html, body {
-                  overflow: visible !important;
-                  height: auto !important;
-                }
+                html, body { width: 210mm; height: 148mm; margin: 0; padding: 0; background: white !important; }
+                body > *:not(#print-overlay) { display: none !important; }
+                #print-overlay { position: static !important; width: 100% !important; height: auto !important; background: white !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; z-index: auto !important; }
+                #print-container { width: 210mm !important; height: 148mm !important; max-width: none !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; overflow: hidden !important; page-break-after: avoid !important; }
+                .print\\:hidden { display: none !important; }
+                #delivery-note-print { padding: 4mm 5mm !important; margin: 0 !important; }
               }
            `}} />
 
-           <div className="max-w-[190mm] mx-auto text-black">
+           <div className="max-w-[210mm] mx-auto">
+              {/* Top border */}
+              <div className="h-[3px] bg-black mb-2"></div>
+
               {/* Header */}
-              <div className="flex justify-between items-start border-b-2 border-black pb-3 mb-5">
-                 <div className="flex items-center gap-3">
-                    {tenantLogo && (
-                       <img src={tenantLogo} alt="Logo" className="h-8 w-auto object-contain" />
-                    )}
-                    <h1 className="text-lg font-bold">{tenantName}</h1>
+              <div className="flex justify-between items-start border-b border-black pb-1.5 mb-2">
+                 <div>
+                    <h1 className="text-sm font-black tracking-tight uppercase leading-none">{tenantName}</h1>
+                    <p style={{ fontSize: '7px' }} className="font-bold text-gray-600 uppercase tracking-widest mt-0.5">SBU Trucking & Land Transportation</p>
                  </div>
                  <div className="text-right">
-                    <h2 className="text-base font-bold">SURAT JALAN</h2>
-                    <p className="text-xs mt-0.5">No: {jo.jo_number}</p>
-                    <p className="text-xs">{joDate}</p>
+                    <div className="bg-black text-white px-3 py-0.5 inline-block mb-0.5">
+                       <h2 style={{ fontSize: '10px' }} className="font-black uppercase tracking-[0.15em]">SURAT JALAN</h2>
+                    </div>
+                    <p className="text-xs font-black leading-none">{jo.jo_number}</p>
+                    <p style={{ fontSize: '7px' }} className="font-bold text-gray-500 uppercase">{joDate}</p>
                  </div>
               </div>
 
-              {/* Info Section */}
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                 <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Bill To / Customer</p>
-                    <p className="text-sm font-bold">{customerName}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">{customerAddress}</p>
-                 </div>
-                 <div className="border border-gray-300 rounded-md p-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Kendaraan & Driver</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                       <span className="text-gray-500">Driver:</span>
-                       <span className="font-medium">{driverName}</span>
-                       <span className="text-gray-500">Telp:</span>
-                       <span className="font-medium">{driverPhone}</span>
-                       <span className="text-gray-500">No. Polisi:</span>
-                       <span className="font-medium">{plateNumber}</span>
-                       <span className="text-gray-500">Jenis:</span>
-                       <span className="font-medium">{truckType}</span>
+              {/* Body: Info Grid */}
+              <div className="space-y-1.5">
+                 <div className="grid grid-cols-2 gap-2">
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">ARMADA / DRIVER</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase leading-tight">{plateNumber} <span className="font-normal text-gray-600">({truckType})</span></p>
+                          <p className="font-bold text-gray-600 uppercase">{driverName} | {driverPhone}</p>
+                       </div>
+                    </div>
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">CUSTOMER</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase leading-tight">{customerName}</p>
+                          <p className="text-gray-500 uppercase">{joDate}</p>
+                       </div>
                     </div>
                  </div>
+
+                 <div className="grid grid-cols-2 gap-2">
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">MUAT (ORIGIN)</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase leading-tight">{origin}</p>
+                       </div>
+                    </div>
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">BONGKAR (DESTINATION)</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase leading-tight">{destination}</p>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-3 gap-2">
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">NO. CONTAINER</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase">{containerNo}</p>
+                       </div>
+                    </div>
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">NO. SEAL</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '9px' }}>
+                          <p className="font-black uppercase">{sealNo}</p>
+                       </div>
+                    </div>
+                    <div>
+                       <p style={{ fontSize: '7px' }} className="font-black text-gray-500 uppercase tracking-wider mb-0.5">CATATAN</p>
+                       <div className="border border-gray-300 px-2 py-1" style={{ fontSize: '8px' }}>
+                          <p className="text-gray-600 leading-tight">{notes}</p>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Table */}
+                 <table className="w-full text-left border-collapse">
+                    <thead>
+                       <tr className="border-y border-black">
+                          <th className="py-0.5 font-black uppercase" style={{ fontSize: '8px' }}>Deskripsi Barang</th>
+                          <th className="py-0.5 font-black uppercase text-center w-24" style={{ fontSize: '8px' }}>Jenis</th>
+                          <th className="py-0.5 font-black uppercase text-right w-16" style={{ fontSize: '8px' }}>Qty</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                       <tr className="border-b border-gray-300">
+                          <td className="py-1 font-bold uppercase" style={{ fontSize: '9px' }}>Angkutan Barang - {customerName}</td>
+                          <td className="py-1 font-bold uppercase text-center" style={{ fontSize: '9px' }}>{truckType}</td>
+                          <td className="py-1 font-black text-right" style={{ fontSize: '9px' }}>1 Unit</td>
+                       </tr>
+                    </tbody>
+                 </table>
               </div>
 
-              {/* Items Table */}
-              <table className="w-full border border-gray-400 mb-5 text-xs">
-                 <thead>
-                    <tr className="bg-gray-50">
-                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold w-10">No</th>
-                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold">Deskripsi Barang</th>
-                       <th className="border border-gray-400 px-3 py-2 text-center font-semibold w-12">Qty</th>
-                       <th className="border border-gray-400 px-3 py-2 text-left font-semibold">Rute</th>
-                    </tr>
-                 </thead>
-                 <tbody>
-                    <tr>
-                       <td className="border border-gray-400 px-3 py-2 text-center">1</td>
-                       <td className="border border-gray-400 px-3 py-2">{truckType}</td>
-                       <td className="border border-gray-400 px-3 py-2 text-center">1</td>
-                       <td className="border border-gray-400 px-3 py-2">{routeDisplay}</td>
-                    </tr>
-                 </tbody>
-              </table>
-
-              {/* Notes */}
-              <div className="mb-8">
-                 <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Catatan</p>
-                 <div className="border border-gray-300 rounded-md p-3 text-xs text-gray-600 min-h-[35px]">
-                    {notes}
-                 </div>
-              </div>
-
-              {/* Signature Section */}
-              <div className="grid grid-cols-3 gap-8 text-center mb-6">
-                 <div>
-                    <p className="text-xs text-gray-500 mb-12">Dibuat Oleh</p>
-                    <div className="border-t border-black pt-2">
-                       <p className="text-xs font-bold">{creatorName}</p>
+              {/* Signatures */}
+              <div className="border-t border-black pt-1.5 mt-3">
+                 <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                       <p style={{ fontSize: '8px' }} className="font-black uppercase tracking-wider mb-6">Penerima</p>
+                       <div className="border-b border-gray-400 w-3/4 mx-auto mb-0.5"></div>
+                       <p style={{ fontSize: '7px' }} className="font-bold text-gray-500 uppercase">Cap & Tanda Tangan</p>
+                    </div>
+                    <div className="border-x border-gray-200">
+                       <p style={{ fontSize: '8px' }} className="font-black uppercase tracking-wider mb-6">Pengemudi</p>
+                       <div className="border-b border-gray-400 w-3/4 mx-auto mb-0.5"></div>
+                       <p style={{ fontSize: '8px' }} className="font-black uppercase">{driverName}</p>
+                    </div>
+                    <div>
+                       <p style={{ fontSize: '8px' }} className="font-black uppercase tracking-wider mb-6">Pengirim</p>
+                       <div className="border-b border-gray-400 w-3/4 mx-auto mb-0.5"></div>
+                       <p style={{ fontSize: '7px' }} className="font-bold text-gray-500 uppercase">Bag. Operasional</p>
                     </div>
                  </div>
-                 <div>
-                    <p className="text-xs text-gray-500 mb-12">Driver / Pengirim</p>
-                    <div className="border-t border-black pt-2">
-                       <p className="text-xs font-bold">{driverName}</p>
-                    </div>
-                 </div>
-                 <div>
-                    <p className="text-xs text-gray-500 mb-12">Penerima</p>
-                    <div className="border-t border-black pt-2">
-                       <p className="text-xs font-bold">{customerName}</p>
-                    </div>
-                 </div>
-              </div>
-
-              {/* Footer */}
-              <div className="pt-3 border-t border-gray-200 text-center">
-                 <p className="text-[9px] text-gray-400">Dokumen ini sah sebagai bukti pengiriman resmi dari {tenantName}</p>
               </div>
            </div>
         </div>
@@ -303,27 +280,32 @@ export default function JobOrderManagementPage() {
 
       if (baseError) throw baseError;
       const rawJOs = baseData || [];
-      // [AI] Strictly filter for TRUCKING SBU to prevent Warehouse JOs from leaking into Trucking Dashboard
-      const truckingJOs = rawJOs.filter((jo: any) => jo.wo_item?.sbu_type === 'TRUCKING');
+      // [AI] Filter for TRUCKING SBU (or fallback when sbu_type is null/not set in older records)
+      const truckingJOs = rawJOs.filter((jo: any) => jo.wo_item?.sbu_type === 'TRUCKING' || jo.sbu_type === 'TRUCKING' || (!jo.sbu_type && (!jo.wo_item || !jo.wo_item.sbu_type || jo.wo_item.sbu_type === 'TRUCKING')));
       
-      // [AI] Include rejected JOs even if they have no driver/fleet — they still need to be visible
-      const baseJOs = Array.from(new Map(truckingJOs.map(jo => [jo.id, jo])).values())
-        .filter(jo => jo.driver_id && jo.fleet_id || ['REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'].includes(jo.status?.toUpperCase()));
+      // [AI] Include all trucking JOs so they appear in their respective tabs (New, Assigned, On Journey, Done, Rejected)
+      const baseJOs = Array.from(new Map(truckingJOs.map(jo => [jo.id, jo])).values());
 
       if (baseJOs.length > 0) {
         const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))];
         const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
+        const transporterIds = [...new Set(baseJOs.map(j => j.transporter_id || j.vendor_id).filter(Boolean))];
 
-        const [driversRes, fleetsRes] = await Promise.all([
+        const [driversRes, fleetsRes, transportersRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone, md_entities(is_vendor)').in('id', driverIds) : { data: [] },
-          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] }
+          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] },
+          transporterIds.length > 0 ? supabase.from('md_entities').select('id, name, legal_name, phone').in('id', transporterIds) : { data: [] }
         ]);
 
-        const enrichedJOs = baseJOs.map(jo => ({
-          ...jo,
-          md_drivers: driversRes.data?.find(d => d.id === jo.driver_id),
-          md_fleets: fleetsRes.data?.find(f => f.id === jo.fleet_id)
-        }));
+        const enrichedJOs = baseJOs.map(jo => {
+          const transporter = transportersRes.data?.find(t => t.id === jo.transporter_id || t.id === jo.vendor_id);
+          return {
+            ...jo,
+            md_drivers: driversRes.data?.find(d => d.id === jo.driver_id),
+            md_fleets: fleetsRes.data?.find(f => f.id === jo.fleet_id),
+            md_transporters: transporter
+          };
+        });
 
         setJobOrders(enrichedJOs);
       } else {
@@ -567,10 +549,10 @@ export default function JobOrderManagementPage() {
                           </div>
                           <div className="min-w-0">
                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic text-ellipsis overflow-hidden">Pilot</p>
-                             <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{jo.md_drivers?.name || 'OUTSOURCED'}</p>
+                             <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{jo.md_drivers?.name || jo.md_transporters?.legal_name || jo.md_transporters?.name || (getJobCategory(jo) === 'awaiting' ? 'BELUM DITUGASKAN' : 'OUTSOURCED')}</p>
                              <div className="flex items-center gap-1.5 mt-0.5">
                                 <Phone size={10} className="text-blue-500" />
-                                <p className="text-[9px] font-bold text-slate-500 tracking-tight">{jo.driver_phone || jo.md_drivers?.phone || 'NO CONTACT'}</p>
+                                <p className="text-[9px] font-bold text-slate-500 tracking-tight">{jo.driver_phone || jo.md_drivers?.phone || jo.md_transporters?.phone || 'NO CONTACT'}</p>
                              </div>
                           </div>
                        </div>
@@ -582,8 +564,8 @@ export default function JobOrderManagementPage() {
                           </div>
                           <div className="min-w-0">
                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic text-ellipsis overflow-hidden">Asset</p>
-                             <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{jo.md_fleets?.plate_number || 'Generic Unit'}</p>
-                             <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate">{jo.md_fleets?.fleet_type?.type_name || 'Generic Class'}</p>
+                             <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{jo.md_fleets?.plate_number || (jo.md_transporters ? 'VENDOR UNIT' : (getJobCategory(jo) === 'awaiting' ? 'BELUM DIISI' : 'Generic Unit'))}</p>
+                             <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate">{jo.md_fleets?.fleet_type?.type_name || (jo.md_transporters ? 'Transporter Partner' : 'Generic Class')}</p>
                           </div>
                        </div>
 

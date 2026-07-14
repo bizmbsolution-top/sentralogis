@@ -65,7 +65,7 @@ function DocumentsAndFinancesContent() {
           driver_revenue_share,
           driver_payment_amount, driver_payment_status,
           base_price, driver_share_percentage,
-          is_doc_finished, is_cost_finished, created_at, updated_at
+          is_doc_finished, is_cost_finished, created_at, updated_at, assignment_documents
         `)
         .in('status', [
             'accepted', 'ORDER DITERIMA', 'DITERIMA',
@@ -88,7 +88,7 @@ function DocumentsAndFinancesContent() {
         const [driversRes, fleetsRes, woItemsRes, costsRes, viRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name').in('id', driverIds) : { data: [] },
           fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type_id, md_entities(name, is_vendor), md_fleet_types(type_name)').in('id', fleetIds) : { data: [] },
-          woItemIds.length > 0 ? supabase.from('wo_items').select('id, wo_id, item_data').in('id', woItemIds) : { data: [] },
+          woItemIds.length > 0 ? supabase.from('wo_items').select('id, wo_id, item_data, sbu_type').in('id', woItemIds) : { data: [] },
           supabase.from('extra_costs').select('id, jo_id, status').in('jo_id', jos.map(j => j.id)),
           supabase.from('vendor_invoices').select('id, invoice_number, status, jo_ids, invoice_amount')
         ]);
@@ -127,8 +127,11 @@ function DocumentsAndFinancesContent() {
           has_draft_costs: costsData.some(c => c.jo_id === j.id && c.status === 'draft')
         }));
 
+        // Only show TRUCKING jobs on this trucking page (warehouse JOs have no trucking fleet/driver)
+        const truckingOnly = hydrated.filter(j => j.wo_items?.sbu_type === 'TRUCKING');
+
         // DEDUPLICATION: Ensure unique JO IDs
-        const uniqueHydrated = Array.from(new Map(hydrated.map(item => [item.id, item])).values());
+        const uniqueHydrated = Array.from(new Map(truckingOnly.map(item => [item.id, item])).values());
         setJobs(uniqueHydrated);
       } else {
         setJobs([]);
@@ -395,6 +398,7 @@ function DocumentsAndFinancesContent() {
           onFinalizeGate={handleFinalizeGate}
           onAddCost={(j) => setHybridFinanceJob(j)}
           onOpenFinanceHub={(j) => setHybridFinanceJob(j)}
+          onUpdate={(updated) => setSelectedJob(updated)}
         />
       )}
 

@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
+  TrendingDown,
+  Minus,
   ChevronRight,
   Package,
   FileCheck,
@@ -37,6 +39,15 @@ type SlaCompliance = {
   pass_count: number;
   fail_count: number;
   compliance_pct: number;
+  target_minutes: number;
+};
+
+type SlaSbuBreakdown = {
+  sbu_type: string;
+  compliance_pct: number;
+  total_count: number;
+  pass_count: number;
+  fail_count: number;
   target_minutes: number;
 };
 
@@ -94,6 +105,15 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 3', 
+    label: 'Assigned → Completed', 
+    desc: 'Proses Eksekusi per SBU', 
+    target: '2-5 hari', 
+    icon: Truck, 
+    link: '/hq/sbu-activities',
+    color: 'cyan' 
+  },
+  { 
+    id: 'SLA 4', 
     label: 'Done → Ready Billing', 
     desc: 'Doc & cost complete', 
     target: '3 hari', 
@@ -102,7 +122,7 @@ const SLA_CONFIG = [
     color: 'purple' 
   },
   { 
-    id: 'SLA 4', 
+    id: 'SLA 5', 
     label: 'Ready → Invoiced', 
     desc: 'Finance audit', 
     target: '1 hari', 
@@ -111,7 +131,7 @@ const SLA_CONFIG = [
     color: 'emerald' 
   },
   { 
-    id: 'SLA 5', 
+    id: 'SLA 6', 
     label: 'Accepted → Paid', 
     desc: 'AR collection', 
     target: 'per ToP', 
@@ -120,7 +140,7 @@ const SLA_CONFIG = [
     color: 'amber' 
   },
   { 
-    id: 'SLA 6', 
+    id: 'SLA 7', 
     label: 'Vendor Invoice → Paid', 
     desc: 'AP discipline', 
     target: 'per ToP', 
@@ -129,6 +149,14 @@ const SLA_CONFIG = [
     color: 'rose' 
   },
 ];
+
+// Per-SBU target minutes for SLA 3 (Processing)
+const SBU_SLA3_TARGETS: Record<string, number> = {
+  TRUCKING: 2 * 24 * 60,    // 2 days = 2880 min
+  WAREHOUSE: 3 * 24 * 60,   // 3 days = 4320 min
+  CLEARANCE: 5 * 24 * 60,   // 5 days = 7200 min
+  FORWARDING: 3 * 24 * 60,  // 3 days = 4320 min
+};
 
 const FLEET_COLORS: Record<string, string> = {
   blue: 'text-blue-600',
@@ -189,6 +217,8 @@ export default function HQOpsDashboardPage() {
   const [apDueAlerts, setApDueAlerts] = useState<DueAlert[]>([]);
   const [escalations, setEscalations] = useState<any[]>([]);
   const [escalationCount, setEscalationCount] = useState(0);
+  const [slaSbuBreakdown, setSlaSbuBreakdown] = useState<SlaSbuBreakdown[]>([]);
+  const [slaTrend, setSlaTrend] = useState<any[]>([]);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [metrics, setMetrics] = useState({
     activeMissions: 0,
@@ -208,11 +238,19 @@ export default function HQOpsDashboardPage() {
     
     try {
       // 1. Fetch Work Orders for Local SLA Calculation
-      const { data: wos } = await supabase
-        .from('work_orders')
-        .select('id, wo_number, status, created_at, updated_at, target_date')
-        .eq('tenant_id', profile.tenant_id)
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+      // 1. Fetch Work Orders and Job Orders for Local SLA Calculation
+      const [{ data: wos }, { data: josSla }] = await Promise.all([
+        supabase
+          .from('work_orders')
+          .select('id, wo_number, status, created_at, updated_at, target_date')
+          .eq('tenant_id', profile.tenant_id)
+          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase
+          .from('job_orders')
+          .select('id, status, sbu_type, created_at, updated_at')
+          .eq('tenant_id', profile.tenant_id)
+          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      ]);
 
       const workOrders = wos || [];
       const totalWO = workOrders.length;
@@ -223,7 +261,7 @@ export default function HQOpsDashboardPage() {
       // [AI] Only show real data — no mock/hardcoded values for empty tenants
       if (totalWO === 0) {
         // Empty state: all SLA at 0%
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 7; i++) {
           localSlaData.push({
             sla_stage: `SLA ${i}`,
             compliance_pct: 0,
@@ -232,6 +270,7 @@ export default function HQOpsDashboardPage() {
             fail_count: 0
           });
         }
+        setSlaSbuBreakdown([]);
       } else {
         // SLA 1: WO Draft -> Submit
         const passSla1 = workOrders.filter(wo => wo.status !== 'DRAFT').length;
@@ -253,18 +292,48 @@ export default function HQOpsDashboardPage() {
           fail_count: Math.max(0, totalWO - passSla2)
         });
 
-        // SLA 3: Done -> Ready Billing
-        const passSla3 = workOrders.filter(wo => ['COMPLETED','PAID'].includes(wo.status)).length;
+        // SLA 3: Assigned -> Completed (Proses Eksekusi per SBU)
+        const sbuList = ['TRUCKING', 'WAREHOUSE', 'CLEARANCE', 'FORWARDING'];
+        const breakdown: SlaSbuBreakdown[] = [];
+        let totalSla3 = 0;
+        let passSla3 = 0;
+
+        for (const sbu of sbuList) {
+          const sbuJos = (josSla || []).filter(j => (j.sbu_type || 'TRUCKING').toUpperCase() === sbu);
+          const total = sbuJos.length;
+          const targetMin = SBU_SLA3_TARGETS[sbu] || 2880;
+          let pass = 0;
+          for (const j of sbuJos) {
+            const created = new Date(j.created_at || Date.now()).getTime();
+            const updated = new Date(j.updated_at || Date.now()).getTime();
+            const diffMin = (updated - created) / (1000 * 60);
+            if (['COMPLETED', 'PAID', 'DONE', 'SELESAI', 'PEKERJAAN SELESAI', 'RECEIVED'].includes((j.status || '').toUpperCase()) && diffMin <= targetMin) {
+              pass++;
+            }
+          }
+          breakdown.push({
+            sbu_type: sbu,
+            compliance_pct: total > 0 ? Math.round((pass / total) * 100) : 0,
+            total_count: total,
+            pass_count: pass,
+            fail_count: Math.max(0, total - pass),
+            target_minutes: targetMin
+          });
+          totalSla3 += total;
+          passSla3 += pass;
+        }
+        setSlaSbuBreakdown(breakdown);
+
         localSlaData.push({
           sla_stage: 'SLA 3',
-          compliance_pct: Math.round((passSla3 / totalWO) * 100) || 0,
-          total_count: totalWO,
+          compliance_pct: totalSla3 > 0 ? Math.round((passSla3 / totalSla3) * 100) : 0,
+          total_count: totalSla3,
           pass_count: passSla3,
-          fail_count: Math.max(0, totalWO - passSla3)
+          fail_count: Math.max(0, totalSla3 - passSla3)
         });
 
-        // SLA 4: Ready -> Invoiced
-        const passSla4 = workOrders.filter(wo => wo.status === 'PAID').length;
+        // SLA 4: Done -> Ready Billing
+        const passSla4 = workOrders.filter(wo => ['COMPLETED','PAID'].includes(wo.status)).length;
         localSlaData.push({
           sla_stage: 'SLA 4',
           compliance_pct: Math.round((passSla4 / totalWO) * 100) || 0,
@@ -273,7 +342,7 @@ export default function HQOpsDashboardPage() {
           fail_count: Math.max(0, totalWO - passSla4)
         });
 
-        // SLA 5: Accepted -> Paid
+        // SLA 5: Ready -> Invoiced
         const passSla5 = workOrders.filter(wo => wo.status === 'PAID').length;
         localSlaData.push({
           sla_stage: 'SLA 5',
@@ -283,7 +352,7 @@ export default function HQOpsDashboardPage() {
           fail_count: Math.max(0, totalWO - passSla5)
         });
 
-        // SLA 6: Vendor Invoice -> Paid
+        // SLA 6: Accepted -> Paid
         const passSla6 = workOrders.filter(wo => wo.status === 'PAID').length;
         localSlaData.push({
           sla_stage: 'SLA 6',
@@ -291,6 +360,16 @@ export default function HQOpsDashboardPage() {
           total_count: totalWO,
           pass_count: passSla6,
           fail_count: Math.max(0, totalWO - passSla6)
+        });
+
+        // SLA 7: Vendor Invoice -> Paid
+        const passSla7 = workOrders.filter(wo => wo.status === 'PAID').length;
+        localSlaData.push({
+          sla_stage: 'SLA 7',
+          compliance_pct: Math.round((passSla7 / totalWO) * 100) || 0,
+          total_count: totalWO,
+          pass_count: passSla7,
+          fail_count: Math.max(0, totalWO - passSla7)
         });
       }
 
@@ -372,48 +451,35 @@ export default function HQOpsDashboardPage() {
         setWoAlerts(alerts.slice(0, 10));
       }
 
-      // 4. AR due alerts (customer invoices) — scoped to tenant via work_orders join
-      const { data: arInvoices } = await supabase
-        .from('invoices')
-        .select(`
-          id, invoice_number, total_billing, status, due_date, wo_id,
-          work_orders!wo_id(tenant_id)
-        `)
-        .in('status', ['sent', 'accepted'])
-        .order('due_date', { ascending: true })
-        .limit(50);
+      // 4. AR due alerts (customer invoices) — scoped to tenant via work_orders
+      const { data: tenantWos } = await supabase
+        .from('work_orders')
+        .select('id, customer_id')
+        .eq('tenant_id', profile.tenant_id);
 
-      // Filter to only this tenant's invoices
-      const tenantArInvoices = (arInvoices || []).filter(
-        (inv: any) => inv.work_orders?.tenant_id === profile.tenant_id
-      ).slice(0, 10);
+      const woMap = new Map((tenantWos || []).map(wo => [wo.id, wo.customer_id]));
+      const woIds = Array.from(woMap.keys());
 
-      if (tenantArInvoices.length > 0) {
-        const woIds = tenantArInvoices.map(i => i.wo_id).filter(Boolean);
-        const { data: workOrders } = await supabase
-          .from('work_orders')
-          .select('id, customer_id')
-          .eq('tenant_id', profile.tenant_id)
-          .in('id', woIds);
-
-        const woMap = new Map((workOrders || []).map(wo => [wo.id, wo.customer_id]));
-        const arResult = tenantArInvoices.map(inv => ({
-          ...inv,
-          wo: woMap.has(inv.wo_id) ? { customer_id: woMap.get(inv.wo_id) } : null,
-        }));
+      if (woIds.length > 0) {
+        const { data: arInvoices } = await supabase
+          .from('invoices')
+          .select('id, invoice_number, total_billing, status, due_date, wo_id')
+          .in('wo_id', woIds)
+          .in('status', ['sent', 'accepted'])
+          .order('due_date', { ascending: true })
+          .limit(10);
 
         const now = new Date();
         const arAlerts: DueAlert[] = [];
-        for (const inv of arResult) {
+        for (const inv of (arInvoices || [])) {
           if (!inv.due_date) continue;
           const due = new Date(inv.due_date);
           const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           if (daysUntilDue <= 3) {
-            const customerName = (inv as any).wo?.customer_id || '';
             arAlerts.push({
               id: inv.id,
               invoice_number: inv.invoice_number || 'N/A',
-              entity_name: customerName,
+              entity_name: woMap.get(inv.wo_id) || 'Customer',
               amount: inv.total_billing || 0,
               due_date: inv.due_date,
               days_until_due: daysUntilDue,
@@ -496,6 +562,17 @@ export default function HQOpsDashboardPage() {
         pendingJobs: jos.filter(j => j.status === 'pending').length,
         readyToInvoice: jos.filter(j => j.status === 'ready_for_billing').length
       });
+
+      // 7. Fetch SLA Trend (last 4 weeks)
+      const cutoffDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data: trendData } = await supabase
+        .from('sla_daily_snapshots')
+        .select('snapshot_date, sla_stage, compliance_pct, total_count, pass_count')
+        .eq('tenant_id', profile.tenant_id)
+        .gte('snapshot_date', cutoffDate)
+        .order('snapshot_date', { ascending: true });
+
+      setSlaTrend(trendData || []);
 
       setLastRefresh(new Date());
     } catch (err) {
@@ -659,6 +736,160 @@ export default function HQOpsDashboardPage() {
           })}
         </div>
       </div>
+
+      {/* SLA 3 SBU Breakdown */}
+      {slaSbuBreakdown.some(s => s.total_count > 0) && (
+        <div className="max-w-7xl mx-auto mb-8">
+          <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
+            <div className="p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-cyan-50 text-cyan-600 rounded-lg flex items-center justify-center">
+                  <Truck size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">SLA 3 — Proses Eksekusi per SBU</h3>
+                  <p className="text-xs text-slate-400">Assigned → Completed (target berbeda per SBU)</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {slaSbuBreakdown.map((sbu) => {
+                  const status = getSlaStatus(sbu.compliance_pct);
+                  const targetDays = Math.round(sbu.target_minutes / (24 * 60));
+                  return (
+                    <div key={sbu.sbu_type} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-slate-600">{sbu.sbu_type}</span>
+                        <span className="text-[10px] text-slate-400">{targetDays}h target</span>
+                      </div>
+                      <div className="flex items-end gap-2 mb-2">
+                        <span className="text-xl font-semibold text-slate-900">{sbu.compliance_pct}%</span>
+                        <span className={`text-[10px] font-medium mb-0.5 ${status.color}`}>{status.label}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(sbu.compliance_pct)}`} 
+                          style={{ width: `${sbu.compliance_pct}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-[10px] text-slate-400">
+                        {sbu.pass_count}/{sbu.total_count} on time
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* SLA Trend — Last 4 Weeks */}
+      {slaTrend.length > 0 && (
+        <div className="max-w-7xl mx-auto mb-8">
+          <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+                  <TrendingUp size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">SLA Trend — Last 4 Weeks</h3>
+                  <p className="text-xs text-slate-400">Compliance mingguan per stage (rekapan snapshot harian)</p>
+                </div>
+              </div>
+              <span className="text-[11px] font-medium px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200">
+                {slaTrend.length} Snapshots
+              </span>
+            </div>
+            <div className="p-5 overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className="pb-3 pr-4">SLA Stage</th>
+                    <th className="pb-3 px-4 text-center">Minggu -3</th>
+                    <th className="pb-3 px-4 text-center">Minggu -2</th>
+                    <th className="pb-3 px-4 text-center">Minggu -1</th>
+                    <th className="pb-3 px-4 text-center">Minggu Ini</th>
+                    <th className="pb-3 pl-4 text-right">Tren & Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                  {SLA_CONFIG.map((cfg) => {
+                    const stageSnaps = slaTrend.filter(s => s.sla_stage === cfg.id);
+                    const nowTime = Date.now();
+                    const getWeekAvg = (minDays: number, maxDays: number) => {
+                      const wSnaps = stageSnaps.filter(s => {
+                        const daysAgo = Math.floor((nowTime - new Date(s.snapshot_date).getTime()) / (24 * 60 * 60 * 1000));
+                        return daysAgo >= minDays && daysAgo <= maxDays;
+                      });
+                      if (wSnaps.length === 0) return null;
+                      const sum = wSnaps.reduce((acc, curr) => acc + Number(curr.compliance_pct), 0);
+                      return Math.round(sum / wSnaps.length);
+                    };
+
+                    const w3 = getWeekAvg(21, 27);
+                    const w2 = getWeekAvg(14, 20);
+                    const w1 = getWeekAvg(7, 13);
+                    const w0 = getWeekAvg(0, 6);
+
+                    const latestPct = w0 !== null ? w0 : (w1 !== null ? w1 : (w2 !== null ? w2 : (w3 !== null ? w3 : 0)));
+                    const prevPct = w1 !== null ? w1 : (w2 !== null ? w2 : (w3 !== null ? w3 : latestPct));
+                    const diff = latestPct - prevPct;
+                    const status = getSlaStatus(latestPct);
+
+                    const renderWeekBadge = (val: number | null) => {
+                      if (val === null) return <span className="text-slate-300">—</span>;
+                      const st = getSlaStatus(val);
+                      return (
+                        <span className={`inline-block px-2 py-0.5 rounded font-semibold text-[11px] ${st.color}`}>
+                          {val}%
+                        </span>
+                      );
+                    };
+
+                    return (
+                      <tr key={cfg.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3 pr-4">
+                          <div className="font-semibold text-slate-900">{cfg.id}</div>
+                          <div className="text-[11px] text-slate-400">{cfg.label}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">{renderWeekBadge(w3)}</td>
+                        <td className="py-3 px-4 text-center">{renderWeekBadge(w2)}</td>
+                        <td className="py-3 px-4 text-center">{renderWeekBadge(w1)}</td>
+                        <td className="py-3 px-4 text-center">{renderWeekBadge(w0)}</td>
+                        <td className="py-3 pl-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {diff > 0 && (
+                              <span className="flex items-center gap-0.5 text-emerald-600 font-semibold text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                <TrendingUp size={12} /> +{diff}%
+                              </span>
+                            )}
+                            {diff < 0 && (
+                              <span className={`flex items-center gap-0.5 font-semibold text-[11px] px-1.5 py-0.5 rounded border ${diff <= -10 ? 'text-rose-600 bg-rose-50 border-rose-200 animate-pulse' : 'text-amber-600 bg-amber-50 border-amber-100'}`}>
+                                <TrendingDown size={12} /> {diff}%
+                              </span>
+                            )}
+                            {diff === 0 && (
+                              <span className="flex items-center gap-0.5 text-slate-400 font-medium text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">
+                                <Minus size={12} /> Steady
+                              </span>
+                            )}
+                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded ${status.color}`}>
+                              {status.label}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Active Breaches Table */}
       <div className="max-w-7xl mx-auto mb-8">

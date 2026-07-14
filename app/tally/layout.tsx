@@ -6,33 +6,18 @@ import { useEffect, useState } from 'react';
 import { Loader2, PackageSearch, CloudDownload, CloudUpload, User } from 'lucide-react';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
+import { NetworkIndicator } from '@/components/shared/NetworkIndicator';
 
 export default function TallyLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     if (!loading && !profile) {
       router.replace('/login?redirect=/tally');
     }
   }, [profile, loading, router]);
-
-  useEffect(() => {
-    // Online/Offline detection
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   if (loading || !profile) {
     return (
@@ -46,15 +31,11 @@ export default function TallyLayout({ children }: { children: React.ReactNode })
   const isDetail = pathname.includes('/inbound/') || pathname.includes('/outbound/');
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex flex-col min-h-screen bg-slate-50 overflow-hidden font-sans pt-6">
       <Toaster position="top-center" />
       
-      {/* Top Status Bar (Only visible if offline) */}
-      {!isOnline && (
-        <div className="bg-rose-500 text-white text-[10px] font-bold text-center py-1 uppercase tracking-widest flex items-center justify-center gap-2">
-          Anda Sedang Offline
-        </div>
-      )}
+      {/* Network Status Indicator */}
+      <NetworkIndicator />
 
       {/* Main Content Area */}
       <main className={`flex-1 overflow-y-auto ${!isDetail ? 'pb-20' : ''}`}>

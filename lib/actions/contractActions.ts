@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { unstable_noStore as noStore } from 'next/cache';
 
 export interface StorageContract {
@@ -37,14 +36,20 @@ export interface BillingRateInput {
 
 export async function getWarehouseContracts(tenantId: string) {
   noStore();
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('md_storage_contracts')
     .select(`
       *,
-      md_entities!md_storage_contracts_customer_id_fkey (name, code),
-      md_warehouses!md_storage_contracts_warehouse_id_fkey (name)
+      md_entities!md_storage_contracts_customer_id_fkey (name, legal_name, entity_code),
+      md_contract_warehouses (
+        id,
+        warehouse_id,
+        committed_space,
+        uom_space,
+        md_warehouses (name, code)
+      )
     `)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
@@ -54,7 +59,13 @@ export async function getWarehouseContracts(tenantId: string) {
     return [];
   }
 
-  return data as StorageContract[];
+  console.log('Fetched contracts count:', data?.length);
+  return data as any[];
+}
+
+export async function revalidateContracts() {
+  const { revalidatePath } = await import('next/cache');
+  revalidatePath('/hq/business/contracts');
 }
 
 export async function createWarehouseContract(
@@ -62,7 +73,7 @@ export async function createWarehouseContract(
   contractData: Omit<StorageContract, 'id' | 'tenant_id' | 'created_at' | 'md_entities' | 'md_warehouses' | 'status' | 'created_by'> & { status: string, notes?: string },
   billingRates: BillingRateInput[]
 ) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
   const userId = user?.user?.id;
 

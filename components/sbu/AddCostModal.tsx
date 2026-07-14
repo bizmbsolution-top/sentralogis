@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "react-hot-toast";
 
@@ -35,26 +36,24 @@ interface AddCostModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialJoId?: string | null;
+  sbuType?: string;
 }
 
-const COST_TYPES = [
-  { id: "unloading", label: "Unloading / Kuli" },
-  { id: "port_ticket", label: "Tiket Pelabuhan" },
-  { id: "overnight", label: "Overnight / Nginap" },
-  { id: "waiting", label: "Waiting Time" },
-  { id: "parking", label: "Parkir & Tol" },
-  { id: "other", label: "Lain-lain" },
-];
+
 
 export default function AddCostModal({
   onClose,
   onSuccess,
   initialJoId,
+  sbuType = 'TRUCKING',
 }: AddCostModalProps) {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [jos, setJos] = useState<any[]>([]);
   const [fetchingJos, setFetchingJos] = useState(true);
   const [selectedJoId, setSelectedJoId] = useState(initialJoId || "");
+  const [selectedJoDetail, setSelectedJoDetail] = useState<any>(null);
+  const [fetchingDetail, setFetchingDetail] = useState(false);
 
   useEffect(() => {
     if (initialJoId) {
@@ -62,11 +61,20 @@ export default function AddCostModal({
     }
   }, [initialJoId]);
 
+  useEffect(() => {
+    if (selectedJoId) {
+      fetchDraftCosts(selectedJoId);
+      fetchJoDetail(selectedJoId);
+    } else {
+      setSelectedJoDetail(null);
+    }
+  }, [selectedJoId]);
+
   // Multi-cost State
   const [costs, setCosts] = useState<CostEntry[]>([
     {
       id: Math.random().toString(),
-      cost_type: "unloading",
+      cost_type: "",
       amount: "",
       description: "",
       charge_type: "reimbursement",
@@ -74,15 +82,21 @@ export default function AddCostModal({
     },
   ]);
   const [coaList, setCoaList] = useState<any[]>([]);
+  const [expenseList, setExpenseList] = useState<any[]>([]);
 
   const fetchCompletedJos = async () => {
     try {
       setFetchingJos(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from("job_orders")
-        .select("id, jo_number")
-        .eq("status", "completed")
-        .order("completed_at", { ascending: false });
+        .select("id, jo_number, purchase_price, base_price, fleet_id, transporter_id, wo_item_id, tenant_id")
+        .eq("status", "completed");
+
+      if (sbuType) {
+        query = query.eq("sbu_type", sbuType);
+      }
+
+      const { data, error } = await query.order("completed_at", { ascending: false });
 
       if (error) throw error;
       setJos(data || []);
@@ -90,6 +104,74 @@ export default function AddCostModal({
       console.error("Fetch Jobs Error:", err);
     } finally {
       setFetchingJos(false);
+    }
+  };
+
+  const fetchJoDetail = async (joId: string) => {
+    try {
+      setFetchingDetail(true);
+      const jo = jos.find(j => j.id === joId);
+      if (!jo) return;
+
+      const [fleetRes, transporterRes, woItemRes] = await Promise.all([
+        jo.fleet_id
+          ? supabase.from('md_fleets').select('id, plate_number, fleet_type_id, entity_id').eq('id', jo.fleet_id).maybeSingle()
+          : { data: null, error: null },
+        jo.transporter_id
+          ? supabase.from('md_entities').select('id, name').eq('id', jo.transporter_id).maybeSingle()
+          : { data: null, error: null },
+        jo.wo_item_id
+          ? supabase.from('wo_items').select('id, item_data, unit_price, total_revenue, wo_id').eq('id', jo.wo_item_id).maybeSingle()
+          : { data: null, error: null },
+      ]);
+
+      let fleetWithType: any = fleetRes?.data || null;
+      if (fleetWithType) {
+        const [fleetTypeRes, fleetEntityRes] = await Promise.all([
+          fleetWithType.fleet_type_id
+            ? supabase.from('md_fleet_types').select('type_name').eq('id', fleetWithType.fleet_type_id).maybeSingle()
+            : { data: null },
+          fleetWithType.entity_id
+            ? supabase.from('md_entities').select('name, is_vendor').eq('id', fleetWithType.entity_id).maybeSingle()
+            : { data: null },
+        ]);
+        fleetWithType = {
+          ...fleetWithType,
+          md_fleet_types: fleetTypeRes?.data || null,
+          md_entities: fleetEntityRes?.data || null,
+        };
+      }
+
+      let woWithCustomer = null;
+      if (woItemRes?.data?.wo_id) {
+        const woData = await supabase
+          .from('work_orders')
+          .select('id, wo_number, customer_id')
+          .eq('id', woItemRes.data.wo_id)
+          .maybeSingle();
+        const wo = woData?.data;
+        if (wo?.customer_id) {
+          const custRes = await supabase
+            .from('md_entities')
+            .select('name, legal_name')
+            .eq('id', wo.customer_id)
+            .maybeSingle();
+          woWithCustomer = { ...wo, md_entities: custRes?.data || null };
+        } else {
+          woWithCustomer = wo;
+        }
+      }
+
+      setSelectedJoDetail({
+        ...jo,
+        md_fleets: fleetWithType,
+        transporter: transporterRes?.data || null,
+        wo_items: woItemRes?.data ? { ...woItemRes.data, work_orders: woWithCustomer } : null,
+      });
+    } catch (err) {
+      console.error('Fetch JO Detail Error:', err);
+    } finally {
+      setFetchingDetail(false);
     }
   };
 
@@ -118,7 +200,6 @@ export default function AddCostModal({
         setCosts(loadedCosts);
         toast.success(`Loaded ${data.length} draft cost(s)`);
       } else {
-        // Reset to initial state if no drafts
         if (
           costs.length > 1 ||
           (costs.length === 1 && costs[0].amount !== "")
@@ -126,7 +207,7 @@ export default function AddCostModal({
           setCosts([
             {
               id: Math.random().toString(),
-              cost_type: "unloading",
+              cost_type: "",
               amount: "",
               description: "",
               charge_type: "reimbursement",
@@ -142,25 +223,23 @@ export default function AddCostModal({
 
   useEffect(() => {
     fetchCompletedJos();
-    // [AI] Fetch COA for cost account selection
     (async () => {
       const { data } = await supabase.from('finance_coa').select('id, account_number, account_name').order('account_number');
       if (data) setCoaList(data);
     })();
-  }, []);
-
-  useEffect(() => {
-    if (selectedJoId) {
-      fetchDraftCosts(selectedJoId);
-    }
-  }, [selectedJoId]);
+    (async () => {
+      if (!profile?.tenant_id) return;
+      const { data: expenseData } = await supabase.from('md_expense_items').select('id, expense_code, expense_name, expense_account_id').eq('tenant_id', profile?.tenant_id);
+      if (expenseData) setExpenseList(expenseData);
+    })();
+  }, [profile?.tenant_id]);
 
   const addCostRow = () => {
     setCosts([
       ...costs,
       {
         id: Math.random().toString(),
-        cost_type: "unloading",
+        cost_type: "",
         amount: "",
         description: "",
         charge_type: "reimbursement",
@@ -218,6 +297,8 @@ export default function AddCostModal({
 
     const invalidCost = costs.find((c) => !c.amount || isNaN(Number(c.amount)));
     if (invalidCost) return toast.error("Pastikan semua jumlah biaya valid");
+    const nonPositive = costs.find((c) => Number(c.amount) <= 0);
+    if (nonPositive) return toast.error("Pastikan semua jumlah biaya positif");
 
     const missingProof = costs.find(
       (c) => !c.proof_url && status === "need_approval",
@@ -231,7 +312,7 @@ export default function AddCostModal({
 
       const { data: selectedJoData, error: selectedJoError } = await supabase
         .from("job_orders")
-        .select("wo_item_id, transporter_id, vendor_id")
+        .select("wo_item_id, transporter_id, vendor_id, tenant_id")
         .eq("id", selectedJoId)
         .single();
 
@@ -257,7 +338,6 @@ export default function AddCostModal({
         cost_type: c.cost_type,
         charge_type: c.charge_type,
         amount: Number(c.amount),
-        // FALLBACK: Since proof_url column is missing, we use description to store the URL
         description: c.proof_url || c.cost_type.toUpperCase(),
         is_billable: true,
         paid_by_entity: c.paid_by_entity,
@@ -267,8 +347,6 @@ export default function AddCostModal({
         cost_account_id: c.cost_account_id || null,
       }));
 
-      // Delete existing drafts or pending submissions for this JO before saving/submitting
-      // This prevents duplicates if the user submits multiple times.
       await supabase
         .from("extra_costs")
         .delete()
@@ -278,12 +356,26 @@ export default function AddCostModal({
       const { error } = await supabase.from("extra_costs").insert(payloads);
       if (error) throw error;
 
-      // Update JO flag if submitted (not draft)
       if (status === "need_approval") {
         await supabase
           .from("job_orders")
           .update({ is_cost_finished: true })
           .eq("id", selectedJoId);
+
+        try {
+          const joObj = jos.find(j => j.id === selectedJoId);
+          await supabase.from("notifications").insert({
+            tenant_id: joObj?.tenant_id || selectedJoData?.tenant_id,
+            role: "hq_finance",
+            title: "Need Approval Add Cost",
+            message: `Biaya tambahan baru diajukan untuk JO ${joObj?.jo_number || selectedJoId}`,
+            type: "add_cost",
+            is_read: false,
+            metadata: { link: `/hq/finance/cost-audit?sbu=${sbuType}` }
+          });
+        } catch (e) {
+          console.error("Notification insert error", e);
+        }
       }
 
       toast.success(
@@ -369,6 +461,107 @@ export default function AddCostModal({
               </select>
             </div>
 
+            {/* Job Order Detail Card */}
+            {fetchingDetail ? (
+              <div className="flex items-center justify-center py-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+              </div>
+            ) : selectedJoDetail ? (
+              <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Job Order Details
+                  </p>
+                  <span className="text-sm font-black text-slate-900">{selectedJoDetail.jo_number}</span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Pelanggan</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {selectedJoDetail.wo_items?.work_orders?.md_entities?.legal_name ||
+                       selectedJoDetail.wo_items?.work_orders?.md_entities?.name || '-'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Route</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {selectedJoDetail.wo_items?.item_data?.origin_name ||
+                       selectedJoDetail.wo_items?.item_data?.shipper_name ||
+                       selectedJoDetail.wo_items?.item_data?.origin_city || '?'} → {selectedJoDetail.wo_items?.item_data?.destination_name ||
+                       selectedJoDetail.wo_items?.item_data?.recipient_name ||
+                       selectedJoDetail.wo_items?.item_data?.recipient_city || '?'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Armada</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {selectedJoDetail.md_fleets?.md_fleet_types?.type_name || selectedJoDetail.md_fleets?.plate_number || '-'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Vendor/Internal</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {selectedJoDetail.md_fleets?.md_entities?.is_vendor
+                        ? (selectedJoDetail.transporter?.name || selectedJoDetail.md_fleets?.md_entities?.name || 'Vendor')
+                        : 'Internal'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-slate-200">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Qty</p>
+                    <p className="text-xs font-bold text-slate-900">
+                      {(() => {
+                        const d = selectedJoDetail.wo_items?.item_data || {};
+                        const qty = d.qty || d.quantity || d.total_qty || d.total_weight;
+                        const uom = d.uom || d.unit || (d.total_weight ? 'kg' : '');
+                        return qty ? `${qty} ${uom}`.trim() : '-';
+                      })()}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Plat Nomor</p>
+                    <p className="text-xs font-bold text-slate-900">{selectedJoDetail.md_fleets?.plate_number || '-'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Harga Jual</p>
+                    <p className="text-xs font-black text-emerald-700">
+                      {(() => {
+                        const sellPrice = selectedJoDetail.base_price ||
+                          selectedJoDetail.wo_items?.unit_price ||
+                          selectedJoDetail.wo_items?.item_data?.deal_price ||
+                          selectedJoDetail.wo_items?.total_revenue || 0;
+                        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(sellPrice);
+                      })()}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-rose-600 uppercase tracking-wider">Harga Beli</p>
+                    <p className="text-xs font-black text-rose-700">
+                      {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(
+                        selectedJoDetail.purchase_price || 0
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-200 flex justify-end">
+                  {(() => {
+                    const sellPrice = selectedJoDetail.base_price ||
+                      selectedJoDetail.wo_items?.unit_price ||
+                      selectedJoDetail.wo_items?.item_data?.deal_price ||
+                      selectedJoDetail.wo_items?.total_revenue || 0;
+                    const buyPrice = selectedJoDetail.purchase_price || 0;
+                    const margin = sellPrice - buyPrice;
+                    return (
+                      <span className={`text-[10px] font-black uppercase tracking-wider ${margin > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        Margin: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(margin)}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+            ) : null}
+
             {/* Dynamic Costs Table */}
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
@@ -394,18 +587,23 @@ export default function AddCostModal({
                           Cost Type
                         </label>
                         <select
-                          className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-black text-slate-900 outline-none"
-                          value={cost.cost_type}
-                          onChange={(e) =>
-                            updateCost(cost.id, "cost_type", e.target.value)
-                          }
-                        >
-                          {COST_TYPES.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
+                           className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-black text-slate-900 outline-none"
+                           value={expenseList.find(e => e.expense_code === cost.cost_type)?.id || ''}
+                           onChange={(e) => {
+                             const selected = expenseList.find((exp) => exp.id === e.target.value);
+                             if (selected) {
+                               updateCost(cost.id, "cost_type", selected.expense_code);
+                               updateCost(cost.id, "cost_account_id", selected.expense_account_id || '');
+                             }
+                           }}
+                         >
+                           <option value="">-- Select Expense --</option>
+                           {expenseList.map((exp) => (
+                             <option key={exp.id} value={exp.id}>
+                               {exp.expense_code} - {exp.expense_name}
+                             </option>
+                           ))}
+                         </select>
                       </div>
 
                       <div className="md:col-span-2 space-y-2">

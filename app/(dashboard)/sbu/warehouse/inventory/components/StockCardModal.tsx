@@ -24,6 +24,7 @@ interface StockCardModalProps {
   productName: string;
   onClose: () => void;
   tenantId: string;
+  warehouseId?: string;
 }
 
 interface LocationStock {
@@ -33,7 +34,7 @@ interface LocationStock {
   status: string;
 }
 
-export default function StockCardModal({ productId, skuCode, productName, onClose, tenantId }: StockCardModalProps) {
+export default function StockCardModal({ productId, skuCode, productName, onClose, tenantId, warehouseId }: StockCardModalProps) {
   const supabase = createClient()!;
   const [loading, setLoading] = useState(true);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -47,37 +48,88 @@ export default function StockCardModal({ productId, skuCode, productName, onClos
     try {
       setLoading(true);
       
+      // Fetch wh_inventory for current stock snapshot (source of truth)
+      const { data: invSnapshot } = await supabase
+        .from('wh_inventory')
+        .select('quantity, status, location_id, location:location_id(code)')
+        .eq('product_sku_id', productId)
+        .eq('tenant_id', tenantId)
+        .filter('warehouse_id', 'eq', warehouseId || '__NONE__');
+
+      const locMap: Record<string, LocationStock> = {};
+      (invSnapshot || []).forEach((i: any) => {
+        const qty = Number(i.quantity || 0);
+        if (qty === 0) return;
+        const locCode = i.location?.code || (i.location_id ? i.location_id.substring(0, 8) : '-');
+        const status = i.status || 'AVAILABLE';
+        const key = `${locCode}|${status}`;
+        if (!locMap[key]) {
+          locMap[key] = { id: key, location_code: locCode, quantity: 0, status };
+        }
+        locMap[key].quantity += qty;
+      });
+      const invLocations = Object.values(locMap).sort((a, b) => a.location_code.localeCompare(b.location_code));
+      setLocations(invLocations);
+
       // 1. Fetch Inbound History
       const { data: inboundData, error: inboundError } = await supabase
         .from('wh_inbound_receipt_items')
         .select(`
           id, actual_good_qty, created_at, putaway_entries, putaway_location_id,
-          wh_inbound_receipts (
-            receipt_number, status, wo_item_id
+          wh_inbound_receipts!inner (
+            receipt_number, status, wo_item_id, tenant_id, warehouse_id
           )
         `)
         .eq('product_sku_id', productId)
+        .eq('wh_inbound_receipts.tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       // 2. Fetch Outbound History
       const { data: outboundData, error: outboundError } = await supabase
         .from('wh_outbound_shipment_items')
         .select(`
-          id, picked_qty, damage_qty, created_at, picking_entries,
-          wh_outbound_shipments (
-            shipment_number, status, wo_item_id
+          id, picked_qty, created_at, picking_entries,
+          wh_outbound_shipments!inner (
+            shipment_number, status, wo_item_id, tenant_id, warehouse_id
           )
         `)
         .eq('product_sku_id', productId)
+        .eq('wh_outbound_shipments.tenant_id', tenantId)
         .order('created_at', { ascending: false });
+
+      // Fetch Transfer Inbound data (via completed outbound shipments linked to transfers)
+      const { data: transferInData } = await supabase
+        .from('wh_outbound_shipment_items')
+        .select(`
+          picked_qty, product_sku_id, created_at,
+          wh_outbound_shipments!inner(transfer_id, status, shipment_number)
+        `)
+        .eq('product_sku_id', productId)
+        .eq('wh_outbound_shipments.status', 'COMPLETED')
+        .not('wh_outbound_shipments.transfer_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      // 3. Fetch Internal Movements
+      const { data: internalData, error: internalError } = await supabase
+        .from('wh_internal_movements')
+        .select(`
+          id, quantity, movement_date, status, reference_type, reference_id,
+          from_location:from_location_id(code),
+          to_location:to_location_id(code)
+        `)
+        .eq('product_sku_id', productId)
+        .eq('tenant_id', tenantId)
+        .eq('status', 'COMPLETED')
+        .order('movement_date', { ascending: false });
 
       if (inboundError) console.error("Inbound error:", inboundError);
       if (outboundError) console.error("Outbound error:", outboundError);
 
-      // Fetch JO Numbers
+      // Fetch JO Numbers — include internal movement reference_ids too
       const woItemIds = [
         ...(inboundData || []).map((m: any) => m.wh_inbound_receipts?.wo_item_id).filter(Boolean),
-        ...(outboundData || []).map((m: any) => m.wh_outbound_shipments?.wo_item_id).filter(Boolean)
+        ...(outboundData || []).map((m: any) => m.wh_outbound_shipments?.wo_item_id).filter(Boolean),
+        ...(internalData || []).map((m: any) => m.reference_id).filter(Boolean)
       ];
 
       const joMap: Record<string, string> = {};
@@ -166,54 +218,61 @@ export default function StockCardModal({ productId, skuCode, productName, onClos
         }
 
         // Handle Damaged Items During Outbound Checking
-        const dmg = Number(m.damage_qty || 0);
-        if (dmg > 0) {
-          allMovements.push({
-            id: `${m.id}-damage`,
-            movement_type: 'INBOUND (QUARANTINE)',
-            quantity: dmg,
-            reference_type: 'JO',
-            reference_id: refId,
-            location: 'Quarantine Zone',
-            notes: 'Damaged item returned to quarantine',
-            created_at: m.created_at, // Use the same timestamp
-          });
-        }
+        // We now rely on explicit Internal Movements (wh_internal_movements) to move items to quarantine.
+        // Therefore, we don't automatically generate an INBOUND (QUARANTINE) entry here anymore,
+        // which prevents mathematically inaccurate double-entries.
+      });
+
+      // Handle Internal Movements
+      (internalData || []).forEach((m: any) => {
+        // Internal movements create TWO rows in the ledger: an OUT from the source, and an IN to the destination
+        const refId = m.reference_id && joMap[m.reference_id] ? joMap[m.reference_id] : (m.reference_id || '-');
+        
+        // 1. OUT from source
+        allMovements.push({
+          id: `${m.id}-out`,
+          movement_type: 'MOVEMENT OUT',
+          quantity: Number(m.quantity),
+          reference_type: m.reference_type || 'MANUAL',
+          reference_id: refId,
+          location: m.from_location?.code || '-',
+          notes: 'Internal movement deduction',
+          created_at: m.movement_date
+        });
+
+        // 2. IN to destination
+        allMovements.push({
+          id: `${m.id}-in`,
+          movement_type: 'MOVEMENT IN',
+          quantity: Number(m.quantity),
+          reference_type: m.reference_type || 'MANUAL',
+          reference_id: refId,
+          location: m.to_location?.code || '-',
+          notes: 'Internal movement addition',
+          created_at: m.movement_date
+        });
+      });
+
+      // Handle Transfer Inbound (completed transfers)
+      (transferInData || []).forEach((m: any) => {
+        const shipment = m.wh_outbound_shipments;
+        if (!shipment) return;
+        allMovements.push({
+          id: `${m.id}-transfer-in`,
+          movement_type: 'TRANSFER IN',
+          quantity: Number(m.picked_qty || 0),
+          reference_type: 'TRANSFER',
+          reference_id: shipment.transfer_id || shipment.shipment_number || '-',
+          location: '-',
+          notes: 'Transfer inbound',
+          created_at: m.created_at,
+        });
       });
 
       // Sort combined array by created_at descending (newest first)
       allMovements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       setMovements(allMovements);
-
-      // Dynamically calculate current active locations from ledger history
-      const locationBalances: Record<string, { location_code: string; status: string; quantity: number }> = {};
-      
-      // We process from oldest to newest to build the balance
-      [...allMovements].reverse().forEach(m => {
-        const isOut = m.movement_type.includes('OUTBOUND') || m.movement_type.includes('MINUS');
-        const loc = m.location;
-        const status = m.movement_type.includes('QUARANTINE') ? 'QUARANTINE' : 'AVAILABLE';
-        const key = `${loc}|${status}`;
-        
-        if (!locationBalances[key]) {
-          locationBalances[key] = { location_code: loc, status, quantity: 0 };
-        }
-        
-        if (isOut) {
-          locationBalances[key].quantity -= m.quantity;
-        } else {
-          locationBalances[key].quantity += m.quantity;
-        }
-      });
-
-      const computedLocations = Object.values(locationBalances)
-        .filter(l => l.quantity !== 0) // Show locations with active or negative stock
-        .map((l, i) => ({ id: `dyn-${i}`, ...l }));
-      
-      // Sort locations alphabetically
-      computedLocations.sort((a, b) => a.location_code.localeCompare(b.location_code));
-      setLocations(computedLocations);
 
     } catch (e) {
       console.error('Failed to fetch stock card history:', e);
@@ -222,15 +281,17 @@ export default function StockCardModal({ productId, skuCode, productName, onClos
     }
   }
 
-  // Calculate a running balance from the bottom up
-  const ledger = [...movements].reverse().reduce((acc, m) => {
-    const isOut = m.movement_type.includes('OUTBOUND') || m.movement_type.includes('MINUS') || m.movement_type.includes('PICKING');
-    const prevBalance = acc.length > 0 ? acc[acc.length - 1].balance : 0;
-    const balance = isOut ? prevBalance - m.quantity : prevBalance + m.quantity;
-    
-    acc.push({ ...m, balance, isOut });
-    return acc;
-  }, [] as (Movement & { balance: number; isOut: boolean })[]).reverse(); // Reverse back for latest first
+  // Running balance starts from wh_inventory current stock (newest-first, walks backwards)
+  const currentStockTotal = locations.reduce((sum, loc) => sum + loc.quantity, 0);
+  const ledger = (() => {
+    let running = currentStockTotal;
+    return movements.map((m) => {
+      const isOut = m.movement_type.includes('OUTBOUND') || m.movement_type.includes('MINUS') || m.movement_type.includes('PICKING') || m.movement_type === 'MOVEMENT OUT';
+      const balance = running;
+      running = isOut ? running + m.quantity : running - m.quantity;
+      return { ...m, balance, isOut };
+    });
+  })();
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">

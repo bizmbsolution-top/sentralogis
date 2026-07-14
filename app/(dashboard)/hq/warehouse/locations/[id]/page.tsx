@@ -605,7 +605,7 @@ export default function WarehouseZoningPage({ params }: { params: Promise<{ id: 
                      <option value="CBM">CBM</option>
                      <option value="SQM">SQM</option>
                      {uoms.map(u => (
-                        <option key={u.name} value={u.name}>{u.name}</option>
+                        <option key={u.id || u.name} value={u.name}>{u.name}</option>
                      ))}
                    </select>
                  </div>

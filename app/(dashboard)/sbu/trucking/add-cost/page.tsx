@@ -30,25 +30,64 @@ export default function SBUAddCostPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
 
+  const sbuType = 'TRUCKING';
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data: costs, error } = await supabase
         .from('extra_costs')
-        .select(`
-          *,
-          job_orders!jo_id (
-            jo_number,
-            purchase_price,
-            vendor_invoice_amount,
-            transporter:transporter_id (name),
-            wo_items:wo_item_id (item_data)
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setData(costs || []);
+
+      if (costs && costs.length > 0) {
+        let joIds = Array.from(new Set(costs.map(c => c.jo_id).filter(Boolean)));
+        const { data: jos } = await supabase
+          .from('job_orders')
+          .select(`
+            id, jo_number, purchase_price, vendor_invoice_amount,
+            transporter_id, wo_item_id
+          `)
+          .in('id', joIds)
+          .eq('sbu_type', sbuType);
+
+        if (jos && jos.length > 0) {
+          const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
+          const transporterIds = Array.from(new Set(jos.map(j => j.transporter_id).filter(Boolean)));
+
+          const [woItemsRes, transportersRes] = await Promise.all([
+            woItemIds.length > 0
+              ? supabase.from('wo_items').select('id, item_data').in('id', woItemIds)
+              : { data: [] },
+            transporterIds.length > 0
+              ? supabase.from('md_entities').select('id, name').in('id', transporterIds)
+              : { data: [] },
+          ]);
+
+          const woItemsMap = Object.fromEntries((woItemsRes.data || []).map(w => [w.id, w]));
+          const transportersMap = Object.fromEntries((transportersRes.data || []).map(t => [t.id, t]));
+
+          const josMap = Object.fromEntries(
+            jos.map(j => [j.id, {
+              ...j,
+              wo_items: woItemsMap[j.wo_item_id] || null,
+              transporter: transportersMap[j.transporter_id] || null,
+            }])
+          );
+
+          setData(
+            costs
+              .map(c => ({ ...c, job_orders: josMap[c.jo_id] || null }))
+              .filter(c => c.job_orders !== null)
+          );
+        } else {
+          setData([]);
+        }
+      } else {
+        setData([]);
+      }
     } catch (err: any) {
       console.error('Fetch Error:', err);
       toast.error('Gagal mengambil data Add Cost');
@@ -75,11 +114,27 @@ export default function SBUAddCostPage() {
 
   const handleSubmitToCS = async (id: string) => {
     try {
+      const item = data.find(c => c.id === id);
       const { error } = await supabase
         .from('extra_costs')
         .update({ status: 'need_approval' })
         .eq('id', id);
       if (error) throw error;
+
+      try {
+        await supabase.from('notifications').insert({
+          tenant_id: profile?.tenant_id,
+          role: 'hq_finance',
+          title: 'Need Approval Add Cost',
+          message: `Biaya tambahan diajukan untuk JO ${item?.job_orders?.jo_number || id}`,
+          type: 'add_cost',
+          is_read: false,
+          metadata: { link: '/hq/finance/cost-audit?sbu=TRUCKING' }
+        });
+      } catch (e) {
+        console.error('Failed notification insert', e);
+      }
+
       toast.success('Berhasil diajukan ke CS');
       fetchData();
     } catch (err) {
@@ -184,6 +239,7 @@ export default function SBUAddCostPage() {
         <AddCostModal 
           onClose={() => setIsAddModalOpen(false)}
           onSuccess={() => { setIsAddModalOpen(false); fetchData(); }}
+          sbuType="TRUCKING"
         />
       )}
 

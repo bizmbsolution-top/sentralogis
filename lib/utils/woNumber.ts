@@ -1,14 +1,33 @@
 import { supabase } from '@/lib/supabaseClient';
 
-// Generate WO Number: HALU-TPS-0526-001
-// HALU = Tenant name, TPS = Customer name (from md_entities.name), 0526 = MMYY, 001 = Order sequence per customer per month
+function cleanCode(str: string, maxLen = 5): string {
+  if (!str) return 'CUS';
+  const cleaned = str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  if (cleaned && cleaned.length <= maxLen) return cleaned;
+  
+  const words = str
+    .toUpperCase()
+    .replace(/\b(PT|CV|TBK|LTD|INC|PERSERO|INDONESIA)\b/g, '')
+    .replace(/[^A-Z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+    
+  if (words.length === 0) return (cleaned || 'CUS').substring(0, maxLen);
+  if (words.length === 1) return words[0].substring(0, maxLen);
+  if (words[0].length >= 3) return words[0].substring(0, maxLen);
+  return words.map(w => w[0]).join('').substring(0, maxLen) || 'CUS';
+}
+
 export async function generateWONumber(tenantId: string, tenantInitial: string, customerInitial: string): Promise<string> {
   const now = new Date();
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
   const yearShort = now.getFullYear().toString().slice(-2);
   const mmyy = `${month}${yearShort}`;
   
-  const prefix = `${tenantInitial || 'HQ'}-${customerInitial || 'CUS'}-${mmyy}-`;
+  const cleanTenant = cleanCode(tenantInitial, 5) || 'HQ';
+  const cleanCustomer = cleanCode(customerInitial, 5) || 'CUS';
+  const prefix = `${cleanTenant}-${cleanCustomer}-${mmyy}-`;
   
   try {
     const { data, error } = await supabase

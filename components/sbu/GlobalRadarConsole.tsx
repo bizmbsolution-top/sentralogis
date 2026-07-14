@@ -5,7 +5,10 @@ import { supabase } from '@/lib/supabaseClient';
 import GlobalRadarMap from './GlobalRadarMap';
 import { Loader2, AlertCircle, RefreshCw, Layers, Shield, Zap } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/hooks/useAuth';
+
+const TripReplayModal = dynamic(() => import('./TripReplayModal'), { ssr: false });
 
 export default function GlobalRadarConsole() {
   const { profile } = useAuth();
@@ -13,13 +16,29 @@ export default function GlobalRadarConsole() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [replayMission, setReplayMission] = useState<any>(null);
 
   const fetchActiveMissions = useCallback(async () => {
     try {
       if (!isSyncing) setLoading(true);
       
-      console.log('Radar Debug: Syncing from Secure API Matrix...');
-      const response = await fetch('/api/sbu/radar');
+      let tenantId = profile?.tenant_id;
+      const isGlobalRole = profile?.role === 'owner_sentralogis' || profile?.role?.startsWith('hq_');
+
+      if (!tenantId && isGlobalRole) {
+        try {
+          const { data: tenantData } = await supabase.from('tenants').select('id').limit(1);
+          if (tenantData && tenantData.length > 0) {
+            tenantId = tenantData[0].id;
+          }
+        } catch (e) {
+          console.error('Failed to resolve fallback tenant ID for GlobalRadarConsole:', e);
+        }
+      }
+
+      console.log('Radar Debug: Syncing from Secure API Matrix for tenant:', tenantId || 'GLOBAL');
+      const url = tenantId ? `/api/sbu/radar?tenant_id=${encodeURIComponent(tenantId)}` : '/api/sbu/radar';
+      const response = await fetch(url);
       const result = await response.json();
 
       if (result.error) throw new Error(result.error);
@@ -33,12 +52,12 @@ export default function GlobalRadarConsole() {
       setLoading(false);
       setIsSyncing(false);
     }
-  }, [isSyncing]);
+  }, [isSyncing, profile]);
 
   useEffect(() => {
     fetchActiveMissions();
 
-    // Set up Realtime subscription
+    // Set up Realtime subscription & 10-second polling interval
     const channel = supabase
       .channel('global-radar-updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'job_tracking' }, () => {
@@ -47,7 +66,12 @@ export default function GlobalRadarConsole() {
       })
       .subscribe();
 
+    const interval = setInterval(() => {
+      fetchActiveMissions();
+    }, 10000);
+
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [fetchActiveMissions, profile]);
@@ -118,7 +142,7 @@ export default function GlobalRadarConsole() {
       </div>
 
       {/* Main Map */}
-      <GlobalRadarMap missions={missions} />
+      <GlobalRadarMap missions={missions} onOpenReplay={(m) => setReplayMission(m)} />
 
       {/* Bottom Footer Decor */}
       <div className="absolute bottom-6 right-8 z-10 pointer-events-none opacity-20">
@@ -129,6 +153,12 @@ export default function GlobalRadarConsole() {
             </p>
          </div>
       </div>
+
+      <TripReplayModal 
+        isOpen={!!replayMission} 
+        onClose={() => setReplayMission(null)} 
+        jobOrder={replayMission} 
+      />
     </div>
   );
 }

@@ -106,6 +106,8 @@ export default function SBUOutboundPage() {
   const [outboundLines, setOutboundLines] = useState<OutboundLine[]>([]);
   const [outboundNotes, setOutboundNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   
   // Modal State
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export default function SBUOutboundPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile]);
+  }, [profile, selectedWarehouse]);
 
   async function fetchTasks() {
     try {
@@ -151,10 +153,29 @@ export default function SBUOutboundPage() {
       }
       if (!tid) return;
 
+      const { data: whData } = await supabase.from('md_warehouses').select('id, name').eq('tenant_id', tid);
+      if (whData) setWarehouses(whData);
+
+      let whId = profile?.warehouse_id;
+      if (!whId) {
+        if (selectedWarehouse) {
+          whId = selectedWarehouse;
+        } else if (whData && whData.length > 0) {
+          whId = whData[0].id;
+          setSelectedWarehouse(whId);
+        } else {
+          setLoading(false);
+          return;
+        }
+      } else {
+        setSelectedWarehouse(whId);
+      }
+
       const { data, error } = await supabase
         .from('wh_outbound_shipments')
         .select('*')
         .eq('tenant_id', tid)
+        .eq('warehouse_id', whId)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -195,6 +216,17 @@ export default function SBUOutboundPage() {
       }
       if (!tid) return;
 
+      let whId = profile?.warehouse_id;
+      if (!whId) {
+        if (selectedWarehouse) {
+          whId = selectedWarehouse;
+        } else if (warehouses && warehouses.length > 0) {
+          whId = warehouses[0].id;
+        } else {
+          return;
+        }
+      }
+
       const { data, error } = await (supabase as any)
         .from('wh_inventory')
         .select(`
@@ -204,6 +236,7 @@ export default function SBUOutboundPage() {
           location:location_id(code)
         `)
         .eq('tenant_id', tid)
+        .eq('warehouse_id', whId)
         .gt('available_quantity', 0)
         .order('expiry_date', { ascending: true })
         .limit(100);
@@ -351,6 +384,7 @@ export default function SBUOutboundPage() {
           .from('wh_inventory')
           .select('id, available_quantity, expiry_date, batch_number, location_id')
           .eq('tenant_id', tid)
+          .eq('warehouse_id', warehouseId)
           .eq('status', 'AVAILABLE')
           .gt('available_quantity', 0)
           .order('expiry_date', { ascending: isFEFO })
@@ -368,6 +402,7 @@ export default function SBUOutboundPage() {
           .from('wh_inventory')
           .select('id, available_quantity')
           .eq('tenant_id', tid)
+          .eq('warehouse_id', warehouseId)
           .eq('status', 'AVAILABLE')
           .gt('available_quantity', 0)
           .order('expiry_date', { ascending: isFEFO })
@@ -381,6 +416,7 @@ export default function SBUOutboundPage() {
           .from('wh_inventory')
           .select('id, available_quantity')
           .eq('tenant_id', tid)
+          .eq('warehouse_id', warehouseId)
           .eq('product_sku_id', sku.id)
           .eq('status', 'AVAILABLE')
           .gt('available_quantity', 0)
@@ -456,10 +492,23 @@ export default function SBUOutboundPage() {
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Outbound</h1>
-          <p className="text-slate-500 text-sm mt-1">Shipment, Picking & Stock</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Outbound</h1>
+            <p className="text-slate-500 text-sm mt-1">Shipment, Picking & Stock</p>
+          </div>
+          {!profile?.warehouse_id && warehouses.length > 0 && (
+            <select
+              value={selectedWarehouse}
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              className="ml-4 px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-slate-900/10"
+            >
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          )}
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -517,19 +566,28 @@ export default function SBUOutboundPage() {
           <Card className="p-3 md:p-4 border-slate-200 shadow-none">
             <div className="space-y-3">
               <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl overflow-x-auto no-scrollbar">
-                {["ALL", "PLANNED", "PENDING", "ASSIGNED", "PICKING", "READY_FOR_CHECKING", "CHECKING", "READY_FOR_LOADING", "LOADING", "READY_FOR_DOCUMENTS", "COMPLETED", "CANCELLED"].map(s => (
+                {["ALL", "PLANNED", "PENDING", "ASSIGNED", "PICKING", "READY_FOR_CHECKING", "CHECKING", "READY_FOR_LOADING", "LOADING", "READY_FOR_DOCUMENTS", "COMPLETED", "CANCELLED"].map(s => {
+                  const count = s === 'ALL' ? tasks.length : tasks.filter(t => t.status === s).length;
+                  return (
                   <button
                     key={s}
                     onClick={() => setStatusFilter(s)}
-                    className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap min-h-[36px] ${
+                    className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap min-h-[36px] flex items-center gap-2 ${
                       statusFilter === s
                         ? "bg-white text-blue-600 shadow-sm border border-slate-100"
                         : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
                     }`}
                   >
                     {statusLabel[s] || s}
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] ${
+                      statusFilter === s 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'bg-slate-200 text-slate-500'
+                    }`}>
+                      {count}
+                    </span>
                   </button>
-                ))}
+                )})}
               </div>
 
               <div className="flex flex-col gap-3">

@@ -37,6 +37,7 @@ export default function InboundReceivingPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   
   const [receipts, setReceipts] = useState<InboundReceipt[]>([]);
+  const [allReceipts, setAllReceipts] = useState<InboundReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
@@ -45,6 +46,8 @@ export default function InboundReceivingPage() {
   
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
 
   useEffect(() => {
     if (profile?.tenant_id) {
@@ -53,10 +56,28 @@ export default function InboundReceivingPage() {
   }, [profile]);
 
   const fetchReceipts = useCallback(async () => {
-    if (!tenantId || !profile?.warehouse_id) return;
+    if (!tenantId) return;
     setLoading(true);
 
     try {
+      let whId = profile?.warehouse_id;
+      const { data: whData } = await supabase.from('md_warehouses').select('id, name').eq('tenant_id', tenantId);
+      if (whData) setWarehouses(whData);
+
+      if (!whId) {
+        if (selectedWarehouse) {
+          whId = selectedWarehouse;
+        } else if (whData && whData.length > 0) {
+          whId = whData[0].id;
+          setSelectedWarehouse(whId);
+        } else {
+          setLoading(false);
+          return;
+        }
+      } else {
+        setSelectedWarehouse(whId);
+      }
+
       let query = supabase
         .from('wh_inbound_receipts')
         .select(`
@@ -66,12 +87,8 @@ export default function InboundReceivingPage() {
           driver:driver_id(name)
         `)
         .eq('tenant_id', tenantId)
-        .eq('warehouse_id', profile.warehouse_id)
+        .eq('warehouse_id', whId)
         .order('created_at', { ascending: false });
-
-      if (activeTab !== 'ALL') {
-        query = query.eq('status', activeTab);
-      }
 
       const { data, error } = await query;
       if (error) throw error;
@@ -85,17 +102,31 @@ export default function InboundReceivingPage() {
         items_count: 0 // Will populate inside detail modal
       })) as InboundReceipt[];
 
-      setReceipts(enrichedData);
+      setAllReceipts(enrichedData);
+      
+      if (activeTab === 'ALL') {
+        setReceipts(enrichedData);
+      } else {
+        setReceipts(enrichedData.filter(r => r.status === activeTab));
+      }
     } catch (error: any) {
       toast.error('Gagal mengambil data Inbound');
     } finally {
       setLoading(false);
     }
-  }, [tenantId, profile?.warehouse_id, activeTab]);
+  }, [tenantId, profile?.warehouse_id, activeTab, selectedWarehouse]);
 
   useEffect(() => {
     fetchReceipts();
   }, [fetchReceipts]);
+
+  useEffect(() => {
+    if (activeTab === 'ALL') {
+      setReceipts(allReceipts);
+    } else {
+      setReceipts(allReceipts.filter(r => r.status === activeTab));
+    }
+  }, [activeTab, allReceipts]);
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, { bg: string, text: string, icon: any, label: string }> = {
@@ -131,32 +162,57 @@ export default function InboundReceivingPage() {
     <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CloudDownload className="text-blue-600" size={24} />
-            Inbound Receiving
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Kelola proses penerimaan barang dari truk hingga putaway.</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <CloudDownload className="text-blue-600" size={24} />
+              Inbound Receiving
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">Kelola proses penerimaan barang dari truk hingga putaway.</p>
+          </div>
+          {!profile?.warehouse_id && warehouses.length > 0 && (
+            <select
+              value={selectedWarehouse}
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              className="ml-4 px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-slate-900/10"
+            >
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          )}
         </div>
+        <button className="flex items-center bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold gap-2 hover:bg-slate-800 transition-colors">
+          <Plus size={16} /> New Inbound
+        </button>
       </div>
 
       {/* Tabs & Filters */}
       <Card className="p-3 md:p-4 border-slate-200 shadow-none overflow-hidden">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl overflow-x-auto no-scrollbar">
-            {['ALL', 'EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].map(tab => (
+            {['ALL', 'EXPECTED', 'TRUCK_ARRIVED', 'UNLOADING', 'CHECKING', 'CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].map(tab => {
+              const count = tab === 'ALL' ? allReceipts.length : allReceipts.filter(r => r.status === tab).length;
+              return (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap min-h-[40px] ${
+                className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap min-h-[40px] flex items-center gap-2 ${
                   activeTab === tab 
                   ? 'bg-white text-blue-600 shadow-sm border border-slate-100' 
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 {tab.replace(/_/g, ' ')}
+                <span className={`px-2 py-0.5 rounded-md text-[10px] ${
+                  activeTab === tab 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-slate-200 text-slate-500'
+                }`}>
+                  {count}
+                </span>
               </button>
-            ))}
+            )})}
           </div>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">

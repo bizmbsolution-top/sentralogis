@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { 
   Users, Building2, Briefcase, Search, 
   Plus, Filter, MoreVertical, Shield,
-  CheckCircle2, Loader2, HardHat
+  CheckCircle2, Loader2, HardHat, Trash2
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,7 @@ import ResetPasswordModal from '@/components/Tenant/ResetPasswordModal';
 import SBUManager from '@/components/Tenant/SBUManager';
 import toast, { Toaster } from 'react-hot-toast';
 import { fetchTenantById } from '@/lib/actions/tenantActions';
+import { deleteStaffAdmin } from '@/app/(dashboard)/tenant/staff/actions';
 
 export default function TenantOrganizationPage() {
   const { user, profile } = useAuth();
@@ -93,6 +94,20 @@ export default function TenantOrganizationPage() {
   };
 
   useEffect(() => { fetchData(); }, [user, profile?.tenant_id]);
+
+  const handleDeleteStaff = async (staffMember: any) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${staffMember.profiles?.full_name}? This action cannot be undone.`)) return;
+    
+    try {
+      const result = await deleteStaffAdmin(staffMember.user_id);
+      if (!result.success) throw new Error(result.message);
+      
+      toast.success('Staff member deleted successfully');
+      fetchData(); // Refresh table
+    } catch (err: any) {
+      toast.error('Failed to delete: ' + err.message);
+    }
+  };
 
   if (!isSuperadmin) {
     return (
@@ -329,8 +344,17 @@ export default function TenantOrganizationPage() {
                              variant="secondary" 
                              className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-rose-600"
                              onClick={() => { setSelectedStaff(s); setIsResetModalOpen(true); }}
+                             title="Reset Password"
                            >
                             <Shield size={14}/>
+                          </Button>
+                          <Button 
+                             variant="secondary" 
+                             className="!p-2 !h-8 !w-8 border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                             onClick={() => handleDeleteStaff(s)}
+                             title="Delete Staff"
+                           >
+                            <Trash2 size={14}/>
                           </Button>
                        </div>
                     </TableCell>

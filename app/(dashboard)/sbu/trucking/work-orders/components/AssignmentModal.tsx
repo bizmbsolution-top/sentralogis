@@ -10,8 +10,10 @@ import {
   ClipboardList, AlertCircle, Activity,
   Package, CheckCircle, ArrowRight, AlertTriangle,
   Layers, ExternalLink, ShieldCheck, Box, Save, MessageCircle,
-  X, Edit2, Plus, Trash2, GripVertical, FileText, DollarSign
+  X, Edit2, Plus, Trash2, GripVertical, FileText, DollarSign, Printer,
+  Upload, FolderGit2, Eye, Download, Image as ImageIcon
 } from 'lucide-react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { saveAssignmentsAction } from '@/lib/actions/assignmentActions';
 import {
@@ -44,6 +46,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [uploadingSlotIndex, setUploadingSlotIndex] = useState<number | null>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   
   // Selection Data
   const [fleets, setFleets] = useState<any[]>([]);
@@ -80,7 +84,8 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         const { data: jos, error: joError } = await supabase
           .from('job_orders')
           .select('*')
-          .eq('wo_item_id', item.id);
+          .eq('wo_item_id', item.id)
+          .order('jo_number', { ascending: true });
 
         console.log('[AssignmentModal] Found JOs:', jos?.length, 'error:', joError?.message, 'errorDetail:', joError);
         if (jos && jos.length > 0) {
@@ -376,6 +381,69 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     setAssignments(updated);
   };
 
+  const handleUploadAssignmentDoc = async (index: number, filesList: FileList | null) => {
+    if (!filesList || filesList.length === 0) return;
+    setUploadingSlotIndex(index);
+    try {
+      const currentSlot = assignments[index];
+      const currentDocs = [...(currentSlot.assignment_documents || [])];
+      const joIdOrToken = currentSlot.id || `temp-${item.id}-${index}`;
+
+      for (let i = 0; i < filesList.length; i++) {
+        const file = filesList[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `assignment-docs/${joIdOrToken}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          toast.error(`Upload gagal (${file.name}): ` + uploadError.message);
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('documents')
+          .getPublicUrl(filePath);
+
+        currentDocs.push({
+          id: `doc_${Math.random().toString(36).substring(2, 9)}`,
+          name: file.name,
+          type: 'SURAT_JALAN',
+          file_url: publicUrl,
+          file_type: file.type || 'application/octet-stream',
+          file_size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+          uploaded_at: new Date().toISOString(),
+        });
+      }
+
+      handleAssignmentChange(index, 'assignment_documents', currentDocs);
+      toast.success('Dokumen pengantar berhasil diunggah!');
+    } catch (err: any) {
+      toast.error('Gagal mengunggah dokumen: ' + err.message);
+    } finally {
+      setUploadingSlotIndex(null);
+    }
+  };
+
+  const handleRemoveAssignmentDoc = (slotIndex: number, docIndex: number) => {
+    const currentSlot = assignments[slotIndex];
+    const currentDocs = [...(currentSlot.assignment_documents || [])];
+    currentDocs.splice(docIndex, 1);
+    handleAssignmentChange(slotIndex, 'assignment_documents', currentDocs);
+  };
+
+  const handleUpdateAssignmentDocType = (slotIndex: number, docIndex: number, newType: string) => {
+    const currentSlot = assignments[slotIndex];
+    const currentDocs = [...(currentSlot.assignment_documents || [])];
+    if (currentDocs[docIndex]) {
+      currentDocs[docIndex].type = newType;
+      handleAssignmentChange(slotIndex, 'assignment_documents', currentDocs);
+    }
+  };
+
   const handleSaveDraft = async () => {
     if (assigning) return;
     
@@ -418,6 +486,60 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
       toast.error(`Gagal save draft: ${errorMessage}`);
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handlePrintDN = async (index: number) => {
+    const slot = assignments[index];
+    if (!slot.id) {
+      toast.error('Simpan dahulu penugasan sebelum mencetak Surat Jalan');
+      return;
+    }
+    
+    // 1. Open tab on same origin immediately to bypass popup blockers and avoid cross-origin SecurityError
+    const targetUrl = `/sbu/trucking/delivery-note/${slot.id}`;
+    const win = window.open(`${targetUrl}?wait=true`, '_blank');
+
+    // 2. Save latest slot changes (container, notes, vendor, driver, fleet) to DB without closing modal
+    const toastId = toast.loading('Menyimpan perubahan & membuka Surat Jalan...');
+    try {
+      const tenantId = profile?.tenant_id;
+      if (tenantId) {
+        await saveAssignmentsAction({
+          tenantId,
+          woItem: {
+            id: item.id,
+            wo_id: item.wo_id,
+            status: item.status,
+            item_code: item.item_code,
+            work_orders: item.work_orders,
+            item_data: item.item_data,
+          },
+          assignments,
+          mode: 'draft',
+          dealPrice,
+          transporters,
+          drivers,
+          fleets,
+        });
+      }
+      toast.dismiss(toastId);
+      toast.success('Surat Jalan siap dicetak!');
+
+      // 3. Navigate the same-origin window to the clean URL without wait=true
+      if (win && !win.closed) {
+        win.location.replace(targetUrl);
+      } else {
+        window.open(targetUrl, '_blank');
+      }
+    } catch (e: any) {
+      toast.dismiss(toastId);
+      toast.error('Gagal menyimpan perubahan: ' + (e.message || String(e)));
+      if (win && !win.closed) {
+        win.location.replace(targetUrl);
+      } else {
+        window.open(targetUrl, '_blank');
+      }
     }
   };
 
@@ -481,6 +603,10 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     return num.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
+  const totalJOCount = unitCount || assignments.length;
+  const assignedCount = assignments.filter(a => Boolean(a.fleet_id || a.driver_id || a.transporter_id)).length;
+  const remainingCount = Math.max(0, totalJOCount - assignedCount);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-300">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
@@ -493,12 +619,19 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
              </div>
              <div>
                 <h2 className="text-lg font-semibold text-slate-900">Assignment Console</h2>
-                <div className="flex items-center gap-2 mt-1">
-                   <p className="text-xs font-medium text-slate-500">{item.work_orders.wo_number}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                   <p className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{item.work_orders.wo_number}</p>
                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                    <p className="text-xs font-medium text-slate-600">
-                      {isHandoverApproved ? `${maxJOCount}/${unitCount} Units (Locked)` : `${unitCount} Fleet Required`}
-                    </p>
+                   <div className="flex items-center gap-1.5 text-xs font-bold">
+                     <span className="bg-slate-800 text-white px-2.5 py-0.5 rounded shadow-sm">{totalJOCount} JO</span>
+                     <span className="bg-emerald-600 text-white px-2.5 py-0.5 rounded shadow-sm">Assigned {assignedCount}</span>
+                     <span className={`px-2.5 py-0.5 rounded shadow-sm ${remainingCount > 0 ? 'bg-amber-500 text-white font-black' : 'bg-slate-200 text-slate-600'}`}>Remaining {remainingCount} JO</span>
+                   </div>
+                   {isHandoverApproved && (
+                     <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 ml-1">
+                       Locked ({maxJOCount})
+                     </span>
+                   )}
                 </div>
              </div>
           </div>
@@ -855,37 +988,188 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                               </>
                             )}
 
-                           <div className="flex-1 min-w-[40px] space-y-1 flex flex-col justify-end">
-                              <div className="h-4"></div>
-                              <div className="flex h-10 items-center">
-                                 {assign.tracking_token && (
-                                    <button
-                                       onClick={() => {
-                                          const driver = drivers.find(d => d.id === assign.driver_id);
-                                          const driverName = driver?.name || 'Driver';
-                                          const phone = assign.driver_phone || driver?.phone || '';
-                                          if (!phone) { toast.error('Nomor telepon driver tidak ditemukan'); return; }
-                                          const origin = window.location.origin;
-                                          const isInternal = driver?.md_entities?.is_vendor === false;
-                                          const link = isInternal
-                                            ? `${origin}/driver/portal`
-                                            : `${origin}/jo/${assign.driver_link_token || assign.id}`;
-                                          const msg = buildDriverAssignmentMessage({
-                                            driverName,
-                                            isInternal,
-                                            link,
-                                          });
-                                          window.open(buildWaLink(phone, msg), '_blank');
-                                       }}
-                                       className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200"
-                                       title="Send WA Link"
-                                    >
-                                       <MessageCircle size={18} />
-                                    </button>
-                                 )}
-                              </div>
+                            <div className="flex-1 min-w-[40px] space-y-1 flex flex-col justify-end">
+                               <div className="h-4"></div>
+                               <div className="flex h-10 items-center">
+                                  {(assign.tracking_token || assign.id || assign.driver_id || assign.driver_phone || assign.transporter_id) && (
+                                     <button
+                                        onClick={() => {
+                                           const driver = drivers.find(d => d.id === assign.driver_id);
+                                           const transporter = transporters.find(t => t.id === assign.transporter_id);
+                                           const driverName = driver?.name || transporter?.name || 'Driver/Vendor';
+                                           const phone = assign.driver_phone || driver?.phone || transporter?.phone || '';
+                                           if (!phone) { toast.error('Nomor telepon driver/vendor tidak ditemukan untuk JO ini'); return; }
+                                           const origin = window.location.origin;
+                                           const isInternal = driver?.md_entities?.is_vendor === false;
+                                           const joNumber = assign.jo_number || `${item.item_code}-${String(idx + 1).padStart(2, '0')}`;
+                                           const link = isInternal && driver
+                                             ? `${origin}/driver/portal`
+                                             : `${origin}/jo/${assign.driver_link_token || assign.id || assign.tracking_token || 'portal'}`;
+                                           const msg = buildDriverAssignmentMessage({
+                                             driverName,
+                                             isInternal: Boolean(isInternal && driver),
+                                             link,
+                                             joNumber,
+                                           });
+                                           window.open(buildWaLink(phone, msg), '_blank');
+                                        }}
+                                        className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200 shadow-sm"
+                                        title="Kirim Link WA Tugas ke Driver/Vendor"
+                                     >
+                                        <MessageCircle size={18} />
+                                     </button>
+                                  )}
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Container & Notes Section per JO Unit */}
+                         <div className="mt-3 pt-3 border-t border-slate-200/80 grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-slate-50/70 p-2.5 rounded-lg border">
+                           <div className="md:col-span-3 space-y-1">
+                             <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                               <Box size={13} className="text-blue-600" />
+                               No. Container / Seal
+                             </label>
+                             <input
+                               type="text"
+                               value={assign.container_number || ''}
+                               onChange={(e) => handleAssignmentChange(idx, 'container_number', e.target.value)}
+                               className="w-full h-9 px-2.5 bg-white border border-slate-300 rounded-md text-xs font-mono font-medium text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none placeholder:text-slate-400 placeholder:font-sans"
+                               placeholder="Contoh: TGHU-123456-7"
+                             />
                            </div>
-                        </div>
+                           <div className="md:col-span-6 space-y-1">
+                             <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                               <FileText size={13} className="text-blue-600" />
+                               Catatan Khusus JO ini
+                             </label>
+                             <input
+                               type="text"
+                               value={assign.notes || ''}
+                               onChange={(e) => handleAssignmentChange(idx, 'notes', e.target.value)}
+                               className="w-full h-9 px-2.5 bg-white border border-slate-300 rounded-md text-xs text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors outline-none placeholder:text-slate-400"
+                               placeholder="Contoh: Masuk via Gate 2, muat malam..."
+                             />
+                           </div>
+                           <div className="md:col-span-3 flex flex-col justify-end space-y-1">
+                             <label className="text-[11px] font-bold text-slate-500 md:opacity-0 hidden md:block">Action</label>
+                             {assign.id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintDN(idx)}
+                                  disabled={assigning}
+                                  className="w-full h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-md flex items-center justify-center gap-1.5 text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                  title="Simpan otomatis & Cetak Surat Jalan untuk JO ini"
+                                >
+                                  <Printer size={13} /> SIMPAN & CETAK DN
+                                </button>
+                             ) : (
+                               <div className="w-full h-9 px-3 bg-slate-100 text-slate-400 border border-slate-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-medium cursor-not-allowed">
+                                 <Printer size={13} /> Simpan dahulu tkr DN
+                               </div>
+                             )}
+                           </div>
+                         </div>
+
+                         {/* Multi-Document Dropzone & Manifest Manager for Driver */}
+                         <div className="mt-3 pt-3 border-t border-slate-200/80 bg-blue-50/40 border border-blue-100 p-3 rounded-lg">
+                           <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center gap-2">
+                               <FolderGit2 size={15} className="text-blue-600" />
+                               <div>
+                                 <span className="text-[11px] font-black uppercase text-blue-950 tracking-wide">
+                                   Dokumen Pengantar & Manifest (Untuk Supir)
+                                 </span>
+                                 <p className="text-[10px] text-slate-500 font-medium">
+                                   Unggah Surat Jalan, Manifest Multidrop, atau Instruksi Khusus yang akan dibuka supir di HP.
+                                 </p>
+                               </div>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               {uploadingSlotIndex === idx && (
+                                 <span className="text-[10px] text-blue-600 font-bold flex items-center gap-1 animate-pulse">
+                                   <Loader2 size={12} className="animate-spin" /> Mengunggah...
+                                 </span>
+                               )}
+                               <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-md text-[11px] font-black uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition-all shadow-sm">
+                                 <Upload size={13} /> Upload File / PDF
+                                 <input
+                                   type="file"
+                                   multiple
+                                   accept=".pdf,image/*"
+                                   className="hidden"
+                                   onChange={(e) => handleUploadAssignmentDoc(idx, e.target.files)}
+                                   disabled={uploadingSlotIndex === idx}
+                                 />
+                               </label>
+                             </div>
+                           </div>
+
+                           {/* Uploaded Documents List */}
+                           {(assign.assignment_documents && assign.assignment_documents.length > 0) ? (
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                               {assign.assignment_documents.map((doc: any, dIdx: number) => (
+                                 <div
+                                   key={doc.id || dIdx}
+                                   className="bg-white border border-blue-200/80 rounded-lg p-2.5 flex items-center justify-between gap-2 shadow-sm"
+                                 >
+                                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                     <div className="w-8 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                                       {doc.name?.endsWith('.pdf') || doc.file_type?.includes('pdf') ? (
+                                         <FileText size={16} className="text-red-500" />
+                                       ) : (
+                                         <ImageIcon size={16} className="text-blue-500" />
+                                       )}
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-xs font-bold text-slate-800 truncate" title={doc.name}>
+                                         {doc.name}
+                                       </p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                         <select
+                                           value={doc.type || 'SURAT_JALAN'}
+                                           onChange={(e) => handleUpdateAssignmentDocType(idx, dIdx, e.target.value)}
+                                           className="text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                         >
+                                           <option value="SURAT_JALAN">SURAT JALAN</option>
+                                           <option value="MANIFEST_CARGO">MANIFEST MULTIDROP</option>
+                                           <option value="POD_BLANKO">BLANKO POD</option>
+                                           <option value="INSTRUKSI_KERJA">INSTRUKSI KERJA / K3</option>
+                                           <option value="LAINNYA">LAINNYA</option>
+                                         </select>
+                                         <span className="text-[9px] text-slate-400 font-medium">{doc.file_size || ''}</span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                   <div className="flex items-center gap-1 shrink-0">
+                                     <button
+                                       type="button"
+                                       onClick={() => setPreviewDocUrl(doc.file_url)}
+                                       className="w-7 h-7 rounded bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors border border-slate-200"
+                                       title="Preview Dokumen"
+                                     >
+                                       <Eye size={13} />
+                                     </button>
+                                     <button
+                                       type="button"
+                                       onClick={() => handleRemoveAssignmentDoc(idx, dIdx)}
+                                       className="w-7 h-7 rounded bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-200"
+                                       title="Hapus Dokumen"
+                                     >
+                                       <Trash2 size={13} />
+                                     </button>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           ) : (
+                             <div className="border border-dashed border-blue-200 rounded-lg py-3 text-center bg-white/60">
+                               <p className="text-[11px] font-bold text-slate-400 italic">
+                                 Belum ada dokumen yang diunggah untuk supir di unit ini.
+                               </p>
+                             </div>
+                           )}
+                         </div>
                       </div>
                     );
                   })}
@@ -898,8 +1182,10 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
            <div className="flex items-center gap-4 text-slate-600">
               <ShieldCheck size={20} className="text-slate-500" />
               <div>
-                 <p className="text-sm font-semibold text-slate-900">Mission Critical</p>
-                 <p className="text-xs text-slate-500">Assign units to initiate operational phase</p>
+                 <p className="text-sm font-semibold text-slate-900">
+                   Status Penugasan: <span className="text-emerald-600 font-bold">Assigned {assignedCount}</span> / <span className="text-amber-600 font-bold">Remaining {remainingCount} JO</span>
+                 </p>
+                 <p className="text-xs text-slate-500">Total {totalJOCount} Job Orders dalam Work Order ini</p>
               </div>
            </div>
 
@@ -942,6 +1228,42 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
             </div>
          </div>
       </div>
+
+      {/* Document Preview Modal */}
+      {previewDocUrl && (
+        <div className="fixed inset-0 z-[1200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative bg-slate-900 rounded-3xl p-4 w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 text-white">
+              <span className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                <Eye className="text-blue-400" size={18} /> Preview Dokumen
+              </span>
+              <div className="flex items-center gap-3">
+                <a
+                  href={previewDocUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all"
+                >
+                  <Download size={14} /> Download
+                </a>
+                <button
+                  onClick={() => setPreviewDocUrl(null)}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-950 rounded-2xl flex items-center justify-center min-h-[60vh]">
+              {previewDocUrl.toLowerCase().includes('.pdf') ? (
+                <iframe src={previewDocUrl} className="w-full h-[75vh] rounded-xl border-0" title="PDF Preview" />
+              ) : (
+                <img src={previewDocUrl} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-xl" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

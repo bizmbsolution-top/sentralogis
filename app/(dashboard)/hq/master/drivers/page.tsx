@@ -12,6 +12,7 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useStatusSync } from '@/lib/hooks/useStatusSync';
+import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
 interface Driver {
   id: string;
@@ -132,36 +133,7 @@ export default function HQDriversPage() {
   }, [tenantId, fetchData, loadingAuth]);
 
   const generateDriverCode = async () => {
-    if (!tenantId) return 'DRI/001';
-    
-    try {
-      // [AI] Query ALL tenants' codes to avoid global unique constraint collision
-      const { data, error } = await supabase
-        .from('md_drivers')
-        .select('driver_code')
-        .like('driver_code', 'DRI/%');
-      
-      if (error) {
-        console.error('Error fetching driver codes:', error);
-        return `DRI/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-      }
-      
-      if (!data || data.length === 0) return 'DRI/001';
-      
-      const numbers = data
-        .map((r) => {
-          const parts = r.driver_code.split('/');
-          return parts.length > 1 ? parseInt(parts[parts.length - 1]) : NaN;
-        })
-        .filter((n) => !isNaN(n));
-      
-      const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-      const newNumber = (maxNum + 1).toString().padStart(3, '0');
-      return `DRI/${newNumber}`;
-    } catch (err) {
-      console.error('Crash in generateDriverCode:', err);
-      return `DRI/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    }
+    return await generateDriverCodeAction();
   };
 
   const handleSubmit = async () => {
@@ -253,17 +225,27 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         toast.success('Data pengemudi berhasil diupdate');
       } else {
         console.log('Inserting new driver...');
-        const code = await generateDriverCode();
+        let code = await generateDriverCode();
         console.log('Generated code:', code);
         
-        const { error } = await supabase
+        let { error } = await supabase
           .from('md_drivers')
           .insert({
             ...payload,
             driver_code: code,
           });
 
-        if (error) {
+        if (error && (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate'))) {
+          const fallbackCode = `DRI/${Date.now().toString().slice(-4)}`;
+          const retryRes = await supabase
+            .from('md_drivers')
+            .insert({
+              ...payload,
+              driver_code: fallbackCode,
+            });
+          if (retryRes.error) throw retryRes.error;
+          error = null;
+        } else if (error) {
             console.error('Supabase Insert Error:', error);
             throw error;
         }

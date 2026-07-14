@@ -52,6 +52,20 @@ export default function EditAddCostModal({ item, onClose, onSuccess }: EditAddCo
 
       if (error) throw error;
 
+      try {
+        await supabase.from("notifications").insert({
+          tenant_id: item?.job_orders?.tenant_id || (await supabase.auth.getUser()).data.user?.user_metadata?.tenant_id,
+          role: "hq_finance",
+          title: "Need Approval Add Cost",
+          message: `Biaya tambahan diperbarui & diajukan untuk JO ${item?.job_orders?.jo_number || item?.jo_id}`,
+          type: "add_cost",
+          is_read: false,
+          metadata: { link: "/hq/finance/cost-audit?sbu=TRUCKING" }
+        });
+      } catch (e) {
+        console.error("Notification insert error", e);
+      }
+
       toast.success('Data berhasil diperbarui');
       onSuccess();
     } catch (err: any) {

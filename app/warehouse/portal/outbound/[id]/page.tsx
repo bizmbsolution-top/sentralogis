@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, ChevronDown, Clock, Play, Pause, Square, FileUp, ScanLine, Camera, Trash2 } from 'lucide-react';
+import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, ChevronDown, Clock, Play, Pause, Square, FileUp, ScanLine, Camera, Trash2, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -81,10 +81,10 @@ export default function OutboundTaskExecutionPage() {
           id, tenant_id, warehouse_id, shipment_number, status, notes,
           driver_id, fleet_id, transporter_id,
           driver:md_drivers(name, phone),
-          transporter:md_entities(name),
+          transporter:transporter_id(name),
           fleet:md_fleets(plate_number),
           surat_jalan_url, bast_url,
-          wo_item_id,
+          wo_item_id, transfer_id,
           wo_item:wo_items(
             id,
             job_orders(id, jo_number)
@@ -96,8 +96,21 @@ export default function OutboundTaskExecutionPage() {
         .eq('id', shipmentId)
         .single();
         
-      if (shipErr || !shipmentData) throw new Error('Shipment not found');
+      if (shipErr || !shipmentData) {
+        console.error('Fetch Shipment Error:', shipErr);
+        throw new Error(shipErr?.message || 'Shipment not found');
+      }
       setShipment(shipmentData);
+
+      // Fetch transfer order context if this is a transfer
+      if (shipmentData.transfer_id) {
+        const { data: trData } = await supabase
+          .from('wh_transfer_orders')
+          .select('id, transfer_number, from_warehouse:from_warehouse_id(name), to_warehouse:to_warehouse_id(name)')
+          .eq('id', shipmentData.transfer_id)
+          .single();
+        if (trData) setShipment((prev: any) => ({ ...prev, transfer_order: trData }));
+      }
 
       const role = sess?.role;
 
@@ -216,6 +229,7 @@ export default function OutboundTaskExecutionPage() {
       if (error) throw error;
 
       if (newStatus === 'COMPLETED') {
+        let transferDetailsPayloads: any[] = [];
         // Stock Deduction Logic uses picking_entries saved by the Picker
         const { data: finalItems } = await supabase.from('wh_outbound_shipment_items').select('id, product_sku_id, picking_entries').eq('shipment_id', shipmentId);
         
@@ -240,6 +254,18 @@ export default function OutboundTaskExecutionPage() {
                        const nQ = Math.max(0, invData.quantity - pe.qty);
                        const nR = Math.max(0, invData.reserved_quantity - pe.qty);
                        await supabase.from('wh_inventory').update({ quantity: nQ, reserved_quantity: nR }).eq('id', invData.id);
+                        
+                       if (shipment?.transfer_id) {
+                          transferDetailsPayloads.push({
+                             tenant_id: shipment.tenant_id,
+                             transfer_id: shipment.transfer_id,
+                             inventory_id: invData.id,
+                             product_sku_id: skuId,
+                             quantity: pe.qty,
+                             from_location_id: pe.location_id,
+                             status: 'SHIPPED'
+                          });
+                       }
                     }
                  }
               }
@@ -289,6 +315,14 @@ export default function OutboundTaskExecutionPage() {
               }
            }
         }
+
+        if (shipment?.transfer_id) {
+           if (transferDetailsPayloads.length > 0) {
+              await supabase.from('wh_transfer_details').insert(transferDetailsPayloads);
+           }
+           await supabase.from('wh_transfer_orders').update({ status: 'SHIPPED' }).eq('id', shipment.transfer_id);
+        }
+
         if (shipment?.wo_item?.job_orders?.length > 0) {
           const joId = shipment.wo_item.job_orders[0].id;
           await supabase.from('job_orders').update({ status: 'completed' }).eq('id', joId);
@@ -675,7 +709,7 @@ export default function OutboundTaskExecutionPage() {
       <div className="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
          <button onClick={() => router.push('/warehouse/portal')} className="p-2 -ml-2 text-slate-400 hover:text-slate-900"><ChevronLeft size={28} /></button>
          <div className="text-center">
-            <h2 className="font-black text-lg text-slate-900 tracking-wide">{shipment.wo_item?.job_orders?.[0]?.jo_number || shipment.shipment_number}</h2>
+            <h2 className="font-black text-lg text-slate-900 tracking-wide">{shipment.transfer_order?.transfer_number || shipment.wo_item?.job_orders?.[0]?.jo_number || shipment.shipment_number}</h2>
             <p className="text-sm font-black text-amber-500 uppercase tracking-widest">{status.replace(/_/g, ' ')}</p>
          </div>
          <div className="w-8" />
@@ -690,6 +724,17 @@ export default function OutboundTaskExecutionPage() {
               <div><span className="block text-xs text-slate-400 font-black uppercase tracking-widest">Driver</span><span className="text-sm font-bold text-slate-900">{shipment.driver?.name || '-'}</span></div>
            </div>
         </Card>
+
+        {/* Transfer Info */}
+        {shipment.transfer_order && (
+          <Card className="p-5 border-violet-200 shadow-sm bg-violet-50">
+            <h3 className="font-black text-violet-900 text-base flex items-center gap-2"><ArrowLeftRight size={20} /> Transfer Order</h3>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div><span className="block text-xs text-violet-500 font-black uppercase tracking-widest">Dari</span><span className="text-sm font-bold text-violet-900">{shipment.transfer_order.from_warehouse?.name || '-'}</span></div>
+              <div><span className="block text-xs text-violet-500 font-black uppercase tracking-widest">Ke</span><span className="text-sm font-bold text-violet-900">{shipment.transfer_order.to_warehouse?.name || '-'}</span></div>
+            </div>
+          </Card>
+        )}
 
         {/* ROLE: SECURITY */}
         {(role === 'SECURITY' || role === 'ADMIN') && ['PLANNED', 'PENDING', 'ASSIGNED', 'PICKING', 'READY_FOR_CHECKING', 'CHECKING', 'READY_FOR_LOADING', 'LOADING'].includes(status) && (
@@ -759,56 +804,64 @@ export default function OutboundTaskExecutionPage() {
         {/* ROLE: PUTAWAY (Picker) */}
         {role === 'PUTAWAY' && ['PLANNED', 'PENDING', 'ASSIGNED', 'PICKING'].includes(status) && (
           <Card className="p-5 border-slate-200 shadow-sm bg-white border-t-4 border-amber-400">
-             <h3 className="font-black text-slate-900 text-base flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><PackageCheck size={20} className="text-amber-500" /> Tugas Picking (JO Plan)</h3>
-             
-             {/* Target / Planned Data List */}
-             <div className="space-y-3 mb-6">
-               {Object.values(
-                 assignments.reduce((acc: any, a: any) => {
-                   const sId = a.manifest?.md_product_skus?.id;
-                   const lCode = a.location?.code?.toUpperCase() || 'UNKNOWN';
-                   const key = `${sId}_${lCode}`;
-                   if (!acc[key]) {
-                     acc[key] = {
-                       skuId: sId,
-                       skuName: a.manifest?.md_product_skus?.name,
-                       locCode: lCode,
-                       targetQty: 0
-                     };
-                   }
-                   acc[key].targetQty += a.quantity;
-                   return acc;
-                 }, {})
-               ).map((plan: any, i) => {
-                 const pickedQty = pickingEntries
-                   .filter(pe => pe.sku_id === plan.skuId && pe.location_code === plan.locCode)
-                   .reduce((sum, pe) => sum + Number(pe.qty), 0);
-                 const isComplete = pickedQty >= plan.targetQty;
+             <h3 className="font-black text-slate-900 text-base flex items-center gap-2 mb-3 border-b border-slate-100 pb-3"><PackageCheck size={20} className="text-amber-500" /> Tugas Picking (JO Plan)</h3>
 
-                 return (
-                 <div key={i} className={`flex justify-between items-center p-3 border rounded-xl transition-colors ${isComplete ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200 shadow-sm'}`}>
-                   <div>
-                     <span className={`font-bold text-sm leading-tight block ${isComplete ? 'text-emerald-800 line-through opacity-60' : 'text-slate-900'}`}>
-                        {plan.skuName}
-                     </span>
-                     <span className={`block text-[10px] font-black tracking-widest mt-1 ${isComplete ? 'text-emerald-600/60' : 'text-slate-500'}`}>
-                        RAK: {plan.locCode}
-                     </span>
-                   </div>
-                   <div className="text-right pl-2">
-                     {isComplete ? (
-                        <div className="flex items-center gap-1 text-emerald-700 bg-emerald-100/80 px-2 py-1.5 rounded-lg font-black text-xs">
-                           <CheckCircle2 size={14} /> SELESAI
-                        </div>
-                     ) : (
-                        <span className="font-black text-blue-600 bg-blue-50 px-2 py-1.5 rounded-lg whitespace-nowrap text-xs">
-                           {pickedQty > 0 ? `${pickedQty} / ` : ''}{plan.targetQty} PCS
-                        </span>
-                     )}
-                   </div>
-                 </div>
-               )})}
-               {assignments.length === 0 && <p className="text-sm text-slate-400 italic">Belum ada alokasi lokasi dari sistem.</p>}
+             {/* Header Table: All WO Items */}
+             <div className="overflow-x-auto mb-5">
+               <table className="w-full text-xs">
+                 <thead>
+                   <tr className="bg-slate-100 text-slate-500 uppercase tracking-widest font-black">
+                     <th className="text-left px-3 py-2.5 rounded-l-lg w-8">#</th>
+                     <th className="text-left px-3 py-2.5">Produk</th>
+                     <th className="text-left px-3 py-2.5">SKU</th>
+                     <th className="text-center px-3 py-2.5">Qty Target</th>
+                     <th className="text-left px-3 py-2.5">Area / Lokasi</th>
+                     <th className="text-center px-3 py-2.5 rounded-r-lg">Status</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {assignments.length === 0 ? (
+                     <tr><td colSpan={6} className="text-center py-6 text-slate-400 italic">Belum ada alokasi lokasi dari sistem.</td></tr>
+                   ) : assignments.map((a: any, i: number) => {
+                     const skuId = a.manifest?.md_product_skus?.id;
+                     const locCode = (a.location?.code || '').toUpperCase();
+                     const pickedSum = pickingEntries
+                       .filter(pe => pe.sku_id === skuId && pe.location_code === locCode)
+                       .reduce((sum, pe) => sum + Number(pe.qty), 0);
+                     const targetQty = Number(a.quantity) || 0;
+                     const isComplete = pickedSum >= targetQty;
+
+                     return (
+                       <tr key={a.id} className={`border-b border-slate-100 transition-colors ${isComplete ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}`}>
+                         <td className="px-3 py-2.5 font-bold text-slate-400">{i + 1}</td>
+                         <td className={`px-3 py-2.5 font-bold ${isComplete ? 'text-emerald-800 line-through opacity-60' : 'text-slate-900'}`}>
+                           {a.manifest?.md_product_skus?.name || '-'}
+                         </td>
+                         <td className="px-3 py-2.5 text-slate-500 font-mono">{a.manifest?.md_product_skus?.sku_code || '-'}</td>
+                         <td className={`px-3 py-2.5 text-center font-black ${isComplete ? 'text-emerald-600' : 'text-blue-600'}`}>
+                           {Intl.NumberFormat('en-US').format(targetQty)} PCS
+                         </td>
+                         <td className="px-3 py-2.5">
+                           <span className="inline-block bg-slate-100 text-slate-700 font-bold px-2 py-1 rounded-md text-[10px] tracking-wider">
+                             {locCode || 'TBA'}
+                           </span>
+                         </td>
+                         <td className="px-3 py-2.5 text-center">
+                           {isComplete ? (
+                             <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md font-black text-[10px]">
+                               <CheckCircle2 size={12} /> DONE
+                             </span>
+                           ) : (
+                             <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-md font-black text-[10px]">
+                               {pickedSum > 0 ? `${Intl.NumberFormat('en-US').format(pickedSum)}/${Intl.NumberFormat('en-US').format(targetQty)}` : 'BELUM'}
+                             </span>
+                           )}
+                         </td>
+                       </tr>
+                     );
+                   })}
+                 </tbody>
+               </table>
              </div>
 
              {/* Dynamic Scan Form */}
@@ -1037,7 +1090,7 @@ export default function OutboundTaskExecutionPage() {
 
              {!shipment.driver_id ? (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex gap-3 text-amber-900 font-bold text-sm">
-                   <AlertTriangle className="shrink-0" /> Menunggu truk datang di gate (Hubungi Security)
+                   <AlertTriangle className="shrink-0" /> Menunggu truk datang di gate (Hubungi Gate Control)
                 </div>
              ) : (
                 <div className="space-y-4">

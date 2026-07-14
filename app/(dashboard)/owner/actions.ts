@@ -35,6 +35,21 @@ export async function fetchTenantsAdmin() {
 
     if (sbuError) throw sbuError
 
+    // Fetch token consumption this month per tenant
+    const monthStart = new Date()
+    monthStart.setDate(1)
+    monthStart.setHours(0, 0, 0, 0)
+    const { data: consumeData } = await admin
+      .from('token_transactions')
+      .select('tenant_code, amount')
+      .eq('transaction_type', 'CONSUME')
+      .gte('created_at', monthStart.toISOString())
+
+    const consumeMap: Record<string, number> = {}
+    ;(consumeData || []).forEach((c: any) => {
+      consumeMap[c.tenant_code] = (consumeMap[c.tenant_code] || 0) + (Number(c.amount) || 0)
+    })
+
     // Map profiles for quick lookup
     const profileMap = (profiles || []).reduce((acc: any, p: any) => {
       acc[p.id] = p
@@ -61,6 +76,7 @@ export async function fetchTenantsAdmin() {
           logo_url: t.logo_url || null,
           subscription_tier: t.subscription_tier,
           token_balance: t.token_balance,
+          token_used_month: consumeMap[t.tenant_code] || 0,
           user_id: t.user_id,
           status: t.status || 'active',
           admin_email: profile.email || t.email || 'N/A',
@@ -455,6 +471,51 @@ export async function updateTokenPrice(params: {
     }
   } catch (error: any) {
     console.error('updateTokenPrice error:', error)
+    return { success: false, message: error.message }
+  }
+}
+
+// ============================================
+// SBU TOKEN RATES MANAGEMENT
+// ============================================
+
+export async function getSbuTokenRates() {
+  const admin = getAdminClient()
+  try {
+    const { data, error } = await admin
+      .from('sbu_token_rates')
+      .select('*')
+      .order('sbu_type', { ascending: true })
+
+    if (error) throw error
+    return { success: true, data: data || [] }
+  } catch (error: any) {
+    console.error('getSbuTokenRates error:', error)
+    return { success: false, data: [] }
+  }
+}
+
+export async function updateSbuTokenRate(params: {
+  sbuType: string
+  tokensPerJo: number
+  userId?: string
+}) {
+  const admin = getAdminClient()
+  try {
+    const { error } = await admin
+      .from('sbu_token_rates')
+      .update({
+        tokens_per_jo: params.tokensPerJo,
+        updated_by: params.userId || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('sbu_type', params.sbuType)
+
+    if (error) throw error
+
+    return { success: true, message: `Tarif ${params.sbuType} diubah menjadi ${params.tokensPerJo} token/JO` }
+  } catch (error: any) {
+    console.error('updateSbuTokenRate error:', error)
     return { success: false, message: error.message }
   }
 }

@@ -191,13 +191,13 @@ export default function MissionTimeline({
       </div>
 
       {/* Unassigned RAW GPS Tracking Logs */}
-      {tracking && tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:')).length > 0 && (
+      {tracking && tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:') && t.status_update !== 'GPS_PING').length > 0 && (
         <div className="mt-6 pt-4 border-t border-slate-200">
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
              <MapPin size={12} /> Live Updates
           </h4>
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:')).map((t: any, i: number) => (
+            {tracking.filter((t: any) => !t.job_route_id && !t.notes?.includes('Route ID:') && t.status_update !== 'GPS_PING').map((t: any, i: number) => (
                <div key={t.id || i} className="text-[10px] flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                   <div className="w-10 text-slate-400 shrink-0 font-medium pt-0.5">{formatTime(t.created_at)}</div>
                   <div className="min-w-0 flex-1">

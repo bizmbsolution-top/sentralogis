@@ -1196,7 +1196,7 @@ export default function MasterWarehousePage() {
                     <option value="CBM">CBM</option>
                     <option value="SQM">SQM</option>
                     {uoms.map((u) => (
-                      <option key={u.name} value={u.name}>
+                      <option key={u.id || u.name} value={u.name}>
                         {u.name}
                       </option>
                     ))}

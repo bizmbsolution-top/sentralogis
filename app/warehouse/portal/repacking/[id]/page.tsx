@@ -420,8 +420,13 @@ export default function RepackingTaskExecutionPage() {
                       className="w-5 h-5 rounded-md border-slate-300 text-emerald-600 focus:ring-emerald-500/20 pointer-events-none"
                     />
                     <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="px-2.5 py-1 bg-slate-900 text-amber-400 font-mono text-xs font-black rounded-lg border border-slate-700 shadow-2xs tracking-wider">
+                          SKU: {item.product?.sku_code || 'NO-SKU'}
+                        </span>
+                      </div>
                       <h4 className="font-black text-slate-900 text-sm truncate">{item.product?.name}</h4>
-                      <div className="flex items-center gap-3 mt-2 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                         <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded">Target Qty: {item.quantity} {item.product?.unit}</span>
                         <span className="flex items-center gap-1"><MapPin size={12}/> Rak Asal: {item.source_location?.code || '-'}</span>
                       </div>
@@ -608,6 +613,11 @@ export default function RepackingTaskExecutionPage() {
                     className="p-5 rounded-2xl border bg-white flex flex-col gap-4 border-slate-100 shadow-sm"
                   >
                     <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="px-2.5 py-1 bg-slate-900 text-amber-400 font-mono text-xs font-black rounded-lg border border-slate-700 shadow-2xs tracking-wider">
+                          SKU: {item.product?.sku_code || 'NO-SKU'}
+                        </span>
+                      </div>
                       <h4 className="font-black text-slate-900 text-sm">{item.product?.name}</h4>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
                         Target Qty: {item.quantity} {item.product?.unit}

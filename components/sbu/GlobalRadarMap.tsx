@@ -6,6 +6,7 @@ import { useGoogleMaps } from '@/lib/google-maps-context';
 import { Loader2, Truck, User, MapPin, Navigation, Clock, Activity, ExternalLink, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/Badge';
+import { calculateBearingFromHistory, getVehicleTopDownMarkerIcon } from './VehicleMarkerUtils';
 
 const containerStyle = {
   width: '100%',
@@ -104,9 +105,10 @@ const mapOptions = {
 
 interface GlobalRadarMapProps {
   missions: any[];
+  onOpenReplay?: (mission: any) => void;
 }
 
-export default function GlobalRadarMap({ missions }: GlobalRadarMapProps) {
+export default function GlobalRadarMap({ missions, onOpenReplay }: GlobalRadarMapProps) {
   const { isLoaded } = useGoogleMaps();
   const [selectedMission, setSelectedMission] = useState<any>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -162,15 +164,15 @@ export default function GlobalRadarMap({ missions }: GlobalRadarMapProps) {
         {missions.map((mission) => {
           if (!mission.latitude || !mission.longitude) return null;
           
+          const bearing = calculateBearingFromHistory(mission.tracking_history || []);
+          const fleetTypeName = mission.fleet_type_name || mission.fleet_type || mission.fleet?.fleet_type?.type_name || mission.fleet_type_id || 'truck';
+          const topDownMarker = getVehicleTopDownMarkerIcon(fleetTypeName, bearing, '#3b82f6');
+
           return (
             <Marker
               key={mission.id}
               position={{ lat: Number(mission.latitude), lng: Number(mission.longitude) }}
-              icon={{
-                url: mission.fleet_icon || 'https://cdn-icons-png.flaticon.com/512/1048/1048312.png',
-                scaledSize: new google.maps.Size(48, 48),
-                anchor: new google.maps.Point(24, 24)
-              }}
+              icon={topDownMarker}
               onClick={() => setSelectedMission(mission)}
               title={mission.jo_number}
             />
@@ -205,10 +207,18 @@ export default function GlobalRadarMap({ missions }: GlobalRadarMapProps) {
                <div className="flex gap-2">
                   <button 
                     onClick={() => window.open(`/sbu/trucking/tracking?q=${selectedMission.jo_number}`, '_blank')}
-                    className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                    className="flex-1 bg-slate-900 text-white py-2 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
                   >
-                    <Activity size={10} /> Full Radar
+                    <Activity size={10} /> Radar
                   </button>
+                  {onOpenReplay && (
+                    <button 
+                      onClick={() => onOpenReplay(selectedMission)}
+                      className="flex-1 bg-cyan-500 text-slate-950 py-2 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center justify-center gap-1 shadow hover:bg-cyan-400"
+                    >
+                      🎬 Replay
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       const phone = selectedMission.driver_phone?.replace(/\D/g, '');

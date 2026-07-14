@@ -19,6 +19,7 @@ interface Product {
   name: string;
   sku_code: string;
   customer_id?: string;
+  [key: string]: any;
 }
 
 interface Location {
