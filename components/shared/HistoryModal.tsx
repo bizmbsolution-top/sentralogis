@@ -69,7 +69,7 @@ useEffect(() => {
             .in('user_id', performedByIds);
           
           if (profilesError) {
-            console.error("[HistoryModal] Tenant_users error:", profilesError);
+            console.error("[HistoryModal] Tenant_users error:", JSON.stringify(profilesError, null, 2));
           } else if (profilesData) {
             profilesMap = Object.fromEntries(profilesData.map(p => [p.user_id, { name: p.full_name }]));
           }
