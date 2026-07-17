@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { GoogleMap, Marker, InfoWindow, Polyline } from '@react-google-maps/api';
+import React, { useMemo, useState, useEffect } from 'react';
+import { GoogleMap, Marker, InfoWindow, Polyline, DirectionsRenderer } from '@react-google-maps/api';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { Loader2, Truck, User, MapPin, Phone, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
@@ -36,6 +36,7 @@ const TRUCK_COLORS = [
 export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selectedJoId }: MultiFleetRadarMapProps) {
   const { isLoaded } = useGoogleMaps();
   const [activeMarker, setActiveMarker] = useState<any | null>(null);
+  const [directionsMap, setDirectionsMap] = useState<{ [joId: string]: google.maps.DirectionsResult }>({});
 
   // Extract valid latest coordinates for all job orders
   const fleetMarkers = useMemo(() => {
@@ -71,9 +72,19 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
         const color = TRUCK_COLORS[idx % TRUCK_COLORS.length];
 
         // Build breadcrumb trail path for this truck
-        const path = validTracking
+        let path = validTracking
           .map((t: any) => ({ lat: Number(t.latitude), lng: Number(t.longitude) }))
           .reverse();
+
+        if (path.length < 2 && jo.routes) {
+          const routePoints = jo.routes
+            .filter((r: any) => r.latitude && r.longitude && Number(r.latitude) !== 0)
+            .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0))
+            .map((r: any) => ({ lat: Number(r.latitude), lng: Number(r.longitude) }));
+          if (routePoints.length >= 2) {
+            path = routePoints;
+          }
+        }
 
         const bearing = calculateBearingFromHistory(validTracking);
         const fleetTypeName = jo.fleet_type_name || jo.fleet_type || jo.fleet?.fleet_type?.type_name || jo.fleet_type_id || 'truck';
@@ -99,6 +110,37 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
       })
       .filter(Boolean);
   }, [jobOrders]);
+
+  // Compute road-snapped directions for all fleet trucks
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.google || fleetMarkers.length === 0) return;
+    const directionsService = new window.google.maps.DirectionsService();
+
+    fleetMarkers.forEach((m: any) => {
+      if (m && m.path && m.path.length >= 2 && !directionsMap[m.jo.id]) {
+        const origin = m.path[0];
+        const destination = m.path[m.path.length - 1];
+        const waypoints = m.path.slice(1, -1).slice(0, 23).map((pt: any) => ({
+          location: new window.google.maps.LatLng(pt.lat, pt.lng),
+          stopover: true
+        }));
+
+        directionsService.route(
+          {
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            waypoints,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+              setDirectionsMap(prev => ({ ...prev, [m.jo.id]: result }));
+            }
+          }
+        );
+      }
+    });
+  }, [fleetMarkers]);
 
   const mapCenter = useMemo(() => {
     if (fleetMarkers.length === 0) return { lat: -6.2088, lng: 106.8456 }; // Jakarta default
@@ -136,18 +178,34 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
           ],
         }}
       >
-        {/* Render polylines / trails for active/completed trucks */}
+        {/* Render road-snapped directions / trails for active/completed trucks */}
         {fleetMarkers.map((m: any) => (
-          m.path.length > 1 && (
-            <Polyline
-              key={`trail-${m.jo.id}`}
-              path={m.path}
+          directionsMap[m.jo.id] ? (
+            <DirectionsRenderer
+              key={`dir-${m.jo.id}`}
+              directions={directionsMap[m.jo.id]}
               options={{
-                strokeColor: m.color,
-                strokeOpacity: selectedJoId === m.jo.id ? 1.0 : 0.6,
-                strokeWeight: selectedJoId === m.jo.id ? 5 : 3,
+                preserveViewport: true,
+                suppressMarkers: true,
+                polylineOptions: {
+                  strokeColor: m.color,
+                  strokeOpacity: selectedJoId === m.jo.id ? 1.0 : 0.65,
+                  strokeWeight: selectedJoId === m.jo.id ? 5 : 3,
+                }
               }}
             />
+          ) : (
+            m.path.length > 1 && (
+              <Polyline
+                key={`trail-${m.jo.id}`}
+                path={m.path}
+                options={{
+                  strokeColor: m.color,
+                  strokeOpacity: selectedJoId === m.jo.id ? 1.0 : 0.6,
+                  strokeWeight: selectedJoId === m.jo.id ? 5 : 3,
+                }}
+              />
+            )
           )
         ))}
 
@@ -177,6 +235,7 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
         {activeMarker && (
           <InfoWindow
             position={{ lat: activeMarker.lat, lng: activeMarker.lng }}
+            options={{ pixelOffset: typeof window !== 'undefined' && window.google ? new window.google.maps.Size(0, -44) : undefined }}
             onCloseClick={() => setActiveMarker(null)}
           >
             <div className="p-3 max-w-xs bg-slate-900 text-white rounded-2xl shadow-xl border border-slate-800">

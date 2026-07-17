@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import { supabase } from '@/lib/supabase/client';
 import { Truck, MapPin, Phone, MessageSquare, ChevronRight, User, CheckCircle2, Clock, RefreshCw, Navigation, AlertCircle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import LanguageSelector from '@/components/LanguageSelector';
+import { calculateBearingFromHistory, getVehicleTopDownMarkerIcon } from '@/components/sbu/VehicleMarkerUtils';
 
 const MultiFleetRadarMap = dynamic(() => import('@/components/sbu/MultiFleetRadarMap'), { ssr: false });
 
@@ -41,31 +43,46 @@ export default function WOTrackingPage({ params }: { params: Promise<{ token: st
   const [error, setError] = useState<string | null>(null);
   const [selectedJoId, setSelectedJoId] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'completed' | 'pending'>('all');
+  const { t } = useLanguage();
 
+  // Fetch data function
+  const fetchData = async () => {
+    try {
+      const response = await fetch(`/api/track/wo/${token}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Gagal mengambil data pelacakan');
+      const woData = result.data;
+      if (!woData) throw new Error('Data tidak ditemukan');
+      setData(woData);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error fetching WO tracking data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Polling effect
   useEffect(() => {
     if (!token) return;
-    
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`/api/track/wo/${token}`);
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Gagal mengambil data pelacakan');
-        const woData = result.data;
-        if (!woData) throw new Error('Data tidak ditemukan');
-        setData(woData);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error fetching WO tracking data:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [token]);
+
+  // Real‑time subscription effect
+  useEffect(() => {
+    if (!data?.wo?.id) return;
+    const channel = supabase.channel('public:job_orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders', filter: `wo_item_id=eq.${data.wo.id}` }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [data?.wo?.id]);
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white font-sans p-6 text-center">
@@ -92,8 +109,7 @@ export default function WOTrackingPage({ params }: { params: Promise<{ token: st
     </div>
   );
 
-const { wo, jobOrders } = data;
-  const { t } = useLanguage();
+  const { wo, jobOrders = [] } = data ?? {};
 
   const getJoInfo = (jo: any) => {
       const isDone = ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'RECEIVED'].includes(jo.status?.toUpperCase());
@@ -217,7 +233,7 @@ return { label, statusColor, bgColor, borderColor, dotColor, stepIndex, lastPosi
 
            {/* Language Selector */}
            <div className="flex items-center gap-4 mb-4">
-             <LanguageSelector />
+             <LanguageSelector align="left" />
            </div>
 
 {/* Customer Info */}
@@ -439,7 +455,11 @@ return { label, statusColor, bgColor, borderColor, dotColor, stepIndex, lastPosi
                 <MissionMap 
                   stops={selectedJo.routes || []} 
                   tracking={selectedJo.tracking_history || []} 
-                  fleetIcon={undefined}
+                  fleetIcon={getVehicleTopDownMarkerIcon(
+                    selectedJo.fleet_type_name || selectedJo.fleet?.fleet_type?.type_name || 'truck',
+                    calculateBearingFromHistory(selectedJo.tracking_history || []),
+                    '#3b82f6'
+                  )}
                   focusedLocation={null}
                 />
               </div>
