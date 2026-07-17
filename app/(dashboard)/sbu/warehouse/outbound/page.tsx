@@ -76,7 +76,14 @@ const statusLabel: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-const priorityColor: Record<string, string> = {
+const PRIORITY_BADGE: Record<string, string> = {
+  LOW: "bg-slate-100 text-slate-700",
+  NORMAL: "bg-blue-100 text-blue-700",
+  HIGH: "bg-amber-100 text-amber-700",
+  URGENT: "bg-red-100 text-red-700 animate-pulse",
+};
+
+const PRIORITY_COLOR: Record<string, string> = {
   LOW: "text-slate-500",
   NORMAL: "text-blue-600",
   HIGH: "text-amber-600",
@@ -86,6 +93,7 @@ const priorityColor: Record<string, string> = {
 export default function SBUOutboundPage() {
   const supabase = createClient()!;
   const { profile } = useAuth();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"tasks" | "stock">("tasks");
 
@@ -119,6 +127,14 @@ export default function SBUOutboundPage() {
     }
     return tid;
   }, [profile]);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const createParam = searchParams.get('create');
+    if (action === 'create' || createParam === 'true') {
+      setShowCreateModal(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!profile) return;

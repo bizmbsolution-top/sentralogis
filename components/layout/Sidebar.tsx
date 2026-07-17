@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
 import { Building, ChevronDown, ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface MenuItem {
   label: string;
@@ -460,10 +461,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   ],
 };
 
-export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: boolean; onClose: () => void; onLinkClick?: () => void }) {
+export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: boolean, onClose: () => void, onLinkClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, loading } = useAuth();
+  const { t } = useLanguage();
   const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Master Data']);
   const [tenantLogo, setTenantLogo] = useState('');
   const [activeSbus, setActiveSbus] = useState<Set<string>>(new Set());
@@ -512,7 +514,8 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
     }, []);
   };
 
-  const menuItems = filterBySbu(MENU_CONFIG[role] || MENU_CONFIG.tenant_admin);
+  const rawMenuItems = MENU_CONFIG[role] ?? MENU_CONFIG.tenant_admin;
+  const menuItems = filterBySbu(Array.isArray(rawMenuItems) ? rawMenuItems : []);
 
   const toggleSubmenu = (label: string) => {
     setOpenSubmenus(prev => 
@@ -601,7 +604,7 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
                       >
                         <div className="flex items-center gap-3">
                           {node.icon && <span className={depth === 0 ? 'text-lg' : 'text-base'}>{node.icon}</span>}
-                          <span className="text-sm">{node.label}</span>
+                          <span className="text-sm">{t.sidebar?.[node.label] || node.label}</span>
                         </div>
                         {isSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
@@ -622,7 +625,7 @@ export default function Sidebar({ isOpen, onClose, onLinkClick }: { isOpen: bool
                         `}
                       >
                         {node.icon && <span className={depth === 0 ? 'text-lg' : 'text-base'}>{node.icon}</span>}
-                        <span className="text-sm">{node.label}</span>
+                        <span className="text-sm">{t.sidebar?.[node.label] || node.label}</span>
                       </Link>
                     )}
 

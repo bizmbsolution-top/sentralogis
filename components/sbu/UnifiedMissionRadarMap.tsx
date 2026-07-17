@@ -60,6 +60,7 @@ export default function UnifiedMissionRadarMap({
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [activeMarker, setActiveMarker] = useState<any | null>(null);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
+  const [directionsMap, setDirectionsMap] = useState<{ [joId: string]: google.maps.DirectionsResult }>({});
   const [selectedRouteStops, setSelectedRouteStops] = useState<any[]>([]);
 
   // Find the currently selected single JO (if any)
@@ -114,9 +115,19 @@ export default function UnifiedMissionRadarMap({
         const color = TRUCK_COLORS[idx % TRUCK_COLORS.length];
         const isSelectedTruck = selectedJoId === jo.id;
 
-        const path = validTracking
+        let path = validTracking
           .map((t: any) => ({ lat: Number(t.latitude), lng: Number(t.longitude) }))
           .reverse();
+
+        if (path.length < 2 && jo.routes) {
+          const routePoints = jo.routes
+            .filter((r: any) => getValidLatLng(r.latitude, r.longitude) !== null)
+            .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0))
+            .map((r: any) => getValidLatLng(r.latitude, r.longitude)!);
+          if (routePoints.length >= 2) {
+            path = routePoints;
+          }
+        }
 
         const bearing = calculateBearingFromHistory(validTracking);
         const fleetTypeName = jo.fleet_type_name || jo.fleet_type || jo.fleet?.fleet_type?.type_name || jo.fleet_type_id || 'truck';
@@ -141,6 +152,37 @@ export default function UnifiedMissionRadarMap({
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
   }, [visibleJobOrders, selectedJoId]);
+
+  // Compute road-snapped directions for all visible fleet trucks
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.google || fleetMarkers.length === 0) return;
+    const directionsService = new window.google.maps.DirectionsService();
+
+    fleetMarkers.forEach(item => {
+      if (item.path.length >= 2 && !directionsMap[item.jo.id]) {
+        const origin = item.path[0];
+        const destination = item.path[item.path.length - 1];
+        const waypoints = item.path.slice(1, -1).slice(0, 23).map(pt => ({
+          location: new window.google.maps.LatLng(pt.lat, pt.lng),
+          stopover: true
+        }));
+
+        directionsService.route(
+          {
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            waypoints,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+              setDirectionsMap(prev => ({ ...prev, [item.jo.id]: result }));
+            }
+          }
+        );
+      }
+    });
+  }, [fleetMarkers]);
 
   // Extract route waypoints for selected JO (for Origin/Destination markers & Directions)
   useEffect(() => {
@@ -319,17 +361,33 @@ export default function UnifiedMissionRadarMap({
 
           return (
             <React.Fragment key={item.jo.id}>
-              {/* Truck Polyline Breadcrumb Trail */}
-              {item.path.length > 1 && (
-                <Polyline
-                  path={item.path}
+              {/* Truck Polyline Breadcrumb Trail (Only if road directions not available yet) */}
+              {(directionsResponse && isSelected) || directionsMap[item.jo.id] ? (
+                <DirectionsRenderer
+                  directions={(directionsResponse && isSelected) ? directionsResponse : directionsMap[item.jo.id]}
                   options={{
-                    strokeColor: isSelected ? '#38bdf8' : item.color,
-                    strokeOpacity: isSelected ? 0.95 : 0.4,
-                    strokeWeight: isSelected ? 4 : 2,
-                    zIndex: isSelected ? 50 : 1
+                    preserveViewport: true,
+                    suppressMarkers: true,
+                    polylineOptions: {
+                      strokeColor: isSelected ? '#38bdf8' : item.color,
+                      strokeOpacity: isSelected ? 0.95 : 0.65,
+                      strokeWeight: isSelected ? 5 : 4,
+                      zIndex: isSelected ? 50 : 1
+                    }
                   }}
                 />
+              ) : (
+                item.path.length > 1 && (
+                  <Polyline
+                    path={item.path}
+                    options={{
+                      strokeColor: isSelected ? '#38bdf8' : item.color,
+                      strokeOpacity: isSelected ? 0.95 : 0.4,
+                      strokeWeight: isSelected ? 4 : 2,
+                      zIndex: isSelected ? 50 : 1
+                    }}
+                  />
+                )
               )}
 
               {/* Breadcrumb Ping Points when selected */}
@@ -362,13 +420,13 @@ export default function UnifiedMissionRadarMap({
                   color: '#ffffff',
                   fontSize: '12px',
                   fontWeight: 'bold',
-                  className: 'bg-blue-600 px-2.5 py-1 rounded-lg border border-white shadow-xl -mt-14 whitespace-nowrap'
+                  className: 'bg-blue-600 px-2.5 py-1 rounded-lg border border-white shadow-xl -mt-16 whitespace-nowrap'
                 } : {
                   text: item.jo.plate_number ? item.jo.plate_number.replace(/\s+/g, '').substring(0, 8) : `#${item.unitIndex}`,
                   color: '#ffffff',
                   fontSize: '10px',
                   fontWeight: 'bold',
-                  className: 'bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-700 -mt-10 shadow-md'
+                  className: 'bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-700 -mt-12 shadow-md'
                 }}
                 icon={item.topDownMarker}
                 zIndex={isSelected ? 9999 : item.unitIndex + 100}
@@ -381,6 +439,7 @@ export default function UnifiedMissionRadarMap({
         {activeMarker && (
           <InfoWindow
             position={{ lat: activeMarker.lat, lng: activeMarker.lng }}
+            options={{ pixelOffset: typeof window !== 'undefined' && window.google ? new window.google.maps.Size(0, -44) : undefined }}
             onCloseClick={() => setActiveMarker(null)}
           >
             <div className="p-2.5 max-w-xs text-slate-900 bg-white rounded-lg shadow-sm">

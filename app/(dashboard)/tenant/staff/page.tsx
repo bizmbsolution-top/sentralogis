@@ -12,6 +12,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
+import { useSearchParams } from 'next/navigation';
 import AddStaffModal from '@/components/Tenant/AddStaffModal';
 import EditStaffModal from '@/components/Tenant/EditStaffModal';
 import ResetPasswordModal from '@/components/Tenant/ResetPasswordModal';
@@ -22,6 +23,7 @@ import { deleteStaffAdmin } from '@/app/(dashboard)/tenant/staff/actions';
 
 export default function TenantOrganizationPage() {
   const { user, profile } = useAuth();
+  const searchParams = useSearchParams();
   const [staff, setStaff] = useState<any[]>([]);
   const [fieldStaff, setFieldStaff] = useState<any[]>([]);
   const [sbus, setSbus] = useState<any[]>([]);
@@ -35,6 +37,14 @@ export default function TenantOrganizationPage() {
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const createParam = searchParams.get('create');
+    if (action === 'create' || action === 'add_staff' || createParam === 'true') {
+      setIsAddModalOpen(true);
+    }
+  }, [searchParams]);
 
   // Permission Check
   const isSuperadmin = profile?.role === 'tenant_superadmin' || profile?.role === 'tenant_admin';

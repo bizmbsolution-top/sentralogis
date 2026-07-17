@@ -116,6 +116,14 @@ export default function HQWorkOrdersPage() {
     // [AI] reading sbu filter from URL
     const sbu = searchParams.get('sbu');
     if (sbu) setSbuFilter(sbu);
+
+    // [AI] Check if Robot AI or URL requested opening form modal directly
+    const action = searchParams.get('action');
+    const createParam = searchParams.get('create');
+    if (action === 'create' || action === 'create_wo' || createParam === 'true') {
+      setIsFormOpen(true);
+      setEditingId(null);
+    }
   }, [searchParams]);
 
   // [AI] Sync sbuFilter to URL without page reload

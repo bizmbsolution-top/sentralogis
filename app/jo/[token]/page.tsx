@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
-import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from '@react-google-maps/api';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
 
 interface RouteStop {
@@ -83,6 +83,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const [panicSending, setPanicSending] = useState(false);
 
   const [readyConfirmOpen, setReadyConfirmOpen] = useState(false);
+  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -383,6 +384,32 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     : mapMarkers.length > 0
       ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
       : { lat: -6.2, lng: 106.816666 };
+
+  useEffect(() => {
+    if (!isLoaded || mapMarkers.length < 2 || typeof google === 'undefined') return;
+
+    const directionsService = new google.maps.DirectionsService();
+    const origin = { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng };
+    const destination = { lat: mapMarkers[mapMarkers.length - 1].lat, lng: mapMarkers[mapMarkers.length - 1].lng };
+    const waypoints = mapMarkers.slice(1, -1).map(s => ({
+      location: { lat: s.lat, lng: s.lng },
+      stopover: true
+    }));
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResponse(result);
+        }
+      }
+    );
+  }, [isLoaded, JSON.stringify(polylinePath)]);
 
   const isGreeting = jobOrder?.driver_response !== 'accepted';
   const isPendingStart = jobOrder?.driver_response === 'accepted' && !jobOrder?.started_at && !['in_progress', 'DALAM PERJALANAN'].includes(jobOrder?.status || '') && !jobOrder?.status?.startsWith('MENUJU');
@@ -706,15 +733,29 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                         }}
                       />
                     ))}
-                    {polylinePath.length > 1 && (
-                      <PolylineF
-                        path={polylinePath}
+                    {directionsResponse ? (
+                      <DirectionsRenderer
+                        directions={directionsResponse}
                         options={{
-                          strokeColor: '#3b82f6',
-                          strokeOpacity: 0.8,
-                          strokeWeight: 4,
+                          suppressMarkers: true,
+                          polylineOptions: {
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.9,
+                            strokeWeight: 5,
+                          }
                         }}
                       />
+                    ) : (
+                      polylinePath.length > 1 && (
+                        <PolylineF
+                          path={polylinePath}
+                          options={{
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 4,
+                          }}
+                        />
+                      )
                     )}
                   </GoogleMap>
                 </div>

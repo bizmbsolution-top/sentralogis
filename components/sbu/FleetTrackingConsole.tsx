@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
-   Truck, Search, Loader2, Zap, Box, MapPin, Navigation, ShieldCheck, Maximize2, Activity, Menu, X, Clock, ChevronLeft, ChevronRight, MessageSquare
+   Truck, Search, Loader2, Zap, Box, MapPin, Navigation, ShieldCheck, Maximize2, Activity, Menu, X, Clock, ChevronLeft, ChevronRight, MessageSquare, Share2, ArrowLeft
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
@@ -257,9 +257,9 @@ export default function FleetTrackingConsole() {
       if (phone.startsWith('8')) phone = '62' + phone;
 
        if (phone && phone.length >= 10) {
-         window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
+         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
        } else {
-         window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+         window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
        }
       toast.success('Membuka WhatsApp...');
     };
@@ -453,11 +453,10 @@ export default function FleetTrackingConsole() {
                                   e.stopPropagation();
                                   handleShareToCustomer(woNum);
                                }}
-                               className="w-full mt-1.5 h-8 px-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 rounded-lg text-[11px] font-semibold text-emerald-700 flex items-center justify-center gap-1.5 transition-all"
+                               className="w-full mt-1.5 h-10 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 hover:border-indigo-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/30 transition-all active:scale-95"
                                title="Kirim WA ke Pelanggan (Bundling semua JO di WO ini)"
                             >
-                               <MessageSquare className="w-3.5 h-3.5" />
-                               Kirim WA ke Pelanggan
+                               <Share2 size={14} /> SHARE TO CUSTOMER
                             </button>
 
                             {/* Sub-JO Accordion List (1 WO -> 10 JO) */}
@@ -607,20 +606,13 @@ export default function FleetTrackingConsole() {
                         </div>
                      </div>
                   ) : (
-                     <div className="flex items-center gap-2">
-                        <button
-                           onClick={() => setSelectedJoId(null)}
-                           className="bg-slate-900/90 hover:bg-slate-900 text-white backdrop-blur-md border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-2xl transition-all hover:scale-105"
-                           title="Kembali memantau seluruh armada WO / konsolidasi"
-                        >
-                           <span>⬅ Kembali ke Radar {selectedWoGroup === 'ALL' || !selectedWoGroup ? 'Semua Armada' : `WO ${selectedWoGroup}`}</span>
-                        </button>
-                        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3.5 py-2 shadow-2xl hidden sm:flex items-center gap-2">
-                           <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider">Fokus Truk:</span>
-                           <span className="text-xs font-black text-white">{selectedJo.plate_number}</span>
-                           <span className="text-[10px] font-bold text-slate-300">({selectedJo.driver_name})</span>
-                        </div>
-                     </div>
+                     <button
+                        onClick={() => setSelectedJoId(null)}
+                        className="bg-slate-900/90 hover:bg-slate-900 text-white backdrop-blur-md border border-slate-700/80 rounded-xl p-2.5 shadow-2xl transition-all hover:scale-105"
+                        title="Kembali ke Radar"
+                     >
+                        <ArrowLeft size={18} />
+                     </button>
                   )}
                </div>
 

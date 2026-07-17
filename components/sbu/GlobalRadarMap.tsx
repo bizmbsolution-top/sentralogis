@@ -182,6 +182,7 @@ export default function GlobalRadarMap({ missions, onOpenReplay }: GlobalRadarMa
         {selectedMission && (
           <InfoWindow
             position={{ lat: Number(selectedMission.latitude), lng: Number(selectedMission.longitude) }}
+            options={{ pixelOffset: typeof window !== 'undefined' && window.google ? new window.google.maps.Size(0, -44) : undefined }}
             onCloseClick={() => setSelectedMission(null)}
           >
             <div className="p-2 min-w-[240px] text-slate-900">

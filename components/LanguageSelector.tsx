@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { Locale } from '@/lib/i18n/translations';
 
-export default function LanguageSelector() {
+export default function LanguageSelector({ align = 'right' }: { align?: 'left' | 'right' }) {
   const { locale, setLocale } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   
@@ -55,7 +55,7 @@ export default function LanguageSelector() {
       </div>
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-slate-900/90 backdrop-blur-md border border-slate-800/60 rounded-xl shadow-lg z-20 w-56 z-[50]">
+        <div className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/90 backdrop-blur-md border border-slate-800/60 rounded-xl shadow-lg z-[50]`}>
           <div className="space-y-1 px-3 pt-2 pb-3">
             {locales.map(l => (
               <button

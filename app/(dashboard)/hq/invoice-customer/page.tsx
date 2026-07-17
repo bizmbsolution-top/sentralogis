@@ -169,6 +169,8 @@ export default function HQInvoiceCustomerPage() {
           dueDate = inv.due_date || null;
         } else if (readyForBilling) {
           status = 'ready';
+        } else {
+          continue; // Skip WO that are still in progress/draft/on journey
         }
 
         rows.push({

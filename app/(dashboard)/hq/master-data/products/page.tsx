@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -15,6 +16,7 @@ import BOMFormModal from './components/BOMFormModal';
 
 export default function ProductsPage() {
   const { profile } = useAuth();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'catalog' | 'bom'>('catalog');
   
   // Products State
@@ -89,6 +91,12 @@ export default function ProductsPage() {
       fetchBoms();
     }
   }, [profile?.tenant_id, activeTab]);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setIsFormOpen(true);
+    }
+  }, [searchParams]);
 
   const handleDeleteBom = async (bomId: string, bomNumber: string) => {
     if (!confirm(`Are you sure you want to delete BOM ${bomNumber}?`)) return;

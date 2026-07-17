@@ -1,0 +1,21 @@
+{
+  "name": "Sentralogis Management Portal",
+  "short_name": "Sentralogis",
+  "description": "Management portal for Sentralogis",
+  "icons": [
+    {
+      "src": "/logo2sentralogis.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/sentralogis_logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050816",
+  "theme_color": "#3b82f6"
+}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, LogIn, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import LanguageSelector from '@/components/LanguageSelector';
@@ -9,6 +10,7 @@ import LanguageSelector from '@/components/LanguageSelector';
 
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -255,10 +257,15 @@ export default function LoginPage() {
         } else if (error.message?.includes('Too many requests')) {
           toast.error('Terlalu banyak percobaan. Tunggu sebentar.');
         } else {
-          toast.error(error.message || 'Login gagal');
+          const safeMsg = typeof error.message === 'string'
+            ? error.message.replace(/["'`]/g, '\\$&')
+            : 'Login gagal';
+          toast.error(safeMsg);
         }
+      } else {
+        // Successful login – let AuthProvider handle navigation via auth state change
+        // No manual router navigation needed here
       }
-      // [AI] Navigation handled by AuthProvider onAuthStateChange
     } catch {
       toast.error('Terjadi kesalahan. Coba lagi.');
     } finally {

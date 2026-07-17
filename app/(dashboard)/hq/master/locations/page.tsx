@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -27,6 +28,7 @@ interface Location {
 
 export default function HQLocationsPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const searchParams = useSearchParams();
   
   // Role Access
   const roleUpper = profile?.role?.toUpperCase() || '';
@@ -89,6 +91,12 @@ export default function HQLocationsPage() {
       setLoading(false);
     }
   }, [tenantId, fetchLocations, loadingAuth]);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
 
   const generateLocationCode = async () => {
     if (!tenantId) return 'LOC/001';

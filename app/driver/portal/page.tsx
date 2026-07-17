@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
-import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from '@react-google-maps/api';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
 
 export default function DriverPortal() {
@@ -60,6 +60,7 @@ export default function DriverPortal() {
   const [driver, setDriver] = useState<any>(null);
   const [tenantInfo, setTenantInfo] = useState<{ name: string; logo_url: string | null } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
 
   // Theme Management: light / dark mode
   // [AI] read and write theme from localStorage, optimized for safe night-driving
@@ -787,6 +788,21 @@ export default function DriverPortal() {
       if (!response.ok) {
         const result = await response.json();
         throw new Error(result.error || 'Gagal memperbarui status');
+      }
+
+      // Optimistically update selectedJob state to reflect the new status immediately
+      if (selectedJob && selectedJob.id === jobId) {
+        if (newStatus === 'DITERIMA') {
+          selectedJob.driver_response = 'accepted';
+        }
+        if (newStatus === 'START JOURNEY') {
+          selectedJob.status = 'IN_PROGRESS';
+        }
+        if (newStatus === 'PEKERJAAN SELESAI' || newStatus === 'SELESAI') {
+          selectedJob.status = 'COMPLETED';
+        }
+        // Force re‑render
+        setSelectedJob({ ...selectedJob });
       }
 
       // [AI] Fleet & driver updates now handled by API (admin client)
@@ -1724,6 +1740,32 @@ export default function DriverPortal() {
   const polylinePath = mapMarkers.map(m => ({ lat: m.lat, lng: m.lng }));
   const mapCenter = mapMarkers.length > 0 ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng } : { lat: -6.2, lng: 106.816666 };
   
+  useEffect(() => {
+    if (!isLoaded || mapMarkers.length < 2 || typeof google === 'undefined') return;
+
+    const directionsService = new google.maps.DirectionsService();
+    const origin = { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng };
+    const destination = { lat: mapMarkers[mapMarkers.length - 1].lat, lng: mapMarkers[mapMarkers.length - 1].lng };
+    const waypoints = mapMarkers.slice(1, -1).map(s => ({
+      location: { lat: s.lat, lng: s.lng },
+      stopover: true
+    }));
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResponse(result);
+        }
+      }
+    );
+  }, [isLoaded, JSON.stringify(polylinePath)]);
+  
   const milestones = selectedJob ? [
     { id: 'start', label: 'TERIMA', status: selectedJob.accepted_at ? 'completed' : 'pending' },
     { id: 'depart', label: 'BERANGKAT', status: (selectedJob.started_at || (selectedJob.status || '').toUpperCase() === 'DALAM PERJALANAN' || (selectedJob.status || '').toUpperCase().startsWith('MENUJU')) ? 'completed' : (selectedJob.accepted_at || (selectedJob.status || '').toUpperCase() === 'MENUNGGU MULAI / START' || (selectedJob.status || '').toUpperCase() === 'ORDER DITERIMA' ? 'current' : 'pending') },
@@ -2371,15 +2413,29 @@ export default function DriverPortal() {
                         }}
                       />
                     ))}
-                    {polylinePath.length > 1 && (
-                      <PolylineF
-                        path={polylinePath}
+                    {directionsResponse ? (
+                      <DirectionsRenderer
+                        directions={directionsResponse}
                         options={{
-                          strokeColor: '#3b82f6',
-                          strokeOpacity: 0.8,
-                          strokeWeight: 4,
+                          suppressMarkers: true,
+                          polylineOptions: {
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.9,
+                            strokeWeight: 5,
+                          }
                         }}
                       />
+                    ) : (
+                      polylinePath.length > 1 && (
+                        <PolylineF
+                          path={polylinePath}
+                          options={{
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 4,
+                          }}
+                        />
+                      )
                     )}
                   </GoogleMap>
                 </div>

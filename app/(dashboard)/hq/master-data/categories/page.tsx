@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { FolderTree, Plus, Edit2, Trash2, ChevronRight, ChevronDown, Package } from 'lucide-react';
 
 export default function MasterCategoriesPage() {
   const { profile } = useAuth();
+  const searchParams = useSearchParams();
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +38,12 @@ export default function MasterCategoriesPage() {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
 
   const buildTree = (cats: any[], parentId: string | null = null): any[] => {
     return cats

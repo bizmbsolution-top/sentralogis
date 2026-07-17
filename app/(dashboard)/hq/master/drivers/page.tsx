@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -38,6 +39,7 @@ interface Driver {
 
 export default function HQDriversPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const searchParams = useSearchParams();
   const { syncStatus, loading: syncLoading, lastSync, lastResult } = useStatusSync({ autoSync: false });
   
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -131,6 +133,12 @@ export default function HQDriversPage() {
       setLoading(false);
     }
   }, [tenantId, fetchData, loadingAuth]);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
 
   const generateDriverCode = async () => {
     return await generateDriverCodeAction();

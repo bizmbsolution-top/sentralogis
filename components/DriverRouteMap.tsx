@@ -33,17 +33,45 @@ export default function DriverRouteMap({ pickup, delivery }: MapProps) {
   const defaultCenter: [number, number] = [-6.2, 106.816666];
 
   useEffect(() => {
-    // Simulasi geocoding dan perhitungan rute
-    // Di production, pakai Google Maps API atau OpenRouteService
-    const timer = setTimeout(() => {
-      setRoute({
-        pickup: [-6.2, 106.816666],
-        delivery: [-6.3, 106.85],
-        path: [[-6.2, 106.816666], [-6.25, 106.833333], [-6.3, 106.85]]
-      });
-      setLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
+    let isMounted = true;
+    const fetchRoadRoute = async () => {
+      try {
+        setLoading(true);
+        const pickupCoords: [number, number] = [-6.200000, 106.816666];
+        const deliveryCoords: [number, number] = [-6.300000, 106.850000];
+
+        const response = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${pickupCoords[1]},${pickupCoords[0]};${deliveryCoords[1]},${deliveryCoords[0]}?overview=full&geometries=geojson`
+        );
+        const data = await response.json();
+
+        let path: [number, number][] = [pickupCoords, deliveryCoords];
+        if (data && data.routes && data.routes[0] && data.routes[0].geometry && data.routes[0].geometry.coordinates) {
+          path = data.routes[0].geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
+        }
+
+        if (isMounted) {
+          setRoute({
+            pickup: pickupCoords,
+            delivery: deliveryCoords,
+            path
+          });
+          setLoading(false);
+        }
+      } catch (e) {
+        if (isMounted) {
+          setRoute({
+            pickup: [-6.200000, 106.816666],
+            delivery: [-6.300000, 106.850000],
+            path: [[-6.200000, 106.816666], [-6.300000, 106.850000]]
+          });
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchRoadRoute();
+    return () => { isMounted = false; };
   }, [pickup, delivery]);
 
   if (loading) {

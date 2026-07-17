@@ -49,11 +49,24 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       }));
   }, [activeSbuTypes]);
   
+  const todayLocal = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const nowLocalTime = () => {
+    return new Date().toTimeString().slice(0, 5);
+  };
+
   const [formData, setFormData] = useState({
     customer_id: '',
-    order_date: new Date().toISOString().split('T')[0],
-    execution_date: new Date().toISOString().split('T')[0],
-    execution_time: '08:00',
+    order_date: todayLocal(),
+    order_time: nowLocalTime(),
+    execution_date: todayLocal(),
+    execution_time: nowLocalTime(),
     notes: '',
   });
   const [woStatus, setWoStatus] = useState<string | null>(null);
@@ -225,9 +238,10 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         setWoStatus(wo.status);
         setFormData({
           customer_id: wo.customer_id || '',
-          order_date: wo.order_date || new Date().toISOString().split('T')[0],
-          execution_date: wo.execution_date || new Date().toISOString().split('T')[0],
-          execution_time: wo.execution_time || '08:00',
+          order_date: wo.order_date || todayLocal(),
+          order_time: wo.order_time || nowLocalTime(),
+          execution_date: wo.execution_date || todayLocal(),
+          execution_time: wo.execution_time || nowLocalTime(),
           notes: wo.notes || '',
         });
         setWoItems(woItemsWithJobs);
@@ -287,6 +301,20 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       return;
     }
 
+    // [VALIDATION] Execution datetime must be >= order datetime (date + time).
+    const orderDateTime = new Date(`${formData.order_date}T${formData.order_time || '00:00'}`);
+    const execDateTime = new Date(`${formData.execution_date}T${formData.execution_time || '00:00'}`);
+    if (isNaN(orderDateTime.getTime()) || isNaN(execDateTime.getTime())) {
+      toast.error('Tanggal/Waktu eksekusi tidak valid.');
+      return;
+    }
+    if (execDateTime.getTime() < orderDateTime.getTime()) {
+      toast.error(
+        `Waktu eksekusi (${formData.execution_date} ${formData.execution_time}) tidak boleh sebelum order time (${formData.order_date} ${formData.order_time}).`
+      );
+      return;
+    }
+
     setSubmitting(status === 'draft' ? 'draft' : 'submit');
     try {
       let woNumber = '';
@@ -308,6 +336,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         wo_number: woNumber,
         customer_id: formData.customer_id,
         order_date: formData.order_date,
+        order_time: formData.order_time,
         execution_date: formData.execution_date,
         execution_time: formData.execution_time,
         notes: formData.notes,
@@ -316,10 +345,18 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       };
 
       if (editId) {
-        const { error } = await supabase.from('work_orders').update(payload).eq('id', editId);
+        let { error } = await supabase.from('work_orders').update(payload).eq('id', editId);
+        if (error && /42703.*order_time/i.test(error.message || '')) {
+          const { order_time, ...safePayload } = payload;
+          ({ error } = await supabase.from('work_orders').update(safePayload).eq('id', editId));
+        }
         if (error) throw error;
       } else {
-        const { data: wo, error } = await supabase.from('work_orders').insert(payload).select().single();
+        let { data: wo, error } = await supabase.from('work_orders').insert(payload).select().single();
+        if (error && /42703.*order_time/i.test(error.message || '')) {
+          const { order_time, ...safePayload } = payload;
+          ({ data: wo, error } = await supabase.from('work_orders').insert(safePayload).select().single());
+        }
         if (error) throw error;
         woId = wo?.id;
       }
@@ -775,13 +812,22 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                       <Calendar size={12} /> Order Date *
                     </label>
-                    <input 
-                      type="date"
-                      disabled={isReadOnly}
-                      value={formData.order_date}
-                      onChange={(e) => setFormData({...formData, order_date: e.target.value})}
-                      className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="date"
+                        disabled={isReadOnly}
+                        value={formData.order_date}
+                        onChange={(e) => setFormData({...formData, order_date: e.target.value})}
+                        className="flex-1 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                      />
+                      <input
+                        type="time"
+                        disabled={isReadOnly}
+                        value={formData.order_time}
+                        onChange={(e) => setFormData({...formData, order_time: e.target.value})}
+                        className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                      />
+                    </div>
                   </div>
                   <div className="md:col-span-2 space-y-3">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
@@ -803,6 +849,17 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                         className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
                       />
                     </div>
+                    {(() => {
+                      const orderRef = new Date(`${formData.order_date}T${formData.order_time || '00:00'}`);
+                      const execRef = new Date(`${formData.execution_date}T${formData.execution_time || '00:00'}`);
+                      const invalid = !isNaN(orderRef.getTime()) && !isNaN(execRef.getTime()) && execRef.getTime() < orderRef.getTime();
+                      if (!invalid) return null;
+                      return (
+                        <p className="text-[10px] font-bold text-rose-600 mt-1 ml-1 flex items-center gap-1">
+                          ⚠ Waktu eksekusi ({formData.execution_date} {formData.execution_time}) tidak boleh sebelum Order Time ({formData.order_date} {formData.order_time}).
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

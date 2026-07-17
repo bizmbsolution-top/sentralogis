@@ -7,9 +7,11 @@ import { Loader2, ClipboardCheck, Plus, Clock, Search, CheckCircle2, XCircle } f
 import { format } from "date-fns";
 import CreateOpnameModal from "./components/CreateOpnameModal";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function StockOpnamePage() {
   const { profile } = useAuth();
+  const searchParams = useSearchParams();
   const tenantId = profile?.tenant_id;
   const role = profile?.role;
 
@@ -18,6 +20,14 @@ export default function StockOpnamePage() {
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const createParam = searchParams.get("create");
+    if (action === "create" || createParam === "true") {
+      setShowModal(true);
+    }
+  }, [searchParams]);
 
   const canCreate = role === "sbu_manager_wh" || role === "sbu_admin_wh" || role === "sbu_ops_wh";
 

@@ -70,9 +70,10 @@ export function getVehicleTopDownMarkerIcon(
 ): { url: string; scaledSize: any; anchor: any } {
   const name = (fleetTypeName || '').toLowerCase();
   
+  const canvasSize = 84;
+  const cx = 42;
+  const cy = 42;
   let svgContent = '';
-  let width = 24;
-  let height = 44;
 
   // Determine color theme by status/SBU if not explicitly passed
   let primaryColor = statusColor;
@@ -81,133 +82,128 @@ export function getVehicleTopDownMarkerIcon(
 
   if (name.includes('trailer') || name.includes('container') || name.includes('40ft') || name.includes('20ft') || name.includes('gandeng')) {
     // 🚚 LONG TRAILER CONTAINER (Top-down tractor cabin + long ribbed container box)
-    width = 26;
-    height = 64;
+    // Box dimensions: 26 width x 60 height centered at (42, 42) -> left=29, top=12
     svgContent = `
-      <g transform="rotate(${bearing}, ${width / 2}, ${height / 2})">
+      <g transform="rotate(${bearing}, ${cx}, ${cy})">
         <!-- Shadow -->
-        <rect x="3" y="2" width="20" height="60" rx="3" fill="rgba(0,0,0,0.35)" />
+        <rect x="29" y="14" width="26" height="60" rx="4" fill="rgba(0,0,0,0.38)" />
         
         <!-- Long Container Cargo Box (Rear) -->
-        <rect x="3" y="18" width="20" height="44" rx="2" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.5" />
+        <rect x="29" y="27" width="26" height="45" rx="3" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.8" />
         <!-- Ribbed Container Lines -->
-        <line x1="5" y1="24" x2="21" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
-        <line x1="5" y1="32" x2="21" y2="32" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
-        <line x1="5" y1="40" x2="21" y2="40" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
-        <line x1="5" y1="48" x2="21" y2="48" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
-        <line x1="5" y1="56" x2="21" y2="56" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
+        <line x1="31" y1="34" x2="53" y2="34" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
+        <line x1="31" y1="42" x2="53" y2="42" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
+        <line x1="31" y1="50" x2="53" y2="50" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
+        <line x1="31" y1="58" x2="53" y2="58" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
+        <line x1="31" y1="66" x2="53" y2="66" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" />
         
         <!-- Kingpin Pivot Connector -->
-        <rect x="10" y="15" width="6" height="4" fill="#64748b" />
+        <rect x="39" y="23" width="6" height="5" fill="#64748b" />
 
         <!-- Front Tractor Cabin -->
-        <rect x="4" y="2" width="18" height="14" rx="3" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1" />
+        <rect x="30" y="11" width="24" height="14" rx="3.5" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1.5" />
         <!-- Windshield Window -->
-        <path d="M 6 5 L 20 5 L 18 9 L 8 9 Z" fill="${accentColor}" opacity="0.9" />
+        <path d="M 33 14 L 51 14 L 48 18 L 36 18 Z" fill="${accentColor}" opacity="0.95" />
         <!-- Headlights -->
-        <circle cx="6" cy="3" r="1.5" fill="#facc15" />
-        <circle cx="20" cy="3" r="1.5" fill="#facc15" />
+        <circle cx="33" cy="12" r="2" fill="#facc15" />
+        <circle cx="51" cy="12" r="2" fill="#facc15" />
       </g>
     `;
   } else if (name.includes('wingbox') || name.includes('tronton') || name.includes('wbox') || name.includes('fuso')) {
     // 🚛 HEAVY WINGBOX / TRONTON (Wide body with wing opening split lines)
-    width = 26;
-    height = 54;
+    // Box dimensions: 28 width x 52 height centered at (42, 42) -> left=28, top=16
     svgContent = `
-      <g transform="rotate(${bearing}, ${width / 2}, ${height / 2})">
+      <g transform="rotate(${bearing}, ${cx}, ${cy})">
         <!-- Shadow -->
-        <rect x="3" y="2" width="20" height="50" rx="3" fill="rgba(0,0,0,0.35)" />
+        <rect x="28" y="18" width="28" height="52" rx="4" fill="rgba(0,0,0,0.38)" />
         
         <!-- Wide Wingbox Cargo Body -->
-        <rect x="3" y="15" width="20" height="37" rx="2" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.5" />
+        <rect x="28" y="29" width="28" height="39" rx="3" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.8" />
         <!-- Center Roof Split Line for Wingbox -->
-        <line x1="13" y1="16" x2="13" y2="51" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" stroke-dasharray="3,2" />
+        <line x1="42" y1="30" x2="42" y2="67" stroke="rgba(255,255,255,0.65)" stroke-width="1.8" stroke-dasharray="4,3" />
         
         <!-- Front Heavy Cabin -->
-        <rect x="4" y="2" width="18" height="13" rx="3" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1" />
+        <rect x="30" y="15" width="24" height="15" rx="3.5" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1.5" />
         <!-- Windshield -->
-        <rect x="6" y="4" width="14" height="4" rx="1" fill="${accentColor}" opacity="0.9" />
+        <rect x="33" y="18" width="18" height="5" rx="1.5" fill="${accentColor}" opacity="0.95" />
         <!-- Headlights -->
-        <circle cx="6" cy="3" r="1.5" fill="#facc15" />
-        <circle cx="20" cy="3" r="1.5" fill="#facc15" />
+        <circle cx="33" cy="16.5" r="2" fill="#facc15" />
+        <circle cx="51" cy="16.5" r="2" fill="#facc15" />
       </g>
     `;
   } else if (name.includes('motor') || name.includes('kurir') || name.includes('express') || name.includes('bike')) {
     // 🏍️ MOTORCYCLE EXPRESS (Compact rider top-down + delivery box)
-    width = 20;
-    height = 30;
+    // Box dimensions: 20 width x 32 height centered at (42, 42) -> left=32, top=26
     svgContent = `
-      <g transform="rotate(${bearing}, ${width / 2}, ${height / 2})">
+      <g transform="rotate(${bearing}, ${cx}, ${cy})">
         <!-- Shadow -->
-        <ellipse cx="10" cy="15" rx="7" ry="12" fill="rgba(0,0,0,0.35)" />
+        <ellipse cx="42" cy="43" rx="9" ry="15" fill="rgba(0,0,0,0.38)" />
         
         <!-- Front Wheel / Handlebars -->
-        <rect x="8" y="2" width="4" height="6" rx="2" fill="#0f172a" />
-        <line x1="4" y1="7" x2="16" y2="7" stroke="#64748b" stroke-width="2" stroke-linecap="round" />
+        <rect x="40" y="26" width="4" height="8" rx="2" fill="#0f172a" />
+        <line x1="33" y1="32" x2="51" y2="32" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" />
         <!-- Headlight -->
-        <circle cx="10" cy="3" r="1.5" fill="#facc15" />
+        <circle cx="42" cy="27" r="2" fill="#facc15" />
 
         <!-- Rider Helmet (Circle) -->
-        <circle cx="10" cy="12" r="4.5" fill="${cabinColor}" stroke="#ffffff" stroke-width="1.5" />
-        <path d="M 7 11 A 3 3 0 0 1 13 11" stroke="${accentColor}" stroke-width="1.5" fill="none" />
+        <circle cx="42" cy="38" r="5.5" fill="${cabinColor}" stroke="#ffffff" stroke-width="1.8" />
+        <path d="M 38 37 A 4 4 0 0 1 46 37" stroke="${accentColor}" stroke-width="1.8" fill="none" />
 
         <!-- Delivery Express Box (Rear) -->
-        <rect x="6" y="18" width="8" height="9" rx="1.5" fill="#9333ea" stroke="#ffffff" stroke-width="1" />
+        <rect x="36" y="46" width="12" height="12" rx="2" fill="#9333ea" stroke="#ffffff" stroke-width="1.5" />
       </g>
     `;
   } else if (name.includes('van') || name.includes('blind') || name.includes('pickup') || name.includes('granmax') || name.includes('l300')) {
     // 🚐 BLIND VAN / PICKUP (Aerodynamic rounded top-down body)
-    width = 22;
-    height = 40;
+    // Box dimensions: 24 width x 44 height centered at (42, 42) -> left=30, top=20
     svgContent = `
-      <g transform="rotate(${bearing}, ${width / 2}, ${height / 2})">
+      <g transform="rotate(${bearing}, ${cx}, ${cy})">
         <!-- Shadow -->
-        <rect x="3" y="2" width="16" height="36" rx="5" fill="rgba(0,0,0,0.35)" />
+        <rect x="30" y="22" width="24" height="44" rx="6" fill="rgba(0,0,0,0.38)" />
         
         <!-- Van Body -->
-        <rect x="3" y="2" width="16" height="36" rx="5" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.5" />
+        <rect x="30" y="20" width="24" height="44" rx="6" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.8" />
         <!-- Curved Windshield -->
-        <path d="M 5 8 Q 11 6 17 8 L 16 13 L 6 13 Z" fill="${cabinColor}" />
-        <path d="M 6 9 Q 11 7.5 16 9 L 15 12 L 7 12 Z" fill="${accentColor}" opacity="0.9" />
+        <path d="M 33 27 Q 42 24 51 27 L 49 33 L 35 33 Z" fill="${cabinColor}" />
+        <path d="M 34 28 Q 42 26 50 28 L 48 32 L 36 32 Z" fill="${accentColor}" opacity="0.95" />
         <!-- Headlights -->
-        <circle cx="5.5" cy="4" r="1.5" fill="#facc15" />
-        <circle cx="16.5" cy="4" r="1.5" fill="#facc15" />
+        <circle cx="33.5" cy="22" r="2" fill="#facc15" />
+        <circle cx="50.5" cy="22" r="2" fill="#facc15" />
       </g>
     `;
   } else {
     // 🚚 STANDARD CDD BOX / CDE (Standard medium box truck)
-    width = 24;
-    height = 46;
+    // Box dimensions: 26 width x 48 height centered at (42, 42) -> left=29, top=18
     svgContent = `
-      <g transform="rotate(${bearing}, ${width / 2}, ${height / 2})">
+      <g transform="rotate(${bearing}, ${cx}, ${cy})">
         <!-- Shadow -->
-        <rect x="3" y="2" width="18" height="42" rx="3" fill="rgba(0,0,0,0.35)" />
+        <rect x="29" y="20" width="26" height="48" rx="4" fill="rgba(0,0,0,0.38)" />
         
         <!-- Cargo Box (Rear) -->
-        <rect x="3" y="14" width="18" height="30" rx="2" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.5" />
-        <rect x="6" y="17" width="12" height="24" rx="1" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" stroke-width="0.5" />
+        <rect x="29" y="32" width="26" height="36" rx="3" fill="${primaryColor}" stroke="#ffffff" stroke-width="1.8" />
+        <rect x="33" y="36" width="18" height="28" rx="1.5" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" />
         
         <!-- Front Cabin -->
-        <rect x="4" y="2" width="16" height="12" rx="3" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1" />
+        <rect x="31" y="18" width="22" height="15" rx="3.5" fill="${cabinColor}" stroke="#38bdf8" stroke-width="1.5" />
         <!-- Windshield -->
-        <path d="M 6 4 L 18 4 L 17 8 L 7 8 Z" fill="${accentColor}" opacity="0.9" />
+        <path d="M 34 21 L 50 21 L 48 26 L 36 26 Z" fill="${accentColor}" opacity="0.95" />
         <!-- Headlights -->
-        <circle cx="6" cy="3" r="1.5" fill="#facc15" />
-        <circle cx="18" cy="3" r="1.5" fill="#facc15" />
+        <circle cx="34" cy="19.5" r="2" fill="#facc15" />
+        <circle cx="50" cy="19.5" r="2" fill="#facc15" />
       </g>
     `;
   }
 
-  const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${svgContent}</svg>`;
+  const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvasSize} ${canvasSize}" width="${canvasSize}" height="${canvasSize}" style="overflow: visible;">${svgContent}</svg>`;
   const dataUri = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(fullSvg)}`;
 
   return {
     url: dataUri,
     scaledSize: typeof window !== 'undefined' && (window as any).google?.maps?.Size 
-      ? new (window as any).google.maps.Size(width * 1.3, height * 1.3)
+      ? new (window as any).google.maps.Size(canvasSize, canvasSize)
       : undefined,
     anchor: typeof window !== 'undefined' && (window as any).google?.maps?.Point
-      ? new (window as any).google.maps.Point((width * 1.3) / 2, (height * 1.3) / 2)
+      ? new (window as any).google.maps.Point(cx, cy)
       : undefined,
   };
 }

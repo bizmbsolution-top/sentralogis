@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { 
-  Truck, Search, Filter, Loader2, 
+import {
+  Truck, Search, Filter, Loader2,
   MapPin, Calendar, Clock, ChevronRight, User,
   ClipboardList, AlertCircle, Activity,
   Package, CheckCircle, ArrowRight, AlertTriangle,
   Layers, ExternalLink, ShieldCheck, Box, Save, MessageCircle,
   X, Edit2, Plus, Trash2, GripVertical, FileText, DollarSign, Printer,
-  Upload, FolderGit2, Eye, Download, Image as ImageIcon
+  Upload, FolderGit2, Eye, Download, Image as ImageIcon, Send
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -33,6 +33,7 @@ import {
   computeMargin,
 } from '@/lib/domain/jo/assignment';
 import { buildDriverAssignmentMessage, buildWaLink } from '@/lib/domain/phone';
+import VendorSendBox from '@/components/sbu/VendorSendBox';
 
 interface AssignmentModalProps {
   item: any;
@@ -61,6 +62,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const [assignments, setAssignments] = useState<AssignmentSlot[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
   const [coaList, setCoaList] = useState<any[]>([]);
+
+  // Vendor reply manual input (from WhatsApp broadcast)
+  const [replyVendorId, setReplyVendorId] = useState<string>('');
+  const [replyQty, setReplyQty] = useState<number>(1);
+  const [replyPrice, setReplyPrice] = useState<string>('');
+  const [replySaving, setReplySaving] = useState(false);
+  const [vendorSendOpen, setVendorSendOpen] = useState(false);
 
   const itemData = parseItemData(item?.item_data);
   const dealPrice = Number(itemData.deal_price) || 0;
@@ -489,6 +497,89 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     }
   };
 
+  const remainingSlots = assignments.filter(
+    (a) => !a.id && !a.transporter_id && !a.fleet_id && !a.driver_id
+  );
+
+  const vendorOptions = transporters.filter((t) => t.is_vendor);
+
+  const handleVendorReplyAssign = async () => {
+    if (replySaving) return;
+    if (!replyVendorId) {
+      toast.error('Pilih nama vendor terlebih dahulu');
+      return;
+    }
+    const qty = Math.min(Math.max(1, Number(replyQty) || 1), remainingSlots.length);
+    if (qty <= 0) {
+      toast.error('Tidak ada unit tersisa untuk di-assign');
+      return;
+    }
+    const price = Number(replyPrice.replace(/\D/g, '')) || 0;
+    if (price <= 0) {
+      toast.error('Harga dari vendor harus diisi (> 0)');
+      return;
+    }
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      toast.error('Tenant ID tidak ditemukan. Harap refresh halaman.');
+      return;
+    }
+
+    setReplySaving(true);
+    try {
+      const updated = [...assignments];
+      let filled = 0;
+      for (let i = 0; i < updated.length && filled < qty; i++) {
+        const a = updated[i];
+        if (!a.id && !a.transporter_id && !a.fleet_id && !a.driver_id) {
+          updated[i] = {
+            ...a,
+            transporter_id: replyVendorId,
+            purchase_price: price,
+            base_price: Number(a.base_price) > 0 ? Number(a.base_price) : dealPrice,
+            status: 'pending',
+          };
+          filled++;
+        }
+      }
+      setAssignments(updated);
+
+      const result = await saveAssignmentsAction({
+        tenantId,
+        woItem: {
+          id: item.id,
+          wo_id: item.wo_id,
+          status: item.status,
+          item_code: item.item_code,
+          work_orders: item.work_orders,
+          item_data: item.item_data,
+        },
+        assignments: updated,
+        mode: 'draft',
+        dealPrice,
+        transporters,
+        drivers,
+        fleets,
+      });
+
+      if (!result.success) {
+        toast.error(`Gagal assign: ${result.error}`);
+        return;
+      }
+
+      toast.success(`${filled} unit di-assign ke vendor`);
+      setReplyQty(1);
+      setReplyPrice('');
+      onSuccess();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Gagal assign: ${errorMessage}`);
+    } finally {
+      setReplySaving(false);
+    }
+  };
+
   const handlePrintDN = async (index: number) => {
     const slot = assignments[index];
     if (!slot.id) {
@@ -609,10 +700,10 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
-        
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+         
         {/* Header Section */}
-        <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center gap-3 bg-white sticky top-0 z-10">
           <div className="flex items-center gap-4">
              <div className="w-10 h-10 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center border border-slate-200">
                 <Activity size={20} />
@@ -635,12 +726,22 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 </div>
              </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-slate-700">
-            <X size={20} />
-          </button>
+           <div className="flex items-center gap-2">
+             <button
+               onClick={() => setVendorSendOpen(true)}
+               title="Send to Vendor via WhatsApp"
+               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-all text-xs font-bold"
+             >
+               <Send size={16} />
+               Send to Vendor
+             </button>
+             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-slate-700">
+               <X size={20} />
+             </button>
+           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 bg-slate-50/50">
           {/* WO Summary Card - FORMAL ENHANCED HEADER */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              <div className="md:col-span-3 bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-center space-y-6">
@@ -695,13 +796,85 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 <p className="text-xs font-semibold text-slate-500 mb-1">HARGA JUAL (DEALS)</p>
                 <p className="text-2xl font-bold text-slate-900">{formatRupiah(dealPrice)}</p>
                 <p className="text-xs font-medium text-slate-400 mt-1">PER FLEET UNIT</p>
+              </div>
+           </div>
+
+           {/* Vendor Reply (from WhatsApp broadcast) */}
+           {remainingSlots.length > 0 && vendorOptions.length > 0 && (
+             <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                   <MessageCircle size={16} className="text-emerald-600" />
+                   <h3 className="text-sm font-semibold text-slate-900">Input Balasan Vendor (WhatsApp)</h3>
+                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                     Sisa {remainingSlots.length} unit
+                   </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Admin input manual hasil balasan WA vendor (nama vendor + jumlah truck + harga dari vendor).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                   <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                         Nama Vendor
+                      </label>
+                      <select
+                         value={replyVendorId}
+                         onChange={(e) => setReplyVendorId(e.target.value)}
+                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/10"
+                      >
+                         <option value="">Pilih vendor...</option>
+                         {vendorOptions.map((v) => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                         ))}
+                      </select>
+                   </div>
+                   <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                         Jumlah Truck
+                      </label>
+                      <input
+                         type="number"
+                         min={1}
+                         max={remainingSlots.length}
+                         value={replyQty}
+                         onChange={(e) => setReplyQty(Math.min(Number(e.target.value) || 1, remainingSlots.length))}
+                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/10"
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                         Harga Vendor / unit
+                      </label>
+                      <div className="relative">
+                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">Rp</span>
+                         <input
+                            type="text"
+                            inputMode="numeric"
+                            value={replyPrice}
+                            onChange={(e) => setReplyPrice(e.target.value.replace(/[^\d]/g, ''))}
+                            placeholder="0"
+                            className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/10"
+                         />
+                      </div>
+                   </div>
+                   <div className="flex items-end">
+                      <button
+                         onClick={handleVendorReplyAssign}
+                         disabled={replySaving}
+                         className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2"
+                      >
+                         {replySaving ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />}
+                         Tambah & Simpan
+                      </button>
+                   </div>
+                </div>
              </div>
-          </div>
+           )}
 
           <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                  <h3 className="text-sm font-semibold text-slate-900">
-                   {isHandoverApproved ? `Locked Units (${maxJOCount} of ${unitCount} Original)` : 'Deploy Units'}
+                    {isHandoverApproved ? `Locked Units (${maxJOCount} of ${unitCount} Original)` : 'Deploy Units'}
                  </h3>
                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -1178,7 +1351,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-200 bg-white sticky bottom-0 z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="p-4 sm:p-6 border-t border-slate-200 bg-white sticky bottom-0 z-10 flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-6">
            <div className="flex items-center gap-4 text-slate-600">
               <ShieldCheck size={20} className="text-slate-500" />
               <div>
@@ -1207,27 +1380,35 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                   <AlertTriangle size={16} /> Handover to HQ
                 </button>
               )}
-             <button
-               onClick={onClose}
-               className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all border border-slate-200"
-               disabled={assigning}
-             >
-               Cancel
-             </button>
-             <button
-               onClick={() => handleSave()}
-               disabled={assigning}
-               className="flex-1 md:flex-none px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_4px_30px_rgba(79,70,229,0.4)] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-             >
+              <button
+                onClick={onClose}
+                className="flex-1 md:flex-none px-8 h-11 sm:h-14 rounded-xl sm:rounded-2xl font-bold sm:font-black text-xs uppercase tracking-widest bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all border border-slate-200"
+                disabled={assigning}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSave()}
+                disabled={assigning}
+                className="flex-1 md:flex-none px-8 h-11 sm:h-14 rounded-xl sm:rounded-2xl font-bold sm:font-black text-xs uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_4px_30px_rgba(79,70,229,0.4)] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
                {assigning ? (
                  <><Loader2 className="animate-spin" size={18} /> Processing...</>
                ) : (
                  <><CheckCircle size={18} /> Confirm Assignments</>
                )}
              </button>
-            </div>
-         </div>
-      </div>
+             </div>
+          </div>
+       </div>
+
+      <VendorSendBox
+        open={vendorSendOpen}
+        onClose={() => setVendorSendOpen(false)}
+        woNumber={item?.work_orders?.wo_number || ''}
+        tenantName={profile?.tenants?.name || ''}
+        items={item ? [item] : []}
+      />
 
       {/* Document Preview Modal */}
       {previewDocUrl && (

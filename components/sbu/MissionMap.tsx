@@ -16,7 +16,7 @@ const containerStyle = {
 interface MissionMapProps {
   stops: any[];
   tracking: any[];
-  fleetIcon?: string;
+  fleetIcon?: string | any;
   focusedLocation?: {lat: number, lng: number, title: string} | null;
 }
 
@@ -303,7 +303,7 @@ export default function MissionMap({ stops = [], tracking = [], fleetIcon, focus
         {latestTracking && (
           <Marker
             position={getValidLatLng(latestTracking.latitude, latestTracking.longitude)!}
-            icon={{
+            icon={typeof fleetIcon === 'object' && fleetIcon !== null ? fleetIcon : {
               url: fleetIcon || 'https://cdn-icons-png.flaticon.com/512/1048/1048312.png',
               scaledSize: new google.maps.Size(56, 56),
               origin: new google.maps.Point(0, 0),

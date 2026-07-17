@@ -66,6 +66,8 @@ export const translations: Record<Locale, {
     noData: string;
     selectJo: string;
   };
+  sidebar: Record<string, string>;
+  navbar: Record<string, string>;
 }> = {
   id: {
     nav: {
@@ -157,6 +159,39 @@ export const translations: Record<Locale, {
       noData: 'Tidak ada data pesanan kerja',
       selectJo: 'Pilih pesanan kerja untuk melihat detail'
     },
+    sidebar: {
+      'Work Order': 'Pesanan Kerja',
+      'Job Order': 'Order Pekerjaan',
+      'Mission Radar': 'Radar Misi',
+      'Intelligence Tower': 'Intelligence Tower',
+      'Master Data': 'Data Master',
+      'Finance Matrix': 'Finance Matrix',
+      'AR = Invoicing': 'Invoice Pelanggan',
+      'AP = Purchase': 'Audit Biaya',
+      'Organization': 'Organisasi',
+      'Users': 'Pengguna',
+      'Settings': 'Pengaturan',
+      'Trucking': 'Trucking',
+      'Warehouse': 'Gudang',
+      'Clearance': 'Clearance',
+      'Forwarding': 'Forwarding',
+      'Reporting': 'Laporan',
+      'Dashboard': 'Dasbor',
+      'Profile': 'Profil'
+    },
+    navbar: {
+      systemOnline: 'Sistem Online',
+      poweredBy: 'Dipersembahkan oleh',
+      robotChat: 'Robot Chat',
+      notifications: 'Notifikasi',
+      new: 'BARU',
+      markAllRead: 'Tandai Semua Dibaca',
+      noNewNotif: 'Tidak ada notifikasi baru',
+      viewAll: 'Lihat Semua Notifikasi',
+      profile: 'Profil',
+      logout: 'Keluar',
+      justNow: 'Baru Saja'
+    }
   },
   en: {
     nav: {
@@ -248,6 +283,39 @@ export const translations: Record<Locale, {
       noData: 'No job order data',
       selectJo: 'Select a job order to view details'
     },
+    sidebar: {
+      'Work Order': 'Work Order',
+      'Job Order': 'Job Order',
+      'Mission Radar': 'Mission Radar',
+      'Intelligence Tower': 'Intelligence Tower',
+      'Master Data': 'Master Data',
+      'Finance Matrix': 'Finance Matrix',
+      'AR = Invoicing': 'AR = Invoicing',
+      'AP = Purchase': 'AP = Purchase',
+      'Organization': 'Organization',
+      'Users': 'Users',
+      'Settings': 'Settings',
+      'Trucking': 'Trucking',
+      'Warehouse': 'Warehouse',
+      'Clearance': 'Clearance',
+      'Forwarding': 'Forwarding',
+      'Reporting': 'Reporting',
+      'Dashboard': 'Dashboard',
+      'Profile': 'Profile'
+    },
+    navbar: {
+      systemOnline: 'System Online',
+      poweredBy: 'Powered by',
+      robotChat: 'Robot Chat',
+      notifications: 'Notifications',
+      new: 'NEW',
+      markAllRead: 'Mark All Read',
+      noNewNotif: 'No new notifications',
+      viewAll: 'View All Notifications',
+      profile: 'Profile',
+      logout: 'Logout',
+      justNow: 'Just now'
+    }
   },
   zh: {
     nav: {
@@ -339,5 +407,38 @@ export const translations: Record<Locale, {
       noData: '暂无工作订单数据',
       selectJo: '选择工作订单以查看详情'
     },
+    sidebar: {
+      'Work Order': '工作订单',
+      'Job Order': '任务订单',
+      'Mission Radar': '任务雷达',
+      'Intelligence Tower': '智能塔',
+      'Master Data': '主数据',
+      'Finance Matrix': '财务矩阵',
+      'AR = Invoicing': '应收发票',
+      'AP = Purchase': '成本审计',
+      'Organization': '组织',
+      'Users': '用户',
+      'Settings': '设置',
+      'Trucking': '运输',
+      'Warehouse': '仓储',
+      'Clearance': '报关',
+      'Forwarding': '货代',
+      'Reporting': '报告',
+      'Dashboard': '仪表盘',
+      'Profile': '个人资料'
+    },
+    navbar: {
+      systemOnline: '系统在线',
+      poweredBy: '技术支持',
+      robotChat: '机器人聊天',
+      notifications: '通知',
+      new: '新',
+      markAllRead: '标为已读',
+      noNewNotif: '没有新通知',
+      viewAll: '查看所有通知',
+      profile: '个人资料',
+      logout: '登出',
+      justNow: '刚刚'
+    }
   },
 };

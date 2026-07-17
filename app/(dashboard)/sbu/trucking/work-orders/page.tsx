@@ -181,10 +181,17 @@ export default function WorkOrderPlanningPage() {
 
   useEffect(() => {
     const itemId = searchParams.get('itemId');
+    const action = searchParams.get('action');
     if (itemId && items.length > 0) {
       const item = items.find(i => i.id === itemId);
       if (item) {
         setSelectedItemForAssignment(item);
+        setShowAssignmentModal(true);
+      }
+    } else if (action === 'create' && items.length > 0) {
+      const pendingItem = items.find(i => filterItemByTab(i, 'pending')) || items[0];
+      if (pendingItem) {
+        setSelectedItemForAssignment(pendingItem);
         setShowAssignmentModal(true);
       }
     }

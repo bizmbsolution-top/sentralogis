@@ -10,6 +10,7 @@ import {
   MessageSquare, X
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import ReceiptDetailModal from './components/ReceiptDetailModal';
 
@@ -22,17 +23,25 @@ interface Warehouse {
 interface InboundReceipt {
   id: string;
   receipt_number: string;
+  wo_id: string;
   status: string;
-  expected_arrival: string;
+  client_id: string;
+  client_name?: string;
+  warehouse_id: string;
+  warehouse_name?: string;
+  expected_arrival?: string;
+  notes?: string;
+  created_at: string;
+  wo_number?: string;
+  items_count?: number;
   transporter: { name: string } | null;
   fleet: { plate_number: string } | null;
   driver: { name: string } | null;
-  created_at: string;
-  items_count: number;
 }
 
 export default function InboundReceivingPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const searchParams = useSearchParams();
 
   const [tenantId, setTenantId] = useState<string | null>(null);
   
@@ -127,6 +136,17 @@ export default function InboundReceivingPage() {
       setReceipts(allReceipts.filter(r => r.status === activeTab));
     }
   }, [activeTab, allReceipts]);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'create' && allReceipts.length > 0 && !isDetailModalOpen) {
+      const target = allReceipts.find(r => r.status === 'EXPECTED' || r.status === 'TRUCK_ARRIVED' || r.status === 'UNLOADING') || allReceipts[0];
+      if (target) {
+        setSelectedReceiptId(target.id);
+        setIsDetailModalOpen(true);
+      }
+    }
+  }, [searchParams, allReceipts]);
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, { bg: string, text: string, icon: any, label: string }> = {

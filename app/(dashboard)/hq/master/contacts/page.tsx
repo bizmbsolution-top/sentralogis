@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -66,6 +67,7 @@ interface Entity {
 
 export default function HQContactsPage() {
   const { profile, loading: loadingAuth } = useAuth();
+  const searchParams = useSearchParams();
   
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +154,12 @@ export default function HQContactsPage() {
       setLoading(false);
     }
   }, [tenantId, fetchEntities, loadingAuth]);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
 
   const generateEntityCode = async () => {
     if (!tenantId) return 'ENT/001';

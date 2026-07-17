@@ -37,3 +37,27 @@ export function buildCustomerTrackingMessage(params: {
   const { customerName, woNumber, joNumber, link } = params;
   return `Halo ${customerName},\n\nBerikut adalah link pelacakan untuk pengiriman Anda (${joNumber}) menggunakan armada pada WO ${woNumber}:\n\n${link}\n\nTerima kasih telah menggunakan Sentralogis.`;
 }
+
+export function buildVendorInquiryMessage(params: {
+  woNumber: string;
+  tenantName: string;
+  vehicleType: string;
+  qty: number;
+  origin: string;
+  destination: string;
+  budgetPerUnit: number;
+}): string {
+  const { woNumber, tenantName, vehicleType, qty, origin, destination, budgetPerUnit } = params;
+  const budget = Number(budgetPerUnit || 0).toLocaleString('id-ID');
+  return [
+    `🚛 *ORDER BARU - WO ${woNumber}*`,
+    ``,
+    `Dari: ${tenantName}`,
+    `Tipe: ${vehicleType}`,
+    `Jumlah: ${qty} unit`,
+    `Rute: ${origin} → ${destination}`,
+    `Budget: Rp ${budget}/unit`,
+    ``,
+    `Minat? Balas jumlah & harga yang Anda tawarkan.`,
+  ].join('\n');
+}

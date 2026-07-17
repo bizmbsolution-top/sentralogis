@@ -27,6 +27,7 @@ import {
   Search,
   Printer,
   Box,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -34,6 +35,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import AssignmentModal from "../components/AssignmentModal";
+import VendorSendBox from "@/components/sbu/VendorSendBox";
 
 interface WorkOrder {
   id: string;
@@ -92,6 +94,7 @@ export default function WorkOrderDetailPage() {
   const [items, setItems] = useState<WOItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [vendorSendOpen, setVendorSendOpen] = useState(false);
   const [vendorInvoices, setVendorInvoices] = useState<any[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
@@ -447,6 +450,18 @@ export default function WorkOrderDetailPage() {
               <Building2 size={16} />
             </div>
           </div>
+
+          {/* Send to Vendor (WhatsApp) */}
+          <button
+            onClick={() => setVendorSendOpen(true)}
+            title="Send to Vendor via WhatsApp"
+            className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-all"
+          >
+            <Send size={16} />
+            <span className="text-[8px] font-black uppercase tracking-widest leading-none">
+              Vendor
+            </span>
+          </button>
 
           {/* Vendor Invoice Matching Panel */}
           <div className="lg:col-span-12 mt-8">
@@ -1008,6 +1023,14 @@ export default function WorkOrderDetailPage() {
           }}
         />
       )}
+
+      <VendorSendBox
+        open={vendorSendOpen}
+        onClose={() => setVendorSendOpen(false)}
+        woNumber={wo?.wo_number || ''}
+        tenantName={profile?.tenants?.name || ''}
+        items={items}
+      />
     </div>
   );
 }

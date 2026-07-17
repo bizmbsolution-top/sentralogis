@@ -155,6 +155,17 @@ export async function downloadReceiptsToDevice(tenantId: string, warehouseId: st
     return offlineList;
   }
 
+export async function getLocalReceipts(): Promise<OfflineReceipt[]> {
+  const allEntries = await entries();
+  const list: OfflineReceipt[] = [];
+  for (const [key, val] of allEntries) {
+    if ((key as string).startsWith('receipt_') && val) {
+      list.push(val as OfflineReceipt);
+    }
+  }
+  return list;
+}
+
 // ----------------------------------------------------
 // 3. Save Tally Work (Offline)
 // ----------------------------------------------------
