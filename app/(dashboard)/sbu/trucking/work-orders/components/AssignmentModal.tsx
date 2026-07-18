@@ -1293,38 +1293,38 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                placeholder="Contoh: Masuk via Gate 2, muat malam..."
                              />
                            </div>
-                           <div className="md:col-span-3 flex flex-col justify-end space-y-1">
-                             <label className="text-[11px] font-bold text-slate-500 md:opacity-0 hidden md:block">Action</label>
-                             {assign.id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePrintDN(idx)}
-                                  disabled={assigning}
-                                  className="w-full h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-md flex items-center justify-center gap-1.5 text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                                  title="Simpan otomatis & Cetak Surat Jalan untuk JO ini"
-                                >
-                                  <Printer size={13} /> SIMPAN & CETAK DN
-                                </button>
-                             ) : (
-                               <div className="flex gap-2">
-                                 <div className="flex-1 h-9 px-3 bg-slate-100 text-slate-400 border border-slate-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-medium cursor-not-allowed">
-                                   <Printer size={13} /> Simpan dahulu tkr DN
-                                 </div>
-                                 {isEmptySlot(assign) && (
+                            <div className="md:col-span-3 flex flex-col justify-end space-y-1">
+                              <label className="text-[11px] font-bold text-slate-500 md:opacity-0 hidden md:block">Action</label>
+                              <div className="flex gap-2">
+                                {assign.id ? (
                                    <button
                                      type="button"
-                                     onClick={() => { setRejectingSlotIndex(rejectingSlotIndex === idx ? null : idx); setRejectReason('truck_unavailable'); setRejectNote(''); }}
-                                     className="h-9 px-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-bold hover:bg-rose-100 transition-colors shrink-0"
+                                     onClick={() => handlePrintDN(idx)}
+                                     disabled={assigning}
+                                     className="flex-1 h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-md flex items-center justify-center gap-1.5 text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                     title="Simpan otomatis & Cetak Surat Jalan untuk JO ini"
                                    >
-                                     <X size={13} /> Reject
+                                     <Printer size={13} /> SIMPAN & CETAK DN
                                    </button>
-                                 )}
-                               </div>
-                             )}
-                           </div>
+                                ) : (
+                                  <div className="flex-1 h-9 px-3 bg-slate-100 text-slate-400 border border-slate-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-medium cursor-not-allowed">
+                                    <Printer size={13} /> Simpan dahulu tkr DN
+                                  </div>
+                                )}
+                                {!assign.rejected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setRejectingSlotIndex(rejectingSlotIndex === idx ? null : idx); setRejectReason('truck_unavailable'); setRejectNote(''); }}
+                                    className="h-9 px-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-bold hover:bg-rose-100 transition-colors shrink-0"
+                                  >
+                                    <X size={13} /> Reject
+                                  </button>
+                                )}
+                              </div>
+                            </div>
 
                            {/* Reject Form (inline, for empty slots) */}
-                           {rejectingSlotIndex === idx && isEmptySlot(assign) && (
+                           {rejectingSlotIndex === idx && !assign.rejected && (
                              <div className="mt-3 pt-3 border-t border-rose-200 bg-rose-50 p-3 rounded-lg space-y-2">
                                <label className="text-[11px] font-bold text-rose-700 flex items-center gap-1.5">
                                  <X size={13} className="text-rose-500" />
