@@ -573,10 +573,10 @@ export default function HQOpsDashboardPage() {
         readyToInvoice: jos.filter(j => j.status === 'ready_for_billing').length
       });
 
-      // 6b. JO Fulfillment Breakdown — rejected_slots from wo_items.item_data
+      // 6b. JO Fulfillment Breakdown — slots from wo_items + job_orders
       const { data: fulfillmentWos } = await supabase
         .from('work_orders')
-        .select('id, wo_number, wo_items(id, item_data, status)')
+        .select('id, wo_number, wo_items(id, item_data, status, job_orders(id, status, driver_id, transporter_id, fleet_id))')
         .eq('tenant_id', profile.tenant_id)
         .not('status', 'in', '("completed","cancelled","paid")');
 
@@ -589,6 +589,8 @@ export default function HQOpsDashboardPage() {
       };
 
       let totalSlots = 0;
+      let assignedSlots = 0;
+      let doneSlots = 0;
       let rejectedSlots = 0;
       const byReason: Record<string, number> = {};
       const rejectDetails: { wo_number: string; reason: string; note: string; rejected_at: string }[] = [];
@@ -597,10 +599,23 @@ export default function HQOpsDashboardPage() {
         const woNum = (wo as any).wo_number;
         for (const wi of ((wo as any).wo_items || [])) {
           const itemData = wi.item_data || {};
-          const capacity = itemData.capacity_truck || 0;
+          const jos = (wi as any).job_orders || [];
+          const capacity = itemData.capacity_truck || jos.length || 0;
           const rejected = itemData.rejected_slots || [];
+
           totalSlots += Math.max(capacity, 0);
           rejectedSlots += rejected.length;
+
+          for (const jo of jos) {
+            const s = (jo.status || '').toUpperCase();
+            if (['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING', 'INVOICED', 'PAID'].includes(s)) {
+              doneSlots++;
+            }
+            if (jo.driver_id || jo.transporter_id || jo.fleet_id) {
+              assignedSlots++;
+            }
+          }
+
           for (const r of rejected) {
             const label = reasonLabels[r.reason] || r.reason;
             byReason[label] = (byReason[label] || 0) + 1;
@@ -611,9 +626,9 @@ export default function HQOpsDashboardPage() {
 
       setJoFulfillment({
         totalSlots,
-        assignedSlots: Math.max(0, totalSlots - rejectedSlots),
+        assignedSlots,
         rejectedSlots,
-        unfilledSlots: rejectedSlots,
+        unfilledSlots: Math.max(0, totalSlots - assignedSlots - rejectedSlots),
         byReason,
         rejectDetails,
       });
