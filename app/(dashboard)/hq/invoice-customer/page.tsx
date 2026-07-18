@@ -257,6 +257,25 @@ export default function HQInvoiceCustomerPage() {
       }).select().single();
 
       if (error) throw error;
+
+      const { data: woItems } = await supabase
+        .from('wo_items')
+        .select('id')
+        .eq('wo_id', row.wo_id);
+
+      if (woItems && woItems.length > 0) {
+        const wiIds = woItems.map(wi => wi.id);
+        await supabase
+          .from('job_orders')
+          .update({ status: 'invoiced' })
+          .in('wo_item_id', wiIds)
+          .in('status', ['ready_for_billing', 'completed', 'PEKERJAAN SELESAI', 'verified']);
+        await supabase
+          .from('wo_items')
+          .update({ status: 'invoiced' })
+          .eq('wo_id', row.wo_id);
+      }
+
       toast.success(`Invoice ${invNumber} created`);
       router.push(`/hq/invoice-customer/${newInv.id}`);
     } catch (err: any) {

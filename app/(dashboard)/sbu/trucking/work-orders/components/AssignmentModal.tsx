@@ -446,7 +446,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           .from('documents')
           .getPublicUrl(filePath);
 
-        currentDocs.push({
+        const newDoc = {
           id: `doc_${Math.random().toString(36).substring(2, 9)}`,
           name: file.name,
           type: 'SURAT_JALAN',
@@ -454,7 +454,18 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           file_type: file.type || 'application/octet-stream',
           file_size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
           uploaded_at: new Date().toISOString(),
-        });
+        };
+        currentDocs.push(newDoc);
+
+        if (currentSlot.id) {
+          const { error: dbError } = await supabase
+            .from('job_orders')
+            .update({ assignment_documents: currentDocs })
+            .eq('id', currentSlot.id);
+          if (dbError) {
+            console.error('Failed to persist document metadata:', dbError);
+          }
+        }
       }
 
       handleAssignmentChange(index, 'assignment_documents', currentDocs);
@@ -466,20 +477,59 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     }
   };
 
-  const handleRemoveAssignmentDoc = (slotIndex: number, docIndex: number) => {
+  const handleRemoveAssignmentDoc = async (slotIndex: number, docIndex: number) => {
     const currentSlot = assignments[slotIndex];
     const currentDocs = [...(currentSlot.assignment_documents || [])];
     currentDocs.splice(docIndex, 1);
     handleAssignmentChange(slotIndex, 'assignment_documents', currentDocs);
+    if (currentSlot.id) {
+      await supabase.from('job_orders').update({ assignment_documents: currentDocs }).eq('id', currentSlot.id);
+    }
   };
 
-  const handleUpdateAssignmentDocType = (slotIndex: number, docIndex: number, newType: string) => {
+  const handleUpdateAssignmentDocType = async (slotIndex: number, docIndex: number, newType: string) => {
     const currentSlot = assignments[slotIndex];
     const currentDocs = [...(currentSlot.assignment_documents || [])];
     if (currentDocs[docIndex]) {
       currentDocs[docIndex].type = newType;
       handleAssignmentChange(slotIndex, 'assignment_documents', currentDocs);
+      if (currentSlot.id) {
+        await supabase.from('job_orders').update({ assignment_documents: currentDocs }).eq('id', currentSlot.id);
+      }
     }
+  };
+
+  const handleClose = async () => {
+    const hasChanges = assignments.some((a) => {
+      return a.transporter_id || a.driver_id || a.fleet_id || (a.assignment_documents || []).length > 0;
+    });
+    if (hasChanges && profile?.tenant_id) {
+      setAssigning(true);
+      try {
+        await saveAssignmentsAction({
+          mode: 'draft',
+          woItem: {
+            id: item.id,
+            wo_id: item.wo_id,
+            status: item.status,
+            item_code: item.item_code,
+            work_orders: item.work_orders,
+            item_data: item.item_data,
+          },
+          tenantId: profile.tenant_id,
+          assignments,
+          dealPrice,
+          transporters,
+          drivers,
+          fleets,
+        });
+      } catch (e) {
+        // silent — best effort on close
+      } finally {
+        setAssigning(false);
+      }
+    }
+    onClose();
   };
 
   const handleSaveDraft = async () => {
@@ -1513,7 +1563,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                 </button>
               )}
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="flex-1 md:flex-none px-8 h-11 sm:h-14 rounded-xl sm:rounded-2xl font-bold sm:font-black text-xs uppercase tracking-widest bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all border border-slate-200"
                 disabled={assigning}
               >
