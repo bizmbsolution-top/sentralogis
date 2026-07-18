@@ -25,6 +25,9 @@ interface Driver {
   sim_number: string;
   sim_class: string;
   sim_expiry: string;
+  sim_photo_url?: string;
+  ktp_photo_url?: string;
+  stnk_photo_url?: string;
   status: 'available' | 'on_duty' | 'unavailable';
   is_active: boolean;
   tenant_id: string;
@@ -64,6 +67,9 @@ export default function HQDriversPage() {
     sim_number: '',
     sim_class: 'B1',
     sim_expiry: '',
+    sim_photo_url: '',
+    ktp_photo_url: '',
+    stnk_photo_url: '',
     status: 'available',
     is_active: true,
     bank_name: '',
@@ -73,7 +79,13 @@ export default function HQDriversPage() {
     photo_url: '',
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [simPhotoPreview, setSimPhotoPreview] = useState<string | null>(null);
+  const [ktpPhotoPreview, setKtpPhotoPreview] = useState<string | null>(null);
+  const [stnkPhotoPreview, setStnkPhotoPreview] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingSim, setUploadingSim] = useState(false);
+  const [uploadingKtp, setUploadingKtp] = useState(false);
+  const [uploadingStnk, setUploadingStnk] = useState(false);
 
   // Sync tenant info
   useEffect(() => {
@@ -200,6 +212,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         sim_number: formData.sim_number,
         sim_class: formData.sim_class,
         sim_expiry: formData.sim_expiry,
+        sim_photo_url: formData.sim_photo_url || null,
+        ktp_photo_url: formData.ktp_photo_url || null,
+        stnk_photo_url: formData.stnk_photo_url || null,
         status: formData.status,
         is_active: formData.is_active,
         bank_name: formData.bank_name || null,
@@ -303,6 +318,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         sim_number: driver.sim_number || '',
         sim_class: driver.sim_class || 'B1',
         sim_expiry: driver.sim_expiry,
+        sim_photo_url: (driver as any).sim_photo_url || '',
+        ktp_photo_url: (driver as any).ktp_photo_url || '',
+        stnk_photo_url: (driver as any).stnk_photo_url || '',
         status: driver.status,
         is_active: driver.is_active,
         bank_name: (driver as any).bank_name || '',
@@ -312,6 +330,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         photo_url: (driver as any).photo_url || '',
       });
       setPhotoPreview((driver as any).photo_url || null);
+      setSimPhotoPreview((driver as any).sim_photo_url || null);
+      setKtpPhotoPreview((driver as any).ktp_photo_url || null);
+      setStnkPhotoPreview((driver as any).stnk_photo_url || null);
     } else {
       setSelectedDriver(null);
       setFormData({
@@ -323,6 +344,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         sim_number: '',
         sim_class: 'B1',
         sim_expiry: '',
+        sim_photo_url: '',
+        ktp_photo_url: '',
+        stnk_photo_url: '',
         status: 'available',
         is_active: true,
         bank_name: '',
@@ -332,19 +356,28 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         photo_url: '',
       });
       setPhotoPreview(null);
+      setSimPhotoPreview(null);
+      setKtpPhotoPreview(null);
+      setStnkPhotoPreview(null);
     }
     setIsModalOpen(true);
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'photo_url' | 'sim_photo_url' | 'ktp_photo_url' | 'stnk_photo_url',
+    setPreview: (url: string | null) => void,
+    setUploading: (v: boolean) => void,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadingPhoto(true);
+    setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `driver-${Date.now()}.${fileExt}`;
-      
+      const prefix = field === 'photo_url' ? 'driver' : field.replace('_photo_url', '');
+      const fileName = `${prefix}-${Date.now()}.${fileExt}`;
+
       const { error: uploadError } = await supabase.storage
         .from('driver-portal')
         .upload(fileName, file);
@@ -355,13 +388,14 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
         .from('driver-portal')
         .getPublicUrl(fileName);
 
-      setFormData({ ...formData, photo_url: urlData.publicUrl });
-      setPhotoPreview(urlData.publicUrl);
-      toast.success('Photo uploaded!');
+      setFormData({ ...formData, [field]: urlData.publicUrl });
+      setPreview(urlData.publicUrl);
+      const label = field === 'photo_url' ? 'Photo' : field.replace('_photo_url', '').toUpperCase();
+      toast.success(`Foto ${label} uploaded!`);
     } catch (err: any) {
-      toast.error('Gagal upload photo: ' + err.message);
+      toast.error('Gagal upload: ' + err.message);
     } finally {
-      setUploadingPhoto(false);
+      setUploading(false);
     }
   };
 
@@ -552,14 +586,25 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
                                        <UserCircle size={18} className="text-slate-400" />
                                      </div>
                                    )}
-                                   <div>
-                                     <div className="text-sm font-medium text-slate-900">{d.name}</div>
-                                     <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
-                                        <span>SIM {d.sim_class || '-'}</span>
-                                        <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                        <span>{d.sim_expiry ? new Date(d.sim_expiry).toLocaleDateString('id-ID') : '-'}</span>
-                                     </div>
-                                   </div>
+                                    <div>
+                                      <div className="text-sm font-medium text-slate-900">{d.name}</div>
+                                      <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                                         <span>SIM {d.sim_class || '-'}</span>
+                                         <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                         <span>{d.sim_expiry ? new Date(d.sim_expiry).toLocaleDateString('id-ID') : '-'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        {[
+                                          { key: 'sim_photo_url', label: 'SIM' },
+                                          { key: 'ktp_photo_url', label: 'KTP' },
+                                          { key: 'stnk_photo_url', label: 'STNK' },
+                                        ].map(doc => (
+                                          <span key={doc.key} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${(d as any)[doc.key] ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                                            {(d as any)[doc.key] ? '✅' : '📷'} {doc.label}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
                                  </div>
                               </td>
                               <td className="px-4 py-3">
@@ -642,11 +687,37 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
                     </div>
                   )}
                   <label className="absolute bottom-0 right-0 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-emerald-600 transition-colors shadow-lg border-4 border-white">
-                    <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+                    <input type="file" accept="image/*" className="hidden" onChange={e => handleDocUpload(e, 'photo_url', setPhotoPreview, setUploadingPhoto)} disabled={uploadingPhoto} />
                     {uploadingPhoto ? <Loader2 size={18} className="text-white animate-spin" /> : <Camera size={18} className="text-white" />}
                   </label>
                 </div>
                 <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Foto Profile</p>
+              </div>
+
+              {/* Document Photos */}
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { key: 'sim_photo_url', label: 'SIM', preview: simPhotoPreview, setPreview: setSimPhotoPreview, uploading: uploadingSim, setUploading: setUploadingSim },
+                  { key: 'ktp_photo_url', label: 'KTP', preview: ktpPhotoPreview, setPreview: setKtpPhotoPreview, uploading: uploadingKtp, setUploading: setUploadingKtp },
+                  { key: 'stnk_photo_url', label: 'STNK', preview: stnkPhotoPreview, setPreview: setStnkPhotoPreview, uploading: uploadingStnk, setUploading: setUploadingStnk },
+                ] as const).map(doc => (
+                  <div key={doc.key} className="flex flex-col items-center">
+                    <div className="relative">
+                      {doc.preview ? (
+                        <img src={doc.preview} alt={doc.label} className="w-full h-20 rounded-xl object-cover border-2 border-slate-200 shadow-sm" />
+                      ) : (
+                        <div className="w-full h-20 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">No {doc.label}</span>
+                        </div>
+                      )}
+                      <label className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors shadow border-2 border-white">
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleDocUpload(e, doc.key as any, doc.setPreview, doc.setUploading)} disabled={doc.uploading} />
+                        {doc.uploading ? <Loader2 size={12} className="text-white animate-spin" /> : <Camera size={12} className="text-white" />}
+                      </label>
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Foto {doc.label}</p>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
