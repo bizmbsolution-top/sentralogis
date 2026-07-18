@@ -60,7 +60,8 @@ export const filterItemByTab = (item: any, tabId: string) => {
   if (tabId === 'all') return true;
   
   if (tabId === 'pending') {
-    return (!hasAnyAssigned && (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'DRAFT')) || (s === 'PENDING' && !allAssigned);
+    if (s === 'NEED_ASSIGNMENT') return true;
+    return (!hasAnyAssigned && (s === 'PENDING' || s === 'DRAFT')) || (s === 'PENDING' && !allAssigned);
   }
   
   if (tabId === 'assigned_units') {
@@ -569,6 +570,17 @@ const filteredItems = useMemo(() => {
                               DOCS & COST <ExternalLink size={14} />
                             </Button>
                           </Link>
+                        );
+                      }
+
+                      if (item.status?.toUpperCase() === 'NEED_ASSIGNMENT') {
+                        return (
+                          <Button 
+                            onClick={() => { setSelectedItemForAssignment(item); setShowAssignmentModal(true); }}
+                            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2"
+                          >
+                            MANAGE JO <ArrowRight size={14} />
+                          </Button>
                         );
                       }
 

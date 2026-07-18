@@ -259,7 +259,7 @@ export async function saveAssignments(
 
       const { error: woUpdateError } = await supabase
         .from('wo_items')
-        .update({ status: 'pending', item_data: updatedItemData })
+        .update({ status: 'need_assignment', item_data: updatedItemData })
         .eq('id', woItem.id);
 
       if (woUpdateError) throw woUpdateError;
