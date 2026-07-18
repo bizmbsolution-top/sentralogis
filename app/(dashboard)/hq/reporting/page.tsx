@@ -135,6 +135,7 @@ export default function HQReportingPage() {
   // SBU-specific
   const [truckTypeFilter, setTruckTypeFilter] = useState("");
   const [transporterFilter, setTransporterFilter] = useState("all");
+  const [vendorFilter, setVendorFilter] = useState("all");
   const [clearanceModeFilter, setClearanceModeFilter] = useState("all");
   const [warehouseFilter, setWarehouseFilter] = useState("");
   const [opTypeFilter, setOpTypeFilter] = useState("all");
@@ -143,6 +144,7 @@ export default function HQReportingPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [truckTypes, setTruckTypes] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [transporters, setTransporters] = useState<any[]>([]);
 
   // Report data
   const [data, setData] = useState<any[]>([]);
@@ -159,13 +161,15 @@ export default function HQReportingPage() {
   const fetchMasterData = async () => {
     if (!tenantId) return;
     try {
-      const [{ data: ct }, { data: tt }, { data: wh }] = await Promise.all([
+      const [{ data: ct }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
         supabase.from("md_entities").select("id, name, legal_name").eq("is_customer", true).eq("tenant_id", tenantId).order("name"),
         supabase.from("wo_items").select("item_data").eq("sbu_type", "TRUCKING").eq("tenant_id", tenantId),
         supabase.from("md_warehouses").select("id, name").eq("tenant_id", tenantId).order("name"),
+        supabase.from("md_entities").select("id, name, vendor_type").eq("is_vendor", true).eq("tenant_id", tenantId).eq("is_active", true).order("name"),
       ]);
       setCustomers(ct || []);
       setWarehouses(wh || []);
+      setTransporters(tr || []);
       const types = (tt || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
       setTruckTypes(Array.from(new Set(types)) as string[]);
     } catch (_) { /* silent */ }
@@ -285,6 +289,7 @@ export default function HQReportingPage() {
             if (itemSbu === "TRUCKING" && transporterFilter !== "all") {
               if (transporterFilter === "internal" && !isInternal) return;
               if (transporterFilter === "vendor" && isInternal) return;
+              if (vendorFilter !== "all" && jo.fleets?.companies?.id !== vendorFilter) return;
             }
 
             const cashTotal = Number(jo.advance_amount || 0);
@@ -329,7 +334,7 @@ export default function HQReportingPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, startDate, endDate, sbuTab, statusFilter, customerFilter, truckTypeFilter, transporterFilter, clearanceModeFilter, warehouseFilter, opTypeFilter]);
+  }, [tenantId, startDate, endDate, sbuTab, statusFilter, customerFilter, truckTypeFilter, transporterFilter, vendorFilter, clearanceModeFilter, warehouseFilter, opTypeFilter]);
 
   // ─── Active Columns ───────────────────────────────────────────────
   const activeCols: ColDef[] = reportMode === "financial"
@@ -548,11 +553,22 @@ export default function HQReportingPage() {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transporter</label>
                   <div className="flex bg-slate-50 p-0.5 rounded-xl border border-slate-200">
-                    <button onClick={() => setTransporterFilter("all")} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400"}`}>All</button>
-                    <button onClick={() => setTransporterFilter("internal")} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "internal" ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}>Internal</button>
+                    <button onClick={() => { setTransporterFilter("all"); setVendorFilter("all"); }} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400"}`}>All</button>
+                    <button onClick={() => { setTransporterFilter("internal"); setVendorFilter("all"); }} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "internal" ? "bg-white text-blue-600 shadow-sm" : "text-slate-400"}`}>Internal</button>
                     <button onClick={() => setTransporterFilter("vendor")} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "vendor" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400"}`}>Vendor</button>
                   </div>
                 </div>
+                {transporterFilter === "vendor" && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Vendor</label>
+                    <select value={vendorFilter} onChange={e => setVendorFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 transition-all">
+                      <option value="all">Semua Vendor</option>
+                      {transporters.filter((t: any) => t.vendor_type === "TRANSPORTER").map((t: any) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 
