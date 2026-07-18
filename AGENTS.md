@@ -1,17 +1,17 @@
 ## Goal
-Add Indonesia-English-China language selector with flag icons to `/track/wo/[token]` page and ensure text translates properly.
+Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid delivery, cargo owner tracking.
 
 ## Constraints & Preferences
 - (none)
 
 ## Progress
 ### Done
-- Fixed syntax errors in `lib/i18n/translations.ts` (duplicate `wo` blocks, missing `pending` in filterTab)
-- Added `wo` translations to all locales (id, en, zh)
-- Updated `/app/track/wo/[token]/page.tsx` to use `t()` for status labels, filter tabs, work order, live, customer
-- Fixed `MultiFleetRadarMap` import in WO page
-- Fixed bug in `LanguageSelector.tsx` (locale comparison logic)
-- Deployed to Vercel production (https://sentralogis.com)
+- JO Fulfillment breakdown di HQ ops dashboard (hitung actual JOs dari DB)
+- Vendor filter spesifik (pilih nama vendor) di HQ reporting page
+- Upload foto SIM/KTP/STNK di halaman master driver (`hq/master/drivers`)
+- Box foto SIM/KTP/STNK diperbesar (h-20 → h-40)
+- PRD SBU Forwarding dibuat (`190726.md`)
+- Migration `170_add_driver_document_photos.sql`
 
 ### In Progress
 - (none)
@@ -20,21 +20,38 @@ Add Indonesia-English-China language selector with flag icons to `/track/wo/[tok
 - (none)
 
 ## Key Decisions
-- Used existing `useLanguage` hook pattern instead of creating new i18n solution
-- Reused `LanguageSelector` component across pages for consistency
-- Used emoji flags (🇮🇩, 🇺🇸, 🇨🇳) for language selector display
+- 1 WO = 1 Customer (forwarder/pemilik barang)
+- FCL/LCL dalam 1 konsolidasi (per vessel/voyage)
+- 3 tabel baru: `fw_consolidations`, `fw_container_assignments`, `fw_container_items`
+- Cargo owner tracking via `/track/fwd/[token]` public page
+- Driver coin reward: 1 koin = Rp 5.000 per job completed
+- Vendor driver cek koin via WA inquiry keyword "KOIN"
 
 ## Next Steps
-- (future) Activate/complete internal movements, repacking, bundling, and kitting features (see `140626.md`)
-- (future) Historical Route Playback (Trip Replay / Blackbox Audit ala YouTube): Convert 10-second GPS ping records into a polyline trajectory with a media player timeline scrubber (rewind/forward/play at 1x-10x speeds) and dynamic info badge above the truck icon.
+- **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
+  - Migration 3 tabel forwarding
+  - WO Create/List/Detail untuk FCL & LCL
+  - Consol Detail + Stuffing Manager
+  - Deconsol + auto-create delivery JO
+  - Cargo owner tracking public page
+- **Driver Coin Reward + WA Inquiry** (lihat section di `190726.md`):
+  - Migration `driver_coins` table
+  - Award coin di `/api/jo/[token]` saat completed
+  - Update webhook WA untuk keyword "KOIN"
+  - Animasi coin di `/jo/[token]` page
+  - Tampilkan saldo di driver portal
+  - Set Twilio credentials di Vercel env
 
 ## Critical Context
-- `LanguageSelector` component uses emoji flags for Indonesia (🇮🇩), English (🇺🇸), and China (🇨🇳)
-- WO page already uses `useLanguage` hook with `t` function for translations
-- Some remaining hardcoded strings in WO page (Progress Pengiriman, Seluruh Pekerjaan Selesai, etc.) are context-specific and may not need translation
+- `190726.md` berisi PRD lengkap SBU Forwarding + Driver Coin plan
+- Infrastructure WA: `lib/twilio/clients.ts` + `app/api/whatsapp/webhook/route.ts`
+- Driver complete flow: `app/jo/[token]/page.tsx` → PATCH `/api/jo/[token]`
+- Driver portal: `app/driver/portal/page.tsx`
+- Forwarding shell UI: `app/sbu/forwarding/` (mock only, belum connect DB)
 
 ## Relevant Files
-- `/lib/i18n/translations.ts`: Contains `wo` namespace translations for all 3 locales
-- `/lib/i18n/LanguageContext.tsx`: Exports `useLanguage` hook for translation access
-- `/components/LanguageSelector.tsx`: Reusable language selector with flag emojis
-- `/app/track/wo/[token]/page.tsx`: WO tracking page with translated text
+- `/190726.md`: PRD SBU Forwarding + Driver Coin plan
+- `supabase/migrations/170_add_driver_document_photos.sql`: Migration terakhir
+- `app/(dashboard)/hq/master/drivers/page.tsx`: Driver master (sudah +upload SIM/KTP/STNK)
+- `app/(dashboard)/hq/reporting/page.tsx`: Reporting (sudah +vendor filter)
+- `app/(dashboard)/hq/ops-dashboard/page.tsx`: Ops dashboard (JO fulfillment fixed)
