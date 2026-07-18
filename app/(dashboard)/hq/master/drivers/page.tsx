@@ -695,27 +695,27 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
               </div>
 
               {/* Document Photos */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-4">
                 {([
                   { key: 'sim_photo_url', label: 'SIM', preview: simPhotoPreview, setPreview: setSimPhotoPreview, uploading: uploadingSim, setUploading: setUploadingSim },
                   { key: 'ktp_photo_url', label: 'KTP', preview: ktpPhotoPreview, setPreview: setKtpPhotoPreview, uploading: uploadingKtp, setUploading: setUploadingKtp },
                   { key: 'stnk_photo_url', label: 'STNK', preview: stnkPhotoPreview, setPreview: setStnkPhotoPreview, uploading: uploadingStnk, setUploading: setUploadingStnk },
                 ] as const).map(doc => (
                   <div key={doc.key} className="flex flex-col items-center">
-                    <div className="relative">
+                    <div className="relative w-full">
                       {doc.preview ? (
-                        <img src={doc.preview} alt={doc.label} className="w-full h-20 rounded-xl object-cover border-2 border-slate-200 shadow-sm" />
+                        <img src={doc.preview} alt={doc.label} className="w-full h-40 rounded-xl object-cover border-2 border-slate-200 shadow-sm" />
                       ) : (
-                        <div className="w-full h-20 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">No {doc.label}</span>
+                        <div className="w-full h-40 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center">
+                          <span className="text-xs font-bold text-slate-400 uppercase">No {doc.label}</span>
                         </div>
                       )}
-                      <label className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors shadow border-2 border-white">
+                      <label className="absolute -bottom-2 -right-2 w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors shadow border-2 border-white">
                         <input type="file" accept="image/*" className="hidden" onChange={e => handleDocUpload(e, doc.key as any, doc.setPreview, doc.setUploading)} disabled={doc.uploading} />
-                        {doc.uploading ? <Loader2 size={12} className="text-white animate-spin" /> : <Camera size={12} className="text-white" />}
+                        {doc.uploading ? <Loader2 size={14} className="text-white animate-spin" /> : <Camera size={14} className="text-white" />}
                       </label>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Foto {doc.label}</p>
+                    <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Foto {doc.label}</p>
                   </div>
                 ))}
               </div>
