@@ -1323,99 +1323,54 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                               </div>
                             </div>
 
-                           {/* Reject Form (inline, for empty slots) */}
+                           {/* Reject Form (inline) */}
                            {rejectingSlotIndex === idx && !assign.rejected && (
-                             <div className="mt-4 pt-4 border-t-2 border-rose-300 bg-gradient-to-b from-rose-50 to-white p-5 rounded-xl space-y-4">
-                               <div className="flex items-center gap-2 mb-1">
-                                 <div className="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center">
-                                   <X size={16} className="text-rose-600" />
-                                 </div>
-                                 <div>
-                                   <h4 className="text-sm font-black text-rose-800 uppercase tracking-wide">Reject Slot {idx + 1}</h4>
-                                   <p className="text-[11px] text-rose-500 font-medium">Pilih alasan penolakan untuk slot ini</p>
-                                 </div>
-                               </div>
-
-                               <div className="grid grid-cols-1 gap-2">
-                                 {[
-                                   { value: 'truck_unavailable', label: 'Truk tidak tersedia', desc: 'Tidak ada unit/truk yang bisa dialokasikan', icon: '🚛' },
-                                   { value: 'vendor_cancelled', label: 'Vendor batal', desc: 'Vendor/transporter membatalkan penugasan', icon: '❌' },
-                                   { value: 'driver_unavailable', label: 'Sopir tidak tersedia', desc: 'Tidak ada supir yang bisa ditugaskan', icon: '👤' },
-                                   { value: 'cost_too_high', label: 'Biaya terlalu tinggi', desc: 'Harga/mebiaya operasional melebihi budget', icon: '💰' },
-                                   { value: 'other', label: 'Lainnya', desc: 'Alasan lain yang perlu dijelaskan', icon: '📝' },
-                                 ].map((opt) => (
-                                   <button
-                                     key={opt.value}
-                                     type="button"
-                                     onClick={() => setRejectReason(opt.value)}
-                                     className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
-                                       rejectReason === opt.value
-                                         ? 'border-rose-500 bg-rose-100 shadow-sm'
-                                         : 'border-slate-200 bg-white hover:border-rose-300 hover:bg-rose-50/50'
-                                     }`}
+                             <div className="mt-3 pt-3 border-t border-rose-200 bg-rose-50 p-3 rounded-lg">
+                               <div className="flex flex-wrap items-end gap-3">
+                                 <div className="flex-1 min-w-[200px] space-y-1">
+                                   <label className="text-xs font-bold text-rose-700">Alasan Reject</label>
+                                   <select
+                                     value={rejectReason}
+                                     onChange={(e) => setRejectReason(e.target.value)}
+                                     className="w-full h-10 px-3 bg-white border border-rose-300 rounded-md text-sm font-medium text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none"
                                    >
-                                     <span className="text-xl">{opt.icon}</span>
-                                     <div className="flex-1 min-w-0">
-                                       <p className={`text-sm font-bold ${rejectReason === opt.value ? 'text-rose-700' : 'text-slate-700'}`}>{opt.label}</p>
-                                       <p className="text-[11px] text-slate-400 font-medium">{opt.desc}</p>
-                                     </div>
-                                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                                       rejectReason === opt.value ? 'border-rose-500 bg-rose-500' : 'border-slate-300'
-                                     }`}>
-                                       {rejectReason === opt.value && (
-                                         <div className="w-2 h-2 bg-white rounded-full" />
-                                       )}
-                                     </div>
-                                   </button>
-                                 ))}
-                               </div>
-
-                               {rejectReason === 'other' && (
-                                 <div className="space-y-1">
-                                   <label className="text-xs font-bold text-rose-700">Tulis alasan detail:</label>
-                                   <textarea
-                                     value={rejectNote}
-                                     onChange={(e) => setRejectNote(e.target.value)}
-                                     placeholder="Contoh: Truk sedang dalam perbaikan, vendor minta batal tiba-tiba..."
-                                     rows={3}
-                                     className="w-full px-3 py-2.5 bg-white border-2 border-rose-200 rounded-lg text-sm text-slate-800 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 outline-none placeholder:text-slate-400 resize-none"
-                                   />
+                                     <option value="truck_unavailable">Truk tidak tersedia</option>
+                                     <option value="vendor_cancelled">Vendor batal</option>
+                                     <option value="driver_unavailable">Sopir tidak tersedia</option>
+                                     <option value="cost_too_high">Biaya terlalu tinggi</option>
+                                     <option value="other">Lainnya</option>
+                                   </select>
                                  </div>
-                               )}
-
-                               {rejectReason !== 'other' && (
-                                 <div className="space-y-1">
-                                   <label className="text-xs font-semibold text-slate-500">Catatan tambahan (opsional):</label>
+                                 <div className="flex-1 min-w-[200px] space-y-1">
+                                   <label className="text-xs font-semibold text-slate-500">Catatan (opsional)</label>
                                    <input
                                      type="text"
                                      value={rejectNote}
                                      onChange={(e) => setRejectNote(e.target.value)}
-                                     placeholder="Tambahkan catatan jika diperlukan..."
-                                     className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 outline-none placeholder:text-slate-400"
+                                     placeholder="Tulis catatan..."
+                                     className="w-full h-10 px-3 bg-white border border-slate-300 rounded-md text-sm text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none placeholder:text-slate-400"
                                    />
                                  </div>
-                               )}
-
-                               <div className="flex gap-3 pt-1">
-                                 <button
-                                   type="button"
-                                   onClick={() => {
-                                     const note = rejectNote.trim() || '';
-                                     handleRejectSlot(idx, rejectReason, note);
-                                     setRejectingSlotIndex(null);
-                                     setRejectNote('');
-                                   }}
-                                   className="h-11 px-8 bg-rose-600 text-white rounded-lg text-sm font-black hover:bg-rose-700 transition-all shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50"
-                                 >
-                                   Konfirmasi Reject
-                                 </button>
-                                 <button
-                                   type="button"
-                                   onClick={() => { setRejectingSlotIndex(null); setRejectNote(''); }}
-                                   className="h-11 px-8 bg-white text-slate-600 border-2 border-slate-200 rounded-lg text-sm font-bold hover:bg-slate-50 hover:border-slate-300 transition-all"
-                                 >
-                                   Batal
-                                 </button>
+                                 <div className="flex gap-2 shrink-0">
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       handleRejectSlot(idx, rejectReason, rejectNote.trim() || '');
+                                       setRejectingSlotIndex(null);
+                                       setRejectNote('');
+                                     }}
+                                     className="h-10 px-5 bg-rose-600 text-white rounded-md text-sm font-bold hover:bg-rose-700 transition-colors"
+                                   >
+                                     Reject
+                                   </button>
+                                   <button
+                                     type="button"
+                                     onClick={() => { setRejectingSlotIndex(null); setRejectNote(''); }}
+                                     className="h-10 px-5 bg-white text-slate-600 border border-slate-300 rounded-md text-sm font-bold hover:bg-slate-50 transition-colors"
+                                   >
+                                     Batal
+                                   </button>
+                                 </div>
                                </div>
                              </div>
                            )}
