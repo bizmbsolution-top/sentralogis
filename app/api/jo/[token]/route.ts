@@ -667,11 +667,6 @@ export async function PATCH(
                           newStatus === 'completed' ? 'PEKERJAAN SELESAI' : newStatus.toUpperCase()
         
         await supabase.from('wo_items').update({ status: itemStatus }).eq('id', jo.wo_item_id)
-        
-        // Update JO status with more detail for 'accepted'
-        if (newStatus === 'accepted') {
-          await supabase.from('job_orders').update({ status: 'ORDER DITERIMA' }).eq('id', jo.id)
-        }
       }
       
       // AUTO-JOURNALING ON COMPLETION

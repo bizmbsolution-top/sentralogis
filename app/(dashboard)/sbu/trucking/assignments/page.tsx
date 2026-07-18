@@ -323,6 +323,18 @@ export default function JobOrderManagementPage() {
     fetchAssignments();
   }, [fetchAssignments]);
 
+  // Real-time subscription for job_orders changes
+  useEffect(() => {
+    const channel = supabase.channel('public:job_orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, () => {
+        fetchAssignments(true);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, fetchAssignments]);
+
   // [AI] Fetch full WO with wo_items for RejectedViewModal
   const fetchFullWo = async (woId: string) => {
     if (!woId) return;

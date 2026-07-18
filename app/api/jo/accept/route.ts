@@ -70,19 +70,29 @@ export async function POST(req: NextRequest) {
         }
 
         // =====================================================
-        // 3. UPDATE STATUS KE ACCEPTED
+        // 3. UPDATE STATUS KE ORDER DITERIMA
         // =====================================================
+        const now = new Date().toISOString();
         const { error: updateError } = await supabase
             .from('job_orders')
             .update({
-                status: 'accepted',
-                accepted_at: new Date().toISOString(),
+                status: 'ORDER DITERIMA',
+                driver_response: 'accepted',
+                accepted_at: now,
             })
             .eq('id', jobOrder.id);
 
         if (updateError) {
             console.error("Update error:", updateError);
             throw updateError;
+        }
+
+        // Sync wo_items status
+        if (jobOrder.wo_item_id) {
+            await supabase
+                .from('wo_items')
+                .update({ status: 'ORDER DITERIMA' })
+                .eq('id', jobOrder.wo_item_id);
         }
 
         // =====================================================
