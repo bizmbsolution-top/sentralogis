@@ -228,6 +228,16 @@ export default function HQOpsDashboardPage() {
     readyToInvoice: 0
   });
 
+  const [joFulfillment, setJoFulfillment] = useState({
+    totalSlots: 0,
+    assignedSlots: 0,
+    rejectedSlots: 0,
+    unfilledSlots: 0,
+    byReason: {} as Record<string, number>,
+    rejectDetails: [] as { wo_number: string; reason: string; note: string; rejected_at: string }[],
+  });
+  const [fulfillmentModalOpen, setFulfillmentModalOpen] = useState(false);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -561,6 +571,51 @@ export default function HQOpsDashboardPage() {
         activeDrivers: driverRes.count || 0,
         pendingJobs: jos.filter(j => j.status === 'pending').length,
         readyToInvoice: jos.filter(j => j.status === 'ready_for_billing').length
+      });
+
+      // 6b. JO Fulfillment Breakdown — rejected_slots from wo_items.item_data
+      const { data: fulfillmentWos } = await supabase
+        .from('work_orders')
+        .select('id, wo_number, wo_items(id, item_data, status)')
+        .eq('tenant_id', profile.tenant_id)
+        .not('status', 'in', '("completed","cancelled","paid")');
+
+      const reasonLabels: Record<string, string> = {
+        truck_unavailable: 'Truk Tidak Tersedia',
+        vendor_cancelled: 'Vendor Batal',
+        driver_unavailable: 'Sopir Tidak Tersedia',
+        cost_too_high: 'Biaya Terlalu Tinggi',
+        other: 'Lainnya',
+      };
+
+      let totalSlots = 0;
+      let rejectedSlots = 0;
+      const byReason: Record<string, number> = {};
+      const rejectDetails: { wo_number: string; reason: string; note: string; rejected_at: string }[] = [];
+
+      for (const wo of (fulfillmentWos || [])) {
+        const woNum = (wo as any).wo_number;
+        for (const wi of ((wo as any).wo_items || [])) {
+          const itemData = wi.item_data || {};
+          const capacity = itemData.capacity_truck || 0;
+          const rejected = itemData.rejected_slots || [];
+          totalSlots += Math.max(capacity, 0);
+          rejectedSlots += rejected.length;
+          for (const r of rejected) {
+            const label = reasonLabels[r.reason] || r.reason;
+            byReason[label] = (byReason[label] || 0) + 1;
+            rejectDetails.push({ wo_number: woNum, reason: label, note: r.note || '', rejected_at: r.rejected_at || '' });
+          }
+        }
+      }
+
+      setJoFulfillment({
+        totalSlots,
+        assignedSlots: Math.max(0, totalSlots - rejectedSlots),
+        rejectedSlots,
+        unfilledSlots: rejectedSlots,
+        byReason,
+        rejectDetails,
       });
 
       // 7. Fetch SLA Trend (last 4 weeks)
@@ -1028,6 +1083,116 @@ export default function HQOpsDashboardPage() {
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* JO Fulfillment Breakdown */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <Card
+          className={`border shadow-sm rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all ${
+            joFulfillment.rejectedSlots > 0 ? 'border-rose-200' : 'border-slate-200'
+          }`}
+          onClick={() => setFulfillmentModalOpen(true)}
+        >
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                joFulfillment.rejectedSlots > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+              }`}>
+                <Package size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">JO Fulfillment — Slot Status</h3>
+                <p className="text-xs text-slate-400">Truck assignment slot breakdown (rejected / assigned / unfilled)</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {joFulfillment.rejectedSlots > 0 && (
+                <span className="px-2.5 py-1 bg-rose-100 text-rose-700 rounded-full text-[11px] font-bold">
+                  {joFulfillment.rejectedSlots} rejected
+                </span>
+              )}
+              <ChevronRight size={16} className="text-slate-400" />
+            </div>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-[10px] font-medium text-slate-400 uppercase mb-1">Total Slots</p>
+                <h3 className="text-xl font-semibold text-slate-900">{joFulfillment.totalSlots}</h3>
+              </div>
+              <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+                <p className="text-[10px] font-medium text-emerald-500 uppercase mb-1">Assigned</p>
+                <h3 className="text-xl font-semibold text-emerald-700">{joFulfillment.assignedSlots}</h3>
+              </div>
+              <div className="p-4 bg-rose-50 rounded-lg border border-rose-100">
+                <p className="text-[10px] font-medium text-rose-500 uppercase mb-1">Rejected</p>
+                <h3 className="text-xl font-semibold text-rose-700">{joFulfillment.rejectedSlots}</h3>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
+                <p className="text-[10px] font-medium text-amber-500 uppercase mb-1">Unfilled</p>
+                <h3 className="text-xl font-semibold text-amber-700">{joFulfillment.unfilledSlots}</h3>
+              </div>
+            </div>
+            {joFulfillment.rejectedSlots > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {Object.entries(joFulfillment.byReason).map(([reason, count]) => (
+                  <span key={reason} className="px-2.5 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">
+                    {reason}: {count}
+                  </span>
+                ))}
+              </div>
+            )}
+            {joFulfillment.totalSlots === 0 && (
+              <p className="text-xs text-slate-400 text-center py-2">No active slots with capacity_truck data</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Fulfillment Drill-down Modal */}
+      {fulfillmentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setFulfillmentModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center">
+                  <Package size={16} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Rejected Slot Details</h2>
+                  <p className="text-xs text-slate-400">Per-WO slot rejection breakdown</p>
+                </div>
+              </div>
+              <button onClick={() => setFulfillmentModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                <XCircle size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5">
+              {joFulfillment.rejectDetails.length === 0 ? (
+                <div className="py-12 text-center">
+                  <CheckCircle2 size={40} className="text-emerald-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-slate-600">No rejected slots</p>
+                  <p className="text-xs text-slate-400 mt-1">All slots are assigned or unfilled without rejection</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {joFulfillment.rejectDetails.map((d, i) => (
+                    <div key={i} className="p-4 bg-rose-50 rounded-lg border border-rose-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-mono font-bold text-rose-800">{d.wo_number}</span>
+                        <span className="text-[10px] text-rose-500">{d.rejected_at ? new Date(d.rejected_at).toLocaleString('id-ID') : '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 bg-rose-200 text-rose-800 rounded text-[10px] font-bold">{d.reason}</span>
+                      </div>
+                      {d.note && <p className="text-[11px] text-rose-700 mt-1">{d.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

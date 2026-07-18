@@ -31,6 +31,7 @@ import {
   parseItemData,
   resolveIsVendor,
   computeMargin,
+  isEmptySlot,
 } from '@/lib/domain/jo/assignment';
 import { buildDriverAssignmentMessage, buildWaLink } from '@/lib/domain/phone';
 import VendorSendBox from '@/components/sbu/VendorSendBox';
@@ -49,6 +50,9 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const [assigning, setAssigning] = useState(false);
   const [uploadingSlotIndex, setUploadingSlotIndex] = useState<number | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [rejectingSlotIndex, setRejectingSlotIndex] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>('truck_unavailable');
+  const [rejectNote, setRejectNote] = useState<string>('');
   
   // Selection Data
   const [fleets, setFleets] = useState<any[]>([]);
@@ -389,7 +393,33 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
     setAssignments(updated);
   };
 
-  const handleUploadAssignmentDoc = async (index: number, filesList: FileList | null) => {
+  const handleRejectSlot = (index: number, reason: string, note: string) => {
+    const updated = [...assignments];
+    updated[index] = {
+      ...updated[index],
+      rejected: true,
+      rejected_reason: reason as any,
+      rejected_note: note,
+      transporter_id: null,
+      fleet_id: null,
+      driver_id: null,
+      driver_phone: '',
+    };
+    setAssignments(updated);
+  };
+
+  const handleCancelReject = (index: number) => {
+    const updated = [...assignments];
+    updated[index] = {
+      ...updated[index],
+      rejected: false,
+      rejected_reason: undefined,
+      rejected_note: undefined,
+    };
+    setAssignments(updated);
+  };
+
+  const handleUploadDocuments = async (index: number, filesList: FileList | null) => {
     if (!filesList || filesList.length === 0) return;
     setUploadingSlotIndex(index);
     try {
@@ -938,6 +968,45 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
 
                     const statusFlag = assign.id ? getStatusFlag(assign.status || '', []) : null;
 
+                    const REJECT_REASONS = [
+                      { value: 'truck_unavailable', label: 'Truk tidak tersedia' },
+                      { value: 'vendor_cancelled', label: 'Vendor batal' },
+                      { value: 'driver_unavailable', label: 'Sopir tidak tersedia' },
+                      { value: 'cost_too_high', label: 'Biaya terlalu tinggi' },
+                      { value: 'other', label: 'Lainnya' },
+                    ];
+
+                    if (assign.rejected) {
+                      const reasonLabel = REJECT_REASONS.find(r => r.value === assign.rejected_reason)?.label || assign.rejected_reason;
+                      return (
+                        <div key={idx} className="bg-rose-50 border-2 border-dashed border-rose-300 rounded-lg p-4 shadow-sm relative overflow-hidden">
+                          <div className="absolute top-0 left-0 px-3 py-1 bg-rose-100 text-rose-700 border-r border-b border-rose-200 rounded-br-lg text-[10px] font-bold uppercase">
+                            Unit {idx + 1} - {itemData.vehicle_type_name || itemData.vehicle_type}
+                          </div>
+                          <div className="absolute top-0 right-0 px-3 py-1 bg-rose-600 text-white rounded-bl-lg text-[10px] font-black uppercase">
+                            REJECTED
+                          </div>
+                          <div className="mt-8 flex items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <X size={14} className="text-rose-500 shrink-0" />
+                                <span className="text-xs font-bold text-rose-700">{reasonLabel}</span>
+                              </div>
+                              {assign.rejected_note && (
+                                <p className="text-[11px] text-rose-600 truncate ml-5">{assign.rejected_note}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleCancelReject(idx)}
+                              className="shrink-0 px-3 py-1.5 bg-white text-rose-600 border border-rose-300 rounded-md text-[10px] font-bold uppercase hover:bg-rose-100 transition-colors"
+                            >
+                              Batal
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div key={idx} className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm hover:border-slate-300 transition-colors relative overflow-hidden">
                         {statusFlag && (
@@ -1237,14 +1306,77 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                   <Printer size={13} /> SIMPAN & CETAK DN
                                 </button>
                              ) : (
-                               <div className="w-full h-9 px-3 bg-slate-100 text-slate-400 border border-slate-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-medium cursor-not-allowed">
-                                 <Printer size={13} /> Simpan dahulu tkr DN
+                               <div className="flex gap-2">
+                                 <div className="flex-1 h-9 px-3 bg-slate-100 text-slate-400 border border-slate-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-medium cursor-not-allowed">
+                                   <Printer size={13} /> Simpan dahulu tkr DN
+                                 </div>
+                                 {isEmptySlot(assign) && (
+                                   <button
+                                     type="button"
+                                     onClick={() => { setRejectingSlotIndex(rejectingSlotIndex === idx ? null : idx); setRejectReason('truck_unavailable'); setRejectNote(''); }}
+                                     className="h-9 px-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-md flex items-center justify-center gap-1.5 text-[11px] font-bold hover:bg-rose-100 transition-colors shrink-0"
+                                   >
+                                     <X size={13} /> Reject
+                                   </button>
+                                 )}
                                </div>
                              )}
                            </div>
-                         </div>
 
-                         {/* Multi-Document Dropzone & Manifest Manager for Driver */}
+                           {/* Reject Form (inline, for empty slots) */}
+                           {rejectingSlotIndex === idx && isEmptySlot(assign) && (
+                             <div className="mt-3 pt-3 border-t border-rose-200 bg-rose-50 p-3 rounded-lg space-y-2">
+                               <label className="text-[11px] font-bold text-rose-700 flex items-center gap-1.5">
+                                 <X size={13} className="text-rose-500" />
+                                 Alasan Reject Slot Ini
+                               </label>
+                               <select
+                                 value={rejectReason}
+                                 onChange={(e) => setRejectReason(e.target.value)}
+                                 className="w-full h-9 px-2.5 bg-white border border-rose-300 rounded-md text-xs font-medium text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none"
+                               >
+                                 <option value="truck_unavailable">Truk tidak tersedia</option>
+                                 <option value="vendor_cancelled">Vendor batal</option>
+                                 <option value="driver_unavailable">Sopir tidak tersedia</option>
+                                 <option value="cost_too_high">Biaya terlalu tinggi</option>
+                                 <option value="other">Lainnya</option>
+                               </select>
+                               {rejectReason === 'other' && (
+                                 <input
+                                   type="text"
+                                   value={rejectNote}
+                                   onChange={(e) => setRejectNote(e.target.value)}
+                                   placeholder="Tulis alasan..."
+                                   className="w-full h-9 px-2.5 bg-white border border-rose-300 rounded-md text-xs text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none placeholder:text-slate-400"
+                                 />
+                               )}
+                               <div className="flex gap-2">
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     const note = rejectReason === 'other' ? rejectNote : '';
+                                     handleRejectSlot(idx, rejectReason, note);
+                                     setRejectingSlotIndex(null);
+                                     setRejectNote('');
+                                   }}
+                                   disabled={rejectReason === 'other' && !rejectNote.trim()}
+                                   className="h-8 px-4 bg-rose-600 text-white rounded-md text-[11px] font-bold hover:bg-rose-700 transition-colors disabled:opacity-50"
+                                 >
+                                   Konfirmasi Reject
+                                 </button>
+                                 <button
+                                   type="button"
+                                   onClick={() => { setRejectingSlotIndex(null); setRejectNote(''); }}
+                                   className="h-8 px-4 bg-white text-slate-600 border border-slate-300 rounded-md text-[11px] font-bold hover:bg-slate-50 transition-colors"
+                                 >
+                                   Batal
+                                 </button>
+                               </div>
+                             </div>
+                           )}
+                          </div>
+
+                          {/* Multi-Document Dropzone & Manifest Manager for Driver */}
                          <div className="mt-3 pt-3 border-t border-slate-200/80 bg-blue-50/40 border border-blue-100 p-3 rounded-lg">
                            <div className="flex items-center justify-between mb-2">
                              <div className="flex items-center gap-2">
@@ -1271,7 +1403,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                    multiple
                                    accept=".pdf,image/*"
                                    className="hidden"
-                                   onChange={(e) => handleUploadAssignmentDoc(idx, e.target.files)}
+                                   onChange={(e) => handleUploadDocuments(idx, e.target.files)}
                                    disabled={uploadingSlotIndex === idx}
                                  />
                                </label>

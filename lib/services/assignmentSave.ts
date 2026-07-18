@@ -257,6 +257,17 @@ export async function saveAssignments(
       delete updatedItemData.confirmed_assigned;
       delete updatedItemData.confirmed_assigned_at;
 
+      // Collect rejected slots
+      const rejectedSlots = assignments
+        .filter((a) => a.rejected && a.rejected_reason)
+        .map((a, i) => ({
+          slot_index: assignments.indexOf(a),
+          reason: a.rejected_reason,
+          note: a.rejected_note || '',
+          rejected_at: new Date().toISOString(),
+        }));
+      updatedItemData.rejected_slots = rejectedSlots;
+
       const { error: woUpdateError } = await supabase
         .from('wo_items')
         .update({ status: 'need_assignment', item_data: updatedItemData })
@@ -416,11 +427,27 @@ export async function saveAssignments(
       status: newStatus,
     };
 
+    // Collect rejected slots from all assignments (including unfilled)
+    const rejectedSlots = assignments
+      .filter((a) => a.rejected && a.rejected_reason)
+      .map((a) => ({
+        slot_index: assignments.indexOf(a),
+        reason: a.rejected_reason,
+        note: a.rejected_note || '',
+        rejected_at: new Date().toISOString(),
+      }));
+
     if (allUnitsAssigned && !isHandoverFlow) {
       updatePayload.item_data = {
         ...currentItemData,
         confirmed_assigned: true,
         confirmed_assigned_at: new Date().toISOString(),
+        rejected_slots: rejectedSlots,
+      };
+    } else if (rejectedSlots.length > 0) {
+      updatePayload.item_data = {
+        ...currentItemData,
+        rejected_slots: rejectedSlots,
       };
     }
 

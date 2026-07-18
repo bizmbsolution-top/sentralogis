@@ -21,6 +21,9 @@ export interface AssignmentSlot {
   notes?: string;
   sbu_metadata?: any;
   assignment_documents?: any[];
+  rejected?: boolean;
+  rejected_reason?: 'truck_unavailable' | 'vendor_cancelled' | 'driver_unavailable' | 'cost_too_high' | 'other';
+  rejected_note?: string;
 }
 
 export interface WoItemContext {
@@ -98,7 +101,11 @@ export function isFilledAssignment(slot: AssignmentSlot): boolean {
 }
 
 export function isEmptySlot(slot: AssignmentSlot): boolean {
-  return !slot.id && !slot.transporter_id && !slot.fleet_id && !slot.driver_id;
+  return !slot.id && !slot.transporter_id && !slot.fleet_id && !slot.driver_id && !slot.rejected;
+}
+
+export function isRejectedSlot(slot: AssignmentSlot): boolean {
+  return slot.rejected === true && Boolean(slot.rejected_reason);
 }
 
 export function validateVendorPurchasePrice(
