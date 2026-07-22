@@ -56,17 +56,26 @@ export const filterItemByTab = (item: any, tabId: string) => {
   const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
   const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
   const hasAssignedStatus = s === 'ASSIGNED' || s === 'ACTIVE';
+  // [FIX] Check if ALL JOs are in terminal state (completed or rejected) — item should not appear in "Assigned" tab
+  const allJobsTerminal = jos.length > 0 && jos.every((j: any) =>
+    ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT', 'REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
+  );
 
   if (tabId === 'all') return true;
   
   if (tabId === 'pending') {
+    // [FIX] Items with 'need_assignment' status should always show in Need Assignment tab
+    // Items with 'pending' status and no assigned JOs should also show here
     if (s === 'NEED_ASSIGNMENT') return true;
-    return (!hasAnyAssigned && (s === 'PENDING' || s === 'DRAFT')) || (s === 'PENDING' && !allAssigned);
+    if (s === 'PENDING' && !hasAnyAssigned) return true;
+    if (s === 'DRAFT' && !hasAnyAssigned) return true;
+    return false;
   }
   
   if (tabId === 'assigned_units') {
     const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(s);
-    return (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) && !anyMoving && !isCompleted && !isRejectedOrPending;
+    // [FIX] Exclude items where all JOs are terminal — they belong in "Need Assignment", not "Assigned"
+    return (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) && !anyMoving && !isCompleted && !isRejectedOrPending && !allJobsTerminal;
   }
   
   if (tabId === 'on_road') return anyMoving && !isCompleted;
