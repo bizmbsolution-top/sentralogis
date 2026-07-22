@@ -18,7 +18,6 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
-  Navigation,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
@@ -71,6 +70,8 @@ export default function GPSTrackingReportPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(20);
   const [selectedWoId, setSelectedWoId] = useState<string>("all");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("all");
+  const [selectedVendorId, setSelectedVendorId] = useState<string>("all");
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
   const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
@@ -158,8 +159,9 @@ export default function GPSTrackingReportPage() {
       const { data: jos, error: joError } = await supabase
         .from("job_orders")
         .select(
-          `id, jo_number, driver_id, fleet_id, plate_number, wo_item_id,
-          md_drivers (name), md_fleets (plate_number, md_fleet_types (type_name))
+          `id, jo_number, driver_id, fleet_id, plate_number, wo_item_id, transporter_id,
+          md_drivers (name), md_fleets (plate_number, md_fleet_types (type_name)),
+          vendor:md_entities!transporter_id (id, name, legal_name)
         `,
         )
         .in("id", joIds);
@@ -219,6 +221,7 @@ export default function GPSTrackingReportPage() {
           wo_number: wo.wo_number || "-",
           customer_name: wo.customer_name || "-",
           wo_id: woItem.wo_id || null,
+          vendor_name: jo.vendor?.legal_name || jo.vendor?.name || "-",
         };
       });
 
@@ -236,6 +239,7 @@ export default function GPSTrackingReportPage() {
           truck_type: joInfo.truck_type || "-",
           wo_number: joInfo.wo_number || "-",
           customer_name: joInfo.customer_name || "-",
+          vendor_name: joInfo.vendor_name || "-",
         });
       });
 
@@ -330,9 +334,20 @@ export default function GPSTrackingReportPage() {
   }, [startDate, endDate, tenantId, canAccess]);
 
   const filteredData = useMemo(() => {
-    if (selectedWoId === "all") return groupedData;
-    return groupedData.filter((wo: any) => wo.wo_id === selectedWoId);
-  }, [groupedData, selectedWoId]);
+    let data = groupedData;
+    if (selectedWoId !== "all") {
+      data = data.filter((wo: any) => wo.wo_id === selectedWoId);
+    }
+    if (selectedCustomerId !== "all") {
+      data = data.filter((wo: any) => wo.customer_name === selectedCustomerId);
+    }
+    if (selectedVendorId !== "all") {
+      data = data.filter((wo: any) =>
+        wo.jos.some((jo: any) => jo.vendor_name === selectedVendorId)
+      );
+    }
+    return data;
+  }, [groupedData, selectedWoId, selectedCustomerId, selectedVendorId]);
 
   const pagedData = useMemo(() => {
     if (pageSize === 999999) return filteredData;
@@ -473,12 +488,6 @@ export default function GPSTrackingReportPage() {
               ))}
             </select>
           )}
-          <Link
-            href="/sbu/trucking/reporting/wo-level"
-            className="h-[42px] px-4 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <Navigation className="w-4 h-4" /> WO Financial
-          </Link>
           <button
             onClick={handleExportExcel}
             className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-emerald-700 transition-all active:scale-95"
@@ -490,7 +499,7 @@ export default function GPSTrackingReportPage() {
 
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div className="md:col-span-2">
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
               Date Range (by Arrival)
@@ -530,7 +539,43 @@ export default function GPSTrackingReportPage() {
               ))}
             </select>
           </div>
-          <div className="md:col-span-2 flex items-end justify-end gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              Pelanggan
+            </label>
+            <select
+              value={selectedCustomerId}
+              onChange={(e) => {
+                setSelectedCustomerId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all cursor-pointer"
+            >
+              <option value="all">Semua Pelanggan</option>
+              {[...new Set(groupedData.map((wo: any) => wo.customer_name).filter(Boolean))].sort().map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              Vendor / Transporter
+            </label>
+            <select
+              value={selectedVendorId}
+              onChange={(e) => {
+                setSelectedVendorId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all cursor-pointer"
+            >
+              <option value="all">Semua Vendor</option>
+              {[...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter(Boolean))].sort().map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end justify-end gap-3">
             <button
               onClick={fetchReportData}
               disabled={loading}
@@ -621,7 +666,7 @@ export default function GPSTrackingReportPage() {
                               <Truck className="w-3 h-3" /> {jo.plate_number}
                             </span>
                             <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                              <Navigation className="w-3 h-3" />{" "}
+                              <MapPin className="w-3 h-3" />{" "}
                               {jo.driver_name}
                             </span>
                             <span className="text-[10px] text-slate-400">

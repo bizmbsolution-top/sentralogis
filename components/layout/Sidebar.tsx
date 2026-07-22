@@ -253,7 +253,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
-    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
+    { label: 'Reporting', icon: '📊', href: '#', submenu: [
+      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+    ]},
   ],
   sbu_ops_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -265,7 +269,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
-    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
+    { label: 'Reporting', icon: '📊', href: '#', submenu: [
+      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+    ]},
   ],
   sbu_admin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -277,7 +285,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
-    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
+    { label: 'Reporting', icon: '📊', href: '#', submenu: [
+      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+    ]},
   ],
   sbu_fin_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -288,7 +300,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
-    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
+    { label: 'Reporting', icon: '📊', href: '#', submenu: [
+      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+    ]},
   ],
   sbu_finance_tr: [
     { label: 'Ops Dashboard', icon: '📊', href: '/sbu/trucking' },
@@ -299,7 +315,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
-    { label: 'Reporting', icon: '📊', href: '/sbu/trucking/reporting' },
+    { label: 'Reporting', icon: '📊', href: '#', submenu: [
+      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+    ]},
   ],
 
   // SBU Warehouse (Manager, Ops, Admin)
@@ -403,6 +423,37 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Finance Dashboard', icon: '📊', href: '/sbu/forwarding/finances' },
     { label: 'Cost Management', icon: '💰', href: '/sbu/forwarding/add-cost' },
     { label: 'Documents', icon: '📄', href: '/sbu/forwarding/documents' },
+  ],
+
+  // SBU Forwarding (Manager, Ops, Admin)
+  sbu_manager_fwd: [
+    { label: 'Work Order', icon: '📋', href: '/sbu/forwarding/wo' },
+    { label: 'Create WO', icon: '➕', href: '/sbu/forwarding/wo/create' },
+    { label: 'Konsolidasi', icon: '🚢', href: '/sbu/forwarding/consol' },
+    { label: 'Master Harga', icon: '💰', href: '/sbu/forwarding/master/price' },
+    { label: 'Finances', icon: '📊', href: '/sbu/forwarding/finances' },
+    { label: 'Documents', icon: '📄', href: '/sbu/forwarding/documents' },
+  ],
+  sbu_ops_fwd: [
+    { label: 'Work Order', icon: '📋', href: '/sbu/forwarding/wo' },
+    { label: 'Create WO', icon: '➕', href: '/sbu/forwarding/wo/create' },
+    { label: 'Konsolidasi', icon: '🚢', href: '/sbu/forwarding/consol' },
+    { label: 'Master Harga', icon: '💰', href: '/sbu/forwarding/master/price' },
+    { label: 'Finances', icon: '📊', href: '/sbu/forwarding/finances' },
+    { label: 'Documents', icon: '📄', href: '/sbu/forwarding/documents' },
+  ],
+  sbu_admin_fwd: [
+    { label: 'Work Order', icon: '📋', href: '/sbu/forwarding/wo' },
+    { label: 'Create WO', icon: '➕', href: '/sbu/forwarding/wo/create' },
+    { label: 'Konsolidasi', icon: '🚢', href: '/sbu/forwarding/consol' },
+    { label: 'Master Harga', icon: '💰', href: '/sbu/forwarding/master/price' },
+    { label: 'Finances', icon: '📊', href: '/sbu/forwarding/finances' },
+    { label: 'Documents', icon: '📄', href: '/sbu/forwarding/documents' },
+  ],
+  cs_forwarding: [
+    { label: 'Work Order', icon: '📋', href: '/sbu/forwarding/wo' },
+    { label: 'Konsolidasi', icon: '🚢', href: '/sbu/forwarding/consol' },
+    { label: 'Tracking', icon: '📍', href: '/sbu/forwarding/tracking' },
   ],
 
   // Driver
