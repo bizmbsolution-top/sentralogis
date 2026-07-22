@@ -114,10 +114,12 @@ export async function GET(
         job_order_id: jobOrder.id,
         sequence: idx + 1,
         stop_type: stop.stop_type || (idx === 0 ? 'PICKUP' : 'DROPOFF'),
-        source_type: 'MD_LOCATION',
-        source_id: 'LEGACY',
+        source_type: stop.source_type || 'MD_LOCATION',
+        source_id: String(stop.source_id || 'LEGACY'),
         location_name: stop.location_name || '-',
         address: stop.address || '-',
+        latitude: stop.latitude != null ? Number(stop.latitude) : null,
+        longitude: stop.longitude != null ? Number(stop.longitude) : null,
         contact_name: stop.contact_name || '-',
         contact_phone: stop.contact_phone || '-',
         status: 'pending'
@@ -263,19 +265,24 @@ export async function PATCH(
 
       if (pingErr) return NextResponse.json({ error: pingErr.message }, { status: 500 });
 
-      // 2. Geofence Check (<= 500 meters from any pending stop)
-      const { data: pendingRoutes } = await supabase
+      // 2. Geofence Check (<= 500 meters from any pending/arrived stop)
+      const { data: activeRoutes } = await supabase
         .from('job_routes')
         .select('*')
         .eq('job_order_id', jo.id)
-        .eq('status', 'pending')
+        .in('status', ['pending', 'arrived'])
         .order('sequence', { ascending: true });
 
       let geofenceTriggered = false;
       let arrivedStopName: string | null = null;
       let geofenceDistanceM: number | null = null;
+      let departedStopName: string | null = null;
 
-      if (pendingRoutes && pendingRoutes.length > 0) {
+      if (activeRoutes && activeRoutes.length > 0) {
+        const pendingRoutes = activeRoutes.filter((r: any) => r.status === 'pending');
+        const arrivedRoutes = activeRoutes.filter((r: any) => r.status === 'arrived');
+
+        // 2a. Check for new arrivals (pending -> arrived)
         for (const route of pendingRoutes) {
           if (route.latitude && route.longitude) {
             const distM = calculateHaversineDistance(Number(lat), Number(lng), Number(route.latitude), Number(route.longitude));
@@ -284,17 +291,15 @@ export async function PATCH(
               arrivedStopName = route.location_name || `Stop #${route.sequence}`;
               geofenceDistanceM = Math.round(distM);
 
-              // Auto-update route status to 'arrived'
               await supabase
                 .from('job_routes')
                 .update({ status: 'arrived', actual_arrival: new Date().toISOString() })
                 .eq('id', route.id);
 
-              // Auto transition JO status for Pickup or Dropoff
               let newJoStatus: string | null = null;
               if (route.sequence === 1 || route.stop_type === 'PICKUP') {
                 newJoStatus = 'TIBA DI LOKASI MUAT';
-              } else if (route.sequence === pendingRoutes.length || route.stop_type === 'DROPOFF') {
+              } else if (route.sequence === pendingRoutes.length + arrivedRoutes.length || route.stop_type === 'DROPOFF') {
                 newJoStatus = 'TIBA DI LOKASI BONGKAR';
               }
 
@@ -305,7 +310,6 @@ export async function PATCH(
                   .eq('id', jo.id);
               }
 
-              // Log Geofence Arrival
               await supabase.from('job_tracking').insert({
                 job_order_id: jo.id,
                 job_route_id: route.id,
@@ -323,7 +327,6 @@ export async function PATCH(
                 whatsapp_sent: false
               });
 
-              // Push Notification to Ops Dashboard
               await supabase.from('notifications').insert({
                 role: 'tenant_admin',
                 tenant_id: jo.tenant_id || null,
@@ -337,13 +340,70 @@ export async function PATCH(
             }
           }
         }
+
+        // 2b. Check for departures (arrived -> completed)
+        for (const route of arrivedRoutes) {
+          if (route.latitude && route.longitude) {
+            const distM = calculateHaversineDistance(Number(lat), Number(lng), Number(route.latitude), Number(route.longitude));
+            if (distM > 500) {
+              departedStopName = route.location_name || `Stop #${route.sequence}`;
+
+              await supabase
+                .from('job_routes')
+                .update({ status: 'completed', actual_departure: new Date().toISOString() })
+                .eq('id', route.id);
+
+              // Update JO status on departure
+              let departJoStatus: string | null = null;
+              if (route.sequence === 1 || route.stop_type === 'PICKUP') {
+                departJoStatus = 'BERANGKAT DARI LOKASI MUAT';
+              } else if (route.stop_type === 'DROPOFF') {
+                departJoStatus = 'SELESAI BONGKAR';
+              }
+              if (departJoStatus) {
+                await supabase
+                  .from('job_orders')
+                  .update({ status: departJoStatus, updated_at: new Date().toISOString() })
+                  .eq('id', jo.id);
+              }
+
+              await supabase.from('job_tracking').insert({
+                job_order_id: jo.id,
+                job_route_id: route.id,
+                status_update: `🚦 Keluar dari ${departedStopName} (Geofence Auto)`,
+                latitude: lat,
+                longitude: lng,
+                notes: `Otomatis terdeteksi keluar dari radius ${Math.round(distM)}m dari titik rute.`
+              });
+
+              await supabase.from('tracking_updates').insert({
+                job_order_id: jo.id,
+                latitude: lat,
+                longitude: lng,
+                status_update: `🚦 Keluar dari ${departedStopName} (Geofence Auto)`,
+                whatsapp_sent: false
+              });
+
+              // Notification on departure
+              await supabase.from('notifications').insert({
+                role: 'tenant_admin',
+                tenant_id: jo.tenant_id || null,
+                type: 'geofence_departure',
+                title: `🚦 Armada Keluar dari ${departedStopName}`,
+                message: `Truk untuk JO ${jo.jo_number} terdeteksi keluar dari ${departedStopName} (Radius ${Math.round(distM)}m via Geofence).`,
+                link: `/sbu/trucking/work-orders/${jo.id}`
+              });
+            }
+          }
+        }
       }
 
       return NextResponse.json({ 
         success: true, 
         geofence_triggered: geofenceTriggered,
         arrived_stop: arrivedStopName,
-        distance_m: geofenceDistanceM
+        distance_m: geofenceDistanceM,
+        departed_stop: departedStopName
       });
     }
 
@@ -557,10 +617,12 @@ export async function PATCH(
           job_order_id: jo.id,
           sequence: idx + 1,
           stop_type: stop.stop_type || (idx === 0 ? 'PICKUP' : 'DROPOFF'),
-          source_type: 'MD_LOCATION',
-          source_id: 'LEGACY',
+          source_type: stop.source_type || 'MD_LOCATION',
+          source_id: String(stop.source_id || 'LEGACY'),
           location_name: stop.location_name || '-',
           address: stop.address || '-',
+          latitude: stop.latitude != null ? Number(stop.latitude) : null,
+          longitude: stop.longitude != null ? Number(stop.longitude) : null,
           contact_name: stop.contact_name || '-',
           contact_phone: stop.contact_phone || '-',
           status: 'pending'

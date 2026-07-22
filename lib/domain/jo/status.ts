@@ -38,6 +38,10 @@ export const JO_ACTIVE_STATUSES = [
   'LOADING',
   'UNLOADING',
   'DITERIMA',
+  'TIBA DI LOKASI MUAT',
+  'TIBA DI LOKASI BONGKAR',
+  'BERANGKAT DARI LOKASI MUAT',
+  'SELESAI BONGKAR',
   'SELESAI' // SELESAI is in HQ ACTIVE array, but also in DONE. We will prioritize DONE in logic
 ] as const;
 
