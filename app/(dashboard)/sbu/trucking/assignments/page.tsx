@@ -13,7 +13,7 @@ import {
   Clock, CheckCircle2, Navigation as NavIcon, MessageCircle,
   AlertCircle, Activity, ClipboardList,
   ShieldCheck, Phone, Satellite, Share2,
-  Info
+  Info, Edit2
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -26,6 +26,7 @@ import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewMo
 // [AI] Import printCashAdvanceSlip utility to print cash advance slips for internal drivers directly from assignments list
 import { printCashAdvanceSlip } from '../utils';
 import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status';
+import EditAssignmentModal from './components/EditAssignmentModal';
 
 // ---------------------------------------------------------
 // DELIVERY NOTE MODAL (Surat Jalan)
@@ -233,6 +234,7 @@ export default function JobOrderManagementPage() {
   const [showRejectedModal, setShowRejectedModal] = useState(false);
   const [selectedRejectedWo, setSelectedRejectedWo] = useState<any>(null);
   const [fetchingWo, setFetchingWo] = useState(false);
+  const [editingJo, setEditingJo] = useState<any>(null);
 
 
   useEffect(() => {
@@ -658,7 +660,16 @@ export default function JobOrderManagementPage() {
                          </>
                         ) : (
                           <>
-                            {getJobCategory(jo) === 'assigned' && (
+                            {/* Edit Assignment Button - for new, assigned and active JOs that aren't completed/rejected */}
+                            {['awaiting', 'assigned', 'active'].includes(getJobCategory(jo)) && (
+                              <Button
+                                onClick={() => setEditingJo(jo)}
+                                className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 hover:border-indigo-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/30 transition-all active:scale-95"
+                              >
+                                <Edit2 size={14} /> EDIT ASSIGNMENT
+                              </Button>
+                            )}
+                            {['awaiting', 'assigned', 'active'].includes(getJobCategory(jo)) && (
                               <Button
                                 onClick={() => {
                                   const driverPhone = jo.driver_phone || jo.md_drivers?.phone;
@@ -682,7 +693,7 @@ export default function JobOrderManagementPage() {
                                 }}
                                 className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 hover:border-emerald-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
                               >
-                                <MessageCircle size={14} /> SEND LINK TO DRIVERS
+                                <MessageCircle size={14} /> {getJobCategory(jo) === 'active' ? 'RESEND WA' : 'SEND LINK TO DRIVERS'}
                               </Button>
                             )}
                             <Button
@@ -730,12 +741,22 @@ export default function JobOrderManagementPage() {
            profile={profile}
          />
        )}
-       {showRejectedModal && selectedRejectedWo && (
-         <RejectedViewModal
-           wo={selectedRejectedWo}
-           onClose={() => setShowRejectedModal(false)}
-         />
-       )}
+        {showRejectedModal && selectedRejectedWo && (
+          <RejectedViewModal
+            wo={selectedRejectedWo}
+            onClose={() => setShowRejectedModal(false)}
+          />
+        )}
+        {editingJo && (
+          <EditAssignmentModal
+            jo={editingJo}
+            onClose={() => setEditingJo(null)}
+            onSuccess={() => {
+              setEditingJo(null);
+              fetchAssignments(true);
+            }}
+          />
+        )}
 
      </div>
    );
