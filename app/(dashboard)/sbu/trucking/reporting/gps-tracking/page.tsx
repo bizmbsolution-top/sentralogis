@@ -159,7 +159,7 @@ export default function GPSTrackingReportPage() {
       const { data: jos, error: joError } = await supabase
         .from("job_orders")
         .select(
-          `id, jo_number, driver_id, fleet_id, plate_number, wo_item_id, transporter_id,
+          `id, jo_number, driver_id, fleet_id, wo_item_id, transporter_id,
           md_drivers (name), md_fleets (plate_number, md_fleet_types (type_name)),
           vendor:md_entities!transporter_id (id, name, legal_name)
         `,
@@ -216,7 +216,7 @@ export default function GPSTrackingReportPage() {
         joMap[jo.id] = {
           jo_number: jo.jo_number,
           driver_name: jo.md_drivers?.name || "-",
-          plate_number: jo.md_fleets?.plate_number || jo.plate_number || "-",
+          plate_number: jo.md_fleets?.plate_number || "-",
           truck_type: jo.md_fleets?.md_fleet_types?.type_name || "-",
           wo_number: wo.wo_number || "-",
           customer_name: wo.customer_name || "-",
