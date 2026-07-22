@@ -47,11 +47,15 @@ export const filterItemByTab = (item: any, tabId: string) => {
   
   const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
   
-  const anyMoving = !isCompleted && jos.some((j: any) => 
-    j.status?.toUpperCase().startsWith('MENUJU') || 
-    j.status?.toUpperCase().startsWith('TIBA') || 
-    ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
-  );
+  // [FIX] Only count a JO as "moving" if it has an active status AND has driver/fleet assigned
+  // Prevents WO items from appearing in "On Journey" tab when JOs have no asset assigned
+  const anyMoving = !isCompleted && jos.some((j: any) => {
+    const hasAsset = j.driver_id || j.fleet_id || j.transporter_id || j.vendor_id;
+    if (!hasAsset) return false;
+    return j.status?.toUpperCase().startsWith('MENUJU') || 
+      j.status?.toUpperCase().startsWith('TIBA') || 
+      ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
+  });
 
   const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
   const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);

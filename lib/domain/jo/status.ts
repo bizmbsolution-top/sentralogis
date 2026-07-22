@@ -89,7 +89,10 @@ export function getAdvancedJobCategory(jo: {
   if ((JO_REJECTED_STATUSES as readonly string[]).includes(s)) return 'rejected';
   if ((JO_DONE_STATUSES as readonly string[]).includes(s)) return 'completed';
   
-  if ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU')) return 'active';
+  // [FIX] Active status ONLY counts if the JO has an actual asset assigned (driver or fleet or transporter)
+  // Prevents orphaned JOs (null driver/fleet) from appearing as "On Journey"
+  const hasAsset = jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone;
+  if (hasAsset && ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU'))) return 'active';
   
   if ((jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone || s === 'ASSIGNED') && !(JO_DONE_STATUSES as readonly string[]).includes(s) && !(JO_ACTIVE_STATUSES as readonly string[]).includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
   
