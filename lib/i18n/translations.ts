@@ -6,6 +6,7 @@ export const translations: Record<Locale, {
     fitur: string;
     kontak: string;
     login: string;
+    loginManajemen: string;
   };
   hero: {
     badge: string;
@@ -68,6 +69,63 @@ export const translations: Record<Locale, {
   };
   sidebar: Record<string, string>;
   navbar: Record<string, string>;
+  landing: {
+    heroBadge: string;
+    heroTitle: string;
+    heroHighlight: string;
+    heroSubtitle: string;
+    heroCTA: string;
+    heroCTA2: string;
+    whyBadge: string;
+    whyTitle: string;
+    whyHighlight: string;
+    whyTraditionalHead: string;
+    whyTraditionalList: string[];
+    whyTraditionalTags: string[];
+    whySentralogisHead: string;
+    whySentralogisList: string[];
+    archBadge: string;
+    archTitle: string;
+    archHighlight: string;
+    archCenter: string;
+    archDomains: string[];
+    opsBadge: string;
+    opsTitle: string;
+    opsHighlight: string;
+    opsCapabilities: string[];
+    opsFooter: string;
+    aiBadge: string;
+    aiTitle: string;
+    aiHighlight: string;
+    aiWorkforce: { name: string; desc: string }[];
+    knowBadge: string;
+    knowTitle: string;
+    knowHighlight: string;
+    knowItems: { label: string; desc: string }[];
+    intelBadge: string;
+    intelTitle: string;
+    intelHighlight: string;
+    intelMetrics: string[];
+    ecoBadge: string;
+    ecoTitle: string;
+    ecoHighlight: string;
+    ecoRoles: string[];
+    ecoFooter: string;
+    roadBadge: string;
+    roadTitle: string;
+    roadHighlight: string;
+    roadSteps: string[];
+    ctaBadge: string;
+    ctaTitle: string;
+    ctaSubtitle: string;
+    ctaEmailLabel: string;
+    ctaCopyEmail: string;
+    ctaCopied: string;
+    ctaRequestDemo: string;
+    footerTagline: string;
+    footerLinks: string[];
+    footerCopyright: string;
+  };
 }> = {
   id: {
     nav: {
@@ -75,6 +133,7 @@ export const translations: Record<Locale, {
       fitur: 'FITUR & EKOSISTEM',
       kontak: 'KONTAK',
       login: 'PORTAL LOGIN',
+      loginManajemen: 'LOGIN MANAJEMEN',
     },
     hero: {
       badge: 'PLATFORM LOGISTIK UNIFIED 4-SBU',
@@ -138,6 +197,79 @@ export const translations: Record<Locale, {
     footer: {
       copyright: '© 2026 Sentralogis.com | Powered by MBsolutions. All Rights Reserved.',
     },
+    landing: {
+      heroBadge: 'ENTERPRISE OPERATING SYSTEM v2.0',
+      heroTitle: 'The Enterprise Operating System',
+      heroHighlight: 'untuk Logistik Modern',
+      heroSubtitle: 'Satu platform yang menghubungkan Transportasi, Gudang, Forwarding, Kepabeanan, Exchange, Capital, Customer Success, Intelligence dan AI.',
+      heroCTA: 'Request Demo Enterprise',
+      heroCTA2: 'Tonton Vision',
+      whyBadge: 'MENGAPA SENTRALOGIS',
+      whyTitle: 'Sistem Tradisional',
+      whyHighlight: 'Tidak Terhubung',
+      whyTraditionalHead: 'Tradisional',
+      whyTraditionalList: ['TMS', 'WMS', 'ERP', 'CRM', 'Spreadsheet', 'Email', 'WhatsApp'],
+      whyTraditionalTags: ['Tidak Terhubung', 'Reaktif', 'Terisolasi', 'Lambat'],
+      whySentralogisHead: 'Sentralogis',
+      whySentralogisList: ['Terhubung', 'Cerdas', 'Kolaboratif', 'Bertenaga AI', 'Siap Enterprise'],
+      archBadge: 'ARSITEKTUR',
+      archTitle: 'Enterprise',
+      archHighlight: 'Operating System',
+      archCenter: 'Bisnis\nKapabilitas',
+      archDomains: ['Operasi', 'Exchange', 'Capital', 'Customer Success', 'Intelligence', 'AI Copilot'],
+      opsBadge: 'OPERASI',
+      opsTitle: 'Platform',
+      opsHighlight: 'Operasi',
+      opsCapabilities: ['Transportasi', 'Gudang', 'Freight Forwarding', 'Kepabeanan', 'Kontainer', 'Pengiriman', 'Inventaris', 'Pelacakan', 'Armada', 'Driver'],
+      opsFooter: 'Workspace Operasi · Jurnal Operasi',
+      aiBadge: 'TENAGA KERJA AI',
+      aiTitle: 'Tenaga Kerja',
+      aiHighlight: 'AI Digital',
+      aiWorkforce: [
+        { name: 'AI Dispatcher', desc: 'Penugasan rute & muatan cerdas' },
+        { name: 'AI Warehouse Planner', desc: 'Penyimpanan & putaway optimal' },
+        { name: 'AI Doc Assistant', desc: 'Generate dokumen pengiriman otomatis' },
+        { name: 'AI Customer Assistant', desc: 'Inquiry & tracking 24/7' },
+        { name: 'AI Finance Copilot', desc: 'Otomatisasi invoice & pembayaran' },
+        { name: 'AI Risk Advisor', desc: 'Prediksi & mitigasi gangguan' },
+        { name: 'AI Knowledge Agent', desc: 'Pengetahuan institusional on demand' },
+        { name: 'AI Decision Assistant', desc: 'Rekomendasi berbasis data' },
+      ],
+      knowBadge: 'PENGETAHUAN',
+      knowTitle: 'Platform',
+      knowHighlight: 'Pengetahuan',
+      knowItems: [
+        { label: 'Jurnal Operasi', desc: 'Setiap peristiwa. Setiap keputusan. Tercatat.' },
+        { label: 'Pelajaran Berharga', desc: 'Perbaikan berkelanjutan dari operasi nyata' },
+        { label: 'Pengetahuan Enterprise', desc: 'Memori institusional. Tidak pernah hilang.' },
+        { label: 'Event Bisnis', desc: 'Stream event real-time lintas semua domain' },
+        { label: 'Percakapan', desc: 'Chat sebagai objek bisnis. Terlacak.' },
+        { label: 'Pembelajaran Berkelanjutan', desc: 'AI belajar dari pola operasi Anda' },
+      ],
+      intelBadge: 'INTELIJEN',
+      intelTitle: 'Intelijen',
+      intelHighlight: 'Enterprise',
+      intelMetrics: ['Skor Kesehatan Bisnis', 'Kesehatan Operasional', 'Kesehatan Pelanggan', 'Kesehatan Finansial', 'Kesehatan Jaringan', 'Analitik Prediktif'],
+      ecoBadge: 'EKOSISTEM',
+      ecoTitle: 'Ekosistem',
+      ecoHighlight: 'Terhubung',
+      ecoRoles: ['Pelanggan', 'Carrier', 'Gudang', 'Forwarder', 'Shipping Line', 'Maskapai', 'Kepabeanan', 'Pemerintah', 'Bank', 'Asuransi', 'Marketplace', 'AI'],
+      ecoFooter: 'Semua Terhubung.',
+      roadBadge: 'ROADMAP',
+      roadTitle: 'Roadmap',
+      roadHighlight: 'Evolusi',
+      roadSteps: ['Fundasi Digital', 'Enterprise Terhubung', 'Enterprise Cerdas', 'Enterprise Otonom', 'Platform Jaringan Logistik'],
+      ctaBadge: 'MULAI',
+      ctaTitle: 'Bangun Masa Depan\nLogistik',
+      ctaSubtitle: 'Jangan beli software lain. Bangun enterprise Anda di Sentralogis.',
+      ctaEmailLabel: 'Hubungi tim kami',
+      ctaCopyEmail: 'Salin Email',
+      ctaCopied: 'Tersalin!',
+      ctaRequestDemo: 'Request Demo Enterprise →',
+      footerTagline: 'Sentralogis',
+      footerLinks: ['Produk', 'Solusi', 'Arsitektur', 'Keamanan', 'Developer', 'Perusahaan', 'Kontak'],
+      footerCopyright: '© 2026 Sentralogis',
+    },
     wo: {
       workOrder: 'Pesanan Kerja',
       live: 'Langsung',
@@ -199,6 +331,7 @@ export const translations: Record<Locale, {
       fitur: 'FEATURES & ECOSYSTEM',
       kontak: 'CONTACT',
       login: 'PORTAL LOGIN',
+      loginManajemen: 'LOGIN MANAGEMENT',
     },
     hero: {
       badge: 'UNIFIED LOGISTICS PLATFORM 4-SBU',
@@ -262,6 +395,79 @@ export const translations: Record<Locale, {
     footer: {
       copyright: '© 2026 Sentralogis.com | Powered by MBsolutions. All Rights Reserved.',
     },
+    landing: {
+      heroBadge: 'ENTERPRISE OPERATING SYSTEM v2.0',
+      heroTitle: 'The Enterprise Operating System',
+      heroHighlight: 'for Modern Logistics',
+      heroSubtitle: 'One platform connecting Transportation, Warehouse, Freight Forwarding, Customs Clearance, Exchange, Capital, Customer Success, Intelligence and AI.',
+      heroCTA: 'Request Enterprise Demo',
+      heroCTA2: 'Watch Vision',
+      whyBadge: 'WHY SENTRALOGIS',
+      whyTitle: 'Traditional Systems Are',
+      whyHighlight: 'Disconnected',
+      whyTraditionalHead: 'Traditional',
+      whyTraditionalList: ['TMS', 'WMS', 'ERP', 'CRM', 'Spreadsheet', 'Email', 'WhatsApp'],
+      whyTraditionalTags: ['Disconnected', 'Reactive', 'Siloed', 'Slow'],
+      whySentralogisHead: 'Sentralogis',
+      whySentralogisList: ['Connected', 'Intelligent', 'Collaborative', 'AI Powered', 'Enterprise Ready'],
+      archBadge: 'ARCHITECTURE',
+      archTitle: 'Enterprise',
+      archHighlight: 'Operating System',
+      archCenter: 'Business\nCapability',
+      archDomains: ['Operations', 'Exchange', 'Capital', 'Customer Success', 'Intelligence', 'AI Copilot'],
+      opsBadge: 'OPERATIONS',
+      opsTitle: 'Operations',
+      opsHighlight: 'Platform',
+      opsCapabilities: ['Transportation', 'Warehouse', 'Freight Forwarding', 'Customs Clearance', 'Container', 'Shipment', 'Inventory', 'Tracking', 'Fleet', 'Driver'],
+      opsFooter: 'Operational Workspace · Operational Journal',
+      aiBadge: 'AI WORKFORCE',
+      aiTitle: 'AI Digital',
+      aiHighlight: 'Workforce',
+      aiWorkforce: [
+        { name: 'AI Dispatcher', desc: 'Intelligent route & load assignment' },
+        { name: 'AI Warehouse Planner', desc: 'Optimal storage & putaway' },
+        { name: 'AI Doc Assistant', desc: 'Auto-generate shipping docs' },
+        { name: 'AI Customer Assistant', desc: '24/7 inquiry & tracking' },
+        { name: 'AI Finance Copilot', desc: 'Invoice & payment automation' },
+        { name: 'AI Risk Advisor', desc: 'Predict & mitigate disruptions' },
+        { name: 'AI Knowledge Agent', desc: 'Institutional knowledge on demand' },
+        { name: 'AI Decision Assistant', desc: 'Data-backed recommendations' },
+      ],
+      knowBadge: 'KNOWLEDGE',
+      knowTitle: 'Knowledge',
+      knowHighlight: 'Platform',
+      knowItems: [
+        { label: 'Operational Journal', desc: 'Every event. Every decision. Recorded.' },
+        { label: 'Lessons Learned', desc: 'Continuous improvement from real operations' },
+        { label: 'Enterprise Knowledge', desc: 'Institutional memory. Never lost.' },
+        { label: 'Business Events', desc: 'Real-time event stream across all domains' },
+        { label: 'Conversation', desc: 'Chat as a business object. Tracked.' },
+        { label: 'Continuous Learning', desc: 'AI trains on your operational patterns' },
+      ],
+      intelBadge: 'INTELLIGENCE',
+      intelTitle: 'Enterprise',
+      intelHighlight: 'Intelligence',
+      intelMetrics: ['Business Health Score', 'Operational Health', 'Customer Health', 'Financial Health', 'Network Health', 'Predictive Analytics'],
+      ecoBadge: 'ECOSYSTEM',
+      ecoTitle: 'Connected',
+      ecoHighlight: 'Ecosystem',
+      ecoRoles: ['Customer', 'Carrier', 'Warehouse', 'Forwarder', 'Shipping Line', 'Airline', 'Customs', 'Government', 'Bank', 'Insurance', 'Marketplace', 'AI'],
+      ecoFooter: 'All Connected.',
+      roadBadge: 'ROADMAP',
+      roadTitle: 'Evolution',
+      roadHighlight: 'Roadmap',
+      roadSteps: ['Digital Foundation', 'Connected Enterprise', 'Intelligent Enterprise', 'Autonomous Enterprise', 'Logistics Network Platform'],
+      ctaBadge: 'GET STARTED',
+      ctaTitle: 'Build the Future\nof Logistics',
+      ctaSubtitle: "Don't buy another software. Build your enterprise on Sentralogis.",
+      ctaEmailLabel: 'Reach our team',
+      ctaCopyEmail: 'Copy Email',
+      ctaCopied: 'Copied!',
+      ctaRequestDemo: 'Request Enterprise Demo →',
+      footerTagline: 'Sentralogis',
+      footerLinks: ['Product', 'Solutions', 'Architecture', 'Security', 'Developers', 'Company', 'Contact'],
+      footerCopyright: '© 2026 Sentralogis',
+    },
     wo: {
       workOrder: 'Work Order',
       live: 'Live',
@@ -323,6 +529,7 @@ export const translations: Record<Locale, {
       fitur: '功能与生态',
       kontak: '联系我们',
       login: '登录门户',
+      loginManajemen: '管理登录',
     },
     hero: {
       badge: '一体化物流平台 4大业务单元',
@@ -385,6 +592,79 @@ export const translations: Record<Locale, {
     },
     footer: {
       copyright: '© 2026 Sentralogis.com | Powered by MBsolutions. 保留所有权利。',
+    },
+    landing: {
+      heroBadge: 'ENTERPRISE OPERATING SYSTEM v2.0',
+      heroTitle: '企业操作系统',
+      heroHighlight: '现代物流而生',
+      heroSubtitle: '一个平台连接运输、仓储、货代、报关、Exchange、Capital、客户成功、智能和AI。',
+      heroCTA: '申请企业演示',
+      heroCTA2: '观看愿景',
+      whyBadge: '为什么选择SENTRALOGIS',
+      whyTitle: '传统系统',
+      whyHighlight: '互不连接',
+      whyTraditionalHead: '传统',
+      whyTraditionalList: ['TMS', 'WMS', 'ERP', 'CRM', 'Spreadsheet', 'Email', 'WhatsApp'],
+      whyTraditionalTags: ['互不连接', '被动响应', '信息孤岛', '缓慢'],
+      whySentralogisHead: 'Sentralogis',
+      whySentralogisList: ['互联', '智能', '协作', 'AI驱动', '企业就绪'],
+      archBadge: '架构',
+      archTitle: '企业',
+      archHighlight: '操作系统',
+      archCenter: '业务\n能力',
+      archDomains: ['运营', 'Exchange', 'Capital', '客户成功', '智能', 'AI Copilot'],
+      opsBadge: '运营',
+      opsTitle: '运营',
+      opsHighlight: '平台',
+      opsCapabilities: ['运输', '仓储', '货代', '报关', '集装箱', '货运', '库存', '追踪', '车队', '司机'],
+      opsFooter: '运营工作空间 · 运营日志',
+      aiBadge: 'AI劳动力',
+      aiTitle: 'AI数字',
+      aiHighlight: '劳动力',
+      aiWorkforce: [
+        { name: 'AI调度员', desc: '智能路线与负载分配' },
+        { name: 'AI仓库规划师', desc: '最优存储与上架' },
+        { name: 'AI文档助手', desc: '自动生成运输文件' },
+        { name: 'AI客户助手', desc: '全天候查询与追踪' },
+        { name: 'AI财务副驾', desc: '发票与支付自动化' },
+        { name: 'AI风险顾问', desc: '预测并缓解中断' },
+        { name: 'AI知识代理', desc: '按需获取机构知识' },
+        { name: 'AI决策助手', desc: '数据驱动的建议' },
+      ],
+      knowBadge: '知识',
+      knowTitle: '知识',
+      knowHighlight: '平台',
+      knowItems: [
+        { label: '运营日志', desc: '每个事件。每个决策。记录在案。' },
+        { label: '经验教训', desc: '从真实运营中持续改进' },
+        { label: '企业知识', desc: '机构记忆。永不丢失。' },
+        { label: '业务事件', desc: '跨所有领域的实时事件流' },
+        { label: '对话', desc: '聊天作为业务对象。可追踪。' },
+        { label: '持续学习', desc: 'AI从您的运营模式中学习' },
+      ],
+      intelBadge: '智能',
+      intelTitle: '企业',
+      intelHighlight: '智能',
+      intelMetrics: ['业务健康评分', '运营健康', '客户健康', '财务健康', '网络健康', '预测分析'],
+      ecoBadge: '生态',
+      ecoTitle: '互联',
+      ecoHighlight: '生态系统',
+      ecoRoles: ['客户', '承运商', '仓储', '货代', '航运公司', '航空公司', '报关', '政府', '银行', '保险', '市场', 'AI'],
+      ecoFooter: '万物互联。',
+      roadBadge: '路线图',
+      roadTitle: '演进',
+      roadHighlight: '路线图',
+      roadSteps: ['数字基础', '互联企业', '智能企业', '自主企业', '物流网络平台'],
+      ctaBadge: '开始',
+      ctaTitle: '构建物流\n的未来',
+      ctaSubtitle: '不要再买另一个软件了。在Sentralogis上构建您的企业。',
+      ctaEmailLabel: '联系我们的团队',
+      ctaCopyEmail: '复制邮箱',
+      ctaCopied: '已复制！',
+      ctaRequestDemo: '申请企业演示 →',
+      footerTagline: 'Sentralogis',
+      footerLinks: ['产品', '解决方案', '架构', '安全', '开发者', '公司', '联系我们'],
+      footerCopyright: '© 2026 Sentralogis',
     },
     wo: {
       workOrder: '工作订单',

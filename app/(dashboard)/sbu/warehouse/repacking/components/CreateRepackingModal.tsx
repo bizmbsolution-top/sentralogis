@@ -362,7 +362,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
     }
     
     const currentUnit = productSku.unit || 'BOX';
-    let conv = conversions.find((c: any) => 
+    const conv = conversions.find((c: any) => 
       String(c.from_uom).toUpperCase() === currentUnit.toUpperCase() ||
       String(c.to_uom).toUpperCase() === currentUnit.toUpperCase()
     );

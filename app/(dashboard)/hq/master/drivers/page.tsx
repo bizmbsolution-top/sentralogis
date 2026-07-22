@@ -162,8 +162,8 @@ export default function HQDriversPage() {
       return;
     }
     
-if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_expiry) {
-        toast.error('Mohon lengkapi data wajib (Tanda *)');
+if (!formData.sim_expiry) {
+        toast.error('SIM Expiry wajib diisi');
         return;
       }
       
@@ -226,29 +226,41 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
 
       if (selectedDriver) {
         console.log('Updating existing driver:', selectedDriver.id);
-        const { error } = await supabase
+        const updatePayload: any = {
+          ...payload,
+          updated_at: new Date().toISOString()
+        };
+        if (!formData.pin) {
+          delete updatePayload.pin;
+        }
+        const { data, error } = await supabase
           .from('md_drivers')
-          .update({
-            ...payload,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', selectedDriver.id);
+          .update(updatePayload)
+          .eq('id', selectedDriver.id)
+          .select('id');
 
+        console.log('Update result:', { data, error, rows: data?.length });
         if (error) throw error;
+        if (!data?.length) {
+          throw new Error('Update tidak mengubah data. Cek RLS / driver ID.');
+        }
 
-        // [AI] Cascade phone update to all job_orders with this driver
-        // Always update to ensure consistency (use whatsapp if available, else phone)
         const contactNumber = formData.whatsapp || formData.phone;
-        await supabase
+        const { error: cascadeError } = await supabase
           .from('job_orders')
           .update({ driver_phone: contactNumber, updated_at: new Date().toISOString() })
           .eq('driver_id', selectedDriver.id);
-        console.log('Cascaded phone update to job_orders for driver:', selectedDriver.id, 'new number:', contactNumber);
+
+        if (cascadeError) {
+          console.error('Cascade phone update failed:', cascadeError);
+        } else {
+          console.log('Cascaded phone update to job_orders for driver:', selectedDriver.id, 'new number:', contactNumber);
+        }
 
         toast.success('Data pengemudi berhasil diupdate');
       } else {
         console.log('Inserting new driver...');
-        let code = await generateDriverCode();
+        const code = await generateDriverCode();
         console.log('Generated code:', code);
         
         let { error } = await supabase
@@ -278,8 +290,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
+      const errMsg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Gagal menyimpan pengemudi. Cek Console (F12) untuk detail.';
       console.error('Final Driver Error Catch:', error);
-      toast.error(error.message || 'Gagal menyimpan pengemudi. Cek Console (F12) untuk detail.');
+      toast.error(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -300,7 +313,9 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
       setIsDeleteModalOpen(false);
       fetchData();
     } catch (error: any) {
-      toast.error('Gagal menghapus data.');
+      const errMsg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Gagal menghapus data.';
+      console.error('Delete Driver Error:', error);
+      toast.error(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -715,26 +730,26 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
                         {doc.uploading ? <Loader2 size={14} className="text-white animate-spin" /> : <Camera size={14} className="text-white" />}
                       </label>
                     </div>
-                    <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Foto {doc.label}</p>
+                     <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Foto {doc.label} <span className="text-slate-400 normal-case">(Opsional)</span></p>
                   </div>
                 ))}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="col-span-full">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Transporter *</label>
-                  <select required value={formData.entity_id} onChange={(e) => setFormData({...formData, entity_id: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-emerald-500 transition-all outline-none">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Transporter</label>
+                  <select value={formData.entity_id} onChange={(e) => setFormData({...formData, entity_id: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-emerald-500 transition-all outline-none">
                     <option value="">Select Transporter</option>
                     {vendors.map(v => (<option key={v.id} value={v.id}>{v.name}</option>))}
                   </select>
                 </div>
                 <div className="col-span-full">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Full Name *</label>
-                  <input type="text" placeholder="Driver Full Name" required value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black uppercase focus:border-emerald-500 transition-all outline-none" />
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Full Name</label>
+                  <input type="text" placeholder="Driver Full Name" value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black uppercase focus:border-emerald-500 transition-all outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Phone *</label>
-                  <input type="text" placeholder="628xxxx" required value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-emerald-500 transition-all outline-none" />
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Phone</label>
+                  <input type="text" placeholder="628xxxx" value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-emerald-500 transition-all outline-none" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">WhatsApp</label>
@@ -782,7 +797,7 @@ if (!formData.name || !formData.phone || !formData.entity_id || !formData.sim_ex
               </div>
               <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Cancel</button>
-                <button onClick={handleSubmit} disabled={submitting || !formData.name || !formData.phone || !formData.entity_id || (!selectedDriver && !formData.pin)} className="px-8 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-bold text-sm shadow-lg shadow-slate-900/20">
+                <button onClick={handleSubmit} disabled={submitting || !formData.sim_expiry || (!selectedDriver && !formData.pin)} className="px-8 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-bold text-sm shadow-lg shadow-slate-900/20">
                   {submitting ? 'Saving...' : selectedDriver ? 'Update Driver' : 'Create Driver'}
                 </button>
               </div>

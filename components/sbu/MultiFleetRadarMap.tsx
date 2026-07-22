@@ -49,7 +49,7 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         let lat = validTracking.length > 0 ? Number(validTracking[0].latitude) : null;
         let lng = validTracking.length > 0 ? Number(validTracking[0].longitude) : null;
-        let lastTimeStr = validTracking.length > 0 ? format(new Date(validTracking[0].created_at), 'HH:mm') : null;
+        const lastTimeStr = validTracking.length > 0 ? format(new Date(validTracking[0].created_at), 'HH:mm') : null;
 
         // Fallback to route stops if no tracking point
         if (lat === null || lng === null) {

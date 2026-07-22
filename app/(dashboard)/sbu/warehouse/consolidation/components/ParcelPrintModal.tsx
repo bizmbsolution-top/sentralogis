@@ -114,7 +114,7 @@ export default function ParcelPrintModal({ parcel, onClose }: ParcelPrintModalPr
     productTotal: number;     // total qty of this product
   };
 
-  let labels: LabelData[] = [];
+  const labels: LabelData[] = [];
 
   if (items.length > 0) {
     // Total across all products

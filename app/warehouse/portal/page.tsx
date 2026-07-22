@@ -139,7 +139,7 @@ export default function WarehousePortalDashboard() {
           ...filteredOutbound.map((d: any) => d.transfer_id).filter(Boolean)
         ])
       ];
-      let transferMap: Record<string, any> = {};
+      const transferMap: Record<string, any> = {};
       if (transferIds.length > 0) {
         const { data: transferOrders } = await supabase
           .from('wh_transfer_orders')

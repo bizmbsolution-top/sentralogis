@@ -157,7 +157,7 @@ export async function createMasterBoxAdmin(
   let totalWeight = 0;
   let totalCbm = 0;
   let totalQty = 0;
-  let consigneeNames = new Set<string>();
+  const consigneeNames = new Set<string>();
 
   selectedParcels.forEach(p => {
     totalWeight += Number(p.weight_kg || 0);

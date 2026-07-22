@@ -66,7 +66,7 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
         if (error) throw error;
         toast.success('Driver updated');
       } else {
-        let codeToUse = formData.driver_code || await generateDriverCodeAction();
+        const codeToUse = formData.driver_code || await generateDriverCodeAction();
         let { error } = await supabase
           .from('md_drivers')
           .insert([{ ...payload, driver_code: codeToUse }]);

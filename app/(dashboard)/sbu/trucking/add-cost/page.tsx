@@ -43,7 +43,7 @@ export default function SBUAddCostPage() {
       if (error) throw error;
 
       if (costs && costs.length > 0) {
-        let joIds = Array.from(new Set(costs.map(c => c.jo_id).filter(Boolean)));
+        const joIds = Array.from(new Set(costs.map(c => c.jo_id).filter(Boolean)));
         const { data: jos } = await supabase
           .from('job_orders')
           .select(`

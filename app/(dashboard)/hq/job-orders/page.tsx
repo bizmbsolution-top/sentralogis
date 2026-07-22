@@ -131,7 +131,7 @@ export default function HQJobOrdersPage() {
         const enrichedJOs = baseJOs.map(jo => {
           let driverObj = driversRes.data?.find(d => d.id === jo.driver_id);
           let fleetObj = fleetsRes.data?.find(f => f.id === jo.fleet_id);
-          let extraPhone = null;
+          const extraPhone = null;
 
           if (jo.wo_item?.sbu_type === 'WAREHOUSE') {
             const receipt = warehouseReceipts.find(r => r.wo_item_id === jo.id);
@@ -154,7 +154,7 @@ export default function HQJobOrdersPage() {
 
         // [AI] Fetch latest audit log for each JO to get last user initials
         const joIds = enrichedJOs.map(j => j.id);
-        let latestLogs: Record<string, any> = {};
+        const latestLogs: Record<string, any> = {};
         if (joIds.length > 0) {
           const { data: logs } = await supabase.from('wo_audit_logs')
             .select(`

@@ -179,8 +179,8 @@ export async function getTokenUsageByTenant(period: 'weekly' | 'monthly' | 'quar
     // [AI] Use tenants.token_balance as single source of truth instead of SUM(token_transactions)
     // This matches what fetchTenantsAdmin() and the tenant dashboard display
     const tenantIds = Object.keys(consumedByTenant)
-    let balances: Record<string, number> = {}
-    let tenantNames: Record<string, string> = {}
+    const balances: Record<string, number> = {}
+    const tenantNames: Record<string, string> = {}
 
     if (tenantIds.length > 0) {
       // Get balances from tenants.token_balance (single source of truth)
@@ -238,7 +238,7 @@ export async function getRevenueByTenant(period: 'weekly' | 'monthly' | 'quarter
     })
 
     const tenantIds = Object.keys(byTenant)
-    let tenantNames: Record<string, string> = {}
+    const tenantNames: Record<string, string> = {}
     if (tenantIds.length > 0) {
       const { data: tenants } = await admin.from('tenants').select('id, name, tenant_code').in('id', tenantIds)
       tenants?.forEach(t => { tenantNames[t.id] = t.name || t.tenant_code })
@@ -271,7 +271,7 @@ export async function getStorageByTenant() {
 
     // Get tenant_id from job_orders
     const joIds = [...new Set(documents?.map(d => d.job_order_id).filter(Boolean))]
-    let joTenantMap: Record<string, string> = {}
+    const joTenantMap: Record<string, string> = {}
     if (joIds.length > 0) {
       const { data: jos } = await admin.from('job_orders').select('id, tenant_id').in('id', joIds)
       jos?.forEach(j => { joTenantMap[j.id] = j.tenant_id })
@@ -295,7 +295,7 @@ export async function getStorageByTenant() {
     })
 
     const tenantIds = Object.keys(byTenant)
-    let tenantNames: Record<string, string> = {}
+    const tenantNames: Record<string, string> = {}
     if (tenantIds.length > 0) {
       const { data: tenants } = await admin.from('tenants').select('id, name, tenant_code').in('id', tenantIds)
       tenants?.forEach(t => { tenantNames[t.id] = t.name || t.tenant_code })
@@ -331,7 +331,7 @@ export async function getActiveUsersByTenant(period: 'weekly' | 'monthly' | 'qua
     if (error) throw error
 
     const tenantIds = [...new Set(profiles?.map(p => p.tenant_id).filter(Boolean))]
-    let tenantNames: Record<string, string> = {}
+    const tenantNames: Record<string, string> = {}
     if (tenantIds.length > 0) {
       const { data: tenants } = await admin.from('tenants').select('id, name, tenant_code').in('id', tenantIds)
       tenants?.forEach(t => { tenantNames[t.id] = t.name || t.tenant_code })
@@ -457,7 +457,7 @@ export async function getPendingTopups() {
     if (error) throw error
 
     const tenantIds = [...new Set(data?.map(d => d.tenant_id).filter(Boolean))]
-    let tenantNames: Record<string, string> = {}
+    const tenantNames: Record<string, string> = {}
     if (tenantIds.length > 0) {
       const { data: tenants } = await admin.from('tenants').select('id, name, tenant_code').in('id', tenantIds)
       tenants?.forEach(t => { tenantNames[t.id] = t.name || t.tenant_code })

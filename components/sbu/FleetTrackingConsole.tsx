@@ -103,23 +103,29 @@ export default function FleetTrackingConsole() {
          ];
          
          // Enrich ALL JOs (including completed) so search & replay can access them
-         const allJosWithAssets = (baseData || []).filter(jo => jo.driver_id && jo.fleet_id);
+         const allJosWithAssets = (baseData || []).filter(jo => jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id);
 
          if (allJosWithAssets.length > 0) {
             const joIds = allJosWithAssets.map(j => j.id);
             const driverIds = [...new Set(allJosWithAssets.map(j => j.driver_id).filter(Boolean))];
             const fleetIds = [...new Set(allJosWithAssets.map(j => j.fleet_id).filter(Boolean))];
 
-            const [driversRes, fleetsRes, routesRes, trackingRes, docsRes] = await Promise.all([
+            const [driversRes, fleetsRes, routesRes, trackingRes] = await Promise.all([
                supabase.from('md_drivers').select('id, name, phone').in('id', driverIds),
                supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(id, type_name, icon_url)').in('id', fleetIds),
                supabase.from('job_routes').select('*').in('job_order_id', joIds),
                supabase.from('job_tracking').select('*').in('job_order_id', joIds).order('created_at', { ascending: false }),
-               supabase.from('documents').select('*').in('job_order_id', joIds)
             ]);
 
+            let docsRes: any = { data: null };
+            try {
+               docsRes = await supabase.from('documents').select('*').in('job_order_id', joIds);
+            } catch (_) {
+               docsRes = { data: null };
+            }
+
             const enrichedAll = (baseData || []).map(jo => {
-               if (!jo.driver_id || !jo.fleet_id) {
+               if (!jo.driver_id && !jo.fleet_id && !jo.transporter_id && !jo.vendor_id) {
                   return {
                      ...jo,
                      wo_id: jo.wo_item?.wo?.id || null,
@@ -183,7 +189,8 @@ export default function FleetTrackingConsole() {
             setAllJobOrders(enrichedAll);
             
             const activeJOs = enrichedAll.filter(jo => {
-               if (!jo.driver_id || !jo.fleet_id) return false;
+               const hasAsset = jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id;
+               if (!hasAsset) return false;
                const s = (jo.status || '').toUpperCase();
                if (DONE_STATUSES.includes(s) || REJECTED_STATUSES.includes(s) || s === 'DRAFT') return false;
                return (
@@ -282,20 +289,26 @@ export default function FleetTrackingConsole() {
       }
    }, [profile, fetchActiveJobs]);
 
-     const groupedByWO = useMemo(() => {
-        const groups: { [key: string]: any[] } = {};
-        const source = searchQuery.trim() ? (allJobOrders.length > 0 ? allJobOrders : jobOrders) : jobOrders;
-        const filtered = source.filter(jo => 
-           jo.wo_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           jo.plate_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           jo.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        filtered.forEach(jo => {
-           if (!groups[jo.wo_number]) groups[jo.wo_number] = [];
-           groups[jo.wo_number].push(jo);
-        });
-        return groups;
-     }, [allJobOrders, jobOrders, searchQuery]);
+      const groupedByWO = useMemo(() => {
+         const groups: { [key: string]: any[] } = {};
+         const hasSearch = searchQuery.trim().length > 0;
+         const hasSelection = !!selectedJoId || hasSearch;
+         const source = hasSearch
+            ? (allJobOrders.length > 0 ? allJobOrders : jobOrders)
+            : hasSelection
+               ? (allJobOrders.length > 0 ? allJobOrders : jobOrders)
+               : jobOrders;
+         const filtered = source.filter(jo => 
+            jo.wo_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            jo.plate_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            jo.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+         );
+         filtered.forEach(jo => {
+            if (!groups[jo.wo_number]) groups[jo.wo_number] = [];
+            groups[jo.wo_number].push(jo);
+         });
+         return groups;
+      }, [allJobOrders, jobOrders, searchQuery, selectedJoId]);
 
    const getStatusColor = (status: string) => {
       const s = (status || '').toUpperCase();

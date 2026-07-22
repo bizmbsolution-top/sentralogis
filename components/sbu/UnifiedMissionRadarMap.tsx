@@ -87,7 +87,7 @@ export default function UnifiedMissionRadarMap({
 
         let lat = hasLiveGps ? Number(validTracking[0].latitude) : null;
         let lng = hasLiveGps ? Number(validTracking[0].longitude) : null;
-        let lastTimeStr = hasLiveGps ? format(new Date(validTracking[0].created_at), 'HH:mm:ss') : null;
+        const lastTimeStr = hasLiveGps ? format(new Date(validTracking[0].created_at), 'HH:mm:ss') : null;
 
         if (lat === null || lng === null) {
           const routes = jo.routes || [];

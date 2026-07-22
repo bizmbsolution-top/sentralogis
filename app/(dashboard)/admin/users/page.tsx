@@ -154,7 +154,7 @@ export default function UserManagementPage() {
       setOrganizations(oData || []);
 
       // 4. Fetch Warehouses
-      let whQuery = supabase.from('md_warehouses').select('id, name, organization_id').eq('is_active', true);
+      const whQuery = supabase.from('md_warehouses').select('id, name, organization_id').eq('is_active', true);
       const { data: wData } = await whQuery;
       setWarehouses(wData || []);
 

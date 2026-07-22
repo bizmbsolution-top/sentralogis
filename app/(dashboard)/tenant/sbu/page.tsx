@@ -58,7 +58,7 @@ export default function TenantSBUConfigPage() {
 
       // Fetch staff count per SBU
       const sbuIds = (data || []).map((s: any) => s.id);
-      let staffCounts: Record<string, number> = {};
+      const staffCounts: Record<string, number> = {};
       if (sbuIds.length > 0) {
         const { data: staffData } = await supabase
           .from('tenant_users')

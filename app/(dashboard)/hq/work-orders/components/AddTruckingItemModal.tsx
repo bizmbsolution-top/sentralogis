@@ -307,6 +307,7 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
 
     onAdd({
       sbu_type: 'TRUCKING',
+      quantity: formData.unit_count,
       unit_price: formData.deal_price,
       total_revenue: estRevenue,
       item_data: {
@@ -333,7 +334,7 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
       <Card className="w-full max-w-6xl max-h-[95vh] overflow-y-auto shadow-2xl border-none !rounded-[2.5rem] p-0">
         <div className="p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20">
           <div className="flex items-center gap-4">

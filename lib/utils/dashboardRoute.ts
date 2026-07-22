@@ -47,6 +47,12 @@ export const getDashboardRoute = (role: string, isMobile: boolean = false) => {
       return '/sbu/warehouse/finances';
     case 'sbu_fin_fwd':
       return '/sbu/forwarding/finances';
+    case 'sbu_manager_fwd':
+    case 'sbu_ops_fwd':
+    case 'sbu_admin_fwd':
+      return '/sbu/forwarding/wo';
+    case 'cs_forwarding':
+      return '/sbu/forwarding/wo';
     case 'driver':
       return '/driver/jobs';
     case 'warehouse_customer':

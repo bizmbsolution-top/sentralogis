@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { generateWONumber } from '@/lib/utils/woNumber';
 import AddTruckingItemModal from './AddTruckingItemModal';
 import AddWarehouseItemModal from './AddWarehouseItemModal';
+import AddForwardingItemModal from './AddForwardingItemModal';
 import ContactFormModal from '@/components/master/ContactFormModal';
 
 interface CreateWOFormProps {
@@ -282,9 +283,10 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
   const handleAddItem = (item: any) => {
     if (editingItem) {
-      setWoItems(woItems.map(i => i.id === editingItem.id ? { ...item, id: editingItem.id } : i));
+      setWoItems(prev => prev.map(i => i.id === editingItem.id ? { ...item, id: editingItem.id } : i));
     } else {
-      setWoItems([...woItems, { ...item, id: Math.random().toString(36).substr(2, 9) }]);
+      const newId = Math.random().toString(36).substr(2, 9);
+      setWoItems(prev => [...prev, { ...item, id: newId }]);
     }
     setActiveSBUModal(null);
     setEditingItem(null);
@@ -316,6 +318,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     }
 
     setSubmitting(status === 'draft' ? 'draft' : 'submit');
+    let step = 'init';
     try {
       let woNumber = '';
       let woId = editId;
@@ -323,6 +326,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       const tenantInitial = profile?.tenant_code || (profile?.tenants as any)?.tenant_code || (profile?.tenants as any)?.name || 'HQ';
 
       if (editId) {
+        step = 'fetch-existing-wo';
         const { data: existingWO } = await supabase.from('work_orders').select('wo_number').eq('id', editId).single();
         woNumber = existingWO?.wo_number || '';
       } else {
@@ -345,15 +349,17 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       };
 
       if (editId) {
+        step = 'update-work-order';
         let { error } = await supabase.from('work_orders').update(payload).eq('id', editId);
-        if (error && /42703.*order_time/i.test(error.message || '')) {
+        if (error && /order_time/i.test(error.message || '')) {
           const { order_time, ...safePayload } = payload;
           ({ error } = await supabase.from('work_orders').update(safePayload).eq('id', editId));
         }
         if (error) throw error;
       } else {
+        step = 'insert-work-order';
         let { data: wo, error } = await supabase.from('work_orders').insert(payload).select().single();
-        if (error && /42703.*order_time/i.test(error.message || '')) {
+        if (error && /order_time/i.test(error.message || '')) {
           const { order_time, ...safePayload } = payload;
           ({ data: wo, error } = await supabase.from('work_orders').insert(safePayload).select().single());
         }
@@ -392,6 +398,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         let woItemId = item.id;
 
         if (isExistingItem) {
+          step = `update-wo-item-${index}`;
           // UPDATE existing wo_item cleanly without deleting or resetting child job orders!
           const { error: updateItemError } = await supabase
             .from('wo_items')
@@ -408,6 +415,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           if (updateItemError) throw updateItemError;
           woItemId = item.id;
         } else {
+          step = `insert-wo-item-${index}`;
           // INSERT new wo_item
           const { data: woItem, error: itemError } = await supabase
             .from('wo_items')
@@ -455,6 +463,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         }
 
         if (item.sbu_type === 'TRUCKING' && item.item_data.stops) {
+          step = `trucking-jo-${index}`;
           const unitCount = item.item_data.unit_count || 1;
           let existingJOs: any[] = [];
           if (isExistingItem) {
@@ -503,13 +512,14 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
             // Update job_routes (Stops / Locations) for this Job Order so driver gets updated destination stop!
             if (jobOrderId) {
+              step = `trucking-routes-${index}-${i}`;
               await supabase.from('job_routes').delete().eq('job_order_id', jobOrderId);
               const routePayloads = (item.item_data.stops || []).map((stop: any) => ({
                 job_order_id: jobOrderId,
                 sequence: stop.sequence || 0,
                 stop_type: stop.stop_type || 'DROPOFF',
                 source_type: stop.source_type || 'MD_LOCATION',
-                source_id: String(stop.source_id || ''),
+                source_id: stop.source_type === 'MD_LOCATION' || stop.source_type === 'MD_CONTACT_ADDRESS' ? stop.source_id : null,
                 location_name: stop.location_name || 'Unknown Location',
                 address: stop.address || '',
                 latitude: stop.latitude,
@@ -535,6 +545,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         // AUTO-SPLIT JOB ORDERS FOR WAREHOUSE (HYBRID PATTERN)
         if (item.sbu_type === 'WAREHOUSE') {
+          step = `warehouse-jo-${index}`;
           const hasManifests = item.manifests && Array.isArray(item.manifests) && item.manifests.length > 0;
           const allManifestsHaveLocation = hasManifests && item.manifests.every(
             (m: any) => m.location_code && m.location_code !== '-' && m.location_code !== ''
@@ -665,8 +676,22 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       toast.success(editId ? 'Perubahan berhasil disimpan' : 'Berhasil disimpan');
       onBack();
     } catch (err: any) {
-      console.error('SUBMIT FATAL ERROR:', err);
-      toast.error(err.message || 'Gagal menyimpan Work Order.');
+      console.error('=== SUBMIT DIAGNOSTICS ===');
+      console.error('Step when error occurred:', step);
+      console.error('typeof err:', typeof err);
+      console.error('err === null:', err === null);
+      console.error('err === undefined:', err === undefined);
+      console.error('Object.keys(err):', Object.keys(err));
+      console.error('Object.getOwnPropertyNames(err):', Object.getOwnPropertyNames(err));
+      console.error('err?.message:', err?.message);
+      console.error('err?.code:', err?.code);
+      console.error('err?.details:', err?.details);
+      console.error('err?.hint:', err?.hint);
+      console.error('err?.toString():', err?.toString());
+      console.error('err?.stack:', err?.stack);
+      try { console.error('JSON:', JSON.stringify(err, Object.getOwnPropertyNames(err).concat('message'))); } catch {}
+      console.error('=== END DIAGNOSTICS ===');
+      toast.error(err?.message || `Gagal menyimpan Work Order (step: ${step}).`);
     } finally {
       setSubmitting(null);
     }
@@ -923,18 +948,32 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
                   <Card key={item.id} className="p-6 border-slate-200 shadow-none !rounded-[2rem] hover:border-slate-400 transition-all group relative overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div className="flex items-start gap-4">
-                        <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 shadow-lg ${item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600 text-white shadow-amber-600/20' : 'bg-blue-600 text-white shadow-blue-600/20'}`}>
-                          {item.sbu_type === 'WAREHOUSE' ? <Package size={24} /> : <Truck size={24} />}
+                        <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 shadow-lg ${
+                          item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600 text-white shadow-amber-600/20' :
+                          item.sbu_type === 'FORWARDING' ? 'bg-indigo-600 text-white shadow-indigo-600/20' :
+                          'bg-blue-600 text-white shadow-blue-600/20'
+                        }`}>
+                          {item.sbu_type === 'WAREHOUSE' ? <Package size={24} /> :
+                           item.sbu_type === 'FORWARDING' ? <Globe size={24} /> :
+                           <Truck size={24} />}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[9px] font-black text-white px-2 py-0.5 rounded uppercase tracking-[0.2em] ${item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600' : 'bg-blue-600'}`}>{item.sbu_type}</span>
+                            <span className={`text-[9px] font-black text-white px-2 py-0.5 rounded uppercase tracking-[0.2em] ${
+                              item.sbu_type === 'WAREHOUSE' ? 'bg-amber-600' :
+                              item.sbu_type === 'FORWARDING' ? 'bg-indigo-600' :
+                              'bg-blue-600'
+                            }`}>{item.sbu_type}</span>
                             <span className="text-xs font-black text-black uppercase tracking-wider">{item.item_data?.unit_count || 1} Units</span>
                           </div>
                           
                           {item.sbu_type === 'WAREHOUSE' ? (
                             <div className="mt-2 text-sm font-bold text-black">
                                {item.item_data?.operation_type || 'Warehouse Task'} | {item.item_data?.est_volume_cbm || 0} CBM
+                            </div>
+                          ) : item.sbu_type === 'FORWARDING' ? (
+                            <div className="mt-2 text-sm font-bold text-black">
+                               {item.item_data?.service_type || 'FCL'} | {item.item_data?.origin_port_name || '?'} → {item.item_data?.destination_port_name || '?'}
                             </div>
                           ) : (
                             <div className="text-sm font-bold text-black mt-1">
@@ -989,10 +1028,10 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
               <div className="space-y-3 pt-4">
                 {!isReadOnly && (
                   <>
-                    <button onClick={() => handleSubmit('need_assignment')} className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-500 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                    <button onClick={() => handleSubmit('need_assignment')} disabled={submitting !== null} className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-500 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
                        {submitting === 'submit' ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} SUBMIT TO SBU
                     </button>
-                    <button onClick={() => handleSubmit('draft')} className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 transition-all flex items-center justify-center gap-3">
+                    <button onClick={() => handleSubmit('draft')} disabled={submitting !== null} className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
                        {submitting === 'draft' ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} SAVE AS DRAFT
                     </button>
                   </>
@@ -1015,6 +1054,20 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         
         {activeSBUModal === 'WAREHOUSE' && (
            <AddWarehouseItemModal 
+             initialData={editingItem}
+             customerId={formData.customer_id}
+             defaultExecutionDate={formData.execution_date}
+             defaultExecutionTime={formData.execution_time}
+             onClose={() => {
+               setActiveSBUModal(null);
+               setEditingItem(null);
+             }} 
+             onAdd={handleAddItem} 
+           />
+        )}
+
+        {activeSBUModal === 'FORWARDING' && (
+           <AddForwardingItemModal 
              initialData={editingItem}
              customerId={formData.customer_id}
              defaultExecutionDate={formData.execution_date}

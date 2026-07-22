@@ -153,7 +153,7 @@ export async function GET() {
     const activeJobFleetIds = new Set((activeJobs.data || []).map(j => j.fleet_id).filter(Boolean));
 
     const stuckDrivers = (onDutyDrivers.data || []).filter(d => !activeJobDriverIds.has(d.id));
-    const stuckFleets = (onRoadFleets.data || []).filter(f => !activeJobFleetIds.has(f.id));
+    const stuckFleets = (activeFleets.data || []).filter(f => !activeJobFleetIds.has(f.id));
 
     return NextResponse.json({
       success: true,

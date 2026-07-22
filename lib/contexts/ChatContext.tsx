@@ -281,7 +281,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     console.log('[FetchChannels] Raw data:', data);
 
     const channels: Channel[] = await Promise.all(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (data || []).map(async (row: any) => {
         const chan = row.chat_channels;
         // Fetch group info separately to avoid join issues

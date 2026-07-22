@@ -88,9 +88,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         receipt = data;
       }
 
-      let fleetPlate = receipt?.fleet?.plate_number || shipment?.fleet?.plate_number || null;
-      let driverName = receipt?.driver?.name || receipt?.driver_name_manual || shipment?.driver?.name || null;
-      let transporterName = receipt?.transporter?.name || receipt?.transporter_name_manual || shipment?.transporter?.name || null;
+      const fleetPlate = receipt?.fleet?.plate_number || shipment?.fleet?.plate_number || null;
+      const driverName = receipt?.driver?.name || receipt?.driver_name_manual || shipment?.driver?.name || null;
+      const transporterName = receipt?.transporter?.name || receipt?.transporter_name_manual || shipment?.transporter?.name || null;
 
       // Calculate Qty Metrics
       let expectedQty = 0;

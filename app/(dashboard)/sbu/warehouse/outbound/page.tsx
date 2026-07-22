@@ -121,7 +121,7 @@ export default function SBUOutboundPage() {
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
 
   const tenantId = useMemo(() => {
-    let tid = profile?.tenant_id;
+    const tid = profile?.tenant_id;
     if (!tid && (profile?.role?.startsWith('hq_') || profile?.role === 'owner_sentralogis')) {
       return null;
     }

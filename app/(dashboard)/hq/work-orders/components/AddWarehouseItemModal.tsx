@@ -145,7 +145,7 @@ export default function AddWarehouseItemModal({
 
           if (!error && data) {
             // Filter by search term on product name or SKU code
-            let filtered = data.filter((item: any) => {
+            const filtered = data.filter((item: any) => {
               const sku = item.product_sku;
               if (!sku) return false;
               const q = skuSearch.toLowerCase();

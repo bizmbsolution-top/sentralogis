@@ -194,7 +194,7 @@ export default function HQWorkOrdersPage() {
 
 // [AI] Fetch latest audit log for each WO to get last user initials
          const woIds = wos.map(w => w.id);
-         let latestLogs: Record<string, any> = {};
+         const latestLogs: Record<string, any> = {};
          if (woIds.length > 0) {
            const { data: logs } = await supabase.from('wo_audit_logs')
              .select('entity_id, performed_by')

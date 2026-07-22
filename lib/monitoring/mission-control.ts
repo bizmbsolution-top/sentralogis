@@ -37,7 +37,7 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
   const wms: WmsMetrics = { low_stock: 0, negative_stock: 0, pending_picking: 0, pending_putaway: 0, inbound_today: 0, outbound_today: 0 };
   const forwarding: ForwardingMetrics = { active_shipment: 0, delayed_shipment: 0, missing_documents: 0, customs_pending: 0, container_tracking_lost: 0 };
   let audit_logs: Array<Record<string, unknown>> = [];
-  let errors: ErrorEntry[] = [];
+  const errors: ErrorEntry[] = [];
   const workflows: WorkflowStep[] = [
     { step: 'WO Created', status: 'completed', count: 0 },
     { step: 'JO Created', status: 'completed', count: 0 },

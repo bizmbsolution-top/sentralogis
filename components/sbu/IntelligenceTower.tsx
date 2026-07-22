@@ -109,13 +109,19 @@ export default function IntelligenceTower() {
         const driverIds = [...new Set(activeJos.map(j => j.driver_id).filter(Boolean))];
         const fleetIds = [...new Set(activeJos.map(j => j.fleet_id).filter(Boolean))];
 
-        const [driversRes, fleetsRes, routesRes, trackingRes, docsRes] = await Promise.all([
+        const [driversRes, fleetsRes, routesRes, trackingRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] },
           fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name, icon_url)').in('id', fleetIds) : { data: [] },
           supabase.from('job_routes').select('*').in('job_order_id', joIds).order('sequence', { ascending: true }),
           supabase.from('job_tracking').select('*').in('job_order_id', joIds).order('created_at', { ascending: false }),
-          supabase.from('documents').select('*').in('job_order_id', joIds)
         ]);
+
+        let docsRes: any = { data: null };
+        try {
+          docsRes = await supabase.from('documents').select('*').in('job_order_id', joIds);
+        } catch (_) {
+          docsRes = { data: null };
+        }
 
         const processedJos = activeJos.map(jo => {
           const joDriver = driversRes.data?.find(d => d.id === jo.driver_id);

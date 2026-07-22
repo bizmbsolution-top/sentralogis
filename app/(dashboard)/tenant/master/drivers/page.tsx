@@ -138,7 +138,7 @@ export default function DriversPage() {
         if (error) throw error;
         toast.success('Data pengemudi berhasil diupdate');
       } else {
-        let code = await generateDriverCode();
+        const code = await generateDriverCode();
         let { error } = await supabase
           .from('md_drivers')
           .insert({

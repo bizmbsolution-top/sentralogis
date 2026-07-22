@@ -23,8 +23,8 @@ export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2:
 
   const y = Math.sin(deltaLambda) * Math.cos(phi2);
   const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
-  let theta = Math.atan2(y, x);
-  let bearing = (toDeg(theta) + 360) % 360;
+  const theta = Math.atan2(y, x);
+  const bearing = (toDeg(theta) + 360) % 360;
 
   return Math.round(bearing);
 }
@@ -76,9 +76,9 @@ export function getVehicleTopDownMarkerIcon(
   let svgContent = '';
 
   // Determine color theme by status/SBU if not explicitly passed
-  let primaryColor = statusColor;
-  let cabinColor = '#1e293b'; // Dark slate cabin
-  let accentColor = '#38bdf8'; // Glowing cyan window/headlights
+  const primaryColor = statusColor;
+  const cabinColor = '#1e293b'; // Dark slate cabin
+  const accentColor = '#38bdf8'; // Glowing cyan window/headlights
 
   if (name.includes('trailer') || name.includes('container') || name.includes('40ft') || name.includes('20ft') || name.includes('gandeng')) {
     // 🚚 LONG TRAILER CONTAINER (Top-down tractor cabin + long ribbed container box)

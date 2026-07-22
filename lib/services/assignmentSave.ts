@@ -278,7 +278,7 @@ export async function saveAssignments(
       return {
         success: true,
         savedCount: assignments.filter((a) => !isEmptySlot(a)).length,
-        woItemStatus: 'pending',
+        woItemStatus: 'need_assignment',
         isHandoverFlow: false,
       };
     }
@@ -416,11 +416,14 @@ export async function saveAssignments(
 
     const successfulAssignments = actualJOs?.length || 0;
     const allUnitsAssigned = successfulAssignments >= effectiveUnitCount;
+
+    // [FIX] When not all units are assigned, keep status as 'need_assignment'
+    // so the item stays in "Need Assignment" tab and can be edited
     const newStatus = isHandoverFlow
       ? woItem.status
       : allUnitsAssigned
         ? 'assigned'
-        : 'pending';
+        : 'need_assignment';
 
     const currentItemData = parseItemData(woItem.item_data) as unknown as Record<string, unknown>;
     const updatePayload: { status: string; item_data?: Record<string, unknown> } = {
@@ -458,25 +461,26 @@ export async function saveAssignments(
 
     if (woUpdateError) throw woUpdateError;
 
+    // [FIX] Only update parent WO status when ALL items are truly assigned
+    // "need_assignment" items should NOT trigger parent WO to move to 'assigned'
+    // Only "assigned" or more advanced statuses should count
     const { data: siblingItems } = await supabase
       .from('wo_items')
       .select('status')
       .eq('wo_id', woItem.wo_id);
 
-    const allAssigned = siblingItems?.every((i) =>
+    const siblingAssignedCount = siblingItems?.filter((i) =>
       ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress', 'completed'].includes(
         (i.status || '').toLowerCase()
       )
-    );
+    ).length || 0;
 
-    const anyAssigned = siblingItems?.some((i) =>
-      ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress', 'completed'].includes(
-        (i.status || '').toLowerCase()
-      )
-    ) || newStatus === 'assigned' || successfulAssignments > 0;
+    const totalSiblingItems = siblingItems?.length || 1;
+    const allSiblingsAssigned = siblingAssignedCount >= totalSiblingItems && totalSiblingItems > 0;
 
-    if (allAssigned || anyAssigned) {
-      // Fetch current wo status so we sync out of draft/need_assignment when any units are assigned
+    // Only set parent WO to 'assigned' when ALL sibling items are assigned
+    // Do NOT trigger on 'need_assignment' or partial assignments
+    if (allSiblingsAssigned && !isHandoverFlow) {
       const { data: parentWo } = await supabase
         .from('work_orders')
         .select('status')
@@ -484,10 +488,11 @@ export async function saveAssignments(
         .single();
 
       const currentParentStatus = (parentWo?.status || '').toLowerCase();
-      if (allAssigned || ['draft', 'pending', 'need_assignment'].includes(currentParentStatus)) {
+      // Only transition from draft/pending/need_assignment to assigned
+      if (['draft', 'pending', 'need_assignment'].includes(currentParentStatus)) {
         await supabase
           .from('work_orders')
-          .update({ status: allAssigned ? 'assigned' : 'assigned' })
+          .update({ status: 'assigned' })
           .eq('id', woItem.wo_id);
       }
     }
@@ -495,7 +500,7 @@ export async function saveAssignments(
     return {
       success: true,
       savedCount: successfulAssignments,
-      woItemStatus: newStatus,
+      woItemStatus: allUnitsAssigned ? 'assigned' : 'need_assignment',
       isHandoverFlow,
     };
   } catch (err: unknown) {

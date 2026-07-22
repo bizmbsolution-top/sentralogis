@@ -28,7 +28,7 @@ export default function LoginPage() {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let particles: Array<{
+    const particles: Array<{
       x: number;
       y: number;
       vx: number;
@@ -69,7 +69,7 @@ export default function LoginPage() {
       });
     }
 
-    let mouse = { x: -1000, y: -1000 };
+    const mouse = { x: -1000, y: -1000 };
 
     const handleMouseMove = (e: MouseEvent) => {
       mouse.x = e.clientX;

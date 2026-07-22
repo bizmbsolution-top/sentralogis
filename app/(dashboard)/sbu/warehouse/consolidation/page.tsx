@@ -146,7 +146,7 @@ export default function ParcelConsolidationPage() {
 
     try {
       setSubmitting(true);
-      let tenantId = profile?.tenant_id || '';
+      const tenantId = profile?.tenant_id || '';
       let whId = profile?.warehouse_id || '';
       
       if (!whId && locations.length > 0) {
@@ -207,8 +207,8 @@ export default function ParcelConsolidationPage() {
 
     try {
       setSubmitting(true);
-      let tenantId = profile?.tenant_id || '00000000-0000-0000-0000-000000000000';
-      let whId = profile?.warehouse_id || '00000000-0000-0000-0000-000000000000';
+      const tenantId = profile?.tenant_id || '00000000-0000-0000-0000-000000000000';
+      const whId = profile?.warehouse_id || '00000000-0000-0000-0000-000000000000';
       const staffName = profile?.full_name || profile?.email || 'Staf Gudang';
 
       // Collect unique parcel IDs from expanded selection

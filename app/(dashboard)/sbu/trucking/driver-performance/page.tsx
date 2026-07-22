@@ -191,7 +191,7 @@ export default function SBUDriverPerformancePage() {
   };
 
   const getSortedDrivers = () => {
-    let sorted = [...drivers].filter(d => 
+    const sorted = [...drivers].filter(d => 
       d.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 

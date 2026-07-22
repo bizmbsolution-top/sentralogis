@@ -1,0 +1,771 @@
+You are a world-class team consisting of:
+
+- Creative Director
+- Enterprise UX Architect
+- Product Designer
+- Brand Strategist
+- Motion Designer
+- Frontend Architect
+- Three.js Engineer
+- Conversion Optimization Expert
+
+Design and build a premium enterprise landing page for:
+
+SENTRALOGIS
+
+Tagline:
+
+"The Enterprise Operating System for Modern Logistics"
+
+========================================================
+
+CORE POSITIONING
+
+========================================================
+
+Sentralogis is NOT:
+
+- Transportation Management System
+- Warehouse Management System
+- Freight Forwarding Software
+- Customs Software
+- ERP
+
+Sentralogis is:
+
+"An Enterprise Operating System for the Logistics Ecosystem."
+
+A platform where:
+
+People
+AI
+Operations
+Knowledge
+Data
+Finance
+Partners
+
+work together as one intelligent system.
+
+The website must immediately communicate:
+
+"This is not another logistics software."
+
+========================================================
+
+EMOTIONAL GOAL
+
+========================================================
+
+Visitors should feel:
+
+Wonder
+Trust
+Intelligence
+Scale
+Innovation
+Enterprise Readiness
+Future Possibility
+
+The experience should feel like:
+
+Apple
+Stripe
+Linear
+OpenAI
+Palantir
+Tesla
+
+Combined together.
+
+Minimal.
+
+Elegant.
+
+Premium.
+
+Timeless.
+
+Never feel like traditional logistics software.
+
+========================================================
+
+VISUAL JOURNEY
+
+========================================================
+
+The website is a journey.
+
+Section 1:
+Universe
+
+↓
+
+Section 2:
+Business Events
+
+↓
+
+Section 3:
+Knowledge
+
+↓
+
+Section 4:
+Business Capabilities
+
+↓
+
+Section 5:
+Operations Platform
+
+↓
+
+Section 6:
+AI Workforce
+
+↓
+
+Section 7:
+Enterprise Intelligence
+
+↓
+
+Section 8:
+Connected Ecosystem
+
+↓
+
+Section 9:
+Future of Logistics
+
+The visitor travels from chaos to intelligence.
+
+========================================================
+
+HERO EXPERIENCE
+
+========================================================
+
+The hero section is the signature identity of Sentralogis.
+
+Height:
+
+100vh
+
+Dark background.
+
+Deep space environment.
+
+No trucks.
+
+No containers.
+
+No warehouse photos.
+
+No maps.
+
+No generic logistics visuals.
+
+========================================================
+
+ENTERPRISE INTELLIGENCE GALAXY
+
+========================================================
+
+Create a living galaxy.
+
+The galaxy represents an enterprise.
+
+Every particle represents:
+
+- Business Event
+- Order
+- Shipment
+- Inventory Activity
+- Customer Interaction
+- Operational Activity
+- Financial Transaction
+- AI Signal
+- Knowledge Signal
+
+Millions of events become one intelligent system.
+
+Particles move continuously.
+
+Movement feels intentional.
+
+Not random.
+
+The universe feels alive.
+
+The universe feels intelligent.
+
+========================================================
+
+PARTICLE PHILOSOPHY
+
+========================================================
+
+Particle = Business Event
+
+Connection = Knowledge
+
+Orbit = Collaboration
+
+Cluster = Intelligence
+
+Galaxy = Enterprise
+
+Mouse = Human Intention
+
+AI = Gravitational Force
+
+Insight = Organized Knowledge
+
+========================================================
+
+INTERACTION DESIGN
+
+========================================================
+
+Desktop:
+
+Mouse movement attracts particles.
+
+Particles orbit gracefully.
+
+Connections appear.
+
+Temporary constellations form.
+
+Smooth premium movement.
+
+No gaming effects.
+
+No explosions.
+
+No aggressive physics.
+
+Elegant only.
+
+========================================================
+
+INSIGHT MOMENT
+
+========================================================
+
+After 1 second of no mouse movement:
+
+Particles begin gathering.
+
+Clusters merge.
+
+Energy lines appear.
+
+Motion slows.
+
+A bright nucleus forms.
+
+The galaxy becomes calm.
+
+For a brief moment:
+
+A subtle "S" shape emerges.
+
+Not a logo reveal.
+
+Not obvious.
+
+Almost subconscious.
+
+Then the galaxy slowly returns to its natural state.
+
+Philosophy:
+
+"When human intention stops searching,
+knowledge organizes itself into insight."
+
+========================================================
+
+MOBILE EXPERIENCE
+
+========================================================
+
+Do NOT replicate desktop effects.
+
+Mobile requires a dedicated experience.
+
+Touch interaction replaces mouse interaction.
+
+Touch creates:
+
+- soft ripple
+- particle attraction
+- temporary clustering
+
+Use visual illusion rather than brute-force rendering.
+
+Maintain premium feel.
+
+Maintain battery efficiency.
+
+Maintain smooth performance.
+
+========================================================
+
+PROGRESSIVE ENHANCEMENT
+
+========================================================
+
+Automatically detect device capability.
+
+Tier 1:
+
+Desktop High-End
+
+20,000–50,000 particles
+
+Full experience
+
+------------------------------------------------
+
+Tier 2:
+
+Modern Laptop
+
+8,000–12,000 particles
+
+Reduced effects
+
+------------------------------------------------
+
+Tier 3:
+
+Tablet
+
+2,000–4,000 particles
+
+Simplified interaction
+
+------------------------------------------------
+
+Tier 4:
+
+Mobile
+
+500–1,000 particles
+
+Lightweight mode
+
+------------------------------------------------
+
+Never force high-end rendering on low-end devices.
+
+========================================================
+
+PERFORMANCE RULES
+
+========================================================
+
+Use:
+
+React Three Fiber
+
+Three.js
+
+Instanced Rendering
+
+GPU Acceleration
+
+Framer Motion
+
+Lazy Loading
+
+Intersection Observer
+
+Adaptive Rendering
+
+Render only while visible.
+
+Pause animation when hero leaves viewport.
+
+Reduce activity when tab is inactive.
+
+Support:
+
+prefers-reduced-motion
+
+Target:
+
+60 FPS desktop
+
+30+ FPS mobile
+
+Lighthouse Score > 90
+
+========================================================
+
+HERO CONTENT
+
+========================================================
+
+Headline:
+
+The Enterprise Operating System for Modern Logistics
+
+Subheadline:
+
+One platform connecting Transportation, Warehouse, Freight Forwarding, Customs Clearance, Exchange, Capital, Customer Success, Intelligence and AI.
+
+CTA Primary:
+
+Request Enterprise Demo
+
+CTA Secondary:
+
+Watch Vision
+
+========================================================
+
+SECTION
+
+WHY SENTRALOGIS
+
+========================================================
+
+Traditional Systems
+
+TMS
+
+WMS
+
+ERP
+
+CRM
+
+Spreadsheet
+
+Email
+
+WhatsApp
+
+↓
+
+Disconnected
+
+Reactive
+
+Siloed
+
+Slow
+
+Sentralogis
+
+↓
+
+Connected
+
+Intelligent
+
+Collaborative
+
+AI Powered
+
+Enterprise Ready
+
+========================================================
+
+SECTION
+
+ENTERPRISE OPERATING SYSTEM
+
+========================================================
+
+Interactive animated architecture diagram.
+
+Center:
+
+Business Capability
+
+Connected Domains:
+
+Operations
+
+Exchange
+
+Capital
+
+Customer Success
+
+Intelligence
+
+AI Copilot
+
+========================================================
+
+SECTION
+
+OPERATIONS PLATFORM
+
+========================================================
+
+Transportation Management
+
+Warehouse Management
+
+Freight Forwarding
+
+Customs Clearance
+
+Fleet
+
+Driver
+
+Container
+
+Shipment
+
+Inventory
+
+Booking
+
+Tracking
+
+Operational Workspace
+
+Operational Journal
+
+========================================================
+
+SECTION
+
+AI DIGITAL WORKFORCE
+
+========================================================
+
+AI Dispatcher
+
+AI Warehouse Planner
+
+AI Documentation Assistant
+
+AI Customer Assistant
+
+AI Finance Copilot
+
+AI Risk Advisor
+
+AI Knowledge Agent
+
+AI Decision Assistant
+
+========================================================
+
+SECTION
+
+KNOWLEDGE PLATFORM
+
+========================================================
+
+Operational Journal
+
+Lessons Learned
+
+Enterprise Knowledge
+
+Business Events
+
+Conversation
+
+Decision History
+
+Continuous Learning
+
+========================================================
+
+SECTION
+
+ENTERPRISE INTELLIGENCE
+
+========================================================
+
+Business Health Score
+
+Operational Health
+
+Customer Health
+
+Financial Health
+
+Network Health
+
+Predictive Analytics
+
+AI Recommendations
+
+========================================================
+
+SECTION
+
+CONNECTED ECOSYSTEM
+
+========================================================
+
+Customer
+
+Carrier
+
+Warehouse
+
+Forwarder
+
+Shipping Line
+
+Airline
+
+Customs
+
+Government
+
+Bank
+
+Insurance
+
+Marketplace
+
+AI
+
+All connected.
+
+========================================================
+
+SECTION
+
+ARCHITECTURE PRINCIPLES
+
+========================================================
+
+Business Before Software
+
+Human First
+
+Intent Before Interface
+
+Workspace Before Menu
+
+Event Before Database
+
+Knowledge Before Reporting
+
+Conversation as Business Object
+
+Operational Journal
+
+Continuous Improvement
+
+AI as Operational Copilot
+
+========================================================
+
+SECTION
+
+EVOLUTION ROADMAP
+
+========================================================
+
+Digital Foundation
+
+↓
+
+Connected Enterprise
+
+↓
+
+Intelligent Enterprise
+
+↓
+
+Autonomous Enterprise
+
+↓
+
+Logistics Network Platform
+
+========================================================
+
+FINAL CTA
+
+========================================================
+
+Headline:
+
+Build the Future of Logistics
+
+Subheadline:
+
+Don't buy another software.
+
+Build your enterprise on Sentralogis.
+
+Button:
+
+Request Enterprise Demo
+
+========================================================
+
+FOOTER
+
+========================================================
+
+Minimal
+
+Elegant
+
+Enterprise
+
+Dark Mode
+
+Product
+
+Solutions
+
+Architecture
+
+Security
+
+Developers
+
+Company
+
+Contact
+
+========================================================
+
+FINAL SUCCESS CRITERIA
+
+========================================================
+
+When a CEO visits the website, they should think:
+
+"This is not another logistics software."
+
+"This feels like the future."
+
+"This is the operating system our enterprise has been missing."
+
+When an investor visits:
+
+"This platform can evolve for the next 10 years."
+
+When a logistics operator visits:
+
+"This platform understands how logistics actually works."
+
+When a technology leader visits:
+
+"This architecture is built for scale."
+
+The website must sell a vision, not features.
+
+The website must feel like an Enterprise Operating System coming to life.

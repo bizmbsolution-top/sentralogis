@@ -45,6 +45,8 @@ export default function HQFleetTypesPage() {
     fuel_consumption: 1.0,
     icon_url: '',
   });
+  const [timeMultiplierRaw, setTimeMultiplierRaw] = useState('1.0');
+  const [fuelConsumptionRaw, setFuelConsumptionRaw] = useState('1.0');
 
   // Sync tenant info
   useEffect(() => {
@@ -150,8 +152,8 @@ export default function HQFleetTypesPage() {
         type_name: formData.type_name,
         capacity_ton: formData.capacity_ton,
         capacity_cbm: formData.capacity_cbm,
-        time_multiplier: formData.time_multiplier,
-        fuel_consumption: formData.fuel_consumption,
+        time_multiplier: parseFloat(timeMultiplierRaw.replace(',', '.')) || 1.0,
+        fuel_consumption: parseFloat(fuelConsumptionRaw.replace(',', '.')) || 1.0,
         is_active: formData.is_active,
         icon_url: formData.icon_url,
       };
@@ -249,6 +251,8 @@ export default function HQFleetTypesPage() {
         is_active: type.is_active,
         icon_url: type.icon_url || '',
       });
+      setTimeMultiplierRaw(String(type.time_multiplier ?? 1.0));
+      setFuelConsumptionRaw(String(type.fuel_consumption ?? 1.0));
     } else {
       setSelectedType(null);
       setFormData({
@@ -260,6 +264,8 @@ export default function HQFleetTypesPage() {
         is_active: true,
         icon_url: '',
       });
+      setTimeMultiplierRaw('1.0');
+      setFuelConsumptionRaw('1.0');
     }
     setIsModalOpen(true);
   };
@@ -346,7 +352,7 @@ export default function HQFleetTypesPage() {
                     <td className="px-4 py-4 font-medium text-slate-900">{ft.type_name}</td>
                     <td className="px-4 py-4 text-slate-600">{ft.capacity_ton} Ton</td>
                     <td className="px-4 py-4 text-center font-bold text-blue-600">{ft.time_multiplier}x</td>
-                    <td className="px-4 py-4 text-center font-bold text-emerald-600">1:{ft.fuel_consumption}</td>
+                    <td className="px-4 py-4 text-center font-bold text-emerald-600">{ft.fuel_consumption}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${ft.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                         {ft.is_active ? 'Active' : 'Inactive'}
@@ -429,20 +435,20 @@ export default function HQFleetTypesPage() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Time Multiplier (x)</label>
                   <input 
-                    type="number" 
-                    step="0.1"
-                    value={formData.time_multiplier}
-                    onChange={(e) => setFormData({...formData, time_multiplier: parseFloat(e.target.value) || 1.0})}
+                    type="text"
+                    inputMode="decimal"
+                    value={timeMultiplierRaw}
+                    onChange={(e) => setTimeMultiplierRaw(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Fuel Cons. (KM/L)</label>
                   <input 
-                    type="number" 
-                    step="0.1"
-                    value={formData.fuel_consumption}
-                    onChange={(e) => setFormData({...formData, fuel_consumption: parseFloat(e.target.value) || 1.0})}
+                    type="text"
+                    inputMode="decimal"
+                    value={fuelConsumptionRaw}
+                    onChange={(e) => setFuelConsumptionRaw(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
                   />
                 </div>

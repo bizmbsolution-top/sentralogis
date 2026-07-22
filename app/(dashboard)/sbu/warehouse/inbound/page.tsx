@@ -87,7 +87,7 @@ export default function InboundReceivingPage() {
         setSelectedWarehouse(whId);
       }
 
-      let query = supabase
+      const query = supabase
         .from('wh_inbound_receipts')
         .select(`
           id, receipt_number, status, expected_arrival, created_at,

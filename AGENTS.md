@@ -12,6 +12,14 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - Box foto SIM/KTP/STNK diperbesar (h-20 → h-40)
 - PRD SBU Forwarding dibuat (`190726.md`)
 - Migration `170_add_driver_document_photos.sql`
+- **[NEW] Integrasi Forwarding modal ke HQ Create WO Form** (`CreateWOForm.tsx`)
+  - Import & render `AddForwardingItemModal` saat SBU FORWARDING dipilih
+  - WO items list menampilkan Globe icon + indigo color untuk forwarding items
+- **[NEW] AddForwardingItemModal** (`app/(dashboard)/hq/work-orders/components/AddForwardingItemModal.tsx`)
+  - Form: Service Type (FCL/LCL), Delivery Type (D2D/P2P/D2P/P2D), Origin/Destination Port dari `md_locations`, Container Type, Unit Count, Rate
+  - Auto-populate harga dari `fw_price_master` saat route cocok
+  - **Hybrid Address**: Pickup & Delivery address — toggle Customer Location (dropdown dari `md_entity_addresses`) atau Google Maps autocomplete
+  - Contact name & phone per address
 
 ### In Progress
 - (none)
@@ -26,6 +34,9 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - Cargo owner tracking via `/track/fwd/[token]` public page
 - Driver coin reward: 1 koin = Rp 5.000 per job completed
 - Vendor driver cek koin via WA inquiry keyword "KOIN"
+- Origin/Destination Port dropdown ambil dari `md_locations` (master public), bukan `fw_locations`
+- Hybrid Address: Customer Location (`md_entity_addresses`) + Google Maps autocomplete
+- 1 WO item = 1 set pickup/delivery address (untuk LCL tahap awal)
 
 ## Next Steps
 - **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
@@ -55,3 +66,5 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - `app/(dashboard)/hq/master/drivers/page.tsx`: Driver master (sudah +upload SIM/KTP/STNK)
 - `app/(dashboard)/hq/reporting/page.tsx`: Reporting (sudah +vendor filter)
 - `app/(dashboard)/hq/ops-dashboard/page.tsx`: Ops dashboard (JO fulfillment fixed)
+- `app/(dashboard)/hq/work-orders/components/AddForwardingItemModal.tsx`: Modal forwarding HQ (FCL/LCL, hybrid address)
+- `app/(dashboard)/hq/work-orders/components/CreateWOForm.tsx`: WO form (sudah integrasi forwarding)

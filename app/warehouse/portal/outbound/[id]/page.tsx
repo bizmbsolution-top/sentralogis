@@ -132,7 +132,7 @@ export default function OutboundTaskExecutionPage() {
 
         // Init picking entries from saved DB if available
         if (['PLANNED', 'PENDING', 'ASSIGNED', 'PICKING'].includes(shipmentData.status)) {
-           let loadedPicks: any[] = [];
+           const loadedPicks: any[] = [];
            const dbItems = shipmentData.items || [];
            dbItems.forEach((itm: any) => {
              const pe = itm.picking_entries || [];
@@ -229,7 +229,7 @@ export default function OutboundTaskExecutionPage() {
       if (error) throw error;
 
       if (newStatus === 'COMPLETED') {
-        let transferDetailsPayloads: any[] = [];
+        const transferDetailsPayloads: any[] = [];
         // Stock Deduction Logic uses picking_entries saved by the Picker
         const { data: finalItems } = await supabase.from('wh_outbound_shipment_items').select('id, product_sku_id, picking_entries').eq('shipment_id', shipmentId);
         
@@ -659,7 +659,7 @@ export default function OutboundTaskExecutionPage() {
     setUploadingDoc(true);
     try {
       let bastUrl = shipment.bast_url;
-      let sjUrl = shipment.surat_jalan_url;
+      const sjUrl = shipment.surat_jalan_url;
       if (documentFile) {
          const { data, error } = await supabase.storage.from('warehouse_documents').upload(`bast/${shipmentId}_${Date.now()}.pdf`, documentFile);
          if (error) throw error;

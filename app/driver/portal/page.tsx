@@ -549,7 +549,7 @@ export default function DriverPortal() {
     const woItemData = woRes.data || [];
     const woIds = woItemData.map((w: any) => w.wo_id).filter(Boolean);
     
-    let woDataRes = { data: [] as any[] };
+    const woDataRes = { data: [] as any[] };
     if (woIds.length > 0) {
       const { data } = await supabase.from('work_orders').select('id, wo_number').in('id', woIds);
       woDataRes.data = data || [];
