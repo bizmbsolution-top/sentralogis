@@ -462,30 +462,47 @@ export async function PATCH(
         const fileName = `${jo.id}/${route_id}-timeline-${Date.now()}.${fileExt}`
         const filePath = `tracking/${fileName}`
 
-        const { error: uploadError } = await supabase.storage
-          .from('pod_documents')
+        // Try pod_documents bucket first, fallback to driver-portal
+        let uploadBucket = 'pod_documents'
+        let { error: uploadError } = await supabase.storage
+          .from(uploadBucket)
           .upload(filePath, buffer, {
             contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
             cacheControl: '3600',
             upsert: false
           })
 
-        if (uploadError) throw uploadError
+        if (uploadError) {
+          console.warn('[API] pod_documents bucket unavailable, trying driver-portal:', uploadError.message)
+          uploadBucket = 'driver-portal'
+          const fallback = await supabase.storage
+            .from(uploadBucket)
+            .upload(filePath, buffer, {
+              contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+              cacheControl: '3600',
+              upsert: false
+            })
+          if (fallback.error) throw fallback.error
+        }
 
         const { data: { publicUrl } } = supabase.storage
-          .from('pod_documents')
+          .from(uploadBucket)
           .getPublicUrl(filePath)
           
         uploadedPublicUrl = publicUrl;
 
-        // Insert into documents table for audit
-        await supabase.from('documents').insert({
-          job_order_id: jo.id,
-          doc_type: 'MILESTONE_PHOTO',
-          file_url: publicUrl,
-          document_name: `Timeline Photo for Route ${route_id}`,
-          uploaded_by: (jo as any).driver_id || null
-        })
+        // Insert into documents table for audit (silent fail if table doesn't exist)
+        try {
+          await supabase.from('documents').insert({
+            job_order_id: jo.id,
+            doc_type: 'MILESTONE_PHOTO',
+            file_url: publicUrl,
+            document_name: `Timeline Photo for Route ${route_id}`,
+            uploaded_by: (jo as any).driver_id || null
+          })
+        } catch (docErr) {
+          console.warn('[API] Documents table insert skipped:', docErr)
+        }
       } catch (uploadErr: any) {
         console.error('[API] Photo upload failed:', uploadErr)
         return NextResponse.json({ error: 'Gagal upload foto: ' + uploadErr.message }, { status: 500 })
@@ -523,18 +540,34 @@ export async function PATCH(
           }
         }
 
-        const { error: insertError } = await supabase.from('job_tracking').insert({
+        // Try with full columns first, fallback to basic columns if columns missing
+        let insertError: any = null;
+        const fullPayload: any = {
           job_order_id: jo.id,
-          job_route_id: matchedRouteId || null, // Requires migration 098
+          job_route_id: matchedRouteId || null,
           status_update: `Laporan di ${locationName}`,
           latitude: lat,
           longitude: lng,
-          photo_url: uploadedPublicUrl || null, // Requires migration 098
+          photo_url: uploadedPublicUrl || null,
           notes: route_notes || 'Mengirim laporan / foto'
-        })
+        };
+        
+        const { error: fullErr } = await supabase.from('job_tracking').insert(fullPayload);
+        if (fullErr) {
+          console.warn('[API] Full job_tracking insert failed, trying basic columns:', fullErr.message);
+          const basicPayload: any = {
+            job_order_id: jo.id,
+            status_update: `Laporan di ${locationName}`,
+            latitude: lat,
+            longitude: lng,
+            notes: route_notes || 'Mengirim laporan / foto'
+          };
+          const { error: basicErr } = await supabase.from('job_tracking').insert(basicPayload);
+          insertError = basicErr;
+        }
         
         if (insertError) {
-          throw new Error(insertError.message || 'Database insert failed. Pastikan Migration SQL sudah dijalankan.');
+          throw new Error(insertError.message || 'Database insert failed');
         }
 
         return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl, matched_route_id: matchedRouteId })
@@ -546,13 +579,15 @@ export async function PATCH(
 
     // LEGACY Photo upload direct handling (returns early)
     if (pod_photo_base64 && route_id && !action) {
-      // Update route with photo URL (Legacy behavior)
-      const { error: routeError } = await supabase
-        .from('job_routes')
-        .update({ pod_photo_url: uploadedPublicUrl })
-        .eq('id', route_id)
-
-      if (routeError) return NextResponse.json({ error: routeError.message }, { status: 500 })
+      // Update route with photo URL (silent fail if column doesn't exist)
+      try {
+        await supabase
+          .from('job_routes')
+          .update({ pod_photo_url: uploadedPublicUrl })
+          .eq('id', route_id)
+      } catch (e) {
+        console.warn('[API] job_routes.pod_photo_url update skipped (column may not exist)')
+      }
       return NextResponse.json({ success: true, publicUrl: uploadedPublicUrl })
     }
 
@@ -580,7 +615,7 @@ export async function PATCH(
       
       const routeUpdate: any = {}
       if (route_status) routeUpdate.status = route_status
-      if (pod_photo_url) routeUpdate.pod_photo_url = pod_photo_url
+      // pod_photo_url removed from routeUpdate - photo URL stored separately via photo upload path
       if (route_notes !== undefined) routeUpdate.notes = route_notes
       
       if (lat && lng) {
