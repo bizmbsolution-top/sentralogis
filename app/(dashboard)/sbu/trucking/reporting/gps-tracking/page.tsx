@@ -70,6 +70,7 @@ export default function GPSTrackingReportPage() {
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(20);
+  const [selectedWoId, setSelectedWoId] = useState<string>("all");
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
   const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
@@ -328,11 +329,16 @@ export default function GPSTrackingReportPage() {
     }
   }, [startDate, endDate, tenantId, canAccess]);
 
+  const filteredData = useMemo(() => {
+    if (selectedWoId === "all") return groupedData;
+    return groupedData.filter((wo: any) => wo.wo_id === selectedWoId);
+  }, [groupedData, selectedWoId]);
+
   const pagedData = useMemo(() => {
-    if (pageSize === 999999) return groupedData;
+    if (pageSize === 999999) return filteredData;
     const startIdx = (page - 1) * pageSize;
-    return groupedData.slice(startIdx, startIdx + pageSize);
-  }, [groupedData, page, pageSize]);
+    return filteredData.slice(startIdx, startIdx + pageSize);
+  }, [filteredData, page, pageSize]);
 
   useEffect(() => {
     fetchReportData();
@@ -340,13 +346,13 @@ export default function GPSTrackingReportPage() {
   }, [fetchReportData]);
 
   const handleExportExcel = async () => {
-    if (groupedData.length === 0) return toast.error("No data to export");
+    if (filteredData.length === 0) return toast.error("No data to export");
     const tid = toast.loading("Excel Engine Starting...");
     try {
       const XLSX = await import("xlsx");
       const exportData: any[] = [];
 
-      groupedData.forEach((wo: any) => {
+      filteredData.forEach((wo: any) => {
         wo.jos.forEach((jo: any) => {
           // JO Header
           exportData.push({
@@ -405,7 +411,7 @@ export default function GPSTrackingReportPage() {
     }
   };
 
-  const totalRows = groupedData.length;
+  const totalRows = filteredData.length;
   const startRecord = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRecord = Math.min(page * pageSize, totalRows);
   const totalPages =
@@ -504,7 +510,27 @@ export default function GPSTrackingReportPage() {
               />
             </div>
           </div>
-          <div className="md:col-span-3 flex items-end justify-end gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              Work Order
+            </label>
+            <select
+              value={selectedWoId}
+              onChange={(e) => {
+                setSelectedWoId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all cursor-pointer"
+            >
+              <option value="all">Semua Work Order</option>
+              {groupedData.map((wo: any) => (
+                <option key={wo.wo_id || wo.wo_number} value={wo.wo_id}>
+                  {wo.wo_number} — {wo.customer_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2 flex items-end justify-end gap-3">
             <button
               onClick={fetchReportData}
               disabled={loading}
