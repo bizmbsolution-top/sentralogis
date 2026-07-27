@@ -6,12 +6,13 @@ import {
   Truck, MapPin, Navigation as NavIcon, Phone, 
   CheckCircle2, Clock, ChevronRight, AlertCircle, 
   Loader2, Play, Check, X, Camera, Calendar, Activity,
-  Expand, Image as ImageIcon, Lock, Box, FileText, Download, Eye, FolderGit2
+  Expand, Image as ImageIcon, Lock, Box, FileText, Download, Eye, FolderGit2, MessageSquare
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from '@react-google-maps/api';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
+import { subscribeToPushNotifications } from '@/lib/push/client';
 
 interface RouteStop {
   id: string;
@@ -52,6 +53,7 @@ interface JobOrder {
   accepted_at?: string;
   started_at?: string;
   completed_at?: string;
+  assigned_at?: string;
   advance_amount?: number;
   advance_status?: string;
   assignment_documents?: any[];
@@ -63,6 +65,8 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const router = useRouter();
   const { isLoaded } = useGoogleMaps();
   
+  const [isNative, setIsNative] = useState(true);
+  
   const [jobOrder, setJobOrder] = useState<JobOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +74,12 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const [photoLoading, setPhotoLoading] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
+  const [gpsDiagnostic, setGpsDiagnostic] = useState<any>(null);
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [timeLeft, setTimeLeft] = useState('');
 
   const [containerNo, setContainerNo] = useState('');
   const [sealNo, setSealNo] = useState('');
@@ -86,16 +96,142 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
 
   useEffect(() => {
+    import('@capacitor/core').then(({ Capacitor }) => {
+      setIsNative(Capacitor.isNativePlatform());
+    }).catch(() => setIsNative(false));
+
     if (!token) return;
     fetchJobOrder();
-  }, [token]);
+
+    const handleNativeGps = (e: any) => {
+      setGpsDiagnostic(e.detail);
+    };
+    window.addEventListener('sentralogis:native_gps_update', handleNativeGps);
+
+    // [AI] Device Health Ping (Every 5 minutes)
+    const healthInterval = setInterval(() => {
+      if (!jobOrder?.id) return;
+      
+      const startPingTime = Date.now();
+      
+      // Get Battery if possible
+      let battery_level = 100;
+      if (typeof navigator !== 'undefined' && (navigator as any).getBattery) {
+        (navigator as any).getBattery().then((batt: any) => {
+          battery_level = batt.level * 100;
+          sendHealthPing(battery_level);
+        }).catch(() => sendHealthPing(battery_level));
+      } else {
+        sendHealthPing(battery_level);
+      }
+      
+      function sendHealthPing(battery: number) {
+        const internet_connected = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        
+        fetch('/api/jo/health', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            job_order_id: jobOrder?.id,
+            token: token,
+            internet_connected,
+            gps_active: true, // simplified
+            background_running: true, // simplified
+            battery_level: battery,
+            accuracy: 10,
+            ping_latency_ms: Date.now() - startPingTime
+          })
+        }).catch(console.warn);
+      }
+    }, 5 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener('sentralogis:native_gps_update', handleNativeGps);
+      clearInterval(healthInterval);
+    };
+  }, [token, jobOrder?.id]);
+
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsStandalone(true);
+      if (jobOrder?.driver?.id) {
+        subscribeToPushNotifications(jobOrder.driver.id);
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!isStandalone) {
+        setShowInstallBanner(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, [jobOrder?.driver?.id, isStandalone]);
+
+  useEffect(() => {
+    if (!jobOrder?.assigned_at || jobOrder.started_at) return;
+    
+    const interval = setInterval(() => {
+      const targetTime = new Date(jobOrder.assigned_at!).getTime() + 30 * 60 * 1000;
+      const now = new Date().getTime();
+      const diff = targetTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        clearInterval(interval);
+      } else {
+        const m = Math.floor(diff / (1000 * 60));
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [jobOrder?.assigned_at, jobOrder?.started_at]);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      toast.success('Untuk iOS: Tap tombol Share lalu "Add to Home Screen"');
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallBanner(false);
+      toast.success('Aplikasi berhasil dipasang!');
+      
+      const driverType = jobOrder?.driver?.driver_type;
+      
+      if (jobOrder?.driver?.id) {
+        subscribeToPushNotifications(jobOrder.driver.id);
+      }
+
+      setTimeout(() => {
+        if (driverType === 'INTERNAL') {
+          window.location.href = '/driver/portal';
+        } else {
+          try {
+            window.close();
+          } catch(e) {}
+          toast('Pemasangan selesai. Anda dapat menutup halaman ini karena GPS sudah aktif.', { icon: '✅', duration: 10000 });
+        }
+      }, 1500);
+    }
+    setDeferredPrompt(null);
+  };
 
   useDriverGpsPing(token, jobOrder?.status, !!jobOrder, (evt) => {
     if (evt.geofence_triggered) {
       setGeofenceBanner({ arrived_stop: evt.arrived_stop, distance_m: evt.distance_m });
       fetchJobOrder();
     }
-  });
+  }, jobOrder?.started_at);
 
   const fetchJobOrder = async () => {
     try {
@@ -115,6 +251,11 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
       setJobOrder(result.data);
       setContainerNo(result.data?.container_number || '');
       setSealNo(result.data?.sbu_metadata?.seal_number || '');
+      
+      if (result.data?.driver?.driver_type) {
+        localStorage.setItem('sentralogis_driver_type', result.data.driver.driver_type);
+      }
+      
       setError(null);
     } catch (err: any) {
       console.error('Error fetching job order:', err);
@@ -166,43 +307,6 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   };
 
   const updateStatus = async (newStatus: string) => {
-    if (newStatus === 'rejected') {
-      const confirmReject = window.confirm('Apakah Anda yakin ingin MENOLAK tugas ini?');
-      if (!confirmReject) return;
-      
-      const note = window.prompt('Alasan penolakan (opsional):');
-      setUpdating(newStatus);
-      try {
-        const location = await getLocation();
-        const response = await fetch(`/api/jo/${token}`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true' 
-          },
-          body: JSON.stringify({ 
-            status: newStatus,
-            rejection_note: note,
-            lat: location?.lat,
-            lng: location?.lng
-          })
-        });
-
-        if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error || 'Gagal memperbarui status');
-        }
-        
-        toast.success('Tugas telah ditolak');
-        await fetchJobOrder();
-        return;
-      } catch (err: any) {
-        toast.error('Error: ' + err.message);
-        setUpdating(null);
-        return;
-      }
-    }
-
     setUpdating(newStatus);
     try {
       const location = await getLocation();
@@ -330,8 +434,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
   };
 
   const milestones = jobOrder ? [
-    { id: 'start', label: 'TERIMA', status: jobOrder.accepted_at ? 'completed' : 'pending' },
-    { id: 'depart', label: 'BERANGKAT', status: (jobOrder.started_at || jobOrder.status === 'DALAM PERJALANAN' || jobOrder.status.startsWith('MENUJU')) ? 'completed' : (jobOrder.accepted_at || jobOrder.status === 'MENUNGGU MULAI / START' || jobOrder.status === 'ORDER DITERIMA' ? 'current' : 'pending') },
+    { id: 'start', label: 'MULAI', status: jobOrder.started_at ? 'completed' : 'pending' },
     ...jobOrder.routes.map((s) => ({
       id: s.id,
       label: s.location_name,
@@ -411,10 +514,11 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     );
   }, [isLoaded, JSON.stringify(polylinePath)]);
 
-  const isGreeting = jobOrder?.driver_response !== 'accepted';
-  const isPendingStart = jobOrder?.driver_response === 'accepted' && !jobOrder?.started_at && !['in_progress', 'DALAM PERJALANAN'].includes(jobOrder?.status || '') && !jobOrder?.status?.startsWith('MENUJU');
-  const isActive = !isGreeting && !isPendingStart && !['completed', 'PEKERJAAN SELESAI', 'SELESAI', 'PAID', 'ready_for_billing', 'verified'].includes(jobOrder?.status || '');
+  const isWaitingConfirmation = jobOrder?.status === 'ASSIGNED';
+  const isPendingStart = !jobOrder?.started_at && ['CONFIRMED_BY_DRIVER', 'AUTO_CONFIRMED', 'ORDER DITERIMA'].includes(jobOrder?.status || '');
+  const isActive = !isWaitingConfirmation && !isPendingStart && !['completed', 'PEKERJAAN SELESAI', 'SELESAI', 'PAID', 'ready_for_billing', 'verified', 'REJECTED', 'CANCELLED'].includes(jobOrder?.status || '');
   const isCompleted = ['completed', 'PEKERJAAN SELESAI', 'SELESAI', 'PAID', 'ready_for_billing', 'verified'].includes(jobOrder?.status || '');
+  const isMenungguSelesai = jobOrder?.status === 'MENUNGGU SELESAI';
 
   const nextStopName = activeStop?.location_name?.toUpperCase() || 'LOKASI TUJUAN';
 
@@ -440,179 +544,216 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
     );
   }
 
+  // [AI] Block web browser access, force use of Native Android app
+  // If App Links fails (e.g. signature mismatch), WhatsApp opens Chrome. 
+  // We use Chrome's Intent URI to forcibly launch the native app.
+  if (!isNative) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-3xl p-8 max-w-sm shadow-xl border border-slate-100">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Truck className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">Buka di Aplikasi</h2>
+          <p className="text-slate-500 text-sm mb-8 leading-relaxed">
+            Demi pelacakan GPS, Anda harus membuka tugas ini melalui Aplikasi Sentralogis Driver.
+          </p>
+          <a 
+            href={`intent://www.sentralogis.com/jo/${token}#Intent;scheme=https;package=com.sentralogis.driver;end;`}
+            className="w-full block bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-200 uppercase tracking-widest mb-6"
+          >
+            Buka di Aplikasi
+          </a>
+          <div className="h-px w-full bg-slate-100 mb-6"></div>
+          <p className="text-xs text-slate-400 mb-3">Belum memiliki aplikasi?</p>
+          <button 
+            onClick={() => router.push('/driver/install')}
+            className="w-full text-blue-600 font-bold text-sm transition-all hover:text-blue-700"
+          >
+            Download Aplikasi Sentralogis
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-32">
       <Toaster position="top-center" />
 
+      {/* PWA Install Banner */}
+      {showInstallBanner && !isStandalone && (
+        <div className="bg-blue-600 text-white p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+              <Truck size={24} />
+            </div>
+            <div>
+              <p className="font-bold text-sm tracking-tight">Pasang aplikasi SentraLogis di HP Anda</p>
+              <p className="text-[10px] text-blue-100 mt-0.5">Akses lebih cepat dan pantau notifikasi</p>
+            </div>
+          </div>
+          <button
+            onClick={handleInstallClick}
+            className="w-full sm:w-auto bg-white text-blue-600 px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-md"
+          >
+            Pasang Sekarang
+          </button>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* PHASE 1: GREETING SCREEN (Before Accept)                     */}
+      {/* PHASE 1: VENDOR CONFIRMATION                                   */}
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {isGreeting && (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
-          <div className="max-w-sm w-full space-y-6">
-            {/* Greeting */}
-            <div className="text-center">
-              <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30">
-                <Truck size={36} />
-              </div>
-              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Selamat Datang</p>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                Halo, {jobOrder.driver?.name || 'Driver'} 👋
-              </h1>
-              <p className="text-base font-semibold text-slate-500 mt-3 leading-relaxed">
-                Anda mendapat tugas baru
+      {isWaitingConfirmation && (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-xl border border-slate-100 text-center space-y-6 animate-in fade-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+              <AlertCircle size={36} />
+            </div>
+            
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">JOB ORDER SENTRALOGIS</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Job: {jobOrder.jo_number}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Tujuan: {jobOrder.routes?.[0]?.location_name || '-'} → {jobOrder.routes?.[jobOrder.routes.length - 1]?.location_name || '-'}
               </p>
+              {jobOrder.container_number && (
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Container: {jobOrder.container_number}</p>
+              )}
             </div>
 
-            {/* Job Info Card */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-lg space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Job Order</span>
-                <span className="bg-slate-900 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{jobOrder.jo_number}</span>
-              </div>
-              <div className="border-t border-slate-100 pt-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
-                    <Calendar size={14} />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tanggal</p>
-                    <p className="text-sm font-black text-slate-800">{formatDate(jobOrder.wo_details?.execution_date || new Date().toISOString())}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
-                    <MapPin size={14} />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tujuan</p>
-                    <p className="text-sm font-black text-slate-800">{jobOrder.routes[0]?.location_name || '-'}</p>
-                    <p className="text-[10px] font-medium text-slate-400 mt-0.5">{jobOrder.routes.length} titik lokasi</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 shrink-0">
-                    <Truck size={14} />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Armada</p>
-                    <p className="text-sm font-black text-slate-800">{jobOrder.fleet?.plate_number || '-'}</p>
-                  </div>
-                </div>
+            <div id="identity-confirm-step" className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+              <p className="font-black text-slate-800 text-lg mb-6 leading-relaxed">
+                APAKAH ANDA {jobOrder?.driver?.name?.toUpperCase() || 'DRIVER'}?
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById('vehicle-confirm-step');
+                    if (el) el.style.display = 'block';
+                    const elIdentity = document.getElementById('identity-confirm-step');
+                    if (elIdentity) elIdentity.style.display = 'none';
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-sm tracking-widest transition-all active:scale-95 shadow-md">
+                  YA
+                </button>
+                <button 
+                  onClick={() => {
+                    setUpdating('rejected');
+                    fetch('/api/jo/' + token, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'rejected', rejection_note: 'DRIVER_IDENTITY_MISMATCH' })
+                    }).then(() => {
+                      toast.success('Ditolak karena tidak sesuai');
+                      window.location.reload();
+                    }).catch(e => toast.error('Gagal'));
+                  }}
+                  disabled={!!updating}
+                  className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-4 rounded-xl font-bold text-xs tracking-widest uppercase transition-all active:scale-95">
+                  BUKAN SAYA
+                </button>
               </div>
             </div>
 
-            {/* Advance Payment */}
-            {jobOrder.advance_status === 'paid' && (
-              <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 flex items-center gap-4">
-                <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shrink-0">
-                  <Check size={20} />
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Dana Operasional Cair</p>
-                  <p className="text-sm font-black text-emerald-800">Rp. {new Intl.NumberFormat('id-ID').format(jobOrder.advance_amount || 0)}</p>
+            <div id="vehicle-confirm-step" style={{ display: 'none' }} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 mt-4 shadow-sm">
+                <p className="font-black text-slate-800 text-lg mb-6 leading-relaxed">
+                  APAKAH ANDA MENGGUNAKAN TRUK {jobOrder?.fleet?.plate_number || '-'}?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => updateStatus('accepted')}
+                    disabled={!!updating}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black text-sm tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center">
+                    {updating === 'accepted' ? <Loader2 className="animate-spin" size={20} /> : 'YA'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setUpdating('rejected');
+                      fetch('/api/jo/' + token, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'rejected', rejection_note: 'VEHICLE_MISMATCH' })
+                      }).then(() => {
+                        toast.success('Ditolak karena beda armada');
+                        window.location.reload();
+                      }).catch(e => toast.error('Gagal'));
+                    }}
+                    disabled={!!updating}
+                    className="w-full bg-rose-100 hover:bg-rose-200 text-rose-700 py-4 rounded-xl font-bold text-xs tracking-widest uppercase transition-all active:scale-95">
+                    BUKAN
+                  </button>
                 </div>
               </div>
-            )}
-
-            {/* Accept/Reject Buttons */}
-            <div className="space-y-3">
-              <button
-                onClick={() => updateStatus('accepted')}
-                disabled={updating !== null}
-                className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all uppercase tracking-widest"
-              >
-                {updating === 'accepted' ? <Loader2 className="animate-spin" /> : <><Check size={22} /> TERIMA TUGAS</>}
-              </button>
-              <button
-                onClick={() => updateStatus('rejected')}
-                disabled={updating !== null}
-                className="w-full h-14 bg-white hover:bg-rose-50 text-rose-600 border-2 border-rose-200 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                {updating === 'rejected' ? <Loader2 className="animate-spin" size={18} /> : <><X size={18} /> TOLAK</>}
-              </button>
             </div>
+            
+            {/* Display Device Health status securely and read-only */}
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-slate-400">STATUS DEVICE</span>
+              <div className="flex items-center gap-1.5">
+                {gpsDiagnostic?.battery > 20 && gpsDiagnostic?.speed !== undefined ? (
+                  <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded"><Check size={12}/> DEVICE READY</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded"><AlertCircle size={12}/> WARNING</span>
+                )}
+              </div>
+            </div>
+            
           </div>
         </div>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* PHASE 2: READY TO DEPART (After accept, before start)        */}
+      {/* PHASE 2: PENDING START (Assigned info card)                  */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {isPendingStart && (
-        <div className="min-h-screen flex flex-col">
-          {/* Compact Header */}
-          <div className="bg-white border-b border-slate-100 px-6 py-4 shadow-sm">
-            <div className="max-w-xl mx-auto flex items-center justify-between">
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-xl border border-slate-100 text-center space-y-6">
+            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+              <Clock size={36} />
+            </div>
+            
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">Tugas akan dimulai otomatis</h2>
+              <p className="text-sm font-semibold text-slate-500">Persiapkan kendaraan Anda</p>
+            </div>
+
+            <div className="bg-slate-900 text-white p-6 rounded-2xl">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Dimulai Dalam</p>
+              <div className="text-4xl font-black font-mono tracking-wider">{timeLeft || '--:--'}</div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6 space-y-4 text-left">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
-                  <Check size={16} />
+                <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500">
+                  <FileText size={18} />
                 </div>
                 <div>
-                  <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">Diterima</p>
-                  <p className="text-[10px] font-bold text-slate-400">{jobOrder.jo_number}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No. Job Order</p>
+                  <p className="font-black text-slate-800 text-sm">{jobOrder.jo_number}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Driver</p>
-                <p className="text-xs font-black text-slate-800 uppercase">{jobOrder.driver?.name}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Milestones (compact) */}
-          <div className="px-6 py-4">
-            <div className="max-w-xl mx-auto">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                {milestones.map((m, idx) => (
-                  <div key={m.id} className="flex items-center gap-2 shrink-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${
-                      m.status === 'completed' ? 'bg-emerald-500 text-white' :
-                      m.status === 'current' ? 'bg-blue-600 text-white' :
-                      'bg-slate-100 text-slate-400'
-                    }`}>
-                      {m.status === 'completed' ? <Check size={12} /> : idx + 1}
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">{m.label}</span>
-                    {idx < milestones.length - 1 && <ChevronRight size={10} className="text-slate-300" />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1 flex flex-col items-center justify-center px-6">
-            <div className="max-w-sm w-full text-center space-y-8">
-              <div>
-                <div className="w-24 h-24 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-bounce">
-                  <Truck size={48} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500">
+                  <MapPin size={18} />
                 </div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
-                  Siap Berangkat?
-                </h2>
-                <p className="text-sm font-semibold text-slate-500 leading-relaxed">
-                  Konfirmasi bahwa Anda sudah siap menuju lokasi pengambilan
-                </p>
-                <div className="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tujuan Pertama</p>
-                  <p className="text-sm font-black text-slate-800">{nextStopName}</p>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tujuan Utama</p>
+                  <p className="font-black text-slate-800 text-sm">{nextStopName}</p>
                 </div>
               </div>
-
-              <button
-                onClick={() => updateStatus('in_progress')}
-                disabled={updating !== null}
-                className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20 active:scale-95 transition-all uppercase tracking-widest"
-              >
-                {updating === 'in_progress' ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <>
-                    <Play size={20} /> YA, BERANGKAT!
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500">
+                  <Truck size={18} />
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Armada</p>
+                  <p className="font-black text-slate-800 text-sm">{jobOrder.fleet?.plate_number || '-'}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -690,6 +831,25 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                       Terverifikasi via Geofence ({geofenceBanner.distance_m || '< 500'}m). Status rute diperbarui!
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* GPS Diagnostic Banner */}
+            {gpsDiagnostic && (
+              <div className="mx-6 mt-4 bg-slate-900 text-white rounded-2xl p-4 shadow-xl border border-slate-700 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Activity size={14} className="text-emerald-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">NATIVE GPS ACTIVE</span>
+                  </div>
+                  <span className="text-[9px] font-bold bg-slate-800 px-2 py-0.5 rounded text-slate-400">
+                    BATT: {gpsDiagnostic.battery > 0 ? gpsDiagnostic.battery + '%' : 'N/A'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-300">
+                  <div>Speed: {gpsDiagnostic.speed ? (gpsDiagnostic.speed * 3.6).toFixed(1) : 0} km/h</div>
+                  <div>Accuracy: {gpsDiagnostic.accuracy?.toFixed(1) || '-'} m</div>
                 </div>
               </div>
             )}
@@ -842,29 +1002,11 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
                             )}
                           </div>
                         )}
-
-                        {/* Geofence status */}
-                        {isActive && (
-                          <div className="mt-2">
-                            {stop.status === 'completed' ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 uppercase tracking-widest">
-                                <CheckCircle2 size={11} /> Selesai
-                              </span>
-                            ) : stop.status === 'arrived' ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
-                                <MapPin size={11} /> Tiba (Geofence)
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
-                                Menunggu (&lt;500m)
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        
+                        {/* Removed Action Buttons from Card (Moved to Bottom Nav) */}
                       </div>
 
-                      {/* Action Buttons */}
+                      {/* Bottom Nav for Camera and Navigasi */}
                       <div className="flex flex-col gap-2 shrink-0">
                         <button 
                           onClick={() => openInGoogleMaps(stop.address)}
@@ -1000,43 +1142,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               </div>
             )}
 
-            {/* Completion Button */}
-            {isActive && (
-              <div className="px-6 pb-8 pt-4">
-                <div className="bg-slate-900 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle2 size={18} className="text-emerald-400" />
-                      <p className="text-xs font-black text-white uppercase tracking-widest">Selesai</p>
-                    </div>
-                    {completedStops < totalStops && (
-                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4 flex items-center gap-2">
-                        <AlertCircle size={14} className="text-amber-400 shrink-0" />
-                        <p className="text-[9px] font-bold text-amber-200 uppercase leading-tight">
-                          {totalStops - completedStops} lokasi belum selesai
-                        </p>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (completedStops < totalStops && totalStops > 0) {
-                          const unvisited = totalStops - completedStops;
-                          if (!window.confirm(`⚠️ Masih ada ${unvisited} lokasi belum selesai. Tetap selesaikan?`)) return;
-                        } else {
-                          if (!window.confirm('Selesaikan seluruh pekerjaan?')) return;
-                        }
-                        updateStatus('completed');
-                      }}
-                      disabled={updating !== null}
-                      className="w-full h-14 bg-white text-slate-900 hover:bg-slate-50 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      {updating === 'completed' ? <Loader2 className="animate-spin" /> : <>PEKERJAAN SELESAI <ChevronRight size={16} /></>}
-                    </button>
-                  </div>
-                  <Activity className="absolute -bottom-4 -right-4 w-24 h-24 text-white/5 rotate-12" />
-                </div>
-              </div>
-            )}
+            {/* Manual Completion Button Removed */}
 
             {/* Completed Screen */}
             {isCompleted && (
@@ -1081,7 +1187,7 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
       {isActive && (
         <button
           onClick={() => setPanicModalOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-16 h-16 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex flex-col items-center justify-center shadow-2xl shadow-rose-600/50 border-4 border-rose-300 active:scale-90 transition-all animate-pulse"
+          className="fixed bottom-24 right-6 z-50 w-14 h-14 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex flex-col items-center justify-center shadow-[0_8px_30px_rgb(225,29,72,0.3)] border-2 border-rose-300 active:scale-90 transition-all animate-pulse"
           title="Tombol Darurat SOS"
         >
           <span className="text-xl leading-none">🚨</span>
@@ -1205,6 +1311,72 @@ export default function DriverTrackingPage({ params }: { params: Promise<{ token
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation */}
+      {isActive && jobOrder && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 px-6 py-4 pb-6 z-40 flex items-center justify-around shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+          {(() => {
+            const activeStop = jobOrder.routes?.find((s: any) => s.status !== 'completed') || jobOrder.routes?.[jobOrder.routes.length - 1];
+            return (
+              <>
+                <button 
+                  onClick={() => activeStop && openInGoogleMaps(activeStop.address)}
+                  className="flex flex-col items-center gap-1.5 text-blue-600 active:scale-95 transition-all group"
+                >
+                  <div className="w-12 h-12 bg-blue-50 group-hover:bg-blue-100 rounded-[1.25rem] flex items-center justify-center transition-all">
+                    <NavIcon size={22} fill="currentColor" />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Navigasi</span>
+                </button>
+
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment"
+                    className="hidden"
+                    id={`photo-bottom`}
+                    onChange={(e) => activeStop && handlePhotoUpload(activeStop.id, e)}
+                  />
+                  <label 
+                    htmlFor={`photo-bottom`}
+                    className={`flex flex-col items-center gap-1.5 active:scale-95 transition-all cursor-pointer group ${activeStop?.pod_photo_url ? 'text-emerald-600' : 'text-slate-700'}`}
+                  >
+                    <div className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${activeStop?.pod_photo_url ? 'bg-emerald-50' : 'bg-slate-100 group-hover:bg-slate-200'}`}>
+                      {activeStop ? (
+                        photoLoading === activeStop.id ? (
+                          <Loader2 size={22} className="animate-spin text-emerald-600" />
+                        ) : activeStop.pod_photo_url ? (
+                          <Check size={22} className="text-emerald-600" />
+                        ) : (
+                          <Camera size={22} className="text-slate-600" />
+                        )
+                      ) : (
+                        <Camera size={22} className="text-slate-600" />
+                      )}
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Foto POD</span>
+                  </label>
+                </div>
+
+                <button 
+                  onClick={() => {
+                     // For Remarks, you can attach it to SOS modal or separate later.
+                     // The user requested keeping Remarks icon in bottom nav.
+                     window.alert("Fitur Remarks akan segera hadir.");
+                  }}
+                  className="flex flex-col items-center gap-1.5 text-slate-700 active:scale-95 transition-all group"
+                >
+                  <div className="w-12 h-12 bg-slate-100 group-hover:bg-slate-200 rounded-[1.25rem] flex items-center justify-center transition-all">
+                    <MessageSquare size={22} className="text-slate-600" />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Remarks</span>
+                </button>
+              </>
+            );
+          })()}
         </div>
       )}
     </div>
