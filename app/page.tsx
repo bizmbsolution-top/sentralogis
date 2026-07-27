@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Zap, Lock } from 'lucide-react';
+import { Zap, Lock, Truck } from 'lucide-react';
 import toast, { Toaster } from "react-hot-toast";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import PortalAccessHubModal from "@/components/portal/PortalAccessHubModal";
 import LanguageSelector from '@/components/LanguageSelector';
 import EnterpriseGalaxy from '@/components/landing/EnterpriseGalaxy';
+import { useAuth } from "@/lib/hooks/useAuth";
+import { Capacitor } from '@capacitor/core';
 import {
   HeroSection, SectionWhy, SectionArchitecture, SectionOperations,
   SectionAI, SectionKnowledge, SectionIntelligence, SectionEcosystem,
@@ -15,10 +16,43 @@ import {
 } from '@/components/landing/Sections';
 
 export default function SentralogisLanding() {
+  const { profile, loading: authLoading } = useAuth();
   const [portalHubOpen, setPortalHubOpen] = useState(false);
   const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [isNative, setIsNative] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (Capacitor.isNativePlatform()) {
+      setIsNative(true);
+    }
+  }, []);
+
+  // ENTRY POINT A: Idle screen for Vendor Driver when opened directly from App Icon
+  if (mounted && isNative) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-100 flex flex-col items-center">
+          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
+            <Truck size={32} className="text-blue-600" />
+          </div>
+          <h1 className="text-xl font-black text-slate-900 mb-6 tracking-wide">SENTRALOGIS DRIVER</h1>
+          
+          <div className="w-full">
+            <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-sm font-semibold text-slate-700 mb-3">
+                Belum ada Job Order yang perlu dikonfirmasi.
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Silakan kembali ke WhatsApp dan buka<br/>Link Job Order yang dikirim oleh PIC SBU.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 font-sans overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200 relative">
