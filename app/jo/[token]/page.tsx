@@ -813,12 +813,21 @@ export default function DriverTrackingPage({
             Demi pelacakan GPS, Anda harus membuka tugas ini melalui Aplikasi
             Sentralogis Driver.
           </p>
-          <a
-            href={`sentralogis://jo/${token}`}
+          <button
+            onClick={() => {
+              console.log('[JO Page] Buka di Aplikasi clicked, token:', token);
+              // Try custom scheme first (most reliable)
+              window.location.href = `sentralogis://jo/${token}`;
+              // Fallback: try intent after 500ms if custom scheme fails
+              setTimeout(() => {
+                console.log('[JO Page] Fallback to intent URL');
+                window.location.href = `intent://sentralogis.com/jo/${token}#Intent;scheme=https;package=com.sentralogis.driver;end;`;
+              }, 500);
+            }}
             className="w-full block bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-200 uppercase tracking-widest mb-6"
           >
             Buka di Aplikasi
-          </a>
+          </button>
           <div className="h-px w-full bg-slate-100 mb-6"></div>
           <p className="text-xs text-slate-400 mb-3">
             Belum memiliki aplikasi?
