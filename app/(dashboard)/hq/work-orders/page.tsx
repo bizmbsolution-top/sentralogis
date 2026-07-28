@@ -296,7 +296,7 @@ export default function HQWorkOrdersPage() {
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j =>
           ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
         );
-        const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
+        const isCompleted = allJobsCompleted;
 
         const anyMoving = !isCompleted && !hasHandoverPending && !hasHandoverRejected && (
           allJobs.some(j =>
@@ -359,8 +359,8 @@ export default function HQWorkOrdersPage() {
     const allItems = wo.wo_items || [];
     const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
 
-    const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => i.status === 'handover_pending');
-    const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => i.status === 'handover_rejected');
+    const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
+    const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
 
     if (hasHandoverRejected) return <Badge className="!bg-rose-100 !text-rose-700 !border-rose-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">HANDOVER REJECTED</Badge>;
     if (hasHandoverPending) return <Badge className="!bg-orange-100 !text-orange-700 !border-orange-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">HANDOVER PENDING</Badge>;
@@ -369,7 +369,7 @@ export default function HQWorkOrdersPage() {
       ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
     );
 
-    const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
+    const isCompleted = allJobsCompleted;
 
     if (isCompleted) {
       const allDocDone = allJobs.every(j => j.is_doc_finished);
@@ -444,44 +444,55 @@ export default function HQWorkOrdersPage() {
   };
 
   const getTabCount = (tabId: string) => {
+    const DONE_WO = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE'];
+    const HANDOVER_WO = ['HANDOVER_PENDING', 'HANDOVER_REJECTED'];
     switch (tabId) {
       case 'all': return workOrders.length;
-      case 'draft': return workOrders.filter(w => w.status === 'draft').length;
+      case 'draft': return workOrders.filter(w => (w.status || '').toUpperCase() === 'DRAFT').length;
       case 'pending': return workOrders.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
-        const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+        const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
         if (hasHandover) return false;
+        if (DONE_WO.includes(s)) return false;
         const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
-        const anyAssigned = allJobs.some(j => j.fleet_id && j.driver_id);
-        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
-        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
-        return (s === 'PENDING' || s === 'NEED_ASSIGNMENT' || s === 'ACTIVE') && !anyAssigned && !anyMoving && !allJobsCompleted;
+        const anyAssigned = allJobs.some(j => j.fleet_id || j.driver_id || j.transporter_id);
+        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || j.status?.toUpperCase().startsWith('TIBA DI') || ['IN_PROGRESS', 'DALAM PERJALANAN', 'MENUNGGU SELESAI'].includes(j.status?.toUpperCase()));
+        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
+        return !anyAssigned && !anyMoving && !allJobsCompleted;
       }).length;
       case 'assigned_units': return workOrders.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
-        const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+        const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
         if (hasHandover) return false;
+        if (DONE_WO.includes(s)) return false;
         const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
-        const anyAssigned = allJobs.some(j => j.fleet_id && j.driver_id);
-        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
-        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
+        const anyAssigned = allJobs.some(j => j.fleet_id || j.driver_id || j.transporter_id);
+        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || j.status?.toUpperCase().startsWith('TIBA DI') || ['IN_PROGRESS', 'DALAM PERJALANAN', 'MENUNGGU SELESAI'].includes(j.status?.toUpperCase()));
+        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
         return anyAssigned && !anyMoving && !allJobsCompleted;
       }).length;
       case 'on_road': return workOrders.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
-        const hasHandover = s === 'HANDOVER_PENDING' || s === 'HANDOVER_REJECTED' || allItems.some((i: any) => ['handover_pending', 'handover_rejected'].includes(i.status));
+        const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
         if (hasHandover) return false;
+        if (DONE_WO.includes(s)) return false;
         const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
-        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || ['IN_PROGRESS', 'DALAM PERJALANAN'].includes(j.status?.toUpperCase()));
-        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
+        const anyMoving = allJobs.some(j => j.status?.toUpperCase().startsWith('MENUJU') || j.status?.toUpperCase().startsWith('TIBA DI') || ['IN_PROGRESS', 'DALAM PERJALANAN', 'MENUNGGU SELESAI'].includes(j.status?.toUpperCase()));
+        const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
         return anyMoving && !allJobsCompleted;
       }).length;
-      case 'handover_pending': return workOrders.filter(w => w.status === 'handover_pending' || w.wo_items?.some(i => i.status === 'handover_pending')).length;
-      case 'handover_rejected': return workOrders.filter(w => w.status === 'handover_rejected' || w.wo_items?.some(i => i.status === 'handover_rejected')).length;
-      case 'completed': return workOrders.filter(w => ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(w.status)).length;
+      case 'handover_pending': return workOrders.filter(w => {
+        const ws = (w.status || '').toUpperCase();
+        return ws === 'HANDOVER_PENDING' || w.wo_items?.some(i => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
+      }).length;
+      case 'handover_rejected': return workOrders.filter(w => {
+        const ws = (w.status || '').toUpperCase();
+        return ws === 'HANDOVER_REJECTED' || w.wo_items?.some(i => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
+      }).length;
+      case 'completed': return workOrders.filter(w => DONE_WO.includes((w.status || '').toUpperCase())).length;
       default: return 0;
     }
   };
@@ -786,7 +797,7 @@ export default function HQWorkOrdersPage() {
                         const primarySbu = sbuTypes[0] || 'TRUCKING';
                         const config = SBU_BADGE_CONFIG[primarySbu] || SBU_BADGE_CONFIG.TRUCKING;
                         const SbuIcon = config.icon;
-                        const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(wo.status);
+                        const isCompleted = ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT'].includes(wo.status?.toUpperCase());
                         
                         return (
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-110 ${
@@ -884,8 +895,8 @@ export default function HQWorkOrdersPage() {
                 {/* Bottom Actions Area */}
                 <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
                   {(() => {
-                    const hasHandoverPending = wo.status === 'handover_pending' || wo.wo_items?.some((i: any) => i.status === 'handover_pending');
-                    const isRejected = wo.status === 'handover_rejected' || wo.wo_items?.some((i: any) => i.status === 'handover_rejected');
+                    const hasHandoverPending = (wo.status || '').toUpperCase() === 'HANDOVER_PENDING' || wo.wo_items?.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
+                    const isRejected = (wo.status || '').toUpperCase() === 'HANDOVER_REJECTED' || wo.wo_items?.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
 
                     if (isRejected) {
                       return (
@@ -920,13 +931,15 @@ export default function HQWorkOrdersPage() {
                     }
 
                     return (
-                      <Button
-                        onClick={() => handleEdit(wo.id)}
-                        variant="secondary"
-                        className="flex-1 h-10 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
-                      >
-                        Detail WO <ArrowRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => handleEdit(wo.id)}
+                          variant="secondary"
+                          className="flex-1 h-10 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          Detail WO <ArrowRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                        </Button>
+                      </>
                     );
                   })()}
                   {wo.hasPendingCosts && (
