@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, Lock, Truck } from 'lucide-react';
+import { Zap, Lock, Truck, Loader2 } from 'lucide-react';
 import toast, { Toaster } from "react-hot-toast";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import PortalAccessHubModal from "@/components/portal/PortalAccessHubModal";
@@ -21,13 +21,49 @@ export default function SentralogisLanding() {
   const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [checkingDeepLink, setCheckingDeepLink] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-    if (Capacitor.isNativePlatform()) {
-      setIsNative(true);
+    async function init() {
+      setMounted(true);
+      if (Capacitor.isNativePlatform()) {
+        // Check for pending deep link BEFORE showing idle screen
+        try {
+          const { App } = await import('@capacitor/app');
+          const launchUrl = await App.getLaunchUrl();
+          if (launchUrl?.url) {
+            // Handle both /jo/ and jo/ (for custom scheme sentralogis://jo/token)
+            let joIndex = launchUrl.url.indexOf('/jo/');
+            if (joIndex === -1) joIndex = launchUrl.url.indexOf('jo/');
+            if (joIndex !== -1) {
+              let path = launchUrl.url.substring(joIndex);
+              const hashIndex = path.indexOf('#');
+              if (hashIndex !== -1) path = path.substring(0, hashIndex);
+              if (!path.startsWith('/')) path = '/' + path;
+              if (window.location.pathname !== path) {
+                window.location.href = path;
+                return; // Don't render anything, redirecting
+              }
+            }
+          }
+        } catch (e) {
+          console.log('[Homepage] Deep link check skipped:', e);
+        }
+        setIsNative(true);
+      }
+      setCheckingDeepLink(false);
     }
+    init();
   }, []);
+
+  // Loading while checking for deep link
+  if (checkingDeepLink) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+      </div>
+    );
+  }
 
   // ENTRY POINT A: Idle screen for Vendor Driver when opened directly from App Icon
   if (mounted && isNative) {
