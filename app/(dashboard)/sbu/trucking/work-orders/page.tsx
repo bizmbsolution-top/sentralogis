@@ -18,7 +18,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StatusBadge } from '../../../../../components/ui/StatusBadge';
+import SLATimer from '@/components/SLATimer';
 import AssignmentModal from './components/AssignmentModal';
+import RejectReassignModal from './components/RejectReassignModal';
 import WODetailSidebar from './components/WODetailSidebar';
 import HandoverSbuModal from '../components/HandoverSbuModal';
 import RejectedViewModal from '../../../../(dashboard)/hq/work-orders/components/RejectedViewModal';
@@ -26,12 +28,9 @@ import RejectedViewModal from '../../../../(dashboard)/hq/work-orders/components
 export const filterItemByTab = (item: any, tabId: string) => {
   const s = item.status?.toUpperCase() || '';
   
-  if (tabId === 'pending' || tabId === 'all') {
-    console.log('[SBU-TRUCK] filterItemByTab:', { tabId, itemStatus: item.status, s, rawItemStatus: item.status });
-  }
-  
   // CRITICAL: Prevent PAID/INVOICED leakage
   if (['INVOICED', 'PAID'].includes(s)) return false;
+  if (tabId === 'all') return true;
 
   const jos = (item.job_orders || []).filter((j: any) => j.status !== 'cancelled');
   const totalUnits = item.item_data?.unit_count || jos.length || 1;
@@ -45,10 +44,9 @@ export const filterItemByTab = (item: any, tabId: string) => {
     ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
   );
   
-  const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s);
+  const isCompleted = allJobsCompleted;
   
-  // [FIX] Only count a JO as "moving" if it has an active status AND has driver/fleet assigned
-  // Prevents WO items from appearing in "On Journey" tab when JOs have no asset assigned
+  // Only count a JO as "moving" if it has an active status AND has driver/fleet assigned
   const anyMoving = !isCompleted && jos.some((j: any) => {
     const hasAsset = j.driver_id || j.fleet_id || j.transporter_id || j.vendor_id;
     if (!hasAsset) return false;
@@ -57,37 +55,34 @@ export const filterItemByTab = (item: any, tabId: string) => {
       ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
   });
 
-  const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
   const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
   const hasAssignedStatus = s === 'ASSIGNED' || s === 'ACTIVE';
-  // [FIX] Check if ALL JOs are in terminal state (completed or rejected) — item should not appear in "Assigned" tab
+  
+  // Check if ALL JOs are in terminal state
   const allJobsTerminal = jos.length > 0 && jos.every((j: any) =>
     ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT', 'REJECTED', 'HANDOVER_REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
   );
 
-  if (tabId === 'all') return true;
-  
-  if (tabId === 'pending') {
-    // [FIX] Items with 'need_assignment' status should always show in Need Assignment tab
-    // Items with 'pending' status and no assigned JOs should also show here
-    if (s === 'NEED_ASSIGNMENT') return true;
-    if (s === 'PENDING' && !hasAnyAssigned) return true;
-    if (s === 'DRAFT' && !hasAnyAssigned) return true;
-    return false;
-  }
-  
-  if (tabId === 'assigned_units') {
-    const isRejectedOrPending = ['HANDOVER_REJECTED', 'HANDOVER_PENDING'].includes(s);
-    // [FIX] Exclude items where all JOs are terminal — they belong in "Need Assignment", not "Assigned"
-    return (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) && !anyMoving && !isCompleted && !isRejectedOrPending && !allJobsTerminal;
-  }
-  
-  if (tabId === 'on_road') return anyMoving && !isCompleted;
+  const isHandoverPending = s === 'HANDOVER_PENDING';
+  const isHandoverRejected = s === 'HANDOVER_REJECTED';
+
   if (tabId === 'completed') return isCompleted;
-  if (tabId === 'handover_pending') return s === 'HANDOVER_PENDING';
-  if (tabId === 'handover_rejected') return s === 'HANDOVER_REJECTED';
+  if (tabId === 'handover_pending') return isHandoverPending && !isCompleted;
+  if (tabId === 'handover_rejected') return isHandoverRejected && !isCompleted;
+  if (tabId === 'on_road') return anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected;
   
-  return item.status === tabId;
+  const isAssignedTab = (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) 
+                        && !anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected && !allJobsTerminal;
+  
+  if (tabId === 'assigned_units') return isAssignedTab;
+
+  if (tabId === 'pending') {
+    // Catch-all: If it didn't fit into any of the active tabs above, it falls into pending (need assignment)!
+    if (isCompleted || isHandoverPending || isHandoverRejected || anyMoving || isAssignedTab) return false;
+    return true;
+  }
+  
+  return false;
 };
 
 export default function WorkOrderPlanningPage() {
@@ -107,6 +102,17 @@ export default function WorkOrderPlanningPage() {
   const [isSubmittingHandover, setIsSubmittingHandover] = useState(false);
   const [showRejectedModal, setShowRejectedModal] = useState(false);
   const [selectedRejectedItem, setSelectedRejectedItem] = useState<any>(null);
+
+  // [AI] Reject & Reassign state
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedJoForReject, setSelectedJoForReject] = useState<any>(null);
+
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const status = searchParams.get('status');
@@ -140,7 +146,7 @@ export default function WorkOrderPlanningPage() {
       .from('wo_items')
       .select(`
         id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
-        work_orders!inner(id, wo_number, execution_date, md_entities!customer_id(name, legal_name))
+        work_orders!inner(id, wo_number, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
       `)
       .eq('tenant_id', tenantId)
       .eq('sbu_type', 'TRUCKING')
@@ -159,8 +165,9 @@ export default function WorkOrderPlanningPage() {
       const { data: joData } = await supabase
         .from('job_orders')
         .select(`
-          id, wo_item_id, status, wa_link_sent_at, driver_response, tracking_token, wa_token, jo_number,
-          fleet_id, driver_id, is_doc_finished, is_cost_finished,
+          id, wo_item_id, status, wa_link_sent_at, assigned_at, driver_response, tracking_token, wa_token, jo_number,
+          fleet_id, driver_id, transporter_id, driver_link_token,
+          is_doc_finished, is_cost_finished,
           transporter:md_entities!transporter_id(name),
           driver:md_drivers(name, phone, md_entities(is_vendor))
         `)
@@ -258,7 +265,7 @@ const filteredItems = useMemo(() => {
       ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
     );
     
-    const isCompleted = allJobsCompleted || ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT', 'DOC_COMPLETED'].includes(s);
+    const isCompleted = allJobsCompleted;
 
     if (isCompleted) {
         const allDocDone = jos.every((j: any) => j.is_doc_finished);
@@ -550,6 +557,16 @@ const filteredItems = useMemo(() => {
                           </span>
                         </div>
                       </div>
+
+                      {/* [AI] SLA Timer for first dispatched JO */}
+                      {(() => {
+                        const allJos = item.job_orders || [];
+                        const dispatchedJo = allJos.find((j: any) => j.wa_link_sent_at && !['COMPLETED', 'PEKERJAAN SELESAI', 'DONE'].includes(j.status?.toUpperCase()));
+                        if (dispatchedJo) {
+                          return <div className="mt-2"><SLATimer assignedAt={dispatchedJo.wa_link_sent_at} slaMinutes={30} compact /></div>;
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
 
@@ -561,13 +578,16 @@ const filteredItems = useMemo(() => {
                       const anyAccepted = jos.some((j: any) => j.driver_response === 'accepted' || j.status === 'in_progress');
                       const allAssigned = (jos.length > 0 && jos.length >= (item.item_data?.unit_count || 1)) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
                       const anyNeedWa = jos.some((j: any) => !j.wa_link_sent_at && j.driver_response !== 'accepted');
-                      const isCompleted = ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(status);
+                      const allJobsCompletedAction = jos.length > 0 && jos.every((j: any) => 
+                        ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
+                      );
+                      const isCompleted = allJobsCompletedAction;
                       const isHandoverApproved = item.item_data?.handover_approved === true;
                       const maxJOCount = isHandoverApproved ? (Number(item.item_data.max_jo_count) || 0) : (item.item_data?.unit_count || jos.length || 1);
                       
                       if (isCompleted) {
                         const allJobsReady = jos.length > 0 && jos.every((j: any) => j.status === 'ready_for_billing' || (j.is_doc_finished && j.is_cost_finished));
-                        const isFinal = ['ready_for_billing', 'verified'].includes(status) || allJobsReady;
+                        const isFinal = allJobsReady;
                         
                         if (isFinal) {
                           return (
@@ -597,13 +617,30 @@ const filteredItems = useMemo(() => {
                         );
                       }
 
-                      if (anyAccepted) {
+                      const onRoad = jos.some((j: any) => {
+                        if (!j.driver_id && !j.fleet_id && !j.transporter_id && !j.vendor_id) return false;
+                        return j.status?.toUpperCase().startsWith('MENUJU') || 
+                          j.status?.toUpperCase().startsWith('TIBA') || 
+                          ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
+                      });
+
+                      if (onRoad || anyAccepted) {
+                        const targetJo = jos.find((j:any) => j.driver_response === 'accepted' || ['IN_PROGRESS', 'DALAM PERJALANAN', 'START JOURNEY'].includes(j.status?.toUpperCase())) || jos[0];
+                        const joNumber = targetJo?.jo_number || '';
                         return (
-                          <Link href={`/sbu/trucking/tracking?jo=${jos.find((j:any) => j.driver_response === 'accepted' || j.status === 'in_progress')?.jo_number || jos[0]?.jo_number}`} className="w-full">
-                            <Button className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2">
-                              TRACK MISSION <Activity size={14} />
-                            </Button>
-                          </Link>
+                          <div className="w-full flex flex-col gap-1.5">
+                            <Link href={`/sbu/trucking/tracking?jo=${joNumber}`} className="w-full">
+                              <Button className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                <Activity size={14} /> TRACK MISSION
+                              </Button>
+                            </Link>
+                            <button
+                              onClick={() => { setSelectedItemForAssignment(item); setShowAssignmentModal(true); }}
+                              className="w-full h-8 text-[10px] font-bold text-slate-500 hover:text-slate-900 underline underline-offset-2 transition-colors text-center"
+                            >
+                              View / Edit Details
+                            </button>
+                          </div>
                         );
                       }
                       
@@ -652,6 +689,83 @@ const filteredItems = useMemo(() => {
                     })()}
                   </div>
                 </div>
+
+                {/* [AI] JO Lines rendering */}
+                {item.job_orders && item.job_orders.filter((j: any) => j.status !== 'cancelled').length > 0 && (
+                  <div className="border-t border-slate-100 bg-slate-50/50 p-4 sm:px-6">
+                    <div className="flex flex-col gap-2">
+                      {item.job_orders.filter((jo: any) => jo.status !== 'cancelled').map((jo: any, idx: number) => {
+                        const s = jo.status?.toUpperCase() || '';
+                        const isAssigned = s === 'ASSIGNED';
+                        const isMenungguSelesai = s === 'MENUNGGU SELESAI';
+                        
+                        let timerBadge = null;
+                        if (isAssigned) {
+                          if (jo.assigned_at) {
+                            const assignedTime = new Date(jo.assigned_at).getTime();
+                            const diffMs = (30 * 60 * 1000) - (now - assignedTime);
+                            
+                            if (diffMs <= 0) {
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Auto-start dimulai...</Badge>;
+                            } else {
+                              const m = Math.floor(diffMs / 60000);
+                              const secs = Math.floor((diffMs % 60000) / 1000);
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
+                            }
+                          } else {
+                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Menunggu...</Badge>;
+                          }
+                        }
+
+                        return (
+                          <div key={jo.id || idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-slate-200 rounded-lg gap-4 shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                                <Truck size={14} className="text-slate-500" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-bold text-slate-900">{jo.jo_number || `JO-${idx+1}`}</div>
+                                <div className="text-xs text-slate-500">
+                                  {jo.transporter?.name || 'Assigned'} • {jo.driver?.name || 'No Driver'}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {timerBadge}
+                              
+                              {isMenungguSelesai ? (
+                                <Badge className="!bg-amber-500 !text-white border-none font-bold text-[10px] uppercase">
+                                  Menunggu Selesai (30m)
+                                </Badge>
+                              ) : (
+                                !isAssigned && (
+                                  <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] uppercase font-bold">
+                                    {s || 'PENDING'}
+                                  </Badge>
+                                )
+                              )}
+                              
+                              {isAssigned && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-8 text-xs font-semibold px-3"
+                                  onClick={() => {
+                                    setSelectedJoForReject(jo);
+                                    setShowRejectModal(true);
+                                  }}
+                                >
+                                  ❌ Reject
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </Card>
             ))}
           </div>
@@ -676,6 +790,11 @@ const filteredItems = useMemo(() => {
             setHandoverItem(selectedItemForAssignment);
             setShowHandoverModal(true);
           }}
+          onRejectReassign={(jo) => {
+            setShowAssignmentModal(false);
+            setSelectedJoForReject(jo);
+            setShowRejectModal(true);
+          }}
         />
       )}
 
@@ -695,6 +814,18 @@ const filteredItems = useMemo(() => {
           onClose={() => setShowRejectedModal(false)}
         />
       )}
+
+      {/* [AI] Reject & Reassign Modal */}
+      <RejectReassignModal
+        show={showRejectModal}
+        jobOrder={selectedJoForReject}
+        onClose={() => { setShowRejectModal(false); setSelectedJoForReject(null); }}
+        onSuccess={() => {
+          setShowRejectModal(false);
+          setSelectedJoForReject(null);
+          fetchData();
+        }}
+      />
     </div>
   );
 }
