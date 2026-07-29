@@ -65,20 +65,22 @@ export const filterItemByTab = (item: any, tabId: string) => {
 
   const isHandoverPending = s === 'HANDOVER_PENDING';
   const isHandoverRejected = s === 'HANDOVER_REJECTED';
+  const allRejected = jos.length > 0 && jos.every((j: any) => 
+    ['REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
+  );
 
   if (tabId === 'completed') return isCompleted;
   if (tabId === 'handover_pending') return isHandoverPending && !isCompleted;
-  if (tabId === 'handover_rejected') return isHandoverRejected && !isCompleted;
-  if (tabId === 'on_road') return anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected;
+  if (tabId === 'handover_rejected') return (isHandoverRejected || allRejected) && !isCompleted;
+  if (tabId === 'on_road') return anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected && !allRejected;
   
   const isAssignedTab = (hasAnyAssigned || isAssignedStatus || hasAssignedStatus || isHandoverApproved) 
-                        && !anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected && !allJobsTerminal;
+                        && !anyMoving && !isCompleted && !isHandoverPending && !isHandoverRejected && !allJobsTerminal && !allRejected;
   
   if (tabId === 'assigned_units') return isAssignedTab;
 
   if (tabId === 'pending') {
-    // Catch-all: If it didn't fit into any of the active tabs above, it falls into pending (need assignment)!
-    if (isCompleted || isHandoverPending || isHandoverRejected || anyMoving || isAssignedTab) return false;
+    if (isCompleted || isHandoverPending || isHandoverRejected || anyMoving || isAssignedTab || allRejected) return false;
     return true;
   }
   
@@ -302,8 +304,11 @@ const filteredItems = useMemo(() => {
     const allAssigned = (jos.length > 0 && jos.length >= totalUnits) && jos.every((j: any) => j.fleet_id && j.driver_id && j.status !== 'pending');
     const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
     
-    // [AI] Check rejected status before assigned
-    if (s === 'HANDOVER_REJECTED') {
+    const allRejected = jos.length > 0 && jos.every((j: any) => 
+      ['REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
+    );
+
+    if (s === 'HANDOVER_REJECTED' || allRejected) {
       return <Badge className="!bg-rose-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">REJECTED</Badge>;
     }
     if (s === 'HANDOVER_PENDING') {

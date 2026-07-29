@@ -462,7 +462,7 @@ export default function DriverTrackingPage({
 
       // [Auto-Start] Jika ASSIGNED > 30 menit, auto-start langsung
       if (
-        result.data?.status === "ASSIGNED" &&
+        (result.data?.status || "").toLowerCase() === "assigned" &&
         result.data?.assigned_at
       ) {
         const assignedAt = new Date(result.data.assigned_at).getTime();
