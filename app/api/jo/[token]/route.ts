@@ -310,10 +310,6 @@ export async function PATCH(
         latitude: lat,
         longitude: lng,
         notes: "Auto GPS ping dari driver (10-Sec Interval)",
-        source: body.source,
-        battery_level: body.battery,
-        speed: body.speed,
-        accuracy: body.accuracy,
       });
 
       // [AI] Update device health if health info is provided from Native app
