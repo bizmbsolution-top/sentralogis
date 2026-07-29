@@ -160,28 +160,6 @@ export default function DriverTrackingPage({
   const [directionsResponse, setDirectionsResponse] =
     useState<google.maps.DirectionsResult | null>(null);
 
-  // Live driver GPS position via browser Geolocation API
-  useEffect(() => {
-    if (!isLoaded || !finalIsNative) return;
-    let watchId: number | null = null;
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setDriverPosition({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            heading: pos.coords.heading ?? undefined,
-          });
-        },
-        (err) => console.warn("[Driver Position] watch error:", err),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-      );
-    }
-    return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    };
-  }, [isLoaded, finalIsNative]);
-
   // [Phase 4.2] Online/offline state for offline banner
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -908,6 +886,29 @@ export default function DriverTrackingPage({
     : typeof window !== "undefined" && (window as any).__FORCE_NATIVE
       ? true
       : isNative;
+
+  // Live driver GPS position via browser Geolocation API
+  useEffect(() => {
+    if (!isLoaded || !finalIsNative) return;
+    let watchId: number | null = null;
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setDriverPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading: pos.coords.heading ?? undefined,
+          });
+        },
+        (err) => console.warn("[Driver Position] watch error:", err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+      );
+    }
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isLoaded, finalIsNative]);
+
   if (!finalIsNative) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
