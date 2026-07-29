@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Truck,
@@ -173,6 +173,14 @@ export default function DriverTrackingPage({
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
 
+  // Refs to avoid stale closures in intervals
+  const jobOrderRef = useRef(jobOrder);
+  jobOrderRef.current = jobOrder;
+  const gpsStatusRef = useRef(gpsStatus);
+  gpsStatusRef.current = gpsStatus;
+  const gpsAccuracyRef = useRef(gpsAccuracy);
+  gpsAccuracyRef.current = gpsAccuracy;
+
   // [AI] Enhanced native detection with multiple fallback methods
   useEffect(() => {
     // Method 1: Capacitor native platform check
@@ -228,7 +236,8 @@ export default function DriverTrackingPage({
     // [AI] Device Health Ping (Every 5 minutes)
     const healthInterval = setInterval(
       () => {
-        if (!jobOrder?.id) return;
+        const currentJo = jobOrderRef.current;
+        if (!currentJo?.id) return;
 
         const startPingTime = Date.now();
 
@@ -254,13 +263,13 @@ export default function DriverTrackingPage({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              job_order_id: jobOrder?.id,
+              job_order_id: currentJo?.id,
               token: token,
               internet_connected,
-              gps_active: gpsStatus === "active",
+              gps_active: gpsStatusRef.current === "active",
               background_running: isNative,
               battery_level: battery,
-              accuracy: gpsAccuracy || 10,
+              accuracy: gpsAccuracyRef.current || 10,
               ping_latency_ms: Date.now() - startPingTime,
             }),
           }).catch(console.warn);
@@ -276,7 +285,8 @@ export default function DriverTrackingPage({
       );
       clearInterval(healthInterval);
     };
-  }, [token, jobOrder?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   // Battery optimization check for native Android
   useEffect(() => {
@@ -427,19 +437,22 @@ export default function DriverTrackingPage({
     setDeferredPrompt(null);
   };
 
+  const onGeofenceRef = useRef<(evt: any) => void>(() => {});
+  onGeofenceRef.current = (evt) => {
+    if (evt.geofence_triggered) {
+      setGeofenceBanner({
+        arrived_stop: evt.arrived_stop,
+        distance_m: evt.distance_m,
+      });
+      fetchJobOrder();
+    }
+  };
+
   useDriverGpsPing(
     token,
     jobOrder?.status,
     !!jobOrder,
-    (evt) => {
-      if (evt.geofence_triggered) {
-        setGeofenceBanner({
-          arrived_stop: evt.arrived_stop,
-          distance_m: evt.distance_m,
-        });
-        fetchJobOrder();
-      }
-    },
+    useCallback((evt) => onGeofenceRef.current(evt), []),
     jobOrder?.started_at,
   );
 
