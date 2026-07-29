@@ -90,7 +90,7 @@ export interface GeofenceArrivalEvent {
 }
 
 export interface GpsPingState {
-  status: "active" | "inactive" | "error" | "loading";
+  status: "active" | "inactive" | "error" | "loading" | "recovering";
   accuracy: number | null;
   speed: number | null;
   battery: number | null;
