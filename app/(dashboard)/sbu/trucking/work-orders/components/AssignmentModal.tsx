@@ -1294,30 +1294,64 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                <div className="h-4"></div>
                                <div className="flex h-10 items-center">
                                   {(assign.tracking_token || assign.id || assign.driver_id || assign.driver_phone || assign.transporter_id) && (
-                                     <button
-                                        onClick={() => {
-                                           const driver = drivers.find(d => d.id === assign.driver_id);
-                                           const transporter = transporters.find(t => t.id === assign.transporter_id);
-                                           const driverName = driver?.name || transporter?.name || 'Driver/Vendor';
-                                           const phone = assign.driver_phone || driver?.phone || transporter?.phone || '';
-                                           if (!phone) { toast.error('Nomor telepon driver/vendor tidak ditemukan untuk JO ini'); return; }
-                                            const isInternal = driver?.md_entities?.is_vendor === false;
-                                            const joNumber = assign.jo_number || `${item.item_code}-${String(idx + 1).padStart(2, '0')}`;
+                                      <button
+                                         onClick={async () => {
+                                            setAssigning(true);
+                                            try {
+                                              const tenantId = profile?.tenant_id;
+                                              if (tenantId) {
+                                                const result = await saveAssignmentsAction({
+                                                  tenantId,
+                                                  woItem: {
+                                                    id: item.id,
+                                                    wo_id: item.wo_id,
+                                                    status: item.status,
+                                                    item_code: item.item_code,
+                                                    work_orders: item.work_orders,
+                                                    item_data: item.item_data,
+                                                  },
+                                                  assignments,
+                                                  mode: 'confirm',
+                                                  dealPrice,
+                                                  transporters,
+                                                  drivers,
+                                                  fleets,
+                                                });
+                                                if (!result.success) {
+                                                  toast.error(result.error || 'Gagal menyimpan assignment');
+                                                  setAssigning(false);
+                                                  return;
+                                                }
+                                              }
+                                            } catch (err: unknown) {
+                                              const errorMessage = err instanceof Error ? err.message : String(err);
+                                              toast.error(`Gagal: ${errorMessage}`);
+                                              setAssigning(false);
+                                              return;
+                                            }
+                                            setAssigning(false);
+
+                                            const driver = drivers.find(d => d.id === assign.driver_id);
+                                            const transporter = transporters.find(t => t.id === assign.transporter_id);
+                                            const driverName = driver?.name || transporter?.name || 'Driver/Vendor';
+                                            const phone = assign.driver_phone || driver?.phone || transporter?.phone || '';
+                                            if (!phone) { toast.error('Nomor telepon driver/vendor tidak ditemukan untuk JO ini'); return; }
+                                             const isInternal = driver?.md_entities?.is_vendor === false;
+                                             const joNumber = assign.jo_number || `${item.item_code}-${String(idx + 1).padStart(2, '0')}`;
+                                             
+                                             const token = assign.driver_link_token || assign.id || assign.tracking_token;
+                                             const link = `https://www.sentralogis.com/jo/${token}`;
                                             
-                                            const token = assign.driver_link_token || assign.id || assign.tracking_token;
-                                            // Gunakan domain tetap agar deep link Android cocok dengan intent-filter
-                                            const link = `https://www.sentralogis.com/jo/${token}`;
-                                           
-                                           const msg = buildDriverAssignmentMessage({
-                                             driverName,
-                                             isInternal: Boolean(isInternal && driver),
-                                             link,
-                                             joNumber,
-                                           });
-                                           window.open(buildWaLink(phone, msg), '_blank');
-                                        }}
-                                        className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200 shadow-sm"
-                                        title="Kirim Link WA Tugas ke Driver/Vendor"
+                                            const msg = buildDriverAssignmentMessage({
+                                              driverName,
+                                              isInternal: Boolean(isInternal && driver),
+                                              link,
+                                              joNumber,
+                                            });
+                                            window.open(buildWaLink(phone, msg), '_blank');
+                                         }}
+                                         className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center hover:bg-emerald-100 transition-colors border border-emerald-200 shadow-sm"
+                                         title="Kirim Link WA Tugas ke Driver/Vendor"
                                      >
                                         <MessageCircle size={18} />
                                      </button>

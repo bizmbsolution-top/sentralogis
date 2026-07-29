@@ -776,7 +776,8 @@ export default function DriverTrackingPage({
     );
   }, [isLoaded, JSON.stringify(polylinePath)]);
 
-  const isWaitingConfirmation = jobOrder?.status === "ASSIGNED";
+  // [FIX] ASSIGNED sekarang langsung tracking — hapus dialog konfirmasi driver
+  const isWaitingConfirmation = false;
   const isPendingStart =
     !jobOrder?.started_at &&
     ["CONFIRMED_BY_DRIVER", "AUTO_CONFIRMED", "ORDER DITERIMA"].includes(
