@@ -466,11 +466,12 @@ export default function DriverTrackingPage({
       setError(null);
 
       // [Auto-Start] Jika ASSIGNED > 30 menit, auto-start langsung
+      const assignedAtStr = result.data?.assigned_at || result.data?.created_at;
       if (
         (result.data?.status || "").toLowerCase() === "assigned" &&
-        result.data?.assigned_at
+        assignedAtStr
       ) {
-        const assignedAt = new Date(result.data.assigned_at).getTime();
+        const assignedAt = new Date(assignedAtStr).getTime();
         const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
         if (assignedAt <= thirtyMinAgo) {
           console.log("[JO Auto-Start] ASSIGNED > 30 min, auto-starting...");

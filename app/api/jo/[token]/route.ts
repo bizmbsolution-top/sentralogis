@@ -35,7 +35,7 @@ async function findJobOrder(supabase: any, token: string) {
   );
   const selectColumns = `
     id, jo_number, status, tenant_id, wo_item_id, tracking_token, 
-    driver_link_token, driver_phone, completed_at, pod_photo_url, driver_response, 
+    driver_link_token, driver_phone, created_at, completed_at, pod_photo_url, driver_response, 
     advance_amount, advance_status, advance_receipt_url, 
     driver_id, fleet_id, base_price, driver_share_percentage, driver_payment_amount,
     purchase_price, transporter_id, vendor_id,
@@ -1254,12 +1254,8 @@ export async function PATCH(
               }
             }
           } else {
-            // Jika belum semua selesai, WO_ITEM tetap 'in_progress'
-            await supabase
-              .from("wo_items")
-              .update({ status: "in_progress" })
-              .eq("id", jo.wo_item_id)
-              .neq("status", "completed");
+            // Jika belum semua selesai, WO_ITEM tetap sesuai status yg sudah di-set di atas
+            // (skip — first sync already set the proper display status like "DALAM PERJALANAN")
           }
         } catch (e) {
           console.warn("Sync Hierarchy failed:", e);
