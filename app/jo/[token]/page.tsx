@@ -139,6 +139,11 @@ export default function DriverTrackingPage({
   const [sealNo, setSealNo] = useState("");
   const [savingContainer, setSavingContainer] = useState(false);
 
+  const [driverPosition, setDriverPosition] = useState<{
+    lat: number;
+    lng: number;
+    heading?: number;
+  } | null>(null);
   const [geofenceBanner, setGeofenceBanner] = useState<{
     arrived_stop: string | null;
     distance_m: number | null;
@@ -154,6 +159,28 @@ export default function DriverTrackingPage({
   const [readyConfirmOpen, setReadyConfirmOpen] = useState(false);
   const [directionsResponse, setDirectionsResponse] =
     useState<google.maps.DirectionsResult | null>(null);
+
+  // Live driver GPS position via browser Geolocation API
+  useEffect(() => {
+    if (!isLoaded || !finalIsNative) return;
+    let watchId: number | null = null;
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setDriverPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading: pos.coords.heading ?? undefined,
+          });
+        },
+        (err) => console.warn("[Driver Position] watch error:", err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+      );
+    }
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isLoaded, finalIsNative]);
 
   // [Phase 4.2] Online/offline state for offline banner
   const [isOnline, setIsOnline] = useState(
@@ -765,11 +792,13 @@ export default function DriverTrackingPage({
   }[];
 
   const polylinePath = mapMarkers.map((m) => ({ lat: m.lat, lng: m.lng }));
-  const mapCenter = activeStopMarker
-    ? { lat: activeStopMarker.lat, lng: activeStopMarker.lng }
-    : mapMarkers.length > 0
-      ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
-      : { lat: -6.2, lng: 106.816666 };
+  const mapCenter = driverPosition
+    ? { lat: driverPosition.lat, lng: driverPosition.lng }
+    : activeStopMarker
+      ? { lat: activeStopMarker.lat, lng: activeStopMarker.lng }
+      : mapMarkers.length > 0
+        ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
+        : { lat: -6.2, lng: 106.816666 };
 
   useEffect(() => {
     if (!isLoaded || mapMarkers.length < 2 || typeof google === "undefined")
@@ -1442,6 +1471,27 @@ export default function DriverTrackingPage({
                           }}
                         />
                       )
+                    )}
+                    {driverPosition && (
+                      <MarkerF
+                        position={{ lat: driverPosition.lat, lng: driverPosition.lng }}
+                        icon={{
+                          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          scale: 1.5,
+          anchor: new google.maps.Point(12, 22),
+                        }}
+                        label={{
+                          text: "●",
+              color: "#2563eb",
+              fontSize: "24px",
+              fontWeight: "black",
+                        }}
+                        title="Posisi Anda (GPS)"
+                      />
                     )}
                   </GoogleMap>
                 </div>
