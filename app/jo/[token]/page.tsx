@@ -459,6 +459,31 @@ export default function DriverTrackingPage({
       }
 
       setError(null);
+
+      // [Auto-Start] Jika ASSIGNED > 30 menit, auto-start langsung
+      if (
+        result.data?.status === "ASSIGNED" &&
+        result.data?.assigned_at
+      ) {
+        const assignedAt = new Date(result.data.assigned_at).getTime();
+        const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
+        if (assignedAt <= thirtyMinAgo) {
+          console.log("[JO Auto-Start] ASSIGNED > 30 min, auto-starting...");
+          fetch(`/api/jo/${token}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "in_progress" }),
+          })
+            .then((r) => r.json())
+            .then((res) => {
+              if (res.success) {
+                console.log("[JO Auto-Start] Success");
+                fetchJobOrder();
+              }
+            })
+            .catch((err) => console.error("[JO Auto-Start] Error:", err));
+        }
+      }
     } catch (err: any) {
       console.error("Error fetching job order:", err);
       setError(
