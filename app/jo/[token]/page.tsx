@@ -524,7 +524,7 @@ export default function DriverTrackingPage({
           console.warn("Location error:", err);
           resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 5000 },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
       );
     });
   };
@@ -624,6 +624,24 @@ export default function DriverTrackingPage({
     }
   };
 
+  const compressImage = (file: File, maxW = 1200, quality = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxW) { height = (maxW / width) * height; width = maxW; }
+        if (height > maxW) { width = (maxW / height) * width; height = maxW; }
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handlePhotoUpload = async (
     routeId: string,
     e: React.ChangeEvent<HTMLInputElement>,
@@ -634,16 +652,14 @@ export default function DriverTrackingPage({
     setPhotoLoading(routeId);
     try {
       const location = await getLocation();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await compressImage(file);
 
       const response = await fetch(`/api/jo/${token}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({
           route_id: routeId,
           pod_photo_base64: base64,
@@ -654,8 +670,10 @@ export default function DriverTrackingPage({
       });
 
       if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Gagal simpan foto ke database");
+        const text = await response.text();
+        let msg: string;
+        try { msg = JSON.parse(text).error || "Gagal simpan foto ke database"; } catch { msg = text || "Gagal simpan foto ke database"; }
+        throw new Error(msg);
       }
 
       toast.success("Foto berhasil diunggah");

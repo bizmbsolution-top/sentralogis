@@ -172,7 +172,10 @@ export function useDriverGpsPing(
       try {
         const response = await fetch(`/api/jo/${token}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
           body: JSON.stringify({
             action: "gps_ping",
             lat,
@@ -232,13 +235,19 @@ export function useDriverGpsPing(
           consecutiveFailures: consecutiveFailuresRef.current,
         });
 
-        // [Phase 2.1] Max retry: 10 gagal berturut-turut → stop ping
+        // [Phase 2.1] Max retry: 10 gagal berturut-turut → stop ping, recover after 60s
         if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
           console.error(
-            `[GPS Ping] Stopped after ${MAX_CONSECUTIVE_FAILURES} consecutive failures.`,
+            `[GPS Ping] Stopped after ${MAX_CONSECUTIVE_FAILURES} consecutive failures. Will retry in 60s.`,
           );
           isStoppedRef.current = true;
           emitPingState({ status: "error" });
+          setTimeout(() => {
+            consecutiveFailuresRef.current = 0;
+            isStoppedRef.current = false;
+            emitPingState({ status: "recovering" });
+            console.log("[GPS Ping] Recovery timer fired — resuming pings.");
+          }, 60_000);
         }
       }
     },
@@ -261,7 +270,7 @@ export function useDriverGpsPing(
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 15_000,
+          timeout: 25_000,
           maximumAge: 30_000,
         });
       });
