@@ -13,55 +13,21 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    const results = { autoConfirmed: 0, autoStarted: 0 };
+    const results = { autoStarted: 0 };
     const nowIso = new Date().toISOString();
     const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
-    // 1. AUTO CONFIRM LOGIC
-    const { data: toConfirm } = await supabase
+    // 1. AUTO-START LOGIC — ASSIGNED after 30 min langsung auto-start (skip confirm dialog)
+    const { data: toStart } = await supabase
       .from('job_orders')
-      .select('id, jo_number, tenant_id')
+      .select('id, jo_number, tenant_id, driver_id, driver_link_token, planned_departure_at')
       .eq('status', 'ASSIGNED')
       .not('assigned_at', 'is', null)
       .lte('assigned_at', thirtyMinAgo)
       .limit(50);
 
-    if (toConfirm && toConfirm.length > 0) {
-      for (const jo of toConfirm) {
-        // Call RPC for atomic race-condition safe update
-        const { data: rpcRes, error } = await supabase.rpc('vendor_job_confirmation', {
-          p_jo_id: jo.id,
-          p_is_accepted: false,
-          p_is_timeout: true
-        });
-        
-        if (!error && rpcRes?.success) {
-          results.autoConfirmed++;
-          
-          await supabase.from('notifications').insert({
-            role: 'tenant_admin',
-            tenant_id: jo.tenant_id,
-            type: 'jo_autoconfirm',
-            title: `⏱️ JO ${jo.jo_number} Auto-Confirmed`,
-            message: `JO ${jo.jo_number} otomatis terkonfirmasi karena driver tidak merespons selama 30 menit.`,
-            link: `/sbu/trucking/work-orders`,
-          });
-        }
-      }
-    }
-
-    // 2. AUTO START LOGIC (Based on planned_departure_at)
-    // If planned_departure_at is null, we assume it should start immediately after CONFIRMED (fallback mechanism)
-    const { data: toStart } = await supabase
-      .from('job_orders')
-      .select('id, jo_number, tenant_id, driver_id, driver_link_token, planned_departure_at')
-      .in('status', ['AUTO_CONFIRMED', 'CONFIRMED_BY_DRIVER'])
-      .or(`planned_departure_at.lte.${nowIso},planned_departure_at.is.null`)
-      .limit(50);
-
     if (toStart && toStart.length > 0) {
       for (const jo of toStart) {
-        // Get first route stop
         const { data: firstRoute } = await supabase
           .from('job_routes')
           .select('location_name')
@@ -84,15 +50,15 @@ export async function GET() {
             updated_at: nowIso,
           })
           .eq('id', jo.id)
-          .in('status', ['AUTO_CONFIRMED', 'CONFIRMED_BY_DRIVER']); // Optimistic lock
+          .eq('status', 'ASSIGNED');
 
         if (!updateErr) {
           results.autoStarted++;
           
           await supabase.from('job_tracking').insert({
             job_order_id: jo.id,
-            status_update: '🚀 Auto-Start GPS',
-            notes: `Waktu keberangkatan tercapai. GPS Tracker dimulai.`,
+            status_update: 'Auto-Start',
+            notes: `JO otomatis dimulai setelah 30 menit. GPS aktif.`,
           });
 
           if (jo.driver_id) {
@@ -104,7 +70,7 @@ export async function GET() {
 
             if (driver?.push_subscription) {
               const payload: PushPayload = {
-                title: '🚀 Waktu Keberangkatan Tiba',
+                title: 'Waktu Keberangkatan Tiba',
                 body: `JO ${jo.jo_number} otomatis dimulai. Silakan jalan menuju ${firstStopName}.`,
                 icon: '/sentralogis_logo.png',
                 tag: `jo-autostart-${jo.id}`,
