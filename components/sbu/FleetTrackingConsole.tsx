@@ -183,7 +183,8 @@ export default function FleetTrackingConsole() {
             const isCompletedPhysically = routes.length > 0 && 
               (routes[routes.length - 1].actual_departure != null || routes[routes.length - 1].status === 'completed');
 
-            return getAdvancedJobCategory(jo) === 'active' && status !== 'MENUNGGU SELESAI' && !isCompletedPhysically;
+            const category = getAdvancedJobCategory(jo);
+            return (category === 'active' || category === 'assigned') && status !== 'MENUNGGU SELESAI' && !isCompletedPhysically;
          });
          
          // Sort job orders by latest ping descending (moving at top, idle at bottom)
