@@ -535,11 +535,9 @@ export async function PATCH(
                 route.stop_type === "DROPOFF" ||
                 route.sequence === activeRoutes.length
               ) {
-                // IMPORTANT: Fix for "masih perjalanan bukan done". Set status to MENUNGGU SELESAI if departing final stop.
-                departJoStatus = "MENUNGGU SELESAI";
+                departJoStatus = "PEKERJAAN SELESAI";
                 updateJoPayload.unloaded_at = new Date().toISOString();
-                updateJoPayload.departure_detected_at =
-                  new Date().toISOString();
+                updateJoPayload.completed_at = new Date().toISOString();
               } else {
                 departJoStatus = "MELANJUTKAN PERJALANAN";
               }
@@ -577,6 +575,54 @@ export async function PATCH(
                 message: `Truk untuk JO ${jo.jo_number} terdeteksi keluar dari ${departedStopName} (Radius ${Math.round(distM)}m via Geofence).`,
                 link: `/sbu/trucking/work-orders/${jo.id}`,
               });
+
+              // Auto-complete cascade when final stop departs
+              if (departJoStatus === "PEKERJAAN SELESAI") {
+                if (jo.wo_item_id) {
+                  await supabase
+                    .from("wo_items")
+                    .update({ status: "PEKERJAAN SELESAI" })
+                    .eq("id", jo.wo_item_id)
+                    .neq("status", "PEKERJAAN SELESAI");
+                }
+                if (jo.fleet_id) {
+                  await supabase
+                    .from("md_fleets")
+                    .update({ status: "available" })
+                    .eq("id", jo.fleet_id);
+                }
+                if (jo.driver_id) {
+                  try {
+                    const { data: driverData } = await supabase
+                      .from("md_drivers")
+                      .select("total_jobs_completed, total_km_driven")
+                      .eq("id", jo.driver_id)
+                      .single();
+                    const estimatedKM = 50;
+                    await supabase
+                      .from("md_drivers")
+                      .update({
+                        total_jobs_completed:
+                          (driverData?.total_jobs_completed || 0) + 1,
+                        total_km_driven:
+                          (driverData?.total_km_driven || 0) + estimatedKM,
+                      })
+                      .eq("id", jo.driver_id);
+                    await supabase
+                      .from("driver_performance_logs")
+                      .insert({
+                        driver_id: jo.driver_id,
+                        job_order_id: jo.id,
+                        type: "KM_LOG",
+                        total_km: estimatedKM,
+                        review_notes: "Auto-complete via Geofence",
+                        tenant_id: jo.tenant_id,
+                      });
+                  } catch (e) {
+                    console.warn("[Geofence] Driver stats update failed:", e);
+                  }
+                }
+              }
             }
           }
         }
