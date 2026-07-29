@@ -192,15 +192,15 @@ export default function HQBusinessDashboard() {
 
       const revenueVariance = lastRevenue > 0 ? ((currentRevenue - lastRevenue) / lastRevenue) * 100 : 0;
       const grossMargin = currentRevenue > 0 ? ((currentRevenue - totalCogs) / currentRevenue) * 100 : 0;
-      const arOutstanding = (invoices || []).reduce((sum, inv) => sum + (Number(inv.total_billing) || 0), 0);
-      const apOutstanding = (vendorInvoices || []).reduce((sum, vi) => sum + (Number(vi.invoice_amount) || 0), 0);
+      const arOutstanding = (invoices || []).reduce<number>((sum, inv) => sum + (Number(inv.total_billing) || 0), 0);
+      const apOutstanding = (vendorInvoices || []).reduce<number>((sum, vi) => sum + (Number(vi.invoice_amount) || 0), 0);
 
       // Customer concentration (top 3 customer % of total revenue)
-      const totalRevenue = jos.reduce((sum, j) => sum + (Number(j.wo_item?.unit_price) || Number(j.base_price) || 0), 0);
+      const totalRevenue = jos.reduce<number>((sum, j) => sum + (Number(j.wo_item?.unit_price) || Number(j.base_price) || 0), 0);
       const top3Revenue = Array.from(customerMap.values())
         .sort((a, b) => b - a)
         .slice(0, 3)
-        .reduce((sum, v) => sum + v, 0);
+        .reduce<number>((sum, v) => sum + v, 0);
       const concentration = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0;
 
       // Format SBU data

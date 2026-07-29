@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { getPendingMutations, syncOutboxQueueToCloud } from '../offline/offlineSyncEngine';
+import { getPendingMutations, syncGpsPingsFirst, getGpsPingQueueLength } from '../offline/offlineSyncEngine';
 
 export interface OfflineStatus {
   isOnline: boolean;
   pendingCount: number;
+  gpsQueueLength: number;
   isSyncing: boolean;
-  lastSyncResult: { syncedCount: number; failedCount: number } | null;
+  lastSyncResult: { syncedGps: number; syncedMutations: number; failedCount: number } | null;
   syncNow: () => Promise<void>;
   refreshQueueCount: () => Promise<void>;
 }
@@ -15,13 +16,16 @@ export interface OfflineStatus {
 export function useOfflineStatus(): OfflineStatus {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [gpsQueueLength, setGpsQueueLength] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [lastSyncResult, setLastSyncResult] = useState<{ syncedCount: number; failedCount: number } | null>(null);
+  const [lastSyncResult, setLastSyncResult] = useState<{ syncedGps: number; syncedMutations: number; failedCount: number } | null>(null);
 
   const refreshQueueCount = useCallback(async () => {
     try {
       const pending = await getPendingMutations();
       setPendingCount(pending.length);
+      const gpsLen = await getGpsPingQueueLength();
+      setGpsQueueLength(gpsLen);
     } catch (err) {
       console.error('[useOfflineStatus] Failed to refresh queue count:', err);
     }
@@ -31,7 +35,7 @@ export function useOfflineStatus(): OfflineStatus {
     if (isSyncing || typeof window === 'undefined' || !window.navigator.onLine) return;
     setIsSyncing(true);
     try {
-      const result = await syncOutboxQueueToCloud();
+      const result = await syncGpsPingsFirst();
       setLastSyncResult(result);
       await refreshQueueCount();
     } catch (err) {
@@ -44,27 +48,29 @@ export function useOfflineStatus(): OfflineStatus {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Initial check
     setIsOnline(window.navigator.onLine);
     refreshQueueCount();
 
     const handleOnline = () => {
-      console.info('[useOfflineStatus] Network online detected. Triggering auto-sync...');
+      console.info('[useOfflineStatus] Network online detected. Triggering GPS-first auto-sync...');
       setIsOnline(true);
       syncNow();
     };
 
     const handleOffline = () => {
-      console.warn('[useOfflineStatus] Network offline detected. Switching to local outbox mode.');
+      console.warn('[useOfflineStatus] Network offline detected. GPS pings will be queued locally.');
       setIsOnline(false);
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Periodic poll of queue count and auto-sync every 30 seconds if online
-    const intervalId = setInterval(() => {
+    // GPS queue checked more frequently (every 15s), full sync every 30s
+    const gpsIntervalId = setInterval(() => {
       refreshQueueCount();
+    }, 15000);
+
+    const syncIntervalId = setInterval(() => {
       if (window.navigator.onLine) {
         syncNow();
       }
@@ -73,13 +79,15 @@ export function useOfflineStatus(): OfflineStatus {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      clearInterval(intervalId);
+      clearInterval(gpsIntervalId);
+      clearInterval(syncIntervalId);
     };
   }, [refreshQueueCount, syncNow]);
 
   return {
     isOnline,
     pendingCount,
+    gpsQueueLength,
     isSyncing,
     lastSyncResult,
     syncNow,

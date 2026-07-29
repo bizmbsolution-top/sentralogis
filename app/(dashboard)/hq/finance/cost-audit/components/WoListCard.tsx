@@ -52,7 +52,7 @@ export default function WoListCard({ group, paymentMap, onSelect }: WoListCardPr
       Number(jo?.purchase_price || 0) +
       Number(jo?.driver_payment_amount || 0);
 
-    const joPayments = jo.id ? paymentMap[jo.id] || [] : [];
+    const joPayments: any[] = jo.id ? paymentMap[jo.id] || [] : [];
     for (const payment of joPayments) {
       totalPaid += Number(payment.amount);
     }
@@ -101,7 +101,7 @@ export default function WoListCard({ group, paymentMap, onSelect }: WoListCardPr
                 {sbuTypes.map(sbu => {
                   const config = SBU_BADGE_CONFIG[sbu];
                   if (!config) return null;
-                  const Icon = config.icon;
+                  const Icon = config.icon as React.ElementType;
                   return (
                     <Badge
                       key={sbu}

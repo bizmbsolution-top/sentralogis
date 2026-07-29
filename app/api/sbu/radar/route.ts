@@ -124,7 +124,12 @@ export async function GET(request: Request) {
         driver_phone: driver?.phone || '',
         customer_name: customerName,
         latitude: lat,
-        longitude: lng
+        longitude: lng,
+        source: latestTracking?.source || 'pwa',
+        speed: latestTracking?.speed ? Number(latestTracking.speed) : null,
+        accuracy: latestTracking?.accuracy ? Number(latestTracking.accuracy) : null,
+        battery_level: latestTracking?.battery_level ? Number(latestTracking.battery_level) : null,
+        heading: latestTracking?.heading ? Number(latestTracking.heading) : null,
       };
     }).filter(m => m.latitude !== null && m.longitude !== null && !isNaN(m.latitude) && !isNaN(m.longitude));
 

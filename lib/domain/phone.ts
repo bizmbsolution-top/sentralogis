@@ -61,3 +61,30 @@ export function buildVendorInquiryMessage(params: {
     `Minat? Balas jumlah & harga yang Anda tawarkan.`,
   ].join('\n');
 }
+
+export function buildGroundStaffNotificationMessage(params: {
+  woNumber: string;
+  tenantName: string;
+  executionDate: string;
+  executionTime: string;
+  siteName: string;
+  origin: string;
+  destination: string;
+  truckCount: number;
+  link: string;
+}): string {
+  const { woNumber, tenantName, executionDate, executionTime, siteName, origin, destination, truckCount, link } = params;
+  return [
+    `📋 *GROUND STAFF — WO ${woNumber}*`,
+    ``,
+    `Tenant: ${tenantName}`,
+    `Tanggal: ${executionDate}`,
+    `Jam: ${executionTime}`,
+    siteName ? `Lokasi: ${siteName}` : null,
+    `Rute: ${origin} → ${destination}`,
+    `Jumlah Truk: ${truckCount} unit`,
+    ``,
+    `Silakan buka aplikasi Ground Staff untuk proses Gate In/Out:`,
+    link,
+  ].filter(Boolean).join('\n');
+}

@@ -6,6 +6,7 @@ import { X, Clock, Loader2, Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
+import RouteTimeline from './RouteTimeline';
 
 interface HistoryModalProps {
   entityId: string;
@@ -18,7 +19,9 @@ const supabase = createClient();
 
 export default function HistoryModal({ entityId, entityType, onClose, title }: HistoryModalProps) {
   const [logs, setLogs] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'audit' | 'timeline'>('audit');
 
 useEffect(() => {
     const fetchLogs = async () => {
@@ -48,17 +51,39 @@ useEffect(() => {
 
         if (logsError) {
           console.error("[HistoryModal] Error fetching logs:", logsError);
+        }
+
+        // Fetch driver tracking logs if entityType is job_order
+        let trackingData: any[] = [];
+        let routesData: any[] = [];
+        if (entityType === 'job_order') {
+          const { data: td, error: te } = await supabase
+            .from('job_tracking')
+            .select('*')
+            .eq('job_order_id', entityId)
+            .order('created_at', { ascending: false });
+          if (!te && td) {
+            trackingData = td;
+          }
+          
+          const { data: rd, error: re } = await supabase
+            .from('job_routes')
+            .select('*')
+            .eq('job_order_id', entityId)
+            .order('sequence', { ascending: true });
+          if (!re && rd) {
+            routesData = rd;
+            setRoutes(rd);
+          }
+        }
+
+        if ((!logsData || logsData.length === 0) && trackingData.length === 0) {
           setLogs([]);
           return;
         }
 
-        if (!logsData || logsData.length === 0) {
-          setLogs([]);
-          return;
-        }
-
-        // Get unique performed_by user IDs
-        const performedByIds = [...new Set(logsData.map(l => l.performed_by).filter(Boolean))];
+        // Get unique performed_by user IDs from audit logs
+        const performedByIds = [...new Set((logsData || []).map(l => l.performed_by).filter(Boolean))];
         
         // Fetch profiles for those users
         let profilesMap: Record<string, any> = {};
@@ -75,13 +100,29 @@ useEffect(() => {
           }
         }
 
-        // Enrich logs with user info
-        const enrichedLogs = logsData.map(log => ({
+        // Enrich audit logs with user info
+        const enrichedAuditLogs = (logsData || []).map(log => ({
           ...log,
           user: log.performed_by && profilesMap[log.performed_by] ? profilesMap[log.performed_by] : null
         }));
 
-        setLogs(enrichedLogs);
+        // Map tracking logs to same shape
+        const mappedTrackingLogs = trackingData.map(t => ({
+          id: `trk-${t.id}`,
+          operation: 'DRIVER_UPDATE',
+          performed_at: t.created_at,
+          user: { name: 'Supir / Driver App' },
+          tracking_status: t.status,
+          tracking_notes: t.notes,
+          tracking_location: t.latitude && t.longitude ? `${t.latitude}, ${t.longitude}` : null
+        }));
+
+        // Combine and sort
+        const combinedLogs = [...enrichedAuditLogs, ...mappedTrackingLogs].sort(
+          (a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime()
+        );
+
+        setLogs(combinedLogs);
       } catch (err) {
         console.error("[HistoryModal] Unexpected error:", err);
         setLogs([]);
@@ -98,6 +139,7 @@ useEffect(() => {
       case 'INSERT': return { label: 'Created', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
       case 'UPDATE': return { label: 'Updated', color: 'bg-blue-100 text-blue-700 border-blue-200' };
       case 'DELETE': return { label: 'Deleted', color: 'bg-rose-100 text-rose-700 border-rose-200' };
+      case 'DRIVER_UPDATE': return { label: 'GPS Ping', color: 'bg-amber-100 text-amber-700 border-amber-200' };
       default: return { label: op, color: 'bg-slate-100 text-slate-700 border-slate-200' };
     }
   };
@@ -141,6 +183,24 @@ useEffect(() => {
           </button>
         </div>
 
+        {/* Tabs for Job Orders */}
+        {entityType === 'job_order' && (
+          <div className="flex border-b border-slate-200 px-6 bg-slate-50">
+             <button 
+               onClick={() => setActiveTab('audit')}
+               className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'audit' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+             >
+               Audit & Live Event Feed
+             </button>
+             <button 
+               onClick={() => setActiveTab('timeline')}
+               className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeTab === 'timeline' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+             >
+               Riwayat Perjalanan (Timeline)
+             </button>
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           {loading ? (
@@ -161,6 +221,8 @@ useEffect(() => {
                 (Entity {entityId} has no audit records yet)
               </p>
             </div>
+          ) : activeTab === 'timeline' ? (
+            <RouteTimeline routes={routes} />
           ) : (
             <div className="relative">
               {/* Timeline Line */}
@@ -177,8 +239,8 @@ useEffect(() => {
                     <div key={log.id || idx} className="relative flex gap-4">
                       {/* Timeline Dot & Avatar */}
                       <div className="relative z-10 w-12 flex flex-col items-center shrink-0 pt-1">
-                        <div className="w-12 h-12 bg-white rounded-full border-4 border-slate-50 flex items-center justify-center shadow-sm">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs border border-indigo-200">
+                        <div className={`w-12 h-12 bg-white rounded-full border-4 border-slate-50 flex items-center justify-center shadow-sm`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs border ${log.operation === 'DRIVER_UPDATE' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}>
                             {initials}
                           </div>
                         </div>
@@ -209,6 +271,29 @@ useEffect(() => {
                                   </span>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {log.operation === 'DRIVER_UPDATE' && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                              {log.tracking_status && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-20">Status</span>
+                                  <span className="text-sm font-bold text-slate-700">{log.tracking_status}</span>
+                                </div>
+                              )}
+                              {log.tracking_location && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-20">Location</span>
+                                  <span className="text-sm font-mono text-slate-600 bg-slate-50 px-2 py-0.5 rounded">{log.tracking_location}</span>
+                                </div>
+                              )}
+                              {log.tracking_notes && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-20 mt-1">Notes</span>
+                                  <span className="text-sm text-slate-600 italic bg-amber-50/50 p-2 rounded-lg flex-1 border border-amber-100/50">{log.tracking_notes}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

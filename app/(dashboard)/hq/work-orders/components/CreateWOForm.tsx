@@ -31,6 +31,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const [customers, setCustomers] = useState<any[]>([]);
   const [activeSBUModal, setActiveSBUModal] = useState<string | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [woNumber, setWoNumber] = useState<string>('');
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
   const [customerSearch, setCustomerSearch] = useState('');
@@ -237,6 +238,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         // STEP 4: Set state
         setWoStatus(wo.status);
+        setWoNumber(wo.wo_number || '');
         setFormData({
           customer_id: wo.customer_id || '',
           order_date: wo.order_date || todayLocal(),
@@ -713,9 +715,11 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-black font-bold transition-all uppercase tracking-widest text-[10px]">
             <ArrowLeft size={14} /> Back to Directory
           </button>
-          <div className="md:text-right">
-            <h2 className="text-3xl font-black text-black italic tracking-tight">ORCHESTRATE WORK ORDER</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Multi-SBU Dispatcher System</p>
+          <div className="md:text-right flex flex-col md:items-end gap-3">
+            <div>
+              <h2 className="text-3xl font-black text-black italic tracking-tight">ORCHESTRATE WORK ORDER</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Multi-SBU Dispatcher System</p>
+            </div>
           </div>
         </div>
 

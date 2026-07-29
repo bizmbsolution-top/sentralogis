@@ -164,9 +164,13 @@ export default function GPSTrackingReportPage() {
           vendor:md_entities!transporter_id (id, name, legal_name)
         `,
         )
-        .in("id", joIds);
+        .in("id", joIds)
+        .eq("tenant_id", tenantId);
 
       if (joError) throw joError;
+
+      const validJoIds = new Set(jos.map((jo: any) => jo.id));
+      const filteredRoutes = (routes || []).filter((r: any) => validJoIds.has(r.job_order_id));
 
       // Step 3: Fetch wo_items for WO context
       const woItemIds = [
@@ -179,7 +183,8 @@ export default function GPSTrackingReportPage() {
         const { data: woItems } = await supabase
           .from("wo_items")
           .select("id, wo_id, item_code, item_data")
-          .in("id", woItemIds);
+          .in("id", woItemIds)
+          .eq("tenant_id", tenantId);
 
         if (woItems) {
           woItems.forEach((wi: any) => {
@@ -193,7 +198,8 @@ export default function GPSTrackingReportPage() {
               .select(
                 "id, wo_number, customer_id, customers:md_entities!customer_id (id, name, legal_name)",
               )
-              .in("id", woIds);
+              .in("id", woIds)
+              .eq("tenant_id", tenantId);
 
             if (wos) {
               wos.forEach((wo: any) => {
@@ -227,7 +233,7 @@ export default function GPSTrackingReportPage() {
 
       // Step 4: Group routes by JO (and WO)
       const routeGroups: Record<string, any[]> = {};
-      (routes || []).forEach((r: any) => {
+      filteredRoutes.forEach((r: any) => {
         const joId = r.job_order_id;
         if (!routeGroups[joId]) routeGroups[joId] = [];
         const joInfo = joMap[joId] || {};
@@ -452,6 +458,12 @@ export default function GPSTrackingReportPage() {
     );
   }
 
+  // Derived metrics for summary
+  const sumWO = groupedData.length;
+  const sumJO = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.length, 0);
+  const sumVendors = [...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter(Boolean))].length;
+  const sumCheckpoints = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.reduce((sum: number, jo: any) => sum + jo.stops.length, 0), 0);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
       <Toaster position="top-right" />
@@ -579,19 +591,72 @@ export default function GPSTrackingReportPage() {
             <button
               onClick={fetchReportData}
               disabled={loading}
-              className="h-[42px] px-4 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
+              className="h-[42px] px-6 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm"
             >
               <RefreshCw
                 className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
               />{" "}
-              Refresh
+              Generate Report
             </button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+      <div className="space-y-6">
+        {/* SBU Snapshot Card */}
+        <div className="bg-slate-900 rounded-2xl p-4 md:p-5 text-white shadow-md relative overflow-hidden">
+          <div className="relative z-10">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-2">
+              GPS Tracking Snapshot
+            </p>
+            <h3 className="text-lg font-bold uppercase text-white mb-4">
+              Operational Tracking
+            </h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-white leading-none">
+                  {sumWO}{" "}
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Total WO
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-blue-400 leading-none">
+                  {sumJO}{" "}
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Total JO
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-emerald-300 leading-none">
+                  {sumVendors}{" "}
+                  <span className="text-[10px] text-emerald-500/70 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Vendors
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-amber-300 leading-none">
+                  {sumCheckpoints}{" "}
+                  <span className="text-[10px] text-amber-500/70 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Checkpoints
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Decorative Elements */}
+          <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+          <div className="absolute -bottom-24 -right-12 w-48 h-48 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-40">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
             GPS Tracking per Work Order
@@ -870,5 +935,6 @@ export default function GPSTrackingReportPage() {
         )}
       </div>
     </div>
+  </div>
   );
 }

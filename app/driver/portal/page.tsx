@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { subscribeToPushNotifications } from '@/lib/push/client';
 import { 
   ShieldCheck, 
   ArrowRight, 
@@ -47,10 +48,14 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from '@react-google-maps/api';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
+import SetupWizard from './components/SetupWizard';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+const NativeGps = registerPlugin<any>('NativeGps');
 
 export default function DriverPortal() {
   const { isLoaded } = useGoogleMaps();
-  const [step, setStep] = useState<'auth' | 'dashboard' | 'profile' | 'inspection' | 'jobDetail' | 'performance' | 'history'>('auth');
+  const [step, setStep] = useState<'auth' | 'dashboard' | 'profile' | 'inspection' | 'jobDetail' | 'performance' | 'history' | 'vendor_active'>('auth');
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [whatsapp, setWhatsapp] = useState('');
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
@@ -60,6 +65,7 @@ export default function DriverPortal() {
   const [driver, setDriver] = useState<any>(null);
   const [tenantInfo, setTenantInfo] = useState<{ name: string; logo_url: string | null } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isSetupComplete, setIsSetupComplete] = useState(true);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
 
   // Theme Management: light / dark mode
@@ -152,6 +158,7 @@ export default function DriverPortal() {
 
   // Theme Sync on Mount, SW Registration, & PWA Install Prompts
   // [AI] Setting up localStorage theme sync, service worker register and capturing beforeinstallprompt event
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('sentralogis-driver-theme');
     if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -160,6 +167,9 @@ export default function DriverPortal() {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       setThemeMode(prefersDark ? 'dark' : 'light');
     }
+
+    const driverType = localStorage.getItem('sentralogis_driver_type');
+    // Removed Vendor block based on user request to allow Vendors to access Driver Portal
 
     // Register Service Worker for PWA Add-to-Home-Screen support
     if ('serviceWorker' in navigator) {
@@ -243,8 +253,19 @@ export default function DriverPortal() {
         }
       } catch(e) {}
     }
+    const setupStatus = localStorage.getItem('sentraship_setup_complete');
+    if (setupStatus !== 'true') {
+      setIsSetupComplete(false);
+    }
     setMounted(true);
   }, []);
+
+  // [AI] Auto-register push subscription when driver is logged in
+  useEffect(() => {
+    if (driver?.id && step === 'dashboard') {
+      subscribeToPushNotifications(driver.id).catch(() => {});
+    }
+  }, [driver?.id, step]);
 
   const handleCheckOut = async () => {
     if (!activeShift) return;
@@ -283,6 +304,36 @@ export default function DriverPortal() {
       fetchAttendanceHistory();
     }
   }, [step, driver]);
+
+  // [AI] Realtime listener: auto-refresh job list when backend changes job status
+  useEffect(() => {
+    if (!driver?.id || step === 'auth') return;
+
+    const channel = supabase
+      .channel(`driver-jobs-${driver.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'job_orders',
+        filter: `driver_id=eq.${driver.id}`,
+      }, (payload) => {
+        console.log('[Realtime] Job order changed:', payload.eventType, payload.new?.status);
+        fetchJobOrders();
+        if (payload.new?.status) {
+          const s = (payload.new.status as string).toUpperCase();
+          if (['ORDER DITERIMA', 'ACCEPTED'].includes(s)) {
+            toast.success('Job baru diterima! GPS tracking aktif.');
+          } else if (s === 'REJECTED') {
+            toast.error('Job dibatalkan oleh ops.');
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id, step]);
 
   const gpsPingJob = useMemo(
     () => selectedJob ?? jobOrders.find(jo => jo.driver_response === 'accepted') ?? null,
@@ -805,6 +856,30 @@ export default function DriverPortal() {
         setSelectedJob({ ...selectedJob });
       }
 
+      // [AI] Capacitor Native Background GPS tracking integration
+      if (apiStatus === 'accepted' || apiStatus === 'in_progress') {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await NativeGps.startTracking({ 
+              jobId,
+              apiUrl: window.location.origin 
+            });
+          } catch (e) {
+            console.error('Failed to start NativeGps', e);
+          }
+        }
+      }
+
+      if (apiStatus === 'completed' || apiStatus === 'rejected' || apiStatus === 'cancelled') {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await NativeGps.stopTracking();
+          } catch (e) {
+            console.error('Failed to stop NativeGps', e);
+          }
+        }
+      }
+
       // [AI] Fleet & driver updates now handled by API (admin client)
       if (apiStatus === 'completed') {
         setSelectedJob(null);
@@ -1315,6 +1390,37 @@ export default function DriverPortal() {
     );
   }
 
+  // [AI] Simple View for Vendor Drivers
+  if (step === 'vendor_active') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-6 relative overflow-hidden font-sans">
+        <div className="absolute top-1/4 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px]" />
+        <div className="absolute bottom-1/4 -left-20 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px]" />
+        
+        <div className="relative z-10 text-center max-w-sm w-full backdrop-blur-xl bg-slate-900/50 p-10 rounded-[2rem] border border-slate-800 shadow-2xl">
+          <div className="mb-8 flex justify-center">
+            <div className="w-28 h-28 rounded-full bg-emerald-500/10 flex items-center justify-center border-4 border-emerald-500 relative">
+              <div className="absolute inset-0 rounded-full border-4 border-emerald-500 animate-ping opacity-30"></div>
+              <MapPin className="w-14 h-14 text-emerald-400" />
+            </div>
+          </div>
+          <h2 className="text-3xl font-black mb-3 tracking-tight">PWA Aktif</h2>
+          <p className="text-slate-400 text-sm font-medium mb-10 leading-relaxed">
+            GPS tracking berjalan di latar belakang saat Anda memiliki pekerjaan aktif.
+          </p>
+          
+          <button 
+            onClick={() => { try { window.close(); } catch(e) {} }}
+            className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 py-5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg"
+          >
+            <X size={20} /> Tutup Aplikasi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // [AI] The rest is for internal drivers
   if (step === 'auth') {
     return (
       <>
@@ -1791,6 +1897,10 @@ export default function DriverPortal() {
   })();
 
   // Dashboard & Worksheets
+  if (!isSetupComplete) {
+    return <SetupWizard onComplete={() => setIsSetupComplete(true)} />;
+  }
+
   return (
     <div className={`min-h-screen pb-28 font-sans transition-colors duration-300 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <Toaster position="top-center" />
@@ -1802,17 +1912,11 @@ export default function DriverPortal() {
         {/* Top Row: Tenant Brand + Title + Theme Toggle + Panic SOS Button */}
         <div className="flex justify-between items-center relative z-10">
           <div className="flex items-center gap-2.5">
-            {tenantInfo?.logo_url ? (
-              <img
-                src={tenantInfo.logo_url}
-                alt={tenantInfo.name}
-                className="w-9 h-9 rounded-xl object-contain bg-white/20 backdrop-blur-md p-1 border border-white/20"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
-                <Building size={18} className="opacity-70" />
-              </div>
-            )}
+            <img
+              src="/logo2sentralogis.png"
+              alt="SentraLogis"
+              className="w-9 h-9 rounded-xl object-contain bg-white/20 backdrop-blur-md p-1 border border-white/20"
+            />
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">
                 {tenantInfo?.name || 'SENTRALOGIS'} — Driver Portal
@@ -2498,13 +2602,17 @@ export default function DriverPortal() {
                           });
                           
                           if (!response.ok) {
-                            const result = await response.json();
-                            throw new Error(result.error || 'Gagal menolak tugas');
+                            toast.error('Gagal menolak tugas');
+                          } else {
+                            toast.success('Tugas ditolak');
+                            if (Capacitor.isNativePlatform()) {
+                              try {
+                                await NativeGps.stopTracking();
+                              } catch (e) {}
+                            }
+                            setSelectedJob(null);
+                            setStep('dashboard');
                           }
-                          
-                          toast.success('Tugas telah ditolak');
-                          setSelectedJob(null);
-                          setStep('dashboard');
                           fetchJobOrders();
                         } catch (err: any) {
                           toast.error('Error: ' + err.message);

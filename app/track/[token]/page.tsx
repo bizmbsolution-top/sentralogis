@@ -93,6 +93,7 @@ export default async function PublicTrackingPage({ params }: { params: Promise<{
         md_fleets: fleet,
         tracking_updates: trackingUpdates,
         documents,
+        stops: stops,
         destination: destStop ? {
             name: destStop.location_name || destStop.name || 'Target Location',
             latitude: destStop.latitude || null,

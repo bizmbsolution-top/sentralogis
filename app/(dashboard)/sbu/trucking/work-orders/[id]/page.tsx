@@ -28,6 +28,7 @@ import {
   Printer,
   Box,
   Send,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -36,6 +37,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import AssignmentModal from "../components/AssignmentModal";
 import VendorSendBox from "@/components/sbu/VendorSendBox";
+import GroundStaffSendBox from "@/components/sbu/GroundStaffSendBox";
 
 interface WorkOrder {
   id: string;
@@ -95,6 +97,7 @@ export default function WorkOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [vendorSendOpen, setVendorSendOpen] = useState(false);
+  const [groundStaffSendOpen, setGroundStaffSendOpen] = useState(false);
   const [vendorInvoices, setVendorInvoices] = useState<any[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
@@ -460,6 +463,18 @@ export default function WorkOrderDetailPage() {
             <Send size={16} />
             <span className="text-[8px] font-black uppercase tracking-widest leading-none">
               Vendor
+            </span>
+          </button>
+
+          {/* Send to Ground Staff (WhatsApp) */}
+          <button
+            onClick={() => setGroundStaffSendOpen(true)}
+            title="Notify Ground Staff via WhatsApp"
+            className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 transition-all"
+          >
+            <Users size={16} />
+            <span className="text-[8px] font-black uppercase tracking-widest leading-none">
+              Ground
             </span>
           </button>
 
@@ -1030,6 +1045,16 @@ export default function WorkOrderDetailPage() {
         woNumber={wo?.wo_number || ''}
         tenantName={profile?.tenants?.name || ''}
         items={items}
+      />
+
+      <GroundStaffSendBox
+        open={groundStaffSendOpen}
+        onClose={() => setGroundStaffSendOpen(false)}
+        woNumber={wo?.wo_number || ''}
+        tenantName={profile?.tenants?.name || ''}
+        executionDate={wo?.execution_date || ''}
+        executionTime={wo?.execution_time || ''}
+        tenantId={profile?.tenant_id || ''}
       />
     </div>
   );

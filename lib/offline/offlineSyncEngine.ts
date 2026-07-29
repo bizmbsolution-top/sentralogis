@@ -45,7 +45,7 @@ export interface CachedMission {
 
 export interface MutationAction {
   id: string; // UUID of mutation
-  type: 'SCAN_ITEM' | 'UPDATE_JO_STATUS' | 'UPLOAD_POD' | 'STOCK_OPNAME_COUNT' | 'UPDATE_MILESTONE';
+  type: 'SCAN_ITEM' | 'UPDATE_JO_STATUS' | 'UPLOAD_POD' | 'STOCK_OPNAME_COUNT' | 'UPDATE_MILESTONE' | 'GPS_PING';
   payload: Record<string, any>;
   tenant_id: string;
   user_id?: string;
@@ -54,6 +54,18 @@ export interface MutationAction {
   retry_count: number;
   error_message?: string;
 }
+
+export interface GpsPing {
+  id: string;
+  job_order_id: string;
+  lat: number;
+  lng: number;
+  timestamp: string;
+  status: 'PENDING' | 'SYNCED' | 'FAILED';
+  retry_count: number;
+}
+
+const GPS_PING_QUEUE_KEY = 'offline_gps_ping_queue';
 
 /**
  * ----------------------------------------------------------------------------
@@ -239,4 +251,110 @@ async function removeMutationFromQueue(id: string): Promise<void> {
     if (!queue) return [];
     return queue.filter(m => m.id !== id);
   });
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * 5. GPS PING QUEUE (Offline GPS Store-and-Forward)
+ * ----------------------------------------------------------------------------
+ */
+export async function enqueueGpsPing(
+  jobOrderId: string,
+  lat: number,
+  lng: number
+): Promise<GpsPing> {
+  const ping: GpsPing = {
+    id: `gps_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    job_order_id: jobOrderId,
+    lat,
+    lng,
+    timestamp: new Date().toISOString(),
+    status: 'PENDING',
+    retry_count: 0,
+  };
+
+  await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+    const current = queue || [];
+    return [...current, ping];
+  });
+
+  console.info(`[OfflineSyncEngine] Enqueued GPS ping: ${ping.id} for JO ${jobOrderId}`);
+  return ping;
+}
+
+export async function getPendingGpsPings(): Promise<GpsPing[]> {
+  try {
+    const queue: GpsPing[] | undefined = await get(GPS_PING_QUEUE_KEY);
+    return (queue || []).filter(p => p.status === 'PENDING' || p.status === 'FAILED');
+  } catch (err) {
+    console.error('[OfflineSyncEngine] Error retrieving GPS pings:', err);
+    return [];
+  }
+}
+
+export async function getGpsPingQueueLength(): Promise<number> {
+  try {
+    const queue: GpsPing[] | undefined = await get(GPS_PING_QUEUE_KEY);
+    return (queue || []).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function removeGpsPingFromQueue(id: string): Promise<void> {
+  await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+    if (!queue) return [];
+    return queue.filter(p => p.id !== id);
+  });
+}
+
+async function updateGpsPingStatus(id: string, status: GpsPing['status']): Promise<void> {
+  await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+    if (!queue) return [];
+    return queue.map(p => p.id === id ? { ...p, status, retry_count: p.retry_count + (status === 'FAILED' ? 1 : 0) } : p);
+  });
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * 6. GPS-PRIORITY SYNC: GPS pings first, then other mutations
+ * ----------------------------------------------------------------------------
+ */
+export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMutations: number; failedCount: number }> {
+  if (typeof window !== 'undefined' && !window.navigator.onLine) {
+    return { syncedGps: 0, syncedMutations: 0, failedCount: 0 };
+  }
+
+  // Step 1: Sync GPS pings first (highest priority)
+  const gpsPings = await getPendingGpsPings();
+  let syncedGps = 0;
+  let failedCount = 0;
+
+  for (const ping of gpsPings) {
+    try {
+      await updateGpsPingStatus(ping.id, 'SYNCED');
+      const { error } = await supabase
+        .from('job_tracking')
+        .insert({
+          job_order_id: ping.job_order_id,
+          status_update: 'GPS_PING',
+          latitude: ping.lat,
+          longitude: ping.lng,
+          notes: 'Offline GPS ping (queued)',
+          created_at: ping.timestamp,
+        });
+      if (error) throw error;
+      await removeGpsPingFromQueue(ping.id);
+      syncedGps++;
+    } catch (err: any) {
+      console.error(`[OfflineSyncEngine] GPS ping sync failed:`, err);
+      failedCount++;
+      await updateGpsPingStatus(ping.id, 'FAILED');
+    }
+  }
+
+  // Step 2: Sync remaining mutations (FIFO)
+  const mutations = await syncOutboxQueueToCloud();
+
+  return { syncedGps, syncedMutations: mutations.syncedCount, failedCount: failedCount + mutations.failedCount };
 }

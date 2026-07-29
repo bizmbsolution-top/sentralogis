@@ -51,6 +51,8 @@ interface Activity {
   description: string;
   location?: string;
   performed_by_name?: string;
+  profiles?: { full_name?: string } | null;
+  photo_url?: string | null;
 }
 
 import ContactFormModal from '@/components/master/ContactFormModal';

@@ -37,6 +37,9 @@ export default function CockpitTelemetryFeed({
                             
                             const latest = jo.tracking_updates?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                             
+                            if (latest?.latitude !== undefined && latest?.longitude !== undefined && latest?.latitude !== null) {
+                                return { lat: Number(latest.latitude), lng: Number(latest.longitude) };
+                            }
                             if (latest?.location) {
                                 const coords = latest.location.split(',').map((c: any) => parseFloat(c.trim()));
                                 if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {

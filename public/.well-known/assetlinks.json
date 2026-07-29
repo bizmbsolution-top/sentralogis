@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sentralogis.driver",
+      "sha256_cert_fingerprints": [
+        "3A:18:1D:10:E0:1F:3F:44:42:FB:BD:04:32:71:AA:F0:F7:48:1D:E5:1B:52:59:BB:BD:FD:BD:AA:D6:63:27:4D"
+      ]
+    }
+  }
+]

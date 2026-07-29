@@ -246,6 +246,8 @@ export async function saveAssignments(
             ...(assign.notes ? { notes: assign.notes } : {}),
           },
           updated_at: new Date().toISOString(),
+          assigned_at: new Date().toISOString(),
+          driver_response: 'accepted',
           status: 'pending',
         };
 
@@ -373,10 +375,14 @@ export async function saveAssignments(
           ...(assign.notes ? { notes: assign.notes } : {}),
         },
         updated_at: new Date().toISOString(),
+        assigned_at: new Date().toISOString(),
+        driver_response: 'accepted',
         status:
           assign.id && assign.status && assign.status !== 'pending' && assign.status !== 'draft'
             ? assign.status
             : 'assigned',
+        dispatch_ready: true,
+        dispatch_ready_at: new Date().toISOString(),
       };
 
       const joId = await upsertJobOrder(supabase, assign, payload, !assign.id);

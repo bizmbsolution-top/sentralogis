@@ -11,8 +11,8 @@ import {
   Search, Loader2,
   Clock, CheckCircle2, Navigation as NavIcon,
   AlertCircle, Activity, ClipboardList,
-  Phone, X, FileText, Layers, Box,
-  Warehouse, Ship, LayoutGrid, Users, ArrowRight
+  Warehouse, Ship, LayoutGrid, Users, ArrowRight, Play, MessageSquare,
+  Layers, Box, FileText
 } from 'lucide-react';
 import { SBU_MAP } from '@/lib/utils/sbuMapping';
 import { toast, Toaster } from 'react-hot-toast';
@@ -121,9 +121,9 @@ export default function HQJobOrdersPage() {
         const warehouseJoIds = baseJOs.filter(j => j.wo_item?.sbu_type === 'WAREHOUSE').map(j => j.id);
 
         const [driversRes, fleetsRes, warehouseReceiptsRes] = await Promise.all([
-          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] },
-          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] },
-          warehouseJoIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseJoIds) : { data: [] }
+          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] as any[] },
+          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] as any[] },
+          warehouseJoIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseJoIds) : { data: [] as any[] }
         ]);
 
         const warehouseReceipts = warehouseReceiptsRes.data || [];
@@ -382,10 +382,10 @@ export default function HQJobOrdersPage() {
         {/* [AI] Mobile SBU Type Filter */}
         <div className="px-4 pb-3">
           <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {[
+            {([
               { id: 'all', label: 'All SBU', icon: Layers },
               ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-            ].map(item => {
+            ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
               const isActive = sbuFilter === item.id;
               const Icon = item.icon;
               return (
@@ -473,10 +473,10 @@ export default function HQJobOrdersPage() {
         {/* [AI] Desktop SBU Type Filter */}
         <div className="mt-3 flex items-center gap-2">
           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
-          {[
+          {([
             { id: 'all', label: 'All SBU', icon: Layers },
             ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-          ].map(item => {
+          ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
             return (
@@ -685,12 +685,24 @@ export default function HQJobOrdersPage() {
                       ? `/track/warehouse/${trackingToken}?jo_id=${jo.id}` 
                       : `/hq/tracking?jo=${jo.jo_number}`;
 
+                    const waPhone = jo.driver_phone ? jo.driver_phone.replace(/\D/g, '') : '';
+                    const waUrl = waPhone ? `https://wa.me/${waPhone.startsWith('0') ? '62' + waPhone.slice(1) : waPhone}` : null;
+
                     return (
                       <>
-                        <div className="h-10 px-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm text-black text-[10px] font-black">
-                          <CheckCircle2 size={12} className={jo.wa_link_sent_at ? "text-emerald-500" : "text-slate-300"} />
-                          {jo.wa_link_sent_at ? 'WA Sent' : 'No WA'}
-                        </div>
+                        {waUrl ? (
+                          <a href={waUrl} target="_blank" rel="noopener noreferrer" className="h-10 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm text-emerald-700 text-[10px] font-black transition-all" title="WhatsApp Driver">
+                            <MessageSquare size={14} />
+                          </a>
+                        ) : (
+                          <div className="h-10 px-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm text-black text-[10px] font-black">
+                            <CheckCircle2 size={12} className={jo.wa_link_sent_at ? "text-emerald-500" : "text-slate-300"} />
+                            {jo.wa_link_sent_at ? 'WA Sent' : 'No WA'}
+                          </div>
+                        )}
+                        <Link href={`/sbu/trucking/tracking?jo=${jo.jo_number}&replay=true`} className="h-10 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center gap-1.5 shrink-0 shadow-sm text-white text-[10px] font-black transition-all" title="Trip Replay">
+                          <Play size={14} />
+                        </Link>
                         <Link href={`/hq/finance/cost-audit?jo_id=${jo.id}`} className="flex-1 shrink-0">
                           <button className="w-full h-10 bg-white !text-black border border-slate-200 hover:bg-slate-50 rounded-xl font-black text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm">
                             <FileText size={14} /> Finance

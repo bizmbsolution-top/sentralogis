@@ -19,6 +19,7 @@ import {
   Calendar,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
@@ -100,18 +101,17 @@ export default function WOLevelReportingPage() {
   // Load customers
   useEffect(() => {
     const loadCustomers = async () => {
-      const tid = profile?.tenant_id || resolvedTenantId;
-      if (!tid) return;
+      if (!tenantId) return;
       const { data } = await supabase
         .from("md_entities")
         .select("id, name, legal_name")
         .eq("is_customer", true)
-        .eq("tenant_id", tid)
+        .eq("tenant_id", tenantId)
         .order("name");
       setCustomers(data || []);
     };
     loadCustomers();
-  }, [profile, resolvedTenantId]);
+  }, [tenantId]);
 
   const fetchReportData = useCallback(async () => {
     setLoading(true);
@@ -145,10 +145,8 @@ export default function WOLevelReportingPage() {
                             status,
                             driver_id,
                             fleet_id,
-                            plate_number,
                             advance_amount,
                             purchase_price,
-                            vendor_price,
                             md_drivers (name),
                             md_fleets (plate_number, md_fleet_types (type_name)),
                             transporter:md_entities!transporter_id (name, legal_name)
@@ -167,6 +165,17 @@ export default function WOLevelReportingPage() {
 
       const { data: woData, error } = await query;
       if (error) throw error;
+
+      // Format JO Status helper
+      const formatJoStatus = (status: string | null | undefined) => {
+        if (!status) return "-";
+        const upper = status.toUpperCase();
+        if (upper === "PENDING" || upper === "ASSIGNED" || upper === "ACCEPTED") return "MENUNGGU BERANGKAT";
+        if (upper === "IN_PROGRESS" || upper === "ON_JOURNEY") return "DALAM PERJALANAN";
+        if (upper === "COMPLETED" || upper === "DONE" || upper === "FINISHED") return "SELESAI";
+        if (upper === "REJECTED" || upper === "CANCELLED") return "DIBATALKAN";
+        return upper.replace(/_/g, " ");
+      };
 
       // Filter and group by WO
       const filtered = (woData || []).filter((wo: any) => {
@@ -207,7 +216,8 @@ export default function WOLevelReportingPage() {
           const itemAR = Number(
             item.total_revenue || item.item_data?.deal_price || 0,
           );
-          totalAR += itemAR;
+          const totalJOsInItem = item.job_orders?.length || 1;
+          const arShare = itemAR / totalJOsInItem;
 
           (item.job_orders || []).forEach((jo: any) => {
             const cashTotal = Number(jo.advance_amount || 0);
@@ -216,12 +226,24 @@ export default function WOLevelReportingPage() {
               !jo.transporter?.name ||
               jo.transporter?.name?.toLowerCase().includes("sentralogis");
             const cost = isInternal ? cashTotal : apTotal;
-            totalCost += cost;
+
+            const upperStatus = (jo.status || "").toUpperCase();
+            const isAssignedDone =
+              upperStatus !== "DIBATALKAN" &&
+              upperStatus !== "REJECTED" &&
+              upperStatus !== "CANCELLED" &&
+              upperStatus !== "DRAFT" &&
+              upperStatus !== "";
+
+            if (isAssignedDone) {
+              totalAR += arShare;
+              totalCost += cost;
+            }
 
             jos.push({
               id: jo.id,
               jo_number: jo.jo_number,
-              status: jo.status,
+              status: formatJoStatus(jo.status),
               driver_name: jo.md_drivers?.name || "-",
               plate_number:
                 jo.md_fleets?.plate_number || jo.plate_number || "-",
@@ -230,7 +252,7 @@ export default function WOLevelReportingPage() {
                 jo.transporter?.name || (isInternal ? "Internal" : "Vendor"),
               advance_amount: cashTotal,
               purchase_price: apTotal,
-              ar_share: itemAR / (truckingItems[0]?.job_orders?.length || 1),
+              ar_share: arShare,
             });
           });
         });
@@ -286,6 +308,14 @@ export default function WOLevelReportingPage() {
     const startIdx = (page - 1) * pageSize;
     return allData.slice(startIdx, startIdx + pageSize);
   }, [allData, page, pageSize]);
+
+  // Bottom Summary metrics calculations
+  const totalWOs = data.length;
+  const totalJOs = data.reduce((sum, d) => sum + (d.total_jo || 0), 0);
+  const totalRevenue = data.reduce((sum, d) => sum + Number(d.total_ar || 0), 0);
+  const totalCost = data.reduce((sum, d) => sum + Number(d.total_cost || 0), 0);
+  const totalGrossMargin = data.reduce((sum, d) => sum + Number(d.margin || 0), 0);
+  const marginRatio = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0;
 
   const handleExportExcel = async () => {
     if (data.length === 0) return toast.error("No data to export");
@@ -368,6 +398,13 @@ export default function WOLevelReportingPage() {
     );
   }
 
+  // Derived metrics for summary
+  const sumWO = allData.length;
+  const sumRitase = allData.reduce((acc: number, wo: any) => acc + (wo.total_jo || 0), 0);
+  const sumRevenue = allData.reduce((acc: number, wo: any) => acc + (wo.total_ar || 0), 0);
+  const sumCost = allData.reduce((acc: number, wo: any) => acc + (wo.total_cost || 0), 0);
+  const sumMargin = allData.reduce((acc: number, wo: any) => acc + (wo.margin || 0), 0);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
       <Toaster position="top-right" />
@@ -404,12 +441,7 @@ export default function WOLevelReportingPage() {
               ))}
             </select>
           )}
-          <Link
-            href="/sbu/trucking/reporting/gps-tracking"
-            className="h-[42px] px-4 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <MapPin className="w-4 h-4" /> GPS Tracking
-          </Link>
+
           <button
             onClick={handleExportExcel}
             className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-emerald-700 transition-all active:scale-95"
@@ -478,16 +510,82 @@ export default function WOLevelReportingPage() {
           <button
             onClick={fetchReportData}
             disabled={loading}
-            className="h-[38px] px-4 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
+            className="h-[38px] px-6 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />{" "}
-            Refresh
+            Generate Report
           </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+      <div className="space-y-6">
+        {/* SBU Snapshot Card */}
+        <div className="bg-slate-900 rounded-2xl p-4 md:p-5 text-white shadow-md relative overflow-hidden">
+          <div className="relative z-10">
+            <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-2">
+              WO Level Snapshot
+            </p>
+            <h3 className="text-lg font-bold uppercase text-white mb-4">
+              Trucking Financials
+            </h3>
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-white leading-none">
+                  {sumWO}{" "}
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Total WO
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-blue-400 leading-none">
+                  {sumRitase}{" "}
+                  <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Total Ritase (JO)
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-emerald-300 leading-none">
+                  Rp {sumRevenue.toLocaleString("id-ID")}{" "}
+                  <span className="text-[10px] text-emerald-500/70 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Revenue (AR)
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-rose-300 leading-none">
+                  Rp {sumCost.toLocaleString("id-ID")}{" "}
+                  <span className="text-[10px] text-rose-500/70 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Cost (AP)
+                  </span>
+                </p>
+              </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p
+                  className={`text-xl sm:text-2xl font-extrabold leading-none ${sumMargin >= 0 ? "text-blue-300" : "text-rose-400"}`}
+                >
+                  Rp {sumMargin.toLocaleString("id-ID")}{" "}
+                  <span
+                    className={`text-[10px] uppercase tracking-wider font-bold block sm:inline sm:ml-1 ${sumMargin >= 0 ? "text-blue-500/70" : "text-rose-500/70"}`}
+                  >
+                    Margin
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Decorative Elements */}
+          <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+          <div className="absolute -bottom-24 -right-12 w-48 h-48 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-40">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
             Work Order Financial Matrix
@@ -497,10 +595,42 @@ export default function WOLevelReportingPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto w-full">
-          {/* WO Rows */}
-          <div className="divide-y divide-slate-100">
-            {data.map((wo: any) => (
+        <div className="overflow-auto w-full max-h-[600px] relative">
+          <div className="min-w-[1000px]">
+            {/* Table Header */}
+            <div className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center gap-3">
+              <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-2">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">WO Number</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer</span>
+                </div>
+                <div className="col-span-3">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Route</span>
+                </div>
+                <div className="col-span-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Truck</span>
+                </div>
+                <div className="col-span-1 text-center">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">JOs</span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revenue (AR)</span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cost (AP)</span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Margin</span>
+                </div>
+              </div>
+              <div className="shrink-0 w-4"></div>
+            </div>
+
+            {/* WO Rows */}
+            <div className="divide-y divide-slate-100">
+              {data.map((wo: any) => (
               <div key={wo.id} className="hover:bg-slate-50/30 transition-all">
                 {/* WO Header Row */}
                 <div
@@ -605,14 +735,15 @@ export default function WOLevelReportingPage() {
                                 <td className="px-4 py-2.5">
                                   <span
                                     className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                      jo.status?.toLowerCase() ===
-                                        "completed" ||
-                                      jo.status?.toLowerCase() === "done"
+                                      jo.status === "SELESAI"
                                         ? "bg-emerald-50 text-emerald-700"
-                                        : jo.status?.toLowerCase() ===
-                                            "assigned"
+                                        : jo.status === "DALAM PERJALANAN"
                                           ? "bg-blue-50 text-blue-700"
-                                          : "bg-slate-100 text-slate-600"
+                                          : jo.status === "DIBATALKAN"
+                                            ? "bg-rose-50 text-rose-700"
+                                            : jo.status === "MENUNGGU BERANGKAT"
+                                              ? "bg-amber-50 text-amber-700"
+                                              : "bg-slate-100 text-slate-600"
                                     }`}
                                   >
                                     {jo.status || "-"}
@@ -649,6 +780,47 @@ export default function WOLevelReportingPage() {
             ))}
           </div>
 
+          {/* Summary Footer */}
+          {data.length > 0 && (
+            <div className="sticky bottom-0 z-20 bg-slate-50 border-t border-slate-200 px-5 py-4">
+              <div className="flex items-center gap-3 min-w-[1000px]">
+                <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-7 flex justify-end">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-widest mr-4">
+                      Total
+                    </span>
+                  </div>
+                  <div className="col-span-1 text-center">
+                    <span className="text-sm font-bold text-slate-800">
+                      {totalJOs}
+                    </span>
+                  </div>
+                  <div className="col-span-1 text-right">
+                    <span className="text-sm font-bold text-emerald-600">
+                      Rp {formatNumber(totalRevenue)}
+                    </span>
+                  </div>
+                  <div className="col-span-1 text-right">
+                    <span className="text-sm font-bold text-amber-600">
+                      Rp {formatNumber(totalCost)}
+                    </span>
+                  </div>
+                  <div className="col-span-1 text-right flex flex-col items-end">
+                    <span
+                      className={`text-sm font-bold ${totalGrossMargin >= 0 ? "text-blue-600" : "text-rose-600"}`}
+                    >
+                      Rp {formatNumber(totalGrossMargin)}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">
+                      {marginRatio.toFixed(1)}% Margin
+                    </span>
+                  </div>
+                </div>
+                <div className="shrink-0 w-4"></div>
+              </div>
+            </div>
+          )}
+
           {data.length === 0 && !loading && (
             <div className="py-24 text-center opacity-25 grayscale flex flex-col items-center justify-center">
               <Inbox className="w-16 h-16 mb-2 text-slate-400" />
@@ -657,6 +829,7 @@ export default function WOLevelReportingPage() {
               </p>
             </div>
           )}
+          </div>
         </div>
 
         {/* Pagination */}
@@ -720,5 +893,6 @@ export default function WOLevelReportingPage() {
         )}
       </div>
     </div>
+  </div>
   );
 }

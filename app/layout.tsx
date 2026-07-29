@@ -4,6 +4,7 @@ import { AuthProvider } from '@/lib/providers/AuthProvider';
 import { Toaster } from 'react-hot-toast';
 import { GoogleMapsProvider } from '@/lib/google-maps-context';
 import { LanguageProvider } from '@/lib/i18n/LanguageContext';
+import DeepLinkHandler from '@/components/DeepLinkHandler';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LanguageProvider>
           <AuthProvider>
             <GoogleMapsProvider>
+              <DeepLinkHandler />
               <Toaster 
                 position="top-right" 
                 toastOptions={{

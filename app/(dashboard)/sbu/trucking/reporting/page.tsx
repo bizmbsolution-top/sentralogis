@@ -47,7 +47,7 @@ export default function SBUTruckingReportingPage() {
   const [endDate, setEndDate] = useState(
     new Date().toISOString().split("T")[0],
   );
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(["done", "rejected"]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [truckTypeFilter, setTruckTypeFilter] = useState("");
   const [transporterFilter, setTransporterFilter] = useState("all");
@@ -97,37 +97,38 @@ export default function SBUTruckingReportingPage() {
     return allData.slice(startIdx, startIdx + pageSize);
   }, [allData, page, pageSize]);
 
-  const operationalStatuses = ["done", "rejected"];
+  const operationalStatuses = ["done", "rejected", "on_journey", "pending"];
 
   const getMappedStatuses = (filters: string[]) => {
-    let expanded = [...filters];
-    if (filters.includes("done"))
-      expanded = [...expanded, "delivered", "finished"];
-    if (filters.includes("on_journey"))
-      expanded = [...expanded, "accepted", "picking_up", "delivering"];
+    let expanded: string[] = [];
+    filters.forEach((f) => {
+      const lower = f.toLowerCase();
+      if (lower === "done" || lower === "selesai" || lower === "completed") {
+        expanded.push("completed", "done", "finished", "delivered", "selesai");
+      } else if (lower === "rejected" || lower === "dibatalkan" || lower === "cancelled") {
+        expanded.push("rejected", "cancelled", "dibatalkan");
+      } else if (lower === "on_journey" || lower === "dalam perjalanan" || lower === "in_progress") {
+        expanded.push("in_progress", "on_journey", "picking_up", "delivering", "dalam perjalanan");
+      } else if (lower === "pending" || lower === "menunggu berangkat" || lower === "assigned" || lower === "idle" || lower === "new") {
+        expanded.push("pending", "assigned", "accepted", "new", "idle", "draft", "menunggu berangkat");
+      } else {
+        expanded.push(lower);
+      }
+    });
     return expanded.map((s) => s.toLowerCase());
   };
 
-  // [AI] Fetch master data from md_entities (customers) to resolve non-existent tables
+  // [AI] Fetch master data from md_entities (customers) strictly scoped by tenant
   const fetchMasterData = async () => {
     try {
-      const [{ data: ct }, { data: tt }] = await Promise.all([
-        supabase
-          .from("md_entities")
-          .select("id, name, legal_name")
-          .eq("is_customer", true)
-          .eq("tenant_id", tenantId)
-          .order("name"),
-        supabase
-          .from("wo_items")
-          .select("item_data")
-          .eq("sbu_type", "TRUCKING"),
-      ]);
+      const { data: ct } = await supabase
+        .from("md_entities")
+        .select("id, name, legal_name")
+        .eq("is_customer", true)
+        .eq("tenant_id", tenantId)
+        .order("name");
+
       setCustomers(ct || []);
-      const types = (tt || [])
-        .map((t: any) => t.item_data?.vehicle_type_name)
-        .filter(Boolean);
-      setTruckTypes(Array.from(new Set(types)) as string[]);
     } catch (e) {}
   };
 
@@ -208,6 +209,27 @@ export default function SBUTruckingReportingPage() {
       const flattened: any[] = [];
       const activeStatusFilters = getMappedStatuses(statusFilter);
 
+      const formatJoStatus = (status: string | null | undefined) => {
+        if (!status) return "-";
+        const upper = status.toUpperCase();
+        if (upper === "PENDING" || upper === "ASSIGNED" || upper === "ACCEPTED") return "MENUNGGU BERANGKAT";
+        if (upper === "IN_PROGRESS" || upper === "ON_JOURNEY") return "DALAM PERJALANAN";
+        if (upper === "COMPLETED" || upper === "DONE" || upper === "FINISHED") return "SELESAI";
+        if (upper === "REJECTED" || upper === "CANCELLED") return "DIBATALKAN";
+        return upper.replace(/_/g, " ");
+      };
+
+      const uniqueTruckTypes = new Set<string>();
+
+      woData?.forEach((wo: any) => {
+        wo.wo_items?.forEach((item: any) => {
+          if (item.sbu_type?.toLowerCase() !== "trucking") return;
+          const typeName = item.item_data?.vehicle_type_name;
+          if (typeName) uniqueTruckTypes.add(typeName);
+        });
+      });
+      setTruckTypes(Array.from(uniqueTruckTypes).sort());
+
       woData?.forEach((wo: any) => {
         wo.wo_items?.forEach((item: any) => {
           // Lock to SBU Trucking only
@@ -237,30 +259,31 @@ export default function SBUTruckingReportingPage() {
           const dealPrice = Number(
             item.total_revenue || item.item_data?.deal_price || 0,
           );
+          const totalJOsInItem = jos.length || 1;
+          const arShare = dealPrice / totalJOsInItem;
 
           if (jos.length === 0) {
-            if (
-              activeStatusFilters.length > 0 &&
-              !activeStatusFilters.includes("rejected")
-            ) {
-              if (!isRejected) return;
-            }
-            if (isRejected || activeStatusFilters.length === 0) {
+            const hasRejectedFilter =
+              activeStatusFilters.length === 0 ||
+              activeStatusFilters.includes("rejected") ||
+              activeStatusFilters.includes("cancelled") ||
+              activeStatusFilters.includes("dibatalkan");
+            if (isRejected && hasRejectedFilter) {
               flattened.push({
                 id: `item-${item.id}`,
                 wo_number: wo.wo_number,
                 jo_number: "REJECTED_WO",
                 company_name:
                   wo.customers?.legal_name || wo.customers?.name || "-",
-                jo_status: "REJECTED",
+                jo_status: "DIBATALKAN",
                 route: routeStr,
                 fleet_info: "N/A (Rejected)",
                 vendor_name: "N/A",
-                ar_total: dealPrice,
+                ar_total: arShare,
                 ap_total: 0,
                 cash_advance: 0,
                 total_cost: 0,
-                gross_margin: dealPrice,
+                gross_margin: arShare,
                 truck_type: itemTruckType,
               });
             }
@@ -286,7 +309,7 @@ export default function SBUTruckingReportingPage() {
             const cashTotal = Number(jo.advance_amount || 0);
             const apTotal = Number(jo.purchase_price || jo.vendor_price || 0);
             const totalCost = isInternal ? cashTotal : apTotal;
-            const grossMargin = dealPrice - totalCost;
+            const grossMargin = arShare - totalCost;
 
             flattened.push({
               id: jo.id,
@@ -294,11 +317,11 @@ export default function SBUTruckingReportingPage() {
               jo_number: jo.jo_number,
               company_name:
                 wo.customers?.legal_name || wo.customers?.name || "-",
-              jo_status: jo.status?.toUpperCase(),
+              jo_status: formatJoStatus(jo.status),
               route: routeStr,
               fleet_info: jo.fleets?.plate_number || "Internal",
               vendor_name: jo.fleets?.companies?.name || "N/A",
-              ar_total: dealPrice,
+              ar_total: arShare,
               ap_total: apTotal,
               cash_advance: cashTotal,
               total_cost: totalCost,
@@ -427,20 +450,25 @@ export default function SBUTruckingReportingPage() {
 
   // Bottom Summary metrics calculations
   const totalRitase = data.length;
-  const totalRevenue = data.reduce(
+  const validFinancialData = data.filter((d) => 
+    d.jo_status === "MENUNGGU BERANGKAT" || 
+    d.jo_status === "DALAM PERJALANAN" || 
+    d.jo_status === "SELESAI"
+  );
+  const totalRevenue = validFinancialData.reduce(
     (sum, d) => sum + Number(d.ar_total || 0),
     0,
   );
-  const totalCashAdvance = data.reduce(
+  const totalCashAdvance = validFinancialData.reduce(
     (sum, d) => sum + Number(d.cash_advance || 0),
     0,
   );
-  const totalVendorCost = data.reduce(
+  const totalVendorCost = validFinancialData.reduce(
     (sum, d) => sum + Number(d.ap_total || 0),
     0,
   );
-  const totalCost = data.reduce((sum, d) => sum + Number(d.total_cost || 0), 0);
-  const totalGrossMargin = data.reduce(
+  const totalCost = validFinancialData.reduce((sum, d) => sum + Number(d.total_cost || 0), 0);
+  const totalGrossMargin = validFinancialData.reduce(
     (sum, d) => sum + Number(d.gross_margin || 0),
     0,
   );
@@ -509,18 +537,7 @@ export default function SBUTruckingReportingPage() {
               ))}
             </select>
           )}
-          <Link
-            href="/sbu/trucking/reporting/wo-level"
-            className="h-[42px] px-4 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <FileText className="w-4 h-4" /> WO Financial
-          </Link>
-          <Link
-            href="/sbu/trucking/reporting/gps-tracking"
-            className="h-[42px] px-4 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm"
-          >
-            <MapPin className="w-4 h-4" /> GPS Tracking
-          </Link>
+
           <button
             onClick={handleExportExcel}
             className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold tracking-wide text-xs flex items-center gap-2 shadow-sm hover:bg-emerald-700 transition-all active:scale-95"
@@ -536,62 +553,55 @@ export default function SBUTruckingReportingPage() {
         </div>
       </header>
 
-      {/* Mobile Filter Toggle */}
-      <div className="xl:hidden mb-4">
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
-        >
-          <Filter size={14} className="text-slate-500" />
-          {showFilters ? "Sembunyikan Filter" : "Tampilkan Filter"}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-        {/* Filter Sidebar */}
-        <aside
-          className={`${showFilters ? "block" : "hidden"} xl:block space-y-4`}
-        >
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Time Horizon
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all"
-                />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all"
-                />
-              </div>
+      {/* Filters Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+              Time Horizon
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all"
+              />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all"
+              />
             </div>
+          </div>
 
-            <div className="space-y-1.5" ref={dropdownRef}>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Execution Status
-              </label>
-              <div
-                className="relative cursor-pointer"
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              >
-                <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 flex justify-between items-center select-none">
-                  <span>
-                    {statusFilter.length > 0
-                      ? `${statusFilter.length} Selected`
-                      : "All Statuses"}
-                  </span>
-                  <ChevronDown size={14} className="text-slate-400" />
-                </div>
-                {showStatusDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
-                    {operationalStatuses.map((s) => (
+          <div className="space-y-1.5" ref={dropdownRef}>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+              Execution Status
+            </label>
+            <div
+              className="relative cursor-pointer"
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+            >
+              <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 flex justify-between items-center select-none">
+                <span>
+                  {statusFilter.length > 0
+                    ? `${statusFilter.length} Selected`
+                    : "All Statuses"}
+                </span>
+                <ChevronDown size={14} className="text-slate-400" />
+              </div>
+              {showStatusDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+                  {operationalStatuses.map((s) => {
+                    const labelMap: Record<string, string> = {
+                      done: "SELESAI (DONE)",
+                      rejected: "DIBATALKAN (REJECTED)",
+                      on_journey: "DALAM PERJALANAN",
+                      pending: "MENUNGGU BERANGKAT",
+                    };
+                    return (
                       <button
                         key={s}
                         onClick={(e) => {
@@ -604,85 +614,85 @@ export default function SBUTruckingReportingPage() {
                         }}
                         className="w-full px-4 py-2.5 text-left text-xs font-semibold uppercase transition-all hover:bg-slate-50 flex items-center justify-between"
                       >
-                        {s.replace(/_/g, " ")}
+                        {labelMap[s] || s.replace(/_/g, " ")}
                         {statusFilter.includes(s) && (
                           <Check className="w-4 h-4 text-blue-600" />
                         )}
                       </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Truck Type
-              </label>
-              <select
-                value={truckTypeFilter}
-                onChange={(e) => setTruckTypeFilter(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-all"
-              >
-                <option value="">All Fleet Types</option>
-                {truckTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Transporter
-              </label>
-              <div className="flex bg-slate-50 p-0.5 rounded-xl border border-slate-200">
-                <button
-                  onClick={() => setTransporterFilter("all")}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "all" ? "bg-white text-slate-900 shadow-sm font-bold" : "text-slate-400 hover:text-slate-600"}`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setTransporterFilter("internal")}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "internal" ? "bg-white text-blue-600 shadow-sm font-bold" : "text-slate-400 hover:text-slate-600"}`}
-                >
-                  Internal
-                </button>
-                <button
-                  onClick={() => setTransporterFilter("vendor")}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${transporterFilter === "vendor" ? "bg-white text-emerald-600 shadow-sm font-bold" : "text-slate-400 hover:text-slate-600"}`}
-                >
-                  Vendor
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Account Client
-              </label>
-              <select
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 transition-all"
-              >
-                <option value="">All Clients</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.legal_name || c.name}
-                  </option>
-                ))}
-              </select>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-        </aside>
 
-        {/* Main Contents */}
-        <main className="xl:col-span-3 space-y-6">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+              Truck Type
+            </label>
+            <select
+              value={truckTypeFilter}
+              onChange={(e) => setTruckTypeFilter(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-all"
+            >
+              <option value="">All Fleet Types</option>
+              {truckTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+              Transporter
+            </label>
+            <select
+              value={transporterFilter}
+              onChange={(e) => setTransporterFilter(e.target.value as any)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-all"
+            >
+              <option value="all">All Transporter</option>
+              <option value="internal">Internal Fleet</option>
+              <option value="vendor">Vendor</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
+              Account Client
+            </label>
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 transition-all"
+            >
+              <option value="">All Clients</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.legal_name || c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={fetchReportData}
+            disabled={loading}
+            className="h-[38px] px-6 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />{" "}
+            Generate Report
+          </button>
+        </div>
+      </div>
+
+      {/* Main Contents */}
+      <div className="space-y-6">
           {/* SBU Snapshot Card */}
-          <div className="bg-slate-900 rounded-2xl p-5 md:p-6 text-white shadow-md relative overflow-hidden">
+          <div className="bg-slate-900 rounded-2xl p-4 md:p-5 text-white shadow-md relative overflow-hidden">
             <div className="relative z-10">
               <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-2">
                 SBU Snapshot
@@ -690,18 +700,18 @@ export default function SBUTruckingReportingPage() {
               <h3 className="text-lg font-bold uppercase text-white mb-4">
                 Trucking Performance
               </h3>
-              <div className="flex flex-wrap items-center gap-8">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                 <div className="flex flex-col">
-                  <p className="text-2xl sm:text-3xl font-extrabold text-blue-400 leading-none">
+                  <p className="text-xl sm:text-2xl font-extrabold text-blue-400 leading-none">
                     {totalRitase}{" "}
                     <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
                       Total Ritase
                     </span>
                   </p>
                 </div>
-                <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+                <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
                 <div className="flex flex-col">
-                  <p className="text-2xl sm:text-3xl font-extrabold text-emerald-300 leading-none">
+                  <p className="text-xl sm:text-2xl font-extrabold text-emerald-300 leading-none">
                     Rp {totalRevenue.toLocaleString("id-ID")}{" "}
                     <span className="text-[10px] text-white/40 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
                       Revenue (AR)
@@ -709,7 +719,7 @@ export default function SBUTruckingReportingPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-white/5 pt-4">
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-white/5 pt-3">
                 <div className="px-3.5 py-2.5 bg-slate-800/40 rounded-xl border border-slate-700/50">
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
                     Driver Allowance
@@ -785,11 +795,15 @@ export default function SBUTruckingReportingPage() {
                         let val = row[colId];
                         if (colId === "jo_status") {
                           const color =
-                            val?.includes("DONE") ||
-                            val?.includes("DELIVERED") ||
-                            val?.includes("FINISHED")
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                              : "bg-slate-100 text-slate-600 border-slate-200";
+                            val === "SELESAI"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : val === "DALAM PERJALANAN"
+                                ? "bg-blue-100 text-blue-700"
+                                : val === "DIBATALKAN"
+                                  ? "bg-rose-100 text-rose-700"
+                                  : val === "MENUNGGU BERANGKAT"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-700";
                           val = (
                             <span
                               className={`px-2.5 py-1 border rounded-lg font-bold text-[9px] uppercase tracking-wide ${color}`}
@@ -950,8 +964,7 @@ export default function SBUTruckingReportingPage() {
               )}
             </div>
           </div>
-        </main>
+        </div>
       </div>
-    </div>
   );
 }

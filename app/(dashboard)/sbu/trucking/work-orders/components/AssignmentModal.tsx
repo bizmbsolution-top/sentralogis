@@ -35,6 +35,7 @@ import {
 } from '@/lib/domain/jo/assignment';
 import { buildDriverAssignmentMessage, buildWaLink } from '@/lib/domain/phone';
 import VendorSendBox from '@/components/sbu/VendorSendBox';
+import GroundStaffSendBox from '@/components/sbu/GroundStaffSendBox';
 
 interface AssignmentModalProps {
   item: any;
@@ -73,6 +74,7 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
   const [replyPrice, setReplyPrice] = useState<string>('');
   const [replySaving, setReplySaving] = useState(false);
   const [vendorSendOpen, setVendorSendOpen] = useState(false);
+  const [groundStaffSendOpen, setGroundStaffSendOpen] = useState(false);
 
   const itemData = parseItemData(item?.item_data);
   const dealPrice = Number(itemData.deal_price) || 0;
@@ -808,13 +810,21 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
           </div>
            <div className="flex items-center gap-2">
              <button
-               onClick={() => setVendorSendOpen(true)}
-               title="Send to Vendor via WhatsApp"
-               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-all text-xs font-bold"
-             >
-               <Send size={16} />
-               Send to Vendor
-             </button>
+                onClick={() => setVendorSendOpen(true)}
+                title="Send to Vendor via WhatsApp"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-all text-xs font-bold"
+              >
+                <Send size={16} />
+                Send to Vendor
+              </button>
+              <button
+                onClick={() => setGroundStaffSendOpen(true)}
+                title="Notify Ground Staff via WhatsApp"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 transition-all text-xs font-bold"
+              >
+                <Send size={16} />
+                Send to Ground
+              </button>
              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-slate-700">
                <X size={20} />
              </button>
@@ -1291,12 +1301,13 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
                                            const driverName = driver?.name || transporter?.name || 'Driver/Vendor';
                                            const phone = assign.driver_phone || driver?.phone || transporter?.phone || '';
                                            if (!phone) { toast.error('Nomor telepon driver/vendor tidak ditemukan untuk JO ini'); return; }
-                                           const origin = window.location.origin;
-                                           const isInternal = driver?.md_entities?.is_vendor === false;
-                                           const joNumber = assign.jo_number || `${item.item_code}-${String(idx + 1).padStart(2, '0')}`;
-                                           const link = isInternal && driver
-                                             ? `${origin}/driver/portal`
-                                             : `${origin}/jo/${assign.driver_link_token || assign.id || assign.tracking_token || 'portal'}`;
+                                            const isInternal = driver?.md_entities?.is_vendor === false;
+                                            const joNumber = assign.jo_number || `${item.item_code}-${String(idx + 1).padStart(2, '0')}`;
+                                            
+                                            const token = assign.driver_link_token || assign.id || assign.tracking_token;
+                                            // Gunakan domain tetap agar deep link Android cocok dengan intent-filter
+                                            const link = `https://www.sentralogis.com/jo/${token}`;
+                                           
                                            const msg = buildDriverAssignmentMessage({
                                              driverName,
                                              isInternal: Boolean(isInternal && driver),
@@ -1590,6 +1601,16 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         woNumber={item?.work_orders?.wo_number || ''}
         tenantName={profile?.tenants?.name || ''}
         items={item ? [item] : []}
+      />
+
+      <GroundStaffSendBox
+        open={groundStaffSendOpen}
+        onClose={() => setGroundStaffSendOpen(false)}
+        woNumber={item?.work_orders?.wo_number || ''}
+        tenantName={profile?.tenants?.name || ''}
+        executionDate={item?.work_orders?.execution_date || ''}
+        executionTime={item?.work_orders?.execution_time || ''}
+        tenantId={profile?.tenant_id || ''}
       />
 
       {/* Document Preview Modal */}

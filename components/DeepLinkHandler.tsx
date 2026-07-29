@@ -37,13 +37,25 @@ export default function DeepLinkHandler() {
   const handleDeepLink = (url: string) => {
     try {
       console.log('[DeepLinkHandler] Received URL:', url);
-      
-      // Handle both /jo/ and jo/ (for custom scheme sentralogis://jo/token)
+
+      // Extract path from URL
+      let path = '';
+
+      // Handle /job/{jobId} format (e.g. https://app.sentralogis.com/job/12345)
+      let jobIndex = url.indexOf('/job/');
+      if (jobIndex !== -1) {
+        path = url.substring(jobIndex);
+      }
+
+      // Handle /jo/{token} format (e.g. https://www.sentralogis.com/jo/abc123)
       let joIndex = url.indexOf('/jo/');
       if (joIndex === -1) joIndex = url.indexOf('jo/');
-      if (joIndex !== -1) {
-        // Extract everything from /jo/ onwards (including query params if any, until a hash)
-        let path = url.substring(joIndex);
+      if (joIndex !== -1 && path === '') {
+        path = url.substring(joIndex);
+      }
+
+      if (path !== '') {
+        // Clean up hash fragments
         const hashIndex = path.indexOf('#');
         if (hashIndex !== -1) {
           path = path.substring(0, hashIndex);

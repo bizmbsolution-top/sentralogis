@@ -810,8 +810,8 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                   </button>
 
                   {/* Language Selector Mobile */}
-                  <div className="sm:hidden px-4 py-2.5 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-600">Language</span>
+                  <div className="sm:hidden px-4 py-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600">{t.navbar?.language || 'Language'}</span>
                     <LanguageSelector />
                   </div>
 

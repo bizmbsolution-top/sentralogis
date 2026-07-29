@@ -869,7 +869,7 @@ export default function MasterWarehousePage() {
                                           acc[prefix].push(loc);
                                           return acc;
                                         }, {} as Record<string, any[]>)
-                                      ).map(([prefix, locs]) => {
+                                      ).map(([prefix, locs]: [string, any[]]) => {
                                         const totalGroupMaxVol = locs.reduce((sum, l) => {
                                           const cap = locationCapacities.find((c) => c.location_id === l.id);
                                           return sum + (cap?.max_volume_m3 || l.max_volume_m3 || 0);

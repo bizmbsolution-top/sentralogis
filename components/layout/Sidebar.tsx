@@ -253,10 +253,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
     { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
     ]},
   ],
   sbu_ops_tr: [
@@ -269,10 +270,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
     { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
     ]},
   ],
   sbu_admin_tr: [
@@ -285,10 +287,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
     { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
     ]},
   ],
   sbu_fin_tr: [
@@ -300,10 +303,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
     { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
     ]},
   ],
   sbu_finance_tr: [
@@ -315,10 +319,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Cost Management', icon: '💰', href: '/sbu/trucking/add-cost' },
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
+    { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
     { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'Financial Overview', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'GPS Tracking', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Financial', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
+      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
+      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
+      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
     ]},
   ],
 

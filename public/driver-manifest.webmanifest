@@ -1,0 +1,26 @@
+{
+  "name": "SentraLogis Driver",
+  "short_name": "SL Driver",
+  "description": "Aplikasi driver SentraLogis — tracking, navigasi, dan manajemen tugas pengiriman",
+  "icons": [
+    {
+      "src": "/logo2sentralogis.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/sentralogis_logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/driver/portal",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "categories": ["logistics", "transportation"],
+  "lang": "id"
+}

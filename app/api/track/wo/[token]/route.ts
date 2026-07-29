@@ -10,6 +10,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Token tidak ditemukan' }, { status: 400 })
     }
 
+    // UUID check regex
+    const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(token);
+
     // Fetch WO with customer info
     const { data: wo, error: woError } = await supabase
       .from('work_orders')
@@ -17,7 +20,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         id, wo_number, status, execution_date, notes,
         customer:md_entities!customer_id (id, name, phone, billing_address)
       `)
-      .eq('id', token)
+      .eq(isUUID ? 'id' : 'wo_number', token)
       .maybeSingle()
 
     if (woError) throw woError

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { saveAssignmentsAction } from '@/lib/actions/assignmentActions';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
   X, Loader2, Truck, User, Building2,
   DollarSign, MessageCircle, CheckCircle
@@ -199,7 +200,7 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
     const isInternal = driver?.md_entities?.is_vendor === false;
     const link = isInternal
       ? `${origin}/driver/portal`
-      : `${origin}/jo/${jo.driver_link_token || jo.id}`;
+      : `https://www.sentralogis.com/jo/${jo.driver_link_token || jo.id}`;
 
     const msg = buildDriverAssignmentMessage({
       driverName,
@@ -246,23 +247,22 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
                   <Building2 size={14} className="text-slate-400" />
                   Vendor / Transporter
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedTransporterId}
-                  onChange={(e) => {
-                    const newVendorId = e.target.value;
-                    if (newVendorId !== selectedTransporterId) {
+                  onChange={(val) => {
+                    if (val !== selectedTransporterId) {
                       setSelectedDriverId('');
                       setSelectedFleetId('');
                     }
-                    setSelectedTransporterId(newVendorId);
+                    setSelectedTransporterId(val);
                   }}
-                  className="w-full h-11 px-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
-                >
-                  <option value="">Pilih Vendor (opsional)</option>
-                  {transporters.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  placeholder="Pilih Vendor (opsional)"
+                  options={[
+                    { value: '', label: 'Pilih Vendor (opsional)' },
+                    ...transporters.map(t => ({ value: t.id, label: t.name }))
+                  ]}
+                  className="h-11"
+                />
               </div>
 
               {/* Driver */}
@@ -271,16 +271,16 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
                   <User size={14} className="text-slate-400" />
                   Driver
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedDriverId}
-                  onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="w-full h-11 px-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
-                >
-                  <option value="">Pilih Driver</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.phone || '-'})</option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedDriverId(val)}
+                  placeholder="Pilih Driver"
+                  options={[
+                    { value: '', label: 'Pilih Driver' },
+                    ...drivers.map(d => ({ value: d.id, label: d.name, description: d.phone || '-' }))
+                  ]}
+                  className="h-11"
+                />
               </div>
 
               {/* Fleet */}
@@ -289,16 +289,16 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
                   <Truck size={14} className="text-slate-400" />
                   Fleet / Plat Nomor
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedFleetId}
-                  onChange={(e) => setSelectedFleetId(e.target.value)}
-                  className="w-full h-11 px-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all outline-none"
-                >
-                  <option value="">Pilih Unit</option>
-                  {fleets.map(f => (
-                    <option key={f.id} value={f.id}>{f.plate_number} - {f.md_fleet_types?.type_name || 'N/A'}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedFleetId(val)}
+                  placeholder="Pilih Unit"
+                  options={[
+                    { value: '', label: 'Pilih Unit' },
+                    ...fleets.map(f => ({ value: f.id, label: f.plate_number, description: f.md_fleet_types?.type_name || 'N/A' }))
+                  ]}
+                  className="h-11"
+                />
               </div>
 
               {/* Purchase Price */}

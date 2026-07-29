@@ -996,7 +996,7 @@ export default function InvoiceDetailPage() {
             <div className="w-full max-w-sm bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-900 font-medium">Subtotal</span>
-                <span className="font-bold text-slate-950">{formatRupiah(totals.subtotal)}</span>
+                <span className="font-bold text-slate-950">{formatRupiah(totals.dpp)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-900 font-medium">PPN ({taxRate}%)</span>

@@ -1,0 +1,452 @@
+﻿.next/types/app/(dashboard)/sbu/trucking/work-orders/page.ts(12,13): error TS2344: Type 'OmitWithTag<typeof import("C:/Users/sonad/projectQ/sentralogis/app/(dashboard)/sbu/trucking/work-orders/page"), "metadata" | "default" | "config" | "generateStaticParams" | "revalidate" | ... 9 more ... | "experimental_ppr", "">' does not satisfy the constraint '{ [x: string]: never; }'.
+  Property 'filterItemByTab' is incompatible with index signature.
+    Type '(item: any, tabId: string) => any' is not assignable to type 'never'.
+.next/types/app/(dashboard)/sbu/warehouse/transfers/print-bast/[id]/page.ts(34,29): error TS2344: Type '{ params: { id: string; }; }' does not satisfy the constraint 'PageProps'.
+  Types of property 'params' are incompatible.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/print-bast/[id]/page.ts(34,29): error TS2344: Type '{ params: { id: string; }; }' does not satisfy the constraint 'PageProps'.
+  Types of property 'params' are incompatible.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/routing-test/page.ts(2,24): error TS2306: File 'C:/Users/sonad/projectQ/sentralogis/app/routing-test/page.tsx' is not a module.
+.next/types/app/routing-test/page.ts(5,29): error TS2306: File 'C:/Users/sonad/projectQ/sentralogis/app/routing-test/page.tsx' is not a module.
+.next/types/app/track/cargo/[token]/page.ts(34,29): error TS2344: Type '{ params: { token: string; }; }' does not satisfy the constraint 'PageProps'.
+  Types of property 'params' are incompatible.
+    Type '{ token: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+app/(dashboard)/commercial/leads/page.tsx(668,21): error TS2345: Argument of type '{ id: any; activity_type: any; activity_date: any; description: any; location: any; photo_url: any; profiles: { full_name: any; }[]; }[]' is not assignable to parameter of type 'SetStateAction<Activity[]>'.
+  Type '{ id: any; activity_type: any; activity_date: any; description: any; location: any; photo_url: any; profiles: { full_name: any; }[]; }[]' is not assignable to type 'Activity[]'.
+    Type '{ id: any; activity_type: any; activity_date: any; description: any; location: any; photo_url: any; profiles: { full_name: any; }[]; }' is not assignable to type 'Activity'.
+      Types of property 'profiles' are incompatible.
+        Type '{ full_name: any; }[]' has no properties in common with type '{ full_name?: string | undefined; }'.
+app/(dashboard)/driver/tracking/page.tsx(277,33): error TS2339: Property 'phone' does not exist on type '{ name: string; address: string; }'.
+app/(dashboard)/driver/tracking/page.tsx(278,49): error TS2339: Property 'phone' does not exist on type '{ name: string; address: string; }'.
+app/(dashboard)/driver/tracking/page.tsx(279,36): error TS2339: Property 'phone' does not exist on type '{ name: string; address: string; }'.
+app/(dashboard)/hq/business/page.tsx(199,84): error TS2339: Property 'unit_price' does not exist on type '{ sbu_type: any; unit_price: any; wo: { customer_id: any; customer: { name: any; }[]; }[]; }[]'.
+app/(dashboard)/hq/business/page.tsx(423,29): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/business/page.tsx(484,37): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/finance/cost-audit/components/WoListCard.tsx(110,29): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/finance/cost-audit/page.tsx(155,23): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/finance/summary/page.tsx(123,36): error TS2339: Property 'id' does not exist on type '{ sbu_type: any; total_revenue: any; unit_price: any; }[]'.
+app/(dashboard)/hq/finance/summary/page.tsx(127,50): error TS2339: Property 'total_revenue' does not exist on type '{ sbu_type: any; total_revenue: any; unit_price: any; }[]'.
+app/(dashboard)/hq/finance/summary/page.tsx(133,52): error TS2339: Property 'total_revenue' does not exist on type '{ sbu_type: any; total_revenue: any; unit_price: any; }[]'.
+app/(dashboard)/hq/job-orders/page.tsx(29,36): error TS2304: Cannot find name 'Layers'.
+app/(dashboard)/hq/job-orders/page.tsx(30,36): error TS2304: Cannot find name 'Box'.
+app/(dashboard)/hq/job-orders/page.tsx(341,22): error TS2304: Cannot find name 'X'.
+app/(dashboard)/hq/job-orders/page.tsx(385,52): error TS2304: Cannot find name 'Layers'.
+app/(dashboard)/hq/job-orders/page.tsx(400,25): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/job-orders/page.tsx(476,50): error TS2304: Cannot find name 'Layers'.
+app/(dashboard)/hq/job-orders/page.tsx(491,23): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/job-orders/page.tsx(511,16): error TS2304: Cannot find name 'X'.
+app/(dashboard)/hq/job-orders/page.tsx(543,35): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/job-orders/page.tsx(543,45): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/job-orders/page.tsx(675,30): error TS2304: Cannot find name 'FileText'.
+app/(dashboard)/hq/job-orders/page.tsx(707,30): error TS2304: Cannot find name 'FileText'.
+app/(dashboard)/hq/warehouse/inventory/page.tsx(94,14): error TS18048: 'i.area_name' is possibly 'undefined'.
+app/(dashboard)/hq/warehouse/locations/page.tsx(872,45): error TS2345: Argument of type '([prefix, locs]: [string, any[]]) => JSX.Element' is not assignable to parameter of type '(value: [string, unknown], index: number, array: [string, unknown][]) => Element'.
+  Types of parameters '__0' and 'value' are incompatible.
+    Type '[string, unknown]' is not assignable to type '[string, any[]]'.
+      Type at position 1 in source is not compatible with type at position 1 in target.
+        Type 'unknown' is not assignable to type 'any[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(163,25): error TS2339: Property 'id' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(164,31): error TS2339: Property 'sku_code' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(165,27): error TS2339: Property 'name' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(166,33): error TS2339: Property 'brand_name' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(167,27): error TS2339: Property 'unit' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(168,31): error TS2339: Property 'base_uom' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(169,42): error TS2339: Property 'default_inbound_uom' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(170,43): error TS2339: Property 'default_outbound_uom' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(171,38): error TS2339: Property 'uom_conversions' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(172,32): error TS2339: Property 'volume_m3' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(173,32): error TS2339: Property 'weight_kg' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(174,35): error TS2339: Property 'storage_rule' does not exist on type '{ id: any; sku_code: any; name: any; brand_name: any; unit: any; base_uom: any; default_inbound_uom: any; default_outbound_uom: any; uom_conversions: any; volume_m3: any; weight_kg: any; storage_rule: any; customer_id: any; }[]'.
+app/(dashboard)/hq/work-orders/components/AddWarehouseItemModal.tsx(178,47): error TS2339: Property 'code' does not exist on type '{ code: any; }[]'.
+app/(dashboard)/hq/work-orders/components/CreateWOForm.tsx(198,17): error TS7034: Variable 'enrichedJobs' implicitly has type 'any[]' in some locations where its type cannot be determined.
+app/(dashboard)/hq/work-orders/components/CreateWOForm.tsx(225,27): error TS7005: Variable 'enrichedJobs' implicitly has an 'any[]' type.
+app/(dashboard)/hq/work-orders/page.tsx(599,25): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/work-orders/page.tsx(686,23): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/work-orders/page.tsx(795,38): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/hq/work-orders/page.tsx(795,48): error TS2322: Type 'number' is not assignable to type 'never'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(14,15): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'BoxAssignment'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(14,30): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'BoxItem'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(104,49): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(215,11): error TS2552: Cannot find name 'tenant_id'. Did you mean 'tenantId'?
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(242,42): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(242,47): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(243,43): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(243,48): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(244,43): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(244,48): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(273,35): error TS2322: Type '"icon"' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(289,21): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(373,39): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(476,49): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(559,39): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx(568,25): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(14,15): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(14,30): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'ContainerAssignment'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(192,35): error TS2322: Type '"icon"' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(355,39): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(372,18): error TS2304: Cannot find name 'CardTitle'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(374,19): error TS2304: Cannot find name 'CardTitle'.
+app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx(401,39): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx(14,15): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx(14,30): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'ContainerAssignment'.
+app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx(214,35): error TS2322: Type '"icon"' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx(281,32): error TS2304: Cannot find name 'Link'.
+app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx(283,33): error TS2304: Cannot find name 'Link'.
+app/(dashboard)/sbu/forwarding/consol/page.tsx(13,15): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+app/(dashboard)/sbu/forwarding/consol/page.tsx(249,33): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/consol/page.tsx(363,19): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/master/price/page.tsx(14,15): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'PriceMaster'.
+app/(dashboard)/sbu/forwarding/master/price/page.tsx(14,56): error TS2305: Module '"@/lib/domain/forwarding/types"' has no exported member 'DeliveryType'.
+app/(dashboard)/sbu/forwarding/master/price/page.tsx(637,17): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/master/price/page.tsx(672,19): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/wo/[id]/page.tsx(102,35): error TS2322: Type '"icon"' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+app/(dashboard)/sbu/forwarding/wo/create/page.tsx(267,16): error TS2304: Cannot find name 'Plus'.
+app/(dashboard)/sbu/forwarding/wo/create/page.tsx(324,40): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/wo/create/page.tsx(325,12): error TS2304: Cannot find name 'Plus'.
+app/(dashboard)/sbu/forwarding/wo/create/page.tsx(565,37): error TS2322: Type '"icon"' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+app/(dashboard)/sbu/forwarding/wo/create/page.tsx(600,13): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/forwarding/wo/page.tsx(184,33): error TS2322: Type '"outline"' is not assignable to type '"success" | "danger" | "secondary" | "primary" | "ghost" | undefined'.
+app/(dashboard)/sbu/trucking/assignments/components/EditAssignmentModal.tsx(95,34): error TS2345: Argument of type '{ id: any; plate_number: any; fleet_type_id: any; status: any; entity_id: any; md_fleet_types: { type_name: any; }[]; }' is not assignable to parameter of type '{ id: any; plate_number: any; fleet_type_id: any; status: any; entity_id: any; is_active: any; md_fleet_types: { type_name: any; }[]; }'.
+  Property 'is_active' is missing in type '{ id: any; plate_number: any; fleet_type_id: any; status: any; entity_id: any; md_fleet_types: { type_name: any; }[]; }' but required in type '{ id: any; plate_number: any; fleet_type_id: any; status: any; entity_id: any; is_active: any; md_fleet_types: { type_name: any; }[]; }'.
+app/(dashboard)/sbu/trucking/completed/components/JobDetailModal.tsx(74,59): error TS2339: Property 'assignment_documents' does not exist on type 'CompletedJob'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(97,48): error TS2339: Property 'customers' does not exist on type '{ wo_number?: string | undefined; status?: string | undefined; }'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(128,145): error TS2339: Property 'origin_location' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(129,102): error TS2339: Property 'origin_location' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(135,145): error TS2339: Property 'destination_location' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(136,102): error TS2339: Property 'destination_location' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(150,38): error TS18048: 'item.assignments' is possibly 'undefined'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(167,130): error TS2339: Property 'driver_name' does not exist on type 'Assignment'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(187,38): error TS18048: 'item.assignments' is possibly 'undefined'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(188,122): error TS18048: 'item.assignments' is possibly 'undefined'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(255,127): error TS2339: Property 'truck_type' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(268,137): error TS2339: Property 'deal_price' does not exist on type 'WorkOrderItem'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(280,55): error TS2339: Property 'created_at' does not exist on type '{ wo_number?: string | undefined; status?: string | undefined; }'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(280,94): error TS2339: Property 'created_at' does not exist on type '{ wo_number?: string | undefined; status?: string | undefined; }'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(289,55): error TS2339: Property 'execution_date' does not exist on type '{ wo_number?: string | undefined; status?: string | undefined; }'.
+app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx(349,93): error TS2551: Property 'work_order_id' does not exist on type 'WorkOrderItem'. Did you mean 'work_orders'?
+app/(dashboard)/sbu/trucking/page.tsx(79,55): error TS2339: Property 'sbu_type' does not exist on type '{ sbu_type: any; unit_price: any; }[]'.
+app/(dashboard)/sbu/trucking/page.tsx(114,68): error TS2339: Property 'unit_price' does not exist on type '{ sbu_type: any; unit_price: any; }[]'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(626,20): error TS2304: Cannot find name 'X'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(951,48): error TS2339: Property 'container_number' does not exist on type '{ id: string; jo_number: string; status: string; transporter: { name: string; }; md_fleets: { plate_number: string; md_fleet_types: { type_name: string; }; }; md_drivers: { name: string; phone: string; }; }'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(951,72): error TS2339: Property 'sbu_metadata' does not exist on type '{ id: string; jo_number: string; status: string; transporter: { name: string; }; md_fleets: { plate_number: string; md_fleet_types: { type_name: string; }; }; md_drivers: { name: string; phone: string; }; }'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(951,90): error TS2339: Property 'sbu_metadata' does not exist on type '{ id: string; jo_number: string; status: string; transporter: { name: string; }; md_fleets: { plate_number: string; md_fleet_types: { type_name: string; }; }; md_drivers: { name: string; phone: string; }; }'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(987,35): error TS2339: Property 'notes' does not exist on type '{ id: string; jo_number: string; status: string; transporter: { name: string; }; md_fleets: { plate_number: string; md_fleet_types: { type_name: string; }; }; md_drivers: { name: string; phone: string; }; }'.
+app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx(990,71): error TS2339: Property 'notes' does not exist on type '{ id: string; jo_number: string; status: string; transporter: { name: string; }; md_fleets: { plate_number: string; md_fleet_types: { type_name: string; }; }; md_drivers: { name: string; phone: string; }; }'.
+app/(dashboard)/sbu/trucking/work-orders/components/AssignmentModal.tsx(1292,111): error TS2339: Property 'phone' does not exist on type 'TransporterOption'.
+app/(dashboard)/sbu/trucking/work-orders/page.tsx(181,153): error TS2339: Property 'status' does not exist on type '{ id: any; wo_number: any; execution_date: any; md_entities: { name: any; legal_name: any; phone: any; }[]; }[]'.
+app/(dashboard)/sbu/trucking/work-orders/page.tsx(748,35): error TS2322: Type '"outline"' is not assignable to type '"success" | "primary" | "secondary" | "danger" | "ghost" | undefined'.
+app/(dashboard)/sbu/trucking/work-orders/page.tsx(790,11): error TS2322: Type '{ key: any; item: any; onClose: () => void; onSuccess: () => void; onHandover: () => void; onRejectReassign: (jo: any) => void; }' is not assignable to type 'IntrinsicAttributes & AssignmentModalProps'.
+  Property 'onRejectReassign' does not exist on type 'IntrinsicAttributes & AssignmentModalProps'.
+app/(dashboard)/sbu/trucking/work-orders/page.tsx(790,30): error TS7006: Parameter 'jo' implicitly has an 'any' type.
+app/(dashboard)/sbu/warehouse/documents/page.tsx(107,22): error TS2345: Argument of type '{ id: any; type: string; title: string; number: any; status: any; warehouse: any; date: any; documents: { batb: any; pod: any; }; missingDocs: never[]; icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<...>>; color: string; }' is not assignable to parameter of type 'Document'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"INTERNAL_MOVEMENT" | "INBOUND_RECEIPT" | "OUTBOUND_SHIPMENT" | "TRANSFER_ORDER" | "REPACKING_ORDER"'.
+app/(dashboard)/sbu/warehouse/documents/page.tsx(123,22): error TS2345: Argument of type '{ id: any; type: string; title: string; number: any; status: any; warehouse: any; date: any; documents: { bast: any; manifest: any; }; missingDocs: never[]; icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<...>>; color: string; }' is not assignable to parameter of type 'Document'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"INTERNAL_MOVEMENT" | "INBOUND_RECEIPT" | "OUTBOUND_SHIPMENT" | "TRANSFER_ORDER" | "REPACKING_ORDER"'.
+app/(dashboard)/sbu/warehouse/documents/page.tsx(139,22): error TS2345: Argument of type '{ id: any; type: string; title: string; number: any; status: any; warehouse: any; date: any; documents: { manifest: any; }; missingDocs: never[]; icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<...>>; color: string; }' is not assignable to parameter of type 'Document'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"INTERNAL_MOVEMENT" | "INBOUND_RECEIPT" | "OUTBOUND_SHIPMENT" | "TRANSFER_ORDER" | "REPACKING_ORDER"'.
+app/(dashboard)/sbu/warehouse/documents/page.tsx(155,22): error TS2345: Argument of type '{ id: any; type: string; title: string; number: any; status: any; warehouse: any; date: any; documents: { manifest: any; }; missingDocs: never[]; icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<...>>; color: string; }' is not assignable to parameter of type 'Document'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"INTERNAL_MOVEMENT" | "INBOUND_RECEIPT" | "OUTBOUND_SHIPMENT" | "TRANSFER_ORDER" | "REPACKING_ORDER"'.
+app/(dashboard)/sbu/warehouse/documents/page.tsx(171,22): error TS2345: Argument of type '{ id: any; type: string; title: string; number: any; status: any; warehouse: any; date: any; documents: { manifest: any; }; missingDocs: never[]; icon: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<...>>; color: string; }' is not assignable to parameter of type 'Document'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"INTERNAL_MOVEMENT" | "INBOUND_RECEIPT" | "OUTBOUND_SHIPMENT" | "TRANSFER_ORDER" | "REPACKING_ORDER"'.
+app/(dashboard)/sbu/warehouse/inbound/page.tsx(81,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx(633,74): error TS18046: 'items' is of type 'unknown'.
+app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx(651,24): error TS18046: 'items' is of type 'unknown'.
+app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx(651,35): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx(694,41): error TS2488: Type 'unknown' must have a '[Symbol.iterator]()' method that returns an iterator.
+app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx(707,76): error TS18046: 'items' is of type 'unknown'.
+app/(dashboard)/sbu/warehouse/inventory-report/stock-card/page.tsx(406,27): error TS2353: Object literal may only specify known properties, and 'unit' does not exist in type '{ id: string; skuCode: string; name: string; } | ((prevState: { id: string; skuCode: string; name: string; } | null) => { id: string; skuCode: string; name: string; } | null)'.
+app/(dashboard)/sbu/warehouse/movements/page.tsx(67,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+app/(dashboard)/sbu/warehouse/movements/page.tsx(102,18): error TS2345: Argument of type '{ id: any; quantity: any; movement_date: any; reference_type: any; status: any; notes: any; assigned_to: any; product: { name: any; sku_code: any; }[]; from_location: { code: any; }[]; to_location: { code: any; }[]; staff: { ...; }[]; }[]' is not assignable to parameter of type 'SetStateAction<Movement[]>'.
+  Type '{ id: any; quantity: any; movement_date: any; reference_type: any; status: any; notes: any; assigned_to: any; product: { name: any; sku_code: any; }[]; from_location: { code: any; }[]; to_location: { code: any; }[]; staff: { ...; }[]; }[]' is not assignable to type 'Movement[]'.
+    Type '{ id: any; quantity: any; movement_date: any; reference_type: any; status: any; notes: any; assigned_to: any; product: { name: any; sku_code: any; }[]; from_location: { code: any; }[]; to_location: { code: any; }[]; staff: { ...; }[]; }' is not assignable to type 'Movement'.
+      Types of property 'product' are incompatible.
+        Type '{ name: any; sku_code: any; }[]' is missing the following properties from type '{ name: string; sku_code: string; }': name, sku_code
+app/(dashboard)/sbu/warehouse/outbound/page.tsx(96,24): error TS2304: Cannot find name 'useSearchParams'.
+app/(dashboard)/sbu/warehouse/outbound/page.tsx(152,70): error TS2339: Property 'shipment_number' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'shipment_number' does not exist on type '{}'.
+app/(dashboard)/sbu/warehouse/outbound/page.tsx(181,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+app/(dashboard)/sbu/warehouse/outbound/page.tsx(674,73): error TS2339: Property 'wo_item' does not exist on type 'TaskItem'.
+app/(dashboard)/sbu/warehouse/outbound/page.tsx(674,117): error TS2339: Property 'shipment_number' does not exist on type 'TaskItem'.
+app/(dashboard)/sbu/warehouse/page.tsx(55,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+app/(dashboard)/sbu/warehouse/repacking/components/BarcodeScannerModal.tsx(24,9): error TS2353: Object literal may only specify known properties, and 'supportedFormats' does not exist in type 'Html5QrcodeScannerConfig'.
+app/(dashboard)/sbu/warehouse/repacking/page.tsx(114,16): error TS2345: Argument of type '{ product_count: number; source_items: number; result_items: number; id: any; order_number: any; order_type: any; status: any; priority: any; notes: any; created_at: any; updated_at: any; created_by: any; customer_id: any; customer: { ...; }[]; }[]' is not assignable to parameter of type 'SetStateAction<RepackingOrder[]>'.
+  Type '{ product_count: number; source_items: number; result_items: number; id: any; order_number: any; order_type: any; status: any; priority: any; notes: any; created_at: any; updated_at: any; created_by: any; customer_id: any; customer: { ...; }[]; }[]' is not assignable to type 'RepackingOrder[]'.
+    Type '{ product_count: number; source_items: number; result_items: number; id: any; order_number: any; order_type: any; status: any; priority: any; notes: any; created_at: any; updated_at: any; created_by: any; customer_id: any; customer: { ...; }[]; }' is not assignable to type 'RepackingOrder'.
+      Types of property 'customer' are incompatible.
+        Property 'name' is missing in type '{ name: any; }[]' but required in type '{ name: string; }'.
+app/(dashboard)/sbu/warehouse/repacking/page.tsx(222,30): error TS2339: Property 'sku_code' does not exist on type '{ sku_code: any; name: any; }[]'.
+app/(dashboard)/sbu/warehouse/repacking/page.tsx(223,26): error TS2339: Property 'name' does not exist on type '{ sku_code: any; name: any; }[]'.
+app/(dashboard)/sbu/warehouse/work-orders/[id]/page.tsx(934,34): error TS7006: Parameter 'summary' implicitly has an 'any' type.
+app/(dashboard)/tenant/master/contacts/page.tsx(451,30): error TS2339: Property 'logo_url' does not exist on type 'Entity'.
+app/(dashboard)/tenant/master/contacts/page.tsx(452,41): error TS2339: Property 'logo_url' does not exist on type 'Entity'.
+app/(dashboard)/tenant/staff/page.tsx(351,31): error TS2322: Type '"secondary"' is not assignable to type '"success" | "default" | "danger" | "warning" | "info" | undefined'.
+app/api/admin/sync-status/route.ts(162,25): error TS2304: Cannot find name 'onRoadFleets'.
+app/api/cron/jo-autocomplete/route.ts(138,14): error TS2551: Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, null, "journal_entries", unknown, "POST">'. Did you mean 'match'?
+app/api/cron/jo-autocomplete/route.ts(150,14): error TS2551: Property 'catch' does not exist on type 'PostgrestFilterBuilder<any, any, any, null, "journal_entries", unknown, "POST">'. Did you mean 'match'?
+app/api/forwarding/consol/[id]/deconsol/route.ts(81,113): error TS2339: Property 'container_number' does not exist on type '{ container_number: any; container_type: any; }[]'.
+app/api/forwarding/consol/[id]/deconsol/route.ts(105,67): error TS2339: Property 'container_number' does not exist on type '{ container_number: any; container_type: any; }[]'.
+app/api/invoice/pdf/route.ts(44,29): error TS2345: Argument of type 'Buffer<ArrayBufferLike>' is not assignable to parameter of type 'BodyInit | null | undefined'.
+  Type 'Buffer<ArrayBufferLike>' is missing the following properties from type 'URLSearchParams': size, append, delete, get, and 2 more.
+app/api/observability/remediate/route.ts(45,59): error TS2353: Object literal may only specify known properties, and 'resolvedCount' does not exist in type 'Omit<LogEntry, "timestamp" | "severity" | "module" | "action">'.
+app/api/observability/remediate/route.ts(70,66): error TS2353: Object literal may only specify known properties, and 'resolvedCount' does not exist in type 'Omit<LogEntry, "timestamp" | "severity" | "module" | "action">'.
+app/api/observability/remediate/route.ts(85,56): error TS2353: Object literal may only specify known properties, and 'resolvedCount' does not exist in type 'Omit<LogEntry, "timestamp" | "severity" | "module" | "action">'.
+app/api/track/warehouse/[token]/route.ts(91,42): error TS2339: Property 'plate_number' does not exist on type '{ plate_number: any; }[]'.
+app/api/track/warehouse/[token]/route.ts(91,75): error TS2339: Property 'plate_number' does not exist on type '{ plate_number: any; }[]'.
+app/api/track/warehouse/[token]/route.ts(92,43): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+app/api/track/warehouse/[token]/route.ts(92,100): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+app/api/track/warehouse/[token]/route.ts(93,53): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+app/api/track/warehouse/[token]/route.ts(93,120): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+app/driver/portal/components/SetupWizard.tsx(46,26): error TS2345: Argument of type 'PermissionState' is not assignable to parameter of type 'SetStateAction<"granted" | "prompt" | "denied" | null>'.
+  Type '"prompt-with-rationale"' is not assignable to type 'SetStateAction<"granted" | "prompt" | "denied" | null>'.
+app/driver/portal/components/SetupWizard.tsx(64,24): error TS2345: Argument of type 'PermissionState' is not assignable to parameter of type 'SetStateAction<"granted" | "prompt" | "denied" | null>'.
+  Type '"prompt-with-rationale"' is not assignable to type 'SetStateAction<"granted" | "prompt" | "denied" | null>'.
+app/driver/portal/components/SetupWizard.tsx(113,161): error TS2304: Cannot find name 'Loader2'.
+app/driver/portal/components/SetupWizard.tsx(130,180): error TS2304: Cannot find name 'Loader2'.
+app/driver/portal/components/SetupWizard.tsx(186,103): error TS2304: Cannot find name 'Loader2'.
+app/driver/portal/page.tsx(320,86): error TS2339: Property 'status' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'status' does not exist on type '{}'.
+app/driver/portal/page.tsx(322,26): error TS2339: Property 'status' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'status' does not exist on type '{}'.
+app/driver/portal/page.tsx(323,34): error TS2339: Property 'status' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'status' does not exist on type '{}'.
+app/driver/portal/page.tsx(346,24): error TS2304: Cannot find name 'fetchJobDetails'.
+app/driver/portal/page.tsx(406,52): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Object literal may only specify known properties, and 'nulls' does not exist in type '{ ascending?: boolean | undefined; nullsFirst?: boolean | undefined; foreignTable?: string | undefined; }'.
+app/driver/portal/page.tsx(2422,30): error TS2304: Cannot find name 'ImageIcon'.
+app/driver/portal/page.tsx(3508,205): error TS2367: This comparison appears to be unintentional because the types '"dashboard" | "jobDetail" | "performance" | "history"' and '"auth"' have no overlap.
+app/ground/dashboard/page.tsx(417,28): error TS2339: Property 'requires_container' does not exist on type '{ type: GroundEventType; label: string; icon: string; color: string; }'.
+app/ground/dashboard/page.tsx(432,95): error TS2339: Property 'requires_photo' does not exist on type '{ type: GroundEventType; label: string; icon: string; color: string; }'.
+app/jo/[token]/page.tsx(340,44): error TS2339: Property 'driver_type' does not exist on type '{ id: string; name: string; phone: string; }'.
+app/manifest.ts(17,9): error TS2820: Type '"any maskable"' is not assignable to type '"any" | "maskable" | "monochrome" | undefined'. Did you mean '"maskable"'?
+app/portal/sales/chat/page.tsx(179,14): error TS2304: Cannot find name 'MessageSquare'.
+app/sbu/clearances/page.tsx(341,125): error TS2339: Property 'carrier' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(345,125): error TS2339: Property 'pol' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(350,121): error TS2339: Property 'eta' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(350,155): error TS2339: Property 'etd' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(359,126): error TS2339: Property 'incoterms' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(359,166): error TS2339: Property 'currency' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(363,121): error TS2339: Property 'gross_weight' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(386,117): error TS2339: Property 'bc11_number' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(390,110): error TS2339: Property 'container_info' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(394,153): error TS2339: Property 'tps' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(405,70): error TS2339: Property 'items' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(406,73): error TS2339: Property 'items' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(429,70): error TS2339: Property 'checklist' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/sbu/clearances/page.tsx(449,70): error TS2339: Property 'checklist' does not exist on type '{ doc_code?: string | undefined; lane?: string | undefined; aju_number?: string | undefined; status_clearance?: string | undefined; }'.
+app/tally/inbound/[id]/page.tsx(27,26): error TS2339: Property 'items' does not exist on type 'OfflineReceipt'.
+app/tally/inbound/[id]/page.tsx(100,43): error TS2345: Argument of type 'undefined' is not assignable to parameter of type 'string'.
+app/tally/page.tsx(208,95): error TS2339: Property 'items' does not exist on type 'OfflineReceipt'.
+app/track/fwd/[token]/page.tsx(224,14): error TS2304: Cannot find name 'CardContent'.
+app/track/fwd/[token]/page.tsx(260,15): error TS2304: Cannot find name 'CardContent'.
+app/track/fwd/[token]/page.tsx(264,14): error TS2304: Cannot find name 'CardContent'.
+app/track/fwd/[token]/page.tsx(283,22): error TS2304: Cannot find name 'ArrowRight'.
+app/track/fwd/[token]/page.tsx(316,15): error TS2304: Cannot find name 'CardContent'.
+app/track/fwd/[token]/page.tsx(322,14): error TS2304: Cannot find name 'CardContent'.
+app/track/fwd/[token]/page.tsx(355,15): error TS2304: Cannot find name 'CardContent'.
+app/track/warehouse/[token]/page.tsx(145,167): error TS2304: Cannot find name 'MapPin'.
+app/track/warehouse/[token]/page.tsx(155,149): error TS2304: Cannot find name 'MapPin'.
+app/warehouse/portal/outbound/[id]/page.tsx(117,78): error TS2339: Property 'job_orders' does not exist on type '{ id: any; job_orders: { id: any; jo_number: any; }[]; }[]'.
+app/warehouse/portal/outbound/[id]/page.tsx(128,52): error TS2339: Property 'job_orders' does not exist on type '{ id: any; job_orders: { id: any; jo_number: any; }[]; }[]'.
+app/warehouse/portal/outbound/[id]/page.tsx(154,54): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+app/warehouse/portal/outbound/[id]/page.tsx(156,44): error TS2339: Property 'name' does not exist on type '{ name: any; phone: any; }[]'.
+app/warehouse/portal/outbound/[id]/page.tsx(690,25): error TS2367: This comparison appears to be unintentional because the types '"SKU"' and '"REPLACEMENT"' have no overlap.
+app/warehouse/portal/outbound/[id]/page.tsx(1211,59): error TS2345: Argument of type '"REPLACEMENT"' is not assignable to parameter of type 'SetStateAction<"SKU" | "LOCATION" | null>'.
+components/chat/ChatComposeModal.tsx(96,75): error TS2345: Argument of type '(string | undefined)[]' is not assignable to parameter of type 'string[]'.
+  Type 'string | undefined' is not assignable to type 'string'.
+    Type 'undefined' is not assignable to type 'string'.
+components/chat/ChatInbox.tsx(87,46): error TS2339: Property 'legal_name' does not exist on type '{ name: any; legal_name: any; }[]'.
+components/chat/ChatInbox.tsx(87,74): error TS2339: Property 'name' does not exist on type '{ name: any; legal_name: any; }[]'.
+components/chat/ChatInbox.tsx(125,34): error TS2339: Property 'work_orders' does not exist on type '{ id: any; sbu_type: any; item_data: any; work_orders: { id: any; wo_number: any; order_date: any; execution_date: any; customers: { name: any; legal_name: any; }[]; }[]; }[]'.
+components/chat/ChatInbox.tsx(127,42): error TS2339: Property 'companies' does not exist on type '{ plate_number: any; companies: { name: any; }[]; }[]'.
+components/chat/ChatInbox.tsx(134,35): error TS2339: Property 'item_data' does not exist on type '{ id: any; sbu_type: any; item_data: any; work_orders: { id: any; wo_number: any; order_date: any; execution_date: any; customers: { name: any; legal_name: any; }[]; }[]; }[]'.
+components/chat/ChatInbox.tsx(134,73): error TS2339: Property 'item_data' does not exist on type '{ id: any; sbu_type: any; item_data: any; work_orders: { id: any; wo_number: any; order_date: any; execution_date: any; customers: { name: any; legal_name: any; }[]; }[]; }[]'.
+components/chat/ChatInbox.tsx(639,95): error TS2339: Property 'full_name' does not exist on type 'Participant'.
+components/chat/ChatPanel.tsx(103,11): error TS2322: Type '"work_order" | "group" | "job_order" | "direct" | "lead"' is not assignable to type '"work_order" | "group" | "job_order" | "direct"'.
+  Type '"lead"' is not assignable to type '"work_order" | "group" | "job_order" | "direct"'.
+components/director/ExceptionInvestigationModal.tsx(204,39): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+components/hq/AddForwardingItemModal.tsx(5,32): error TS2307: Cannot find module '@/lib/domain/forwarding/repository' or its corresponding type declarations.
+components/hq/AddForwardingItemModal.tsx(67,11): error TS2554: Expected 3 arguments, but got 4.
+components/landing/Sections.tsx(32,6): error TS2322: Type '{ children: (string | Element)[]; className: string; initial: { opacity: number; y: number; }; whileInView: { opacity: number; y: number; }; viewport: { once: boolean; margin: string; }; transition: { ...; }; }' is not assignable to type 'Omit<HTMLMotionProps<"div">, "ref">'.
+  Types of property 'transition' are incompatible.
+    Type '{ duration: number; ease: number[]; }' is not assignable to type 'Transition<any> | undefined'.
+      Type '{ duration: number; ease: number[]; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+        Type '{ duration: number; ease: number[]; }' is not assignable to type 'ValueAnimationTransition<any>'.
+          Types of property 'ease' are incompatible.
+            Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+              Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+                Type 'number[]' is not assignable to type 'Easing[]'.
+                  Type 'number' is not assignable to type 'Easing'.
+components/landing/Sections.tsx(36,29): error TS2322: Type '{ duration: number; ease: number[]; delay: number; }' is not assignable to type 'Transition<any> | undefined'.
+  Type '{ duration: number; ease: number[]; delay: number; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+    Type '{ duration: number; ease: number[]; delay: number; }' is not assignable to type 'ValueAnimationTransition<any>'.
+      Types of property 'ease' are incompatible.
+        Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+          Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+            Type 'number[]' is not assignable to type 'Easing[]'.
+              Type 'number' is not assignable to type 'Easing'.
+components/landing/Sections.tsx(125,10): error TS2322: Type '{ children: (Element | Element[])[]; className: string; initial: { opacity: number; y: number; }; whileInView: { opacity: number; y: number; }; viewport: { once: boolean; margin: string; }; transition: { ...; }; }' is not assignable to type 'Omit<HTMLMotionProps<"div">, "ref">'.
+  Types of property 'transition' are incompatible.
+    Type '{ duration: number; ease: number[]; }' is not assignable to type 'Transition<any> | undefined'.
+      Type '{ duration: number; ease: number[]; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+        Type '{ duration: number; ease: number[]; }' is not assignable to type 'ValueAnimationTransition<any>'.
+          Types of property 'ease' are incompatible.
+            Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+              Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+                Type 'number[]' is not assignable to type 'Easing[]'.
+                  Type 'number' is not assignable to type 'Easing'.
+components/landing/Sections.tsx(250,8): error TS2322: Type '{ children: string; className: string; initial: { opacity: number; y: number; }; whileInView: { opacity: number; y: number; }; viewport: { once: boolean; margin: string; }; transition: { duration: number; ease: number[]; }; }' is not assignable to type 'Omit<HTMLMotionProps<"p">, "ref">'.
+  Types of property 'transition' are incompatible.
+    Type '{ duration: number; ease: number[]; }' is not assignable to type 'Transition<any> | undefined'.
+      Type '{ duration: number; ease: number[]; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+        Type '{ duration: number; ease: number[]; }' is not assignable to type 'ValueAnimationTransition<any>'.
+          Types of property 'ease' are incompatible.
+            Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+              Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+                Type 'number[]' is not assignable to type 'Easing[]'.
+                  Type 'number' is not assignable to type 'Easing'.
+components/landing/Sections.tsx(358,8): error TS2322: Type '{ children: Element[]; className: string; initial: { opacity: number; y: number; }; whileInView: { opacity: number; y: number; }; viewport: { once: boolean; margin: string; }; transition: { duration: number; ease: number[]; }; }' is not assignable to type 'Omit<HTMLMotionProps<"div">, "ref">'.
+  Types of property 'transition' are incompatible.
+    Type '{ duration: number; ease: number[]; }' is not assignable to type 'Transition<any> | undefined'.
+      Type '{ duration: number; ease: number[]; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+        Type '{ duration: number; ease: number[]; }' is not assignable to type 'ValueAnimationTransition<any>'.
+          Types of property 'ease' are incompatible.
+            Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+              Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+                Type 'number[]' is not assignable to type 'Easing[]'.
+                  Type 'number' is not assignable to type 'Easing'.
+components/landing/Sections.tsx(376,8): error TS2322: Type '{ children: string; className: string; initial: { opacity: number; y: number; }; whileInView: { opacity: number; y: number; }; viewport: { once: boolean; margin: string; }; transition: { duration: number; ease: number[]; }; }' is not assignable to type 'Omit<HTMLMotionProps<"p">, "ref">'.
+  Types of property 'transition' are incompatible.
+    Type '{ duration: number; ease: number[]; }' is not assignable to type 'Transition<any> | undefined'.
+      Type '{ duration: number; ease: number[]; }' is not assignable to type 'TransitionWithValueOverrides<any>'.
+        Type '{ duration: number; ease: number[]; }' is not assignable to type 'ValueAnimationTransition<any>'.
+          Types of property 'ease' are incompatible.
+            Type 'number[]' is not assignable to type 'Easing | Easing[] | undefined'.
+              Type 'number[]' is not assignable to type 'EasingFunction | Easing[]'.
+                Type 'number[]' is not assignable to type 'Easing[]'.
+                  Type 'number' is not assignable to type 'Easing'.
+components/layout/TopNavbar.tsx(174,40): error TS2339: Property 'wo_number' does not exist on type '{ id: any; wo_number: any; }[]'.
+components/layout/TopNavbar.tsx(177,64): error TS2339: Property 'id' does not exist on type '{ id: any; wo_number: any; }[]'.
+components/master/ContactsFormModal.tsx(217,17): error TS2322: Type '{ value: any; onChange: (address: any) => void; }' is not assignable to type 'IntrinsicAttributes & GoogleMapsInputProps'.
+  Property 'value' does not exist on type 'IntrinsicAttributes & GoogleMapsInputProps'.
+components/master/ContactsFormModal.tsx(218,28): error TS7006: Parameter 'address' implicitly has an 'any' type.
+components/master/LocationsFormModal.tsx(104,15): error TS2322: Type '{ value: any; onChange: (data: any) => void; }' is not assignable to type 'IntrinsicAttributes & GoogleMapsInputProps'.
+  Property 'value' does not exist on type 'IntrinsicAttributes & GoogleMapsInputProps'.
+components/master/LocationsFormModal.tsx(105,26): error TS7006: Parameter 'data' implicitly has an 'any' type.
+components/portal/TenantBrandShowcase.tsx(77,9): error TS2322: Type '{ id: any; name: any; logo_url: any; } | null' is not assignable to type '{ id: any; name: any; logo_url: any; tenant_code: any; } | null'.
+  Property 'tenant_code' is missing in type '{ id: any; name: any; logo_url: any; }' but required in type '{ id: any; name: any; logo_url: any; tenant_code: any; }'.
+components/sbu/FleetTrackingConsole.tsx(147,49): error TS2339: Property 'icon_url' does not exist on type '{ id: any; type_name: any; icon_url: any; }[]'.
+components/sbu/FleetTrackingConsole.tsx(158,50): error TS2339: Property 'type_name' does not exist on type '{ id: any; type_name: any; icon_url: any; }[]'.
+components/sbu/IntelligenceMap.tsx(214,76): error TS2339: Property 'status' does not exist on type 'DirectionsResult'.
+components/sbu/IntelligenceMap.tsx(216,22): error TS2339: Property 'status' does not exist on type 'DirectionsResult'.
+components/sbu/IntelligenceMap.tsx(219,45): error TS2339: Property 'encoded' does not exist on type 'string'.
+components/sbu/IntelligenceMap.tsx(219,78): error TS2339: Property 'encoded' does not exist on type 'string'.
+components/sbu/IntelligenceMap.tsx(220,55): error TS2339: Property 'encoded' does not exist on type 'string'.
+components/sbu/IntelligenceMap.tsx(228,83): error TS2339: Property 'status' does not exist on type 'DirectionsResult'.
+components/sbu/IntelligenceTower.tsx(154,32): error TS2339: Property 'wo' does not exist on type '{ id: any; item_data: any; wo: any[]; }[]'.
+components/sbu/IntelligenceTower.tsx(155,36): error TS2339: Property 'wo' does not exist on type '{ id: any; item_data: any; wo: any[]; }[]'.
+components/sbu/IntelligenceTower.tsx(156,40): error TS2339: Property 'wo' does not exist on type '{ id: any; item_data: any; wo: any[]; }[]'.
+components/sbu/IntelligenceTower.tsx(157,41): error TS2339: Property 'wo' does not exist on type '{ id: any; item_data: any; wo: any[]; }[]'.
+components/shared/ProtectedRoute.tsx(14,29): error TS2339: Property 'profileLoading' does not exist on type 'AuthContextType'.
+components/Tenant/AddStaffModal.tsx(136,27): error TS2345: Argument of type '{ email: string; fullName: string; whatsapp: string; roleCode: string; password: string; }' is not assignable to parameter of type 'SetStateAction<{ email: string; fullName: string; whatsapp: string; roleCode: string; password: string; division: string; }>'.
+  Property 'division' is missing in type '{ email: string; fullName: string; whatsapp: string; roleCode: string; password: string; }' but required in type '{ email: string; fullName: string; whatsapp: string; roleCode: string; password: string; division: string; }'.
+components/Tenant/EditStaffModal.tsx(63,26): error TS2339: Property 'division' does not exist on type '{}'.
+components/Tenant/EditStaffModal.tsx(68,26): error TS2339: Property 'level' does not exist on type '{}'.
+lib/actions/tenantActions.ts(44,44): error TS2339: Property 'user_id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(57,55): error TS2339: Property 'id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(108,61): error TS2339: Property 'admin_email' does not exist on type 'never'.
+lib/actions/tenantActions.ts(118,49): error TS2339: Property 'admin_email' does not exist on type 'never'.
+lib/actions/tenantActions.ts(125,30): error TS2339: Property 'admin_email' does not exist on type 'never'.
+lib/actions/tenantActions.ts(128,21): error TS2339: Property 'id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(129,80): error TS2339: Property 'id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(135,39): error TS2339: Property 'admin_email' does not exist on type 'never'.
+lib/actions/tenantActions.ts(184,30): error TS2339: Property 'id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(200,7): error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'never[]'.
+lib/actions/tenantActions.ts(213,7): error TS2353: Object literal may only specify known properties, and 'name' does not exist in type 'never[]'.
+lib/actions/tenantActions.ts(262,31): error TS2339: Property 'tenants' does not exist on type 'never'.
+lib/actions/tenantActions.ts(264,9): error TS2698: Spread types may only be created from object types.
+lib/actions/tenantActions.ts(265,19): error TS2339: Property 'tenants' does not exist on type 'never'.
+lib/actions/tenantActions.ts(266,26): error TS2339: Property 'tenants' does not exist on type 'never'.
+lib/actions/tenantActions.ts(266,54): error TS2339: Property 'tenant_code' does not exist on type 'never'.
+lib/actions/tenantActions.ts(299,26): error TS2339: Property 'id' does not exist on type 'never'.
+lib/actions/tenantActions.ts(369,19): error TS2345: Argument of type '{ status: string; rejection_reason: string; }' is not assignable to parameter of type 'never'.
+lib/actions/tenantActions.ts(377,72): error TS2345: Argument of type '{ p_tenant_code: string; p_amount_received: number; p_note: string; }' is not assignable to parameter of type 'undefined'.
+lib/actions/tenantActions.ts(389,17): error TS2345: Argument of type '{ status: string; }' is not assignable to parameter of type 'never'.
+lib/actions/tenantActions.ts(406,72): error TS2345: Argument of type '{ p_tenant_code: string; p_amount_received: number; p_note: string; }' is not assignable to parameter of type 'undefined'.
+lib/alerting.ts(65,3): error TS2322: Type '(alert: Alert) => void' is not assignable to type '(alert: Alert) => Promise<void>'.
+  Type 'void' is not assignable to type 'Promise<void>'.
+lib/audit.ts(47,7): error TS2353: Object literal may only specify known properties, and 'module' does not exist in type 'never[]'.
+lib/domain/forwarding/pricing.ts(4,26): error TS2307: Cannot find module '../../utils/supabase/client' or its corresponding type declarations.
+lib/domain/forwarding/pricing.ts(57,65): error TS2304: Cannot find name 'executionMode'.
+lib/domain/forwarding/types.ts(53,9): error TS2304: Cannot find name 'Leg'.
+lib/domain/forwarding/types.ts(54,15): error TS2304: Cannot find name 'Container'.
+lib/driver-portal/actions.ts(27,10): error TS2352: Conversion of type '{ id: any; plate_number: any; md_fleet_types: { type_name: any; }[]; }[]' to type 'FleetWithType[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ id: any; plate_number: any; md_fleet_types: { type_name: any; }[]; }' is not comparable to type 'FleetWithType'.
+    Types of property 'md_fleet_types' are incompatible.
+      Property 'type_name' is missing in type '{ type_name: any; }[]' but required in type '{ type_name: string; }'.
+lib/invoice/pdf.ts(515,7): error TS2322: Type '"networkidle0"' is not assignable to type '"load" | "domcontentloaded" | ("load" | "domcontentloaded")[] | undefined'.
+lib/monitoring/forwarding-monitor.ts(43,33): error TS2339: Property 'table_name' does not exist on type 'never'.
+lib/monitoring/forwarding-monitor.ts(56,39): error TS2339: Property 'shipment_number' does not exist on type 'never'.
+lib/monitoring/forwarding-monitor.ts(56,67): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/forwarding-monitor.ts(57,42): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/forwarding-monitor.ts(57,72): error TS2339: Property 'shipment_number' does not exist on type 'never'.
+lib/monitoring/forwarding-monitor.ts(57,106): error TS2339: Property 'status' does not exist on type 'never'.
+lib/monitoring/mission-control.ts(135,27): error TS2339: Property 'checked_at' does not exist on type 'never'.
+lib/monitoring/mission-control.ts(136,25): error TS2339: Property 'status' does not exist on type 'never'.
+lib/monitoring/mission-control.ts(158,11): error TS2322: Type '"Stuck Job Orders"' is not assignable to type '"orphan" | "duplicate" | "invalid_relation" | "negative_total" | "missing_reference"'.
+lib/monitoring/mission-control.ts(173,11): error TS2322: Type '"Over Reserved Stock"' is not assignable to type '"orphan" | "duplicate" | "invalid_relation" | "negative_total" | "missing_reference"'.
+lib/monitoring/mission-control.ts(176,11): error TS2322: Type '"critical"' is not assignable to type '"low" | "medium" | "high"'.
+lib/monitoring/persist.ts(33,7): error TS2353: Object literal may only specify known properties, and 'check_type' does not exist in type 'never[]'.
+lib/monitoring/trucking-monitor.ts(49,28): error TS2339: Property 'jo_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(49,55): error TS2339: Property 'status' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(50,31): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(50,50): error TS2339: Property 'jo_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(50,73): error TS2339: Property 'status' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(50,97): error TS2339: Property 'created_at' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(81,52): error TS2339: Property 'jo_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(82,31): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(82,50): error TS2339: Property 'jo_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(82,76): error TS2339: Property 'driver_id' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(108,23): error TS2488: Type 'never' must have a '[Symbol.iterator]()' method that returns an iterator.
+lib/monitoring/trucking-monitor.ts(110,49): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+lib/monitoring/trucking-monitor.ts(111,26): error TS2339: Property 'push' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(115,16): error TS2339: Property 'length' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(119,37): error TS2339: Property 'plate_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(119,61): error TS2339: Property 'fleet_id' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(120,40): error TS2339: Property 'fleet_id' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(120,72): error TS2339: Property 'plate_number' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(120,97): error TS2339: Property 'map' does not exist on type 'never'.
+lib/monitoring/trucking-monitor.ts(120,102): error TS7006: Parameter 'j' implicitly has an 'any' type.
+lib/monitoring/wms-monitor.ts(57,44): error TS2339: Property 'item_name' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(57,62): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(57,79): error TS2339: Property 'quantity' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(58,36): error TS2339: Property 'id' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(58,56): error TS2339: Property 'item_name' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(58,82): error TS2339: Property 'quantity' does not exist on type 'never'.
+lib/monitoring/wms-monitor.ts(58,111): error TS2339: Property 'warehouse_id' does not exist on type 'never'.
+lib/push/client.ts(30,9): error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'string | BufferSource | null | undefined'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+lib/push/sender.ts(2,21): error TS7016: Could not find a declaration file for module 'web-push'. 'C:/Users/sonad/projectQ/sentralogis/node_modules/web-push/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/web-push` if it exists or add a new declaration (.d.ts) file containing `declare module 'web-push';`
+lib/services/assignmentSave.ts(73,20): error TS2345: Argument of type '(stop: Record<string, unknown>, sIdx: number) => { job_order_id: string; sequence: number; stop_type: string; source_type: string; source_id: string; location_name: string; address: string; ... 6 more ...; duration_minutes: number | null; }' is not assignable to parameter of type '(value: unknown, index: number, array: unknown[]) => { job_order_id: string; sequence: number; stop_type: string; source_type: string; source_id: string; location_name: string; address: string; latitude: number | null; ... 5 more ...; duration_minutes: number | null; }'.
+  Types of parameters 'stop' and 'value' are incompatible.
+    Type 'unknown' is not assignable to type 'Record<string, unknown>'.
+lib/status-history.ts(31,7): error TS2353: Object literal may only specify known properties, and 'job_order_id' does not exist in type 'never[]'.
+lib/status-history.ts(55,7): error TS2353: Object literal may only specify known properties, and 'shipment_id' does not exist in type 'never[]'.
+lib/status-history.ts(83,7): error TS2353: Object literal may only specify known properties, and 'item_id' does not exist in type 'never[]'.
+lib/tallyStore.ts(122,9): error TS2353: Object literal may only specify known properties, and 'items' does not exist in type 'OfflineReceipt'.
+lib/tallyStore.ts(176,9): error TS2339: Property 'items' does not exist on type 'OfflineReceipt'.
+lib/tallyStore.ts(213,30): error TS2339: Property 'items' does not exist on type 'OfflineReceipt'.

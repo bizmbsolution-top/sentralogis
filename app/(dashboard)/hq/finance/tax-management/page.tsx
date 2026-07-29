@@ -12,18 +12,7 @@ import {
   TableBody, 
   TableRow, 
   TableCell, 
-  Input, 
-  Textarea, 
-  Select,
-  Switch,
-  Form,
-  FormField,
-  FormItem,
-  FormControl,
-  FormLabel,
-  Description,
-  DescriptionItem,
-  Toaster
+  Input 
 } from '@/components/ui';
 import { 
   TrendingUp, 
@@ -35,7 +24,6 @@ import {
   Save,
   X
 } from 'lucide-react';
-import { formatRupiah } from '@/lib/utils/format';
 
 const TaxManagementPage = () => {
   const { profile } = useAuth();
@@ -62,7 +50,7 @@ const TaxManagementPage = () => {
       const { data, error } = await supabase
         .from('md_taxes')
         .select('*')
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id', profile?.tenant_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -75,7 +63,9 @@ const TaxManagementPage = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
+    const target = e.target as HTMLInputElement;
+    const { name, value, type } = target;
+    const checked = 'checked' in target ? target.checked : false;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : type === 'number' ? parseFloat(value) || 0 : value
@@ -193,8 +183,8 @@ const TaxManagementPage = () => {
 
   return (
     <div className="p-4 md:6 lg:p-8">
-      <Toaster position="top-right" />
       
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Manajemen Master Pajak</h1>
         <p className="text-slate-600 mt-1">Kelola tarif pajak yang dapat dikonfigurasi sesuai dengan peraturan perpajakan Indonesia</p>
@@ -211,75 +201,65 @@ const TaxManagementPage = () => {
             )}
             
             <form onSubmit={(e) => e.preventDefault()}>
-              <Form>
-                <FormField>
-                  <FormLabel>Kode Pajak</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Mis: PPN, PPH 23"
-                      value={formData.code}
-                      onChange={handleInputChange}
-                      name="code"
-                      required
-                    />
-                  </FormControl>
-                </FormField>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Kode Pajak</label>
+                  <Input
+                    placeholder="Mis: PPN, PPH 23"
+                    value={formData.code}
+                    onChange={handleInputChange}
+                    name="code"
+                    required
+                  />
+                </div>
 
-                <FormField>
-                  <FormLabel>Nama Pajak</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Mis: Pajak Pertambahan Nilai"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      name="name"
-                      required
-                    />
-                  </FormControl>
-                </FormField>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nama Pajak</label>
+                  <Input
+                    placeholder="Mis: Pajak Pertambahan Nilai"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    name="name"
+                    required
+                  />
+                </div>
 
-                <FormField>
-                  <FormLabel>Tarief (%)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Mis: 11 untuk 11%"
-                      value={formData.rate}
-                      onChange={handleInputChange}
-                      name="rate"
-                      min="0"
-                      step="0.1"
-                      required
-                    />
-                  </FormControl>
-                </FormField>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tarif (%)</label>
+                  <Input
+                    type="number"
+                    placeholder="Mis: 11 untuk 11%"
+                    value={formData.rate}
+                    onChange={handleInputChange}
+                    name="rate"
+                    min="0"
+                    step="0.1"
+                    required
+                  />
+                </div>
 
-                <FormField>
-                  <FormLabel>Deskripsi</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Mis: PPN 11% sesuai tarif perpajakan Indonesia"
-                      value={formData.description}
-                      onChange={handleInputChange}
-                      name="description"
-                      rows={3}
-                    />
-                  </FormControl>
-                </FormField>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi</label>
+                  <textarea
+                    className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Mis: PPN 11% sesuai tarif perpajakan Indonesia"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    name="description"
+                    rows={3}
+                  />
+                </div>
 
-                <FormField>
-                  <FormLabel>Status Aktif</FormLabel>
-                  <FormControl>
-                    <Switch
-                      checked={formData.is_active}
-                      onCheckedChange={(checked) => {
-                        setFormData(prev => ({ ...prev, is_active: checked }));
-                      }}
-                    >
-                      Aktif
-                    </Switch>
-                  </FormControl>
-                </FormField>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="is_active" className="text-sm font-medium text-slate-700">Status Aktif</label>
+                </div>
 
                 <Button 
                   type="submit"
@@ -292,7 +272,7 @@ const TaxManagementPage = () => {
                 {editingTaxId && (
                   <Button 
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => {
                       setEditingTaxId(null);
                       setFormData({
@@ -308,7 +288,7 @@ const TaxManagementPage = () => {
                     Batal
                   </Button>
                 )}
-              </Form>
+              </div>
             </form>
           </div>
         </Card>
@@ -319,7 +299,7 @@ const TaxManagementPage = () => {
             <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
               <h2 className="text-xl font-semibold text-slate-900">Daftar Master Pajak</h2>
               <Button 
-                variant="outline"
+                variant="secondary"
                 onClick={handleAddTax}
                 className="flex items-center gap-2"
               >
@@ -354,8 +334,8 @@ const TaxManagementPage = () => {
                         {tax.rate}%
                       </span>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={tax.description || '-'}>
-                      {tax.description || '-'}
+                    <TableCell className="max-w-[200px] truncate">
+                      <div title={tax.description || '-'}>{tax.description || '-'}</div>
                     </TableCell>
                     <TableCell className="text-center">
                       <span 
@@ -375,8 +355,7 @@ const TaxManagementPage = () => {
                         <Edit2 size={16} />
                       </Button>
                       <Button 
-                        variant="destructive"
-                        ghost
+                        variant="danger"
                         size="sm"
                         onClick={() => handleDeleteTax(tax.id)}
                       >

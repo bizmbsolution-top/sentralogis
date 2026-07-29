@@ -27,6 +27,14 @@
     {
       "path": "/api/cron/sla-snapshot",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/jo-autostart",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/jo-autocomplete",
+      "schedule": "0 6 * * *"
     }
   ]
 }

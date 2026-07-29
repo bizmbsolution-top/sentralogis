@@ -22,6 +22,9 @@ interface InventoryItem {
   status: string;
   location_code: string;
   warehouse_name: string;
+  area_name?: string;
+  area_code?: string;
+  zone_code?: string;
 }
 
 export default function HQWarehouseInventory() {

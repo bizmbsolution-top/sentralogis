@@ -136,10 +136,10 @@ export default function CostAuditPage() {
         {/* [AI] Desktop SBU Type Filter */}
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
-          {[
+          {([
             { id: 'all', label: 'All SBU', icon: Layers },
             ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-          ].map(item => {
+          ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
             return (

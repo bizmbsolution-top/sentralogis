@@ -13,7 +13,7 @@ import {
   Clock, CheckCircle2, Navigation as NavIcon, MessageCircle,
   AlertCircle, Activity, ClipboardList,
   ShieldCheck, Phone, Satellite, Share2,
-  Info, Edit2
+  Info, Edit2, History
 } from 'lucide-react';
 import { toast, Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { Printer, X, ShieldCheck as Shield, FileText, User as UserIcon, Truck as TruckIcon, MapPin as MapIcon, Box } from 'lucide-react';
 import { sendNotification } from '@/lib/supabase/notifications';
 import RejectedViewModal from '../../../hq/work-orders/components/RejectedViewModal';
+import HistoryModal from '@/components/shared/HistoryModal';
 // [AI] Import printCashAdvanceSlip utility to print cash advance slips for internal drivers directly from assignments list
 import { printCashAdvanceSlip } from '../utils';
 import { getAdvancedJobCategory as getJobCategory } from '@/lib/domain/jo/status';
@@ -235,6 +236,8 @@ export default function JobOrderManagementPage() {
   const [selectedRejectedWo, setSelectedRejectedWo] = useState<any>(null);
   const [fetchingWo, setFetchingWo] = useState(false);
   const [editingJo, setEditingJo] = useState<any>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedEntityForHistory, setSelectedEntityForHistory] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -410,7 +413,16 @@ export default function JobOrderManagementPage() {
         return <Badge className="bg-slate-900 text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">{label}</Badge>;
     }
     if (category === 'active') {
-        return <Badge className="bg-emerald-100 text-emerald-600 border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON JOURNEY</Badge>;
+        return (
+          <div className="flex items-center gap-2">
+            <Badge className="bg-emerald-100 text-emerald-600 border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">
+              ON JOURNEY
+            </Badge>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md border border-slate-200 truncate max-w-[200px]">
+              {jo.status || 'DALAM PERJALANAN'}
+            </span>
+          </div>
+        );
     }
     if (category === 'assigned') {
         return <Badge className="bg-blue-100 text-blue-600 border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ASSIGNED</Badge>;
@@ -685,7 +697,7 @@ export default function JobOrderManagementPage() {
                                     link = `${origin}/driver/portal`;
                                     msg = `Halo ${driverName}, Anda mendapat tugas baru (${jo.jo_number}). Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
                                   } else {
-                                    link = `${origin}/jo/${jo.driver_link_token || jo.id}`;
+                                    link = `https://www.sentralogis.com/jo/${jo.driver_link_token || jo.id}`;
                                     msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda (${jo.jo_number}): ${link}`;
                                   }
                                   
@@ -712,7 +724,7 @@ export default function JobOrderManagementPage() {
                               </Button>
                             )}
                             {getJobCategory(jo) === 'active' ? (
-                              <Link href="/hq/sbu-activities" className="w-full block">
+                              <Link href={`/sbu/trucking/tracking?jo=${encodeURIComponent(jo.jo_number)}`} className="w-full block">
                                 <Button className="w-full h-10 bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30 transition-all active:scale-95">
                                   <Satellite size={14} /> Live Tracking
                                 </Button>
@@ -724,6 +736,15 @@ export default function JobOrderManagementPage() {
                                 </Button>
                               </Link>
                             )}
+                            <Button
+                              onClick={() => {
+                                setSelectedEntityForHistory(jo.id);
+                                setShowHistoryModal(true);
+                              }}
+                              className="w-full h-10 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-slate-600 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-black/20 transition-all"
+                            >
+                              <History size={14} /> View Logs & Timeline
+                            </Button>
                           </>
                         )}
 
@@ -755,6 +776,14 @@ export default function JobOrderManagementPage() {
               setEditingJo(null);
               fetchAssignments(true);
             }}
+          />
+        )}
+        {showHistoryModal && selectedEntityForHistory && (
+          <HistoryModal
+            entityId={selectedEntityForHistory}
+            entityType="job_order"
+            title="Info Log Drivers & Timeline"
+            onClose={() => setShowHistoryModal(false)}
           />
         )}
 

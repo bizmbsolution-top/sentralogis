@@ -27,8 +27,11 @@ export default function Error({
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Terjadi Kesalahan</h1>
-        <p className="text-slate-600 mb-6">
+        <p className="text-slate-600 mb-2">
           Sistem mengalami error yang tidak terduga. Tim teknis telah diberitahu secara otomatis.
+        </p>
+        <p className="text-xs text-red-500 mb-6 font-mono bg-red-50 p-3 rounded-xl border border-red-200 break-all">
+          {error?.message || 'Tidak ada pesan error'}
         </p>
         <button
           onClick={reset}

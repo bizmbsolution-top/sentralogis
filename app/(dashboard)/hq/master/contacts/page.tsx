@@ -270,7 +270,6 @@ export default function HQContactsPage() {
         billing_longitude: Number(formData.billing_longitude) || 0,
         billing_directions: formData.billing_directions,
         billing_method: formData.billing_method,
-        payment_terms: formData.payment_terms || undefined,
         notes: formData.notes,
         is_active: formData.is_active,
         parent_id: formData.parent_id || null,
@@ -365,9 +364,8 @@ export default function HQContactsPage() {
     } catch (error: any) {
       clearTimeout(timeoutId);
       setSubmitting(false);
-      console.error('[HQContacts] Fatal Submission Error:', error);
-      // Ensure the user sees the error message
-      toast.error(`Gagal menyimpan: ${error.message || 'Kesalahan Sistem'}`, { id: toastId });
+      console.error('[HQContacts] Fatal Submission Error:', JSON.stringify(error, null, 2), error);
+      toast.error(`Gagal menyimpan: ${error?.message || error?.details || JSON.stringify(error) || 'Kesalahan Sistem'}`, { id: toastId });
     } finally {
       setSubmitting(false);
     }

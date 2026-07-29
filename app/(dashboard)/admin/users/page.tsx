@@ -239,7 +239,7 @@ export default function UserManagementPage() {
     if (p.organization_id) {
        const { data } = await supabase.from('wo_organization_users').select('assigned_warehouse_id').eq('user_id', p.id).maybeSingle();
        if (data?.assigned_warehouse_id) {
-          setFormData(prev => ({...prev, assigned_warehouse_id: data.assigned_warehouse_id}));
+          setFormData((prev: any) => ({...prev, assigned_warehouse_id: data.assigned_warehouse_id}));
        }
     }
   };

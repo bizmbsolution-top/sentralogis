@@ -1,13 +1,68 @@
-// [AI] Service Worker for SentraLogis Warehouse Portal PWA
-const CACHE_NAME = 'sentralogis-wh-portal-v2';
+// [AI] Service Worker for SentraLogis PWA (Warehouse + Driver Portal)
+const CACHE_NAME = 'sentralogis-pwa-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/login',
   '/warehouse/portal',
   '/warehouse/portal/login',
+  '/driver/portal',
   '/sentralogis_logo.png',
   '/favicon.ico'
 ];
+
+// [AI] Push Notification Handler
+self.addEventListener('push', (event) => {
+  let data = { title: 'SentraLogis', body: 'Notifikasi baru', tag: 'sentralogis' };
+  try {
+    if (event.data) {
+      data = event.data.json();
+    }
+  } catch (e) {
+    console.warn('[SW] Push data parse error:', e);
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/sentralogis_logo.png',
+    badge: data.badge || '/favicon.ico',
+    vibrate: data.vibrate || [200, 100, 200],
+    tag: data.tag || 'sentralogis-notification',
+    data: data.data || {},
+    actions: data.actions || [],
+    requireInteraction: false,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// [AI] Notification Click Handler - opens the correct page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const notificationData = event.notification.data || {};
+  const jobId = notificationData.job_id;
+  const joToken = notificationData.token;
+  // [AI] Route to /jo/[token] if token present, otherwise /driver/portal
+  const targetUrl = joToken ? `/jo/${joToken}` : (jobId ? `/driver/portal?job=${jobId}` : '/driver/portal');
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        // [AI] Check both /driver/portal and /jo/ pages for existing open tabs
+        if ((client.url.includes('/driver/portal') || client.url.includes('/jo/')) && 'focus' in client) {
+          client.focus();
+          client.navigate(targetUrl);
+          return;
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

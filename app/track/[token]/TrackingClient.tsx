@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
-import { Truck, Navigation as NavIcon, Clock, Phone, Loader2, MapPin, Activity, Image as ImageIcon, X, Expand } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Truck, Navigation as NavIcon, Clock, Phone, MapPin, Activity, Image as ImageIcon, X, Map } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useGoogleMaps } from "@/lib/google-maps-context";
 import Image from "next/image";
 
 interface TrackingClientProps {
@@ -12,41 +10,8 @@ interface TrackingClientProps {
     token: string;
 }
 
-const mapOptions = { 
-    disableDefaultUI: false, 
-    zoomControl: true,
-    mapTypeControl: false,
-    streetViewControl: false,
-};
-
-function ShipmentRoute({ currentPos, destination }: { currentPos: { lat: number, lng: number }, destination: { lat: number, lng: number } }) {
-    const [response, setResponse] = useState<google.maps.DirectionsResult | null>(null);
-    const directionsCallback = useCallback((res: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
-        if (status === 'OK' && res) setResponse(res);
-    }, []);
-    if (destination.lat === 0) return null;
-    return (
-        <>
-            <DirectionsService
-                options={{ origin: currentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }}
-                callback={directionsCallback}
-            />
-            {response && (
-                <DirectionsRenderer
-                    options={{
-                        directions: response,
-                        suppressMarkers: true,
-                        polylineOptions: { strokeColor: "#f97316", strokeWeight: 6, strokeOpacity: 0.8 }
-                    }}
-                />
-            )}
-        </>
-    );
-}
-
 export default function PublicTrackingClient({ initialJob, token }: TrackingClientProps) {
     const supabase = createClient();
-    const { isLoaded } = useGoogleMaps();
     const [job, setJob] = useState(initialJob);
     const [position, setPosition] = useState<{ lat: number, lng: number, timestamp: string } | null>(null);
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -88,13 +53,16 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
     }, [job.id, supabase]);
 
     const destLoc = job.destination;
-    const destination = useMemo(() => ({ lat: Number(destLoc?.latitude || 0), lng: Number(destLoc?.longitude || 0) }), [destLoc]);
+    const stops = job.stops && job.stops.length > 0 ? job.stops : [
+        { location_name: 'Origin', stop_type: 'start' },
+        { location_name: destLoc?.name || 'Destination', stop_type: 'destination' }
+    ];
 
     return (
         <div className="min-h-screen bg-slate-950 flex flex-col font-sans overflow-hidden">
             
             {/* 🛰️ COMPACT MISSION HEADER */}
-            <header className="fixed top-0 left-0 right-0 z-[100] p-4 bg-slate-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
+            <header className="sticky top-0 z-[100] p-4 bg-slate-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 items-center justify-between">
                     
                     {/* LEFT: PT INFO */}
@@ -114,17 +82,6 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                                 </span>
                             </div>
                         </div>
-                    </div>
-
-                    {/* CENTER: ROUTE INFO */}
-                    <div className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-3xl px-6 py-3 w-full md:w-auto overflow-hidden shadow-inner">
-                         <div className="w-10 h-10 bg-orange-500 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-orange-500/20">
-                            <NavIcon className="w-5 h-5" />
-                         </div>
-                         <div className="min-w-0">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block leading-none mb-1.5 text-orange-400">Destination</span>
-                            <p className="text-lg md:text-xl font-black text-white italic truncate tracking-tight uppercase">{destLoc?.name || 'Target Location'}</p>
-                         </div>
                     </div>
 
                     {/* RIGHT: DRIVER & PLATE */}
@@ -150,95 +107,112 @@ export default function PublicTrackingClient({ initialJob, token }: TrackingClie
                 </div>
             </header>
 
-            {/* 📍 MAP FULL AREA */}
-            <main className="flex-1 relative bg-slate-100 mt-[160px] md:mt-[90px]">
-                {!isLoaded ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-50">
-                        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Initalizing Strategic Grid...</span>
+            {/* 📍 TIMELINE & LIVE PING AREA (Replaces Map) */}
+            <main className="flex-1 relative bg-slate-950 p-4 md:p-8 overflow-y-auto">
+                <div className="max-w-3xl mx-auto space-y-6">
+                    
+                    {/* Live GPS Ping Status */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Map className="w-24 h-24 text-white" />
+                        </div>
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30">
+                                <Activity className="w-6 h-6 text-blue-400 animate-pulse" />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-bold text-lg">Real-time GPS Monitor</h3>
+                                {position ? (
+                                    <p className="text-slate-400 text-sm font-mono mt-1">
+                                        Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)}
+                                    </p>
+                                ) : (
+                                    <p className="text-slate-400 text-sm mt-1">Menunggu sinyal GPS dari pengemudi...</p>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                ) : (
-                    <div className="w-full h-full absolute inset-0">
-                        <GoogleMap
-                            mapContainerStyle={{ width: '100%', height: '100%' }}
-                            center={position || defaultCenter}
-                            zoom={14}
-                            options={mapOptions}
-                        >
-                            {position && (
-                                <>
-                                    <Marker 
-                                        position={position} 
-                                        icon={{
-                                            url: "/truck_icon.svg",
-                                            scaledSize: new window.google.maps.Size(40, 40),
-                                            anchor: new window.google.maps.Point(20, 20)
-                                        }}
-                                    />
-                                    {destination.lat !== 0 && (
-                                        <>
-                                            <Marker 
-                                                position={destination} 
-                                                icon={{
-                                                    url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-                                                    scaledSize: new window.google.maps.Size(28, 28)
-                                                }}
-                                            />
-                                            <ShipmentRoute currentPos={position} destination={destination} />
-                                        </>
-                                    )}
-                                </>
-                            )}
-                        </GoogleMap>
-                    </div>
-                )}
 
-                {/* 📸 DIGITAL EVIDENCE (POD) PANEL */}
-                {job.documents && job.documents.length > 0 && (
-                    <div className="absolute bottom-10 left-5 z-[50] max-w-[280px]">
-                         <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 shadow-2xl border border-slate-200">
-                             <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                <ImageIcon className="w-3.5 h-3.5 text-slate-400" /> Digital Evidence / POD
-                             </h4>
-                             <div className="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                    {/* Timeline Container */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                            <NavIcon className="w-4 h-4 text-slate-400" /> Route & Milestones
+                        </h3>
+                        
+                        <div className="relative pl-6 space-y-8">
+                            {/* Vertical Line */}
+                            <div className="absolute left-[11px] top-4 bottom-4 w-[2px] bg-slate-800 rounded-full" />
+                            
+                            {stops.map((stop: any, index: number) => {
+                                const isFirst = index === 0;
+                                const isLast = index === stops.length - 1;
+                                // Simple active logic: just highlight current step if needed, or keep all neutral
+                                const isActive = true;
+
+                                return (
+                                    <div key={index} className="relative flex items-start gap-6">
+                                        <div className="absolute -left-6 bg-slate-900 py-1">
+                                            <div className={`w-6 h-6 rounded-full border-4 border-slate-900 flex items-center justify-center shrink-0 ${isFirst ? 'bg-orange-500' : isLast ? 'bg-emerald-500' : 'bg-blue-500'}`}>
+                                                <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                                            </div>
+                                        </div>
+                                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 flex-1">
+                                            <span className="text-[10px] font-black uppercase tracking-widest block mb-1 text-slate-400">
+                                                {isFirst ? 'START' : isLast ? 'DESTINATION' : stop.stop_type || `STOP ${index}`}
+                                            </span>
+                                            <h4 className="text-white font-bold text-base md:text-lg">
+                                                {stop.location_name || stop.name || 'Titik Lokasi'}
+                                            </h4>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* 📸 DIGITAL EVIDENCE (POD) PANEL */}
+                    {job.documents && job.documents.length > 0 && (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                <ImageIcon className="w-4 h-4 text-slate-400" /> Digital Evidence / POD
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {job.documents.map((doc: any) => (
                                     <div 
                                         key={doc.id} 
-                                        className="relative aspect-square bg-slate-100 rounded-xl overflow-hidden group cursor-pointer border border-slate-100"
+                                        className="relative aspect-square bg-slate-800 rounded-2xl overflow-hidden group cursor-pointer border border-slate-700"
                                         onClick={() => setSelectedPhoto(doc.file_url)}
                                     >
                                         <Image src={doc.file_url} alt="POD" fill className="object-cover group-hover:scale-110 transition-all" />
-                                        <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="text-[7px] font-black text-white uppercase block truncate">{doc.doc_type || 'Evidence'}</span>
-                                            <span className="text-[6px] font-bold text-slate-300 block">{hasMounted ? new Date(doc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                                        <div className="absolute inset-x-0 bottom-0 bg-slate-900/90 p-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                                            <span className="text-[9px] font-black text-white uppercase block truncate">{doc.doc_type || 'Evidence'}</span>
+                                            <span className="text-[8px] font-bold text-slate-400 block">{hasMounted ? new Date(doc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
                                         </div>
                                     </div>
                                 ))}
-                             </div>
-                         </div>
-                    </div>
-                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </main>
 
             {/* 🖼️ PHOTO OVERLAY MODAL */}
             {selectedPhoto && (
                 <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setSelectedPhoto(null)}>
                     <div className="relative max-w-4xl w-full h-full max-h-[80vh] flex items-center justify-center">
-                         <button className="absolute -top-12 right-0 text-white hover:text-slate-300 flex items-center gap-2 font-black uppercase text-xs tracking-widest">
-                            Close <X className="w-6 h-6" />
+                         <button className="absolute -top-12 right-0 text-white hover:text-slate-300 flex items-center gap-2 font-black uppercase text-xs tracking-widest bg-slate-900/50 px-4 py-2 rounded-full">
+                            Tutup <X className="w-4 h-4" />
                          </button>
-                         <div className="relative w-full h-full bg-white rounded-3xl overflow-hidden shadow-2xl">
+                         <div className="relative w-full h-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
                             <Image src={selectedPhoto} alt="Evidence Full" fill className="object-contain" />
                          </div>
                     </div>
                 </div>
             )}
 
-            <footer className="p-2 bg-slate-900 text-center shrink-0 border-t border-white/5">
-                 <p className="text-[7px] font-bold text-slate-600 uppercase tracking-[0.4em]">Sentinel Real-Time Intelligence • {job.jo_number}</p>
+            <footer className="p-3 bg-slate-900 text-center shrink-0 border-t border-slate-800">
+                 <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.4em]">Sentinel Real-Time Intelligence • {job.jo_number}</p>
             </footer>
         </div>
     );
 }
-
-const defaultCenter = { lat: -6.1754, lng: 106.8272 };

@@ -32,11 +32,25 @@ export default function SentralogisLanding() {
           const { App } = await import('@capacitor/app');
           const launchUrl = await App.getLaunchUrl();
           if (launchUrl?.url) {
-            // Handle both /jo/ and jo/ (for custom scheme sentralogis://jo/token)
-            let joIndex = launchUrl.url.indexOf('/jo/');
-            if (joIndex === -1) joIndex = launchUrl.url.indexOf('jo/');
-            if (joIndex !== -1) {
-              let path = launchUrl.url.substring(joIndex);
+            let path = '';
+            const url = launchUrl.url;
+
+            // Handle /job/{id} format (e.g. https://app.sentralogis.com/job/12345)
+            const jobIdx = url.indexOf('/job/');
+            if (jobIdx !== -1) {
+              path = url.substring(jobIdx);
+            }
+
+            // Handle /jo/ and jo/ (for custom scheme sentralogis://jo/token)
+            if (!path) {
+              let joIdx = url.indexOf('/jo/');
+              if (joIdx === -1) joIdx = url.indexOf('jo/');
+              if (joIdx !== -1) {
+                path = url.substring(joIdx);
+              }
+            }
+
+            if (path) {
               const hashIndex = path.indexOf('#');
               if (hashIndex !== -1) path = path.substring(0, hashIndex);
               if (!path.startsWith('/')) path = '/' + path;

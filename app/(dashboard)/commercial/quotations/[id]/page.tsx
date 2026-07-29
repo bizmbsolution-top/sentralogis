@@ -50,6 +50,7 @@ export default function DesktopQuotationBuilder({ params }: { params: Promise<{ 
   const [activeTab, setActiveTab] = useState<string>('');
   const [isApproverModalOpen, setIsApproverModalOpen] = useState(false);
   const [isSendPanelOpen, setIsSendPanelOpen] = useState(false);
+  const [sendMethod, setSendMethod] = useState<'whatsapp' | 'email'>('whatsapp');
   const [messageTemplate, setMessageTemplate] = useState('');
 
   // Add Item State

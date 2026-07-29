@@ -1,9 +1,7 @@
 import { supabase } from '@/lib/supabaseClient';
 
-function cleanCode(str: string, maxLen = 5): string {
+function cleanCode(str: string, maxLen = 4): string {
   if (!str) return 'CUS';
-  const cleaned = str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  if (cleaned && cleaned.length <= maxLen) return cleaned;
   
   const words = str
     .toUpperCase()
@@ -13,10 +11,16 @@ function cleanCode(str: string, maxLen = 5): string {
     .split(/\s+/)
     .filter(Boolean);
     
-  if (words.length === 0) return (cleaned || 'CUS').substring(0, maxLen);
-  if (words.length === 1) return words[0].substring(0, maxLen);
-  if (words[0].length >= 3) return words[0].substring(0, maxLen);
-  return words.map(w => w[0]).join('').substring(0, maxLen) || 'CUS';
+  if (words.length === 0) {
+    const cleaned = str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return (cleaned || 'CUS').substring(0, maxLen);
+  }
+  
+  if (words.length === 1) {
+    return words[0].substring(0, maxLen);
+  }
+  
+  return words.map(w => w[0]).join('').substring(0, maxLen);
 }
 
 export async function generateWONumber(tenantId: string, tenantInitial: string, customerInitial: string): Promise<string> {

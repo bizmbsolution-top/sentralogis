@@ -131,8 +131,11 @@ export default function DriverTrackingPage({
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
 
+  const [showBatteryOptIn, setShowBatteryOptIn] = useState(false);
+  const [batteryOptChecked, setBatteryOptChecked] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState<{ manufacturer: string; model: string } | null>(null);
+
   const [containerNo, setContainerNo] = useState("");
-  const [sealNo, setSealNo] = useState("");
   const [savingContainer, setSavingContainer] = useState(false);
 
   const [geofenceBanner, setGeofenceBanner] = useState<{
@@ -260,6 +263,56 @@ export default function DriverTrackingPage({
       clearInterval(healthInterval);
     };
   }, [token, jobOrder?.id]);
+
+  // Battery optimization check for native Android
+  useEffect(() => {
+    let cancelled = false;
+    async function checkBatteryOpt() {
+      try {
+        const { Capacitor, registerPlugin } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const gpsPlugin = registerPlugin<any>('NativeGps');
+        const info = await gpsPlugin.getDeviceInfo();
+        if (cancelled) return;
+        setDeviceInfo({ manufacturer: info.manufacturer, model: info.model });
+        setBatteryOptChecked(true);
+        if (!info.batteryOptimizationIgnored) {
+          setShowBatteryOptIn(true);
+        }
+      } catch (e) {
+        console.log('[BatteryOpt] Check skipped:', e);
+        if (!cancelled) setBatteryOptChecked(true);
+      }
+    }
+    checkBatteryOpt();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleOpenBatterySettings = async () => {
+    try {
+      const { registerPlugin } = await import('@capacitor/core');
+      const gpsPlugin = registerPlugin<any>('NativeGps');
+      await gpsPlugin.openBatterySettings();
+    } catch (e) {
+      console.error('[BatteryOpt] Failed to open settings:', e);
+    }
+  };
+
+  const handleDismissBatteryOpt = () => {
+    setShowBatteryOptIn(false);
+  };
+
+  const oemGuide: Record<string, string> = {
+    oppo: "Oppo: Buka Settings > Battery > Power Saving Mode > Pilih 'Don't Optimize' untuk SentraLogis",
+    vivo: "Vivo: Buka Settings > Battery > Background App Management > Pilih SentraLogis > Allow Background Running",
+    xiaomi: "Xiaomi: Buka Settings > Battery & Performance > App Battery Saver > Pilih SentraLogis > No Restrictions",
+    realme: "Realme: Buka Settings > Battery > Power Saving Mode > App Quick Freeze > Nonaktifkan untuk SentraLogis",
+    samsung: "Samsung: Buka Settings > Battery > Background Usage Limits > Never Sleeping Apps > Tambah SentraLogis",
+    huawei: "Huawei: Buka Settings > Battery > Launch > Pilih SentraLogis > Manage Manually > Aktifkan semua",
+  };
+
+  const manufacturerKey = (deviceInfo?.manufacturer || '').toLowerCase();
+  const oemTip = Object.entries(oemGuide).find(([key]) => manufacturerKey.includes(key));
 
   // [Phase 4.2] Online/offline event listeners for offline banner
   useEffect(() => {
@@ -814,16 +867,19 @@ export default function DriverTrackingPage({
             Sentralogis Driver.
           </p>
           <button
-            onClick={() => {
-              console.log('[JO Page] Buka di Aplikasi clicked, token:', token);
-              // Try custom scheme first (most reliable)
-              window.location.href = `sentralogis://jo/${token}`;
-              // Fallback: try intent after 500ms if custom scheme fails
-              setTimeout(() => {
-                console.log('[JO Page] Fallback to intent URL');
-                window.location.href = `intent://sentralogis.com/jo/${token}#Intent;scheme=https;package=com.sentralogis.driver;end;`;
-              }, 500);
-            }}
+ onClick={() => {
+                console.log('[JO Page] Buka di Aplikasi clicked, token:', token);
+                // Android Intent URL — paling reliable dari Chrome / WebView
+                // Format: intent://{path}#Intent;scheme={scheme};package={pkg};S.browser_fallback_url={url};end
+                const intentUrl =
+                  `intent://jo/${token}` +
+                  '#Intent;' +
+                  'scheme=sentralogis;' +
+                  'package=com.sentralogis.driver;' +
+                  `S.browser_fallback_url=https://www.sentralogis.com/jo/${token}?browser=1;` +
+                  'end';
+                window.location.href = intentUrl;
+              }}
             className="w-full block bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-200 uppercase tracking-widest mb-6"
           >
             Buka di Aplikasi
@@ -869,6 +925,45 @@ export default function DriverTrackingPage({
           >
             Pasang Sekarang
           </button>
+        </div>
+      )}
+
+      {/* Battery Optimization Warning */}
+      {showBatteryOptIn && (
+        <div className="bg-amber-500 text-white p-4 shadow-lg sticky top-0 z-50">
+          <div className="flex items-start gap-3 max-w-4xl mx-auto">
+            <div className="w-8 h-8 bg-white text-amber-600 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+              <AlertCircle size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm tracking-tight">
+                GPS Tidak Optimal
+              </p>
+              <p className="text-[11px] text-amber-100 mt-1 leading-relaxed">
+                HP Anda mengoptimasi baterai yang mematikan GPS saat layar off.
+                Aktifkan izin "Abaikan Optimasi Baterai" untuk tracking akurat.
+              </p>
+              {oemTip && (
+                <p className="text-[10px] text-amber-200 mt-1 italic">
+                  {oemTip[1]}
+                </p>
+              )}
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={handleOpenBatterySettings}
+                  className="bg-white text-amber-700 px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider active:scale-95 transition-all"
+                >
+                  Buka Pengaturan
+                </button>
+                <button
+                  onClick={handleDismissBatteryOpt}
+                  className="text-white/80 hover:text-white text-xs font-semibold px-2"
+                >
+                  Nanti
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
