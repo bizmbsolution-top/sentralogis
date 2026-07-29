@@ -329,10 +329,12 @@ export default function FleetTrackingConsole() {
             statusEmoji = '🚨';
             statusText = 'DARURAT / SOS';
             statusColor = 'text-rose-400';
-         } else if (gfStatus === 'idle') {
+          } else if (gfStatus === 'idle') {
             statusEmoji = '⏸';
             const diffMins = log ? differenceInMinutes(new Date(), new Date(log.created_at + (log.created_at.includes('+') || log.created_at.endsWith('Z') ? '' : 'Z'))) : 0;
-            statusText = `IDLE / Tidak ada pergerakan (${diffMins} mnt)`;
+            const arrivedStop = (jo.routes || []).find((r: any) => r.status === 'arrived');
+            const idleLocation = arrivedStop ? ` @ ${arrivedStop.location_name}` : '';
+            statusText = `IDLE${idleLocation} / Tidak ada pergerakan (${diffMins} mnt)`;
             statusColor = 'text-amber-400';
          } else {
             // Moving — match Live Event Feed logic
