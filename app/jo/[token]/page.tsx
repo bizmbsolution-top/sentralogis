@@ -136,6 +136,7 @@ export default function DriverTrackingPage({
   const [deviceInfo, setDeviceInfo] = useState<{ manufacturer: string; model: string } | null>(null);
 
   const [containerNo, setContainerNo] = useState("");
+  const [sealNo, setSealNo] = useState("");
   const [savingContainer, setSavingContainer] = useState(false);
 
   const [geofenceBanner, setGeofenceBanner] = useState<{
