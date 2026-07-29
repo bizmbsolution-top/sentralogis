@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Truck, Clock, AlertTriangle, CheckCircle2, Activity, Maximize, Minimize, X, Target } from 'lucide-react';
+import { Loader2, Truck, Clock, AlertTriangle, CheckCircle2, Activity, Maximize, Minimize, X, Target, History } from 'lucide-react';
 import { format, differenceInMinutes } from 'date-fns';
 import { getAdvancedJobCategory, JO_DONE_STATUSES, JO_REJECTED_STATUSES } from '@/lib/domain/jo/status';
 
@@ -38,6 +38,8 @@ const IntelligenceTower = dynamic(() => import('./IntelligenceTower'), {
    )
 });
 
+const TripReplayModal = dynamic(() => import('./TripReplayModal'), { ssr: false });
+
 // Using JO status domain logic for consistency across app
 
 export default function FleetTrackingConsole() {
@@ -57,6 +59,7 @@ export default function FleetTrackingConsole() {
    // Map<joId, { lastGeofence: string, unchangedCount: number, status: GeofenceMovementStatus }>
    const geofenceTrackerRef = useRef<Map<string, { lastGeofence: string; unchangedCount: number; status: GeofenceMovementStatus }>>(new Map());
    const [geofenceStatusMap, setGeofenceStatusMap] = useState<Record<string, GeofenceMovementStatus>>({});
+   const [replayJo, setReplayJo] = useState<any>(null);
 
    const toggleFullscreen = () => {
       if (!document.fullscreenElement) {
@@ -546,14 +549,26 @@ export default function FleetTrackingConsole() {
                               )}
                            </div>
                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSOS ? 'bg-rose-500/30 text-rose-300' : (isMoving ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-400')} truncate max-w-[70%]`}>
-                                    {jo.plate_number} • {jo.driver_name}
-                                 </span>
-                                 <span className={`text-[10px] font-medium shrink-0 ${isMoving ? 'text-blue-400' : 'text-slate-500'}`}>
-                                    {format(new Date(log.created_at + (log.created_at.includes('+') || log.created_at.endsWith('Z') ? '' : 'Z')), 'HH:mm')}
-                                 </span>
-                              </div>
+                               <div className="flex items-center justify-between gap-2 mb-1">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSOS ? 'bg-rose-500/30 text-rose-300' : (isMoving ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-400')} truncate max-w-[60%]`}>
+                                     {jo.plate_number} • {jo.driver_name}
+                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                     {(jo.tracking_history?.length ?? 0) > 1 && (
+                                        <button
+                                           onClick={(e) => { e.stopPropagation(); setReplayJo(jo); }}
+                                           className="text-[9px] flex items-center gap-0.5 px-1 py-0.5 rounded bg-rose-500/20 text-rose-400 hover:bg-rose-500/40 transition-colors"
+                                           title="Putar ulang riwayat GPS"
+                                        >
+                                           <History size={10} />
+                                           Replay
+                                        </button>
+                                     )}
+                                     <span className={`text-[10px] font-medium ${isMoving ? 'text-blue-400' : 'text-slate-500'}`}>
+                                        {format(new Date(log.created_at + (log.created_at.includes('+') || log.created_at.endsWith('Z') ? '' : 'Z')), 'HH:mm')}
+                                     </span>
+                                  </div>
+                               </div>
                                <p className={`text-[11px] font-medium leading-tight ${isSOS ? 'text-rose-400 font-bold' : (isMoving ? 'text-slate-200' : 'text-slate-400')}`}>
                                   {(() => {
                                     const s = jo.status || '';
@@ -667,7 +682,13 @@ export default function FleetTrackingConsole() {
             </div>
          </div>
 
-         <style dangerouslySetInnerHTML={{__html: `
+          <TripReplayModal
+             isOpen={!!replayJo}
+             onClose={() => setReplayJo(null)}
+             jobOrder={replayJo}
+          />
+
+          <style dangerouslySetInnerHTML={{__html: `
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             @keyframes fadeInUp {
