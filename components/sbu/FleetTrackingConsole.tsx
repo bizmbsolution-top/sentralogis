@@ -337,15 +337,26 @@ export default function FleetTrackingConsole() {
          } else {
             // Moving — match Live Event Feed logic
             const s = jo.status || '';
+
+            // Check current stop from routes
+            const arrivedStop = (jo.routes || []).find((r: any) => r.status === 'arrived');
+            const currentStopLabel = arrivedStop ? ` @ ${arrivedStop.location_name}` : '';
+
             if (['GPS Ping', 'GPS_PING', 'IN_PROGRESS', 'COMPLETED', 'STARTED', 'ACCEPTED'].includes(log?.status_update)) {
                if (s === 'pending' || s === 'assigned') {
                   statusText = 'MENUNGGU BERANGKAT';
                } else if (s === 'in_progress') {
                   statusText = 'DALAM PERJALANAN';
-               } else if (s === 'completed') {
+               } else if (s === 'completed' || s === 'PEKERJAAN SELESAI') {
                   statusText = 'SELESAI';
+               } else if (s.startsWith('TIBA')) {
+                  statusText = s.toUpperCase() + currentStopLabel;
+               } else if (s.startsWith('MENUJU')) {
+                  statusText = s.toUpperCase();
+               } else if (s.startsWith('BERANGKAT')) {
+                  statusText = s.toUpperCase();
                } else {
-                  statusText = s?.toUpperCase() || 'DALAM PERJALANAN';
+                  statusText = (s || '').toUpperCase() || 'DALAM PERJALANAN';
                }
             } else {
                statusText = log?.status_update?.toLowerCase() === 'pending' || log?.status_update?.toLowerCase() === 'assigned'
@@ -541,15 +552,34 @@ export default function FleetTrackingConsole() {
                                     {format(new Date(log.created_at + (log.created_at.includes('+') || log.created_at.endsWith('Z') ? '' : 'Z')), 'HH:mm')}
                                  </span>
                               </div>
-                              <p className={`text-[11px] font-medium leading-tight ${isSOS ? 'text-rose-400 font-bold' : (isMoving ? 'text-slate-200' : 'text-slate-400')}`}>
-                                 {['GPS Ping', 'GPS_PING', 'IN_PROGRESS', 'COMPLETED', 'STARTED', 'ACCEPTED'].includes(log.status_update) 
-                                    ? `📍 ${jo.status === 'pending' || jo.status === 'assigned' ? 'MENUNGGU BERANGKAT' : (jo.status === 'in_progress' ? 'DALAM PERJALANAN' : (jo.status === 'completed' ? 'SELESAI' : (jo.status?.toUpperCase() || 'DALAM PERJALANAN')))} ${jo.updated_at ? `(${(() => {
-                                          const diff = Math.max(0, differenceInMinutes(new Date(), new Date(jo.updated_at + (jo.updated_at.includes('+') || jo.updated_at.endsWith('Z') ? '' : 'Z'))));
-                                          if (diff < 60) return `${diff} mnt`;
-                                          return `${Math.floor(diff / 60)} jam ${diff % 60} mnt`;
-                                       })()})` : ''}`
-                                    : (log.status_update?.toLowerCase() === 'pending' || log.status_update?.toLowerCase() === 'assigned' ? 'MENUNGGU BERANGKAT' : log.status_update)}
-                              </p>
+                               <p className={`text-[11px] font-medium leading-tight ${isSOS ? 'text-rose-400 font-bold' : (isMoving ? 'text-slate-200' : 'text-slate-400')}`}>
+                                  {(() => {
+                                    const s = jo.status || '';
+                                    const arrivedStop = (jo.routes || []).find((r: any) => r.status === 'arrived');
+                                    const stopLabel = arrivedStop ? ` @ ${arrivedStop.location_name}` : '';
+                                    const eventLabel = log.status_update?.includes('Geofence') ? log.status_update : null;
+
+                                    if (eventLabel) return eventLabel;
+
+                                    if (['GPS Ping', 'GPS_PING', 'IN_PROGRESS', 'COMPLETED', 'STARTED', 'ACCEPTED'].includes(log.status_update)) {
+                                      if (s === 'pending' || s === 'assigned') return 'MENUNGGU BERANGKAT';
+                                      if (s === 'in_progress') return 'DALAM PERJALANAN';
+                                      if (s === 'completed' || s === 'PEKERJAAN SELESAI') return 'SELESAI';
+                                      if (s.startsWith('TIBA')) return s.toUpperCase() + stopLabel;
+                                      if (s.startsWith('MENUJU')) return s.toUpperCase();
+                                      if (s.startsWith('BERANGKAT')) return s.toUpperCase();
+                                      return (s || '').toUpperCase() || 'DALAM PERJALANAN';
+                                    }
+                                    return log.status_update?.toLowerCase() === 'pending' || log.status_update?.toLowerCase() === 'assigned'
+                                      ? 'MENUNGGU BERANGKAT'
+                                      : (log.status_update || s?.toUpperCase() || 'AKTIF');
+                                  })()}
+                                  {jo.updated_at ? ` (${(() => {
+                                    const diff = Math.max(0, differenceInMinutes(new Date(), new Date(jo.updated_at + (jo.updated_at.includes('+') || jo.updated_at.endsWith('Z') ? '' : 'Z'))));
+                                    if (diff < 60) return `${diff} mnt`;
+                                    return `${Math.floor(diff / 60)} jam ${diff % 60} mnt`;
+                                  })()})` : ''}
+                               </p>
                               {!isMoving && !isSOS && (
                                  <p className="text-[9px] text-slate-500 mt-1 italic">Idle / Tidak ada pergerakan ({diffMins} mnt)</p>
                               )}

@@ -156,9 +156,17 @@ export default function DriverTrackingPage({
   const [panicHasCargo, setPanicHasCargo] = useState<boolean>(true);
   const [panicSending, setPanicSending] = useState(false);
 
+  const [now, setNow] = useState(Date.now());
+
   const [readyConfirmOpen, setReadyConfirmOpen] = useState(false);
   const [directionsResponse, setDirectionsResponse] =
     useState<google.maps.DirectionsResult | null>(null);
+
+  // Tick every second for elapsed time counters
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
 
   // [Phase 4.2] Online/offline state for offline banner
   const [isOnline, setIsOnline] = useState(
@@ -683,6 +691,16 @@ export default function DriverTrackingPage({
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const formatDuration = (fromMs: number, toMs: number) => {
+    const diff = Math.max(0, toMs - fromMs);
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    if (h > 0) return `${h}j ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
   };
 
   const milestones = jobOrder
@@ -1604,7 +1622,7 @@ export default function DriverTrackingPage({
                           {stop.address}
                         </p>
 
-                        {/* Arrival time */}
+                        {/* Arrival time + elapsed duration */}
                         {(stop.actual_arrival || stop.actual_departure) && (
                           <div className="flex items-center gap-4 mt-2">
                             {stop.actual_arrival && (
@@ -1617,7 +1635,7 @@ export default function DriverTrackingPage({
                                 </span>
                               </div>
                             )}
-                            {stop.actual_departure && (
+                            {stop.actual_departure ? (
                               <div className="flex items-center gap-1">
                                 <span className="text-[8px] font-bold text-slate-400 uppercase">
                                   Berangkat
@@ -1626,7 +1644,14 @@ export default function DriverTrackingPage({
                                   {formatTime(stop.actual_departure)}
                                 </span>
                               </div>
-                            )}
+                            ) : stop.status === "arrived" && stop.actual_arrival ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                <span className="text-[8px] font-bold text-blue-600 uppercase tracking-wide">
+                                  {formatDuration(new Date(stop.actual_arrival).getTime(), now)}
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
                         )}
 
