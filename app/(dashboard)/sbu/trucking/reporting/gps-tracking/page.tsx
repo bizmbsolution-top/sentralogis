@@ -54,6 +54,22 @@ function formatDurationDetail(seconds: number | null): string {
   return `${s} detik`;
 }
 
+function formatPingTime(ts: string | null | undefined): string {
+  if (!ts) return "-";
+  // If timestamp has no timezone info, treat as UTC (Supabase stores UTC internally)
+  const normalized = ts.includes("T") && !ts.endsWith("Z") && !ts.includes("+") ? ts + "Z" : ts;
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function GPSTrackingReportPage() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -1303,12 +1319,7 @@ export default function GPSTrackingReportPage() {
                   >
                     <td className="px-3 py-1.5 text-slate-400 font-bold">{idx + 1}</td>
                     <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
-                      {(() => {
-                        const ts = ping.recorded_at || ping.created_at;
-                        if (!ts) return "-";
-                        const d = new Date(ts);
-                        return format(d, "dd MMM HH:mm:ss");
-                      })()}
+                      {formatPingTime(ping.recorded_at || ping.created_at)}
                     </td>
                     <td className="px-3 py-1.5">
                       <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
