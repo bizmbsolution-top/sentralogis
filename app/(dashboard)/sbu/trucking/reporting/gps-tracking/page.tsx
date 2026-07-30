@@ -138,7 +138,7 @@ export default function GPSTrackingReportPage() {
       const { data: routes, error } = await supabase
         .from("job_routes")
         .select(
-          "id, sequence, location_name, actual_arrival, actual_departure, status, job_order_id",
+          "id, sequence, stop_type, location_name, address, actual_arrival, actual_departure, status, job_order_id",
         )
         .not("actual_arrival", "is", null)
         .gte("actual_arrival", startDate)
@@ -257,6 +257,9 @@ export default function GPSTrackingReportPage() {
 
         // Calculate stats per stop
         let totalDurationSeconds = 0;
+        const firstArrivalTime = stops[0]?.actual_arrival
+          ? new Date(stops[0].actual_arrival).getTime()
+          : null;
         const stopDetails = stops.map((stop: any, idx: number) => {
           const prev = stops[idx - 1] || null;
           const dwellSeconds =
@@ -276,14 +279,26 @@ export default function GPSTrackingReportPage() {
                 )
               : null;
 
+          // Cumulative seconds from first arrival
+          let cumulativeSeconds: number | null = null;
+          const stopEnd = stop.actual_departure || stop.actual_arrival;
+          if (firstArrivalTime && stopEnd) {
+            cumulativeSeconds = Math.floor(
+              (new Date(stopEnd).getTime() - firstArrivalTime) / 1000,
+            );
+          }
+
           return {
             id: stop.id,
             sequence: stop.sequence,
+            stop_type: stop.stop_type || "DROPOFF",
             location_name: stop.location_name || `Stop #${stop.sequence}`,
+            address: stop.address || null,
             actual_arrival: stop.actual_arrival,
             actual_departure: stop.actual_departure,
             dwell_seconds: dwellSeconds,
             travel_seconds: travelSeconds,
+            cumulative_seconds: cumulativeSeconds,
           };
         });
 
@@ -381,18 +396,23 @@ export default function GPSTrackingReportPage() {
             Customer: wo.customer_name,
             "JO Number": jo.jo_number,
             Driver: jo.driver_name,
+            Vendor: jo.vendor_name,
             Fleet: jo.plate_number,
             "Truck Type": jo.truck_type,
-            Location: "--- HEADER ---",
-            Arrival: jo.first_arrival
+            "#": "",
+            "Tipe": "",
+            "Lokasi": "--- HEADER ---",
+            Alamat: "",
+            Tiba: jo.first_arrival
               ? format(new Date(jo.first_arrival), "dd MMM yyyy HH:mm")
               : "-",
-            Departure: jo.last_departure
+            Berangkat: jo.last_departure
               ? format(new Date(jo.last_departure), "dd MMM yyyy HH:mm")
               : "-",
-            "Dwell Time": "",
-            "Travel Time": "",
-            "Total Duration": formatDurationDetail(jo.total_duration_seconds),
+            "Lama Berhenti": "",
+            Perjalanan: "",
+            Kumulatif: "",
+            "Total Durasi": formatDurationDetail(jo.total_duration_seconds),
           });
 
           // Stop details
@@ -402,18 +422,23 @@ export default function GPSTrackingReportPage() {
               Customer: "",
               "JO Number": "",
               Driver: "",
+              Vendor: "",
               Fleet: "",
               "Truck Type": "",
-              Location: stop.location_name,
-              Arrival: stop.actual_arrival
+              "#": stop.sequence,
+              Tipe: stop.stop_type === "PICKUP" ? "MUAT" : "BONGKAR",
+              Lokasi: stop.location_name,
+              Alamat: stop.address || "",
+              Tiba: stop.actual_arrival
                 ? format(new Date(stop.actual_arrival), "dd MMM yyyy HH:mm")
                 : "-",
-              Departure: stop.actual_departure
+              Berangkat: stop.actual_departure
                 ? format(new Date(stop.actual_departure), "dd MMM yyyy HH:mm")
                 : "-",
-              "Dwell Time": formatDuration(stop.dwell_seconds),
-              "Travel Time": formatDuration(stop.travel_seconds),
-              "Total Duration": "",
+              "Lama Berhenti": formatDuration(stop.dwell_seconds),
+              Perjalanan: formatDuration(stop.travel_seconds),
+              Kumulatif: formatDuration(stop.cumulative_seconds),
+              "Total Durasi": "",
             });
           });
         });
@@ -737,6 +762,9 @@ export default function GPSTrackingReportPage() {
                             <span className="text-[10px] text-slate-400">
                               {jo.truck_type}
                             </span>
+                            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                              Vendor: {jo.vendor_name}
+                            </span>
                             <span className="text-[10px] font-semibold text-emerald-700 ml-auto">
                               Total:{" "}
                               {formatDurationDetail(jo.total_duration_seconds)}
@@ -745,58 +773,79 @@ export default function GPSTrackingReportPage() {
                         </div>
 
                         {/* Stops Table */}
+                        <div className="overflow-x-auto">
                         <table className="w-full text-left">
                           <thead>
                             <tr className="bg-slate-50/80">
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider w-8">
                                 #
                               </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Location
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                Tipe
                               </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Enter (Arrival)
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                Lokasi
                               </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Exit (Departure)
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                Tiba
                               </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
-                                Dwell Time
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                Berangkat
                               </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
-                                Travel to Here
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                Lama Berhenti
+                              </th>
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                Perjalanan
+                              </th>
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                Kumulatif
                               </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">
-                            {jo.stops.map((stop: any) => (
+                            {jo.stops.map((stop: any) => {
+                              const isPickup = stop.stop_type === "PICKUP";
+                              return (
                               <tr
                                 key={stop.id}
                                 className="hover:bg-slate-50/50 transition-all"
                               >
-                                <td className="px-4 py-2.5 text-xs font-bold text-slate-400">
-                                  #{stop.sequence}
+                                <td className="px-3 py-2.5 text-xs font-bold text-slate-400">
+                                  {stop.sequence}
                                 </td>
-                                <td className="px-4 py-2.5 text-xs font-semibold text-slate-700">
-                                  {stop.location_name}
+                                <td className="px-3 py-2.5">
+                                  <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${isPickup ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                                    {isPickup ? "MUAT" : "BONGKAR"}
+                                  </span>
                                 </td>
-                                <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">
-                                  {stop.actual_arrival
-                                    ? format(
-                                        new Date(stop.actual_arrival),
-                                        "dd MMM yyyy HH:mm",
-                                      )
-                                    : "-"}
+                                <td className="px-3 py-2.5">
+                                  <div className="text-xs font-semibold text-slate-700">
+                                    {stop.location_name}
+                                  </div>
+                                  {stop.address && (
+                                    <div className="text-[9px] text-slate-400 mt-0.5 truncate max-w-[180px]" title={stop.address}>
+                                      {stop.address}
+                                    </div>
+                                  )}
                                 </td>
-                                <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">
-                                  {stop.actual_departure
-                                    ? format(
-                                        new Date(stop.actual_departure),
-                                        "dd MMM yyyy HH:mm",
-                                      )
-                                    : "-"}
+                                <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">
+                                  {stop.actual_arrival ? (
+                                    <span className="flex flex-col leading-tight">
+                                      <span>{format(new Date(stop.actual_arrival), "EEEE", { locale: id })}</span>
+                                      <span className="font-semibold">{format(new Date(stop.actual_arrival), "dd MMM yyyy HH:mm")}</span>
+                                    </span>
+                                  ) : "-"}
                                 </td>
-                                <td className="px-4 py-2.5 text-xs font-bold text-right whitespace-nowrap">
+                                <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">
+                                  {stop.actual_departure ? (
+                                    <span className="flex flex-col leading-tight">
+                                      <span>{format(new Date(stop.actual_departure), "EEEE", { locale: id })}</span>
+                                      <span className="font-semibold">{format(new Date(stop.actual_departure), "dd MMM yyyy HH:mm")}</span>
+                                    </span>
+                                  ) : "-"}
+                                </td>
+                                <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap">
                                   {stop.dwell_seconds ? (
                                     <span className="text-emerald-600">
                                       {formatDuration(stop.dwell_seconds)}
@@ -805,7 +854,7 @@ export default function GPSTrackingReportPage() {
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
-                                <td className="px-4 py-2.5 text-xs font-bold text-right whitespace-nowrap">
+                                <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap">
                                   {stop.travel_seconds ? (
                                     <span className="text-blue-600">
                                       {formatDuration(stop.travel_seconds)}
@@ -814,17 +863,22 @@ export default function GPSTrackingReportPage() {
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
+                                <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap text-indigo-600">
+                                  {stop.cumulative_seconds
+                                    ? formatDuration(stop.cumulative_seconds)
+                                    : "-"}
+                                </td>
                               </tr>
-                            ))}
+                            )})}
                           </tbody>
                           {/* JO Total Row */}
                           <tfoot>
                             <tr className="bg-slate-100/80">
                               <td
-                                colSpan={4}
-                                className="px-4 py-2.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider"
+                                colSpan={5}
+                                className="px-3 py-2.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider"
                               >
-                                Total Duration:{" "}
+                                Total Durasi:{" "}
                                 {formatDurationDetail(
                                   jo.total_duration_seconds,
                                 )}
@@ -846,14 +900,15 @@ export default function GPSTrackingReportPage() {
                                   )}
                               </td>
                               <td
-                                colSpan={2}
-                                className="px-4 py-2.5 text-xs font-bold text-right text-blue-700"
+                                colSpan={3}
+                                className="px-3 py-2.5 text-xs font-bold text-right text-blue-700"
                               >
                                 {formatDuration(jo.total_duration_seconds)}
                               </td>
                             </tr>
                           </tfoot>
                         </table>
+                        </div>
                       </div>
                     );
                   })}
