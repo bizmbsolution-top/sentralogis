@@ -486,6 +486,7 @@ export async function PATCH(
                 latitude: lat,
                 longitude: lng,
                 notes: `Otomatis terdeteksi dalam radius ${geofenceDistanceM}m dari titik rute.`,
+                ...(recorded_at ? { recorded_at } : {}),
               });
 
               await supabase.from("tracking_updates").insert({
@@ -494,6 +495,7 @@ export async function PATCH(
                 longitude: lng,
                 status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
                 whatsapp_sent: false,
+                ...(recorded_at ? { recorded_at } : {}),
               });
 
               await supabase.from("notifications").insert({
@@ -573,6 +575,7 @@ export async function PATCH(
                 latitude: lat,
                 longitude: lng,
                 notes: `Otomatis terdeteksi keluar dari radius ${Math.round(distM)}m dari titik rute.`,
+                ...(recorded_at ? { recorded_at } : {}),
               });
 
               await supabase.from("tracking_updates").insert({
@@ -581,6 +584,7 @@ export async function PATCH(
                 longitude: lng,
                 status_update: `🚦 Keluar dari ${departedStopName} (Geofence Auto)`,
                 whatsapp_sent: false,
+                ...(recorded_at ? { recorded_at } : {}),
               });
 
               // Notification on departure
@@ -688,6 +692,7 @@ export async function PATCH(
                     latitude: lat,
                     longitude: lng,
                     notes: `Sistem mendeteksi armada kembali masuk ke radius 300m.`,
+                    ...(recorded_at ? { recorded_at } : {}),
                   });
                   break;
                 }
@@ -742,6 +747,7 @@ export async function PATCH(
           latitude: lat,
           longitude: lng,
           notes: notesText,
+          ...(recorded_at ? { recorded_at } : {}),
         });
 
         await supabase.from("tracking_updates").insert({
@@ -750,6 +756,7 @@ export async function PATCH(
           longitude: lng,
           status_update: statusUpdateText,
           whatsapp_sent: false,
+          ...(recorded_at ? { recorded_at } : {}),
         });
       }
 

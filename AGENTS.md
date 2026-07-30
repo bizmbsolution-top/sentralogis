@@ -48,6 +48,8 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - Origin/Destination Port dropdown ambil dari `md_locations` (master public), bukan `fw_locations`
 - Hybrid Address: Customer Location (`md_entity_addresses`) + Google Maps autocomplete
 - 1 WO item = 1 set pickup/delivery address (untuk LCL tahap awal)
+- GPS ping timestamps pakai `recorded_at` (jam HP driver), fallback `created_at` (server)
+- Telemetry Playback: raw ping table dengan geofence matching (500m threshold) ke nearest stop
 
 ## Next Steps
 - **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
@@ -65,48 +67,26 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Set Twilio credentials di Vercel env
 
 ## Critical Context
+- Hasil deploy terakhir (commit `5ed1d9b`): `recorded_at` dari semua source (PWA, Android native, offline sync)
+- Migration `190_add_recorded_at_to_job_tracking.sql` sudah dijalankan di Supabase dashboard
+- `lib/utils/geoUtils.ts`: Haversine distance, formatDistance, formatSpeed — untuk GPS report
+- GPS Tracking Report (`gps-tracking/page.tsx`): distance/speed per stop, trip summary, Telemetry Playback tab
 - `190726.md` berisi PRD lengkap SBU Forwarding + Driver Coin plan
 - Infrastructure WA: `lib/twilio/clients.ts` + `app/api/whatsapp/webhook/route.ts`
 - Driver complete flow: `app/jo/[token]/page.tsx` → PATCH `/api/jo/[token]`
 - Driver portal: `app/driver/portal/page.tsx`
 - Forwarding shell UI: `app/sbu/forwarding/` (mock only, belum connect DB)
+- Native Android: `android/app/src/main/java/com/sentralogis/driver/GpsForegroundService.java` + `OfflineGpsDbHelper.java`
 
 ## Relevant Files
 - `/190726.md`: PRD SBU Forwarding + Driver Coin plan
-- `supabase/migrations/170_add_driver_document_photos.sql`: Migration terakhir
-- `app/(dashboard)/hq/master/drivers/page.tsx`: Driver master (sudah +upload SIM/KTP/STNK)
-- `app/(dashboard)/hq/reporting/page.tsx`: Reporting (sudah +vendor filter)
-- `app/(dashboard)/hq/ops-dashboard/page.tsx`: Ops dashboard (JO fulfillment fixed)
-- `app/(dashboard)/hq/work-orders/components/AddForwardingItemModal.tsx`: Modal forwarding HQ (FCL/LCL, hybrid address)
-- `app/(dashboard)/hq/work-orders/components/CreateWOForm.tsx`: WO form (sudah integrasi forwarding)
-
-## Next Steps
-- **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
-  - Migration 3 tabel forwarding
-  - WO Create/List/Detail untuk FCL & LCL
-  - Consol Detail + Stuffing Manager
-  - Deconsol + auto-create delivery JO
-  - Cargo owner tracking public page
-- **Driver Coin Reward + WA Inquiry** (lihat section di `190726.md`):
-  - Migration `driver_coins` table
-  - Award coin di `/api/jo/[token]` saat completed
-  - Update webhook WA untuk keyword "KOIN"
-  - Animasi coin di `/jo/[token]` page
-  - Tampilkan saldo di driver portal
-  - Set Twilio credentials di Vercel env
-
-## Critical Context
-- `190726.md` berisi PRD lengkap SBU Forwarding + Driver Coin plan
-- Infrastructure WA: `lib/twilio/clients.ts` + `app/api/whatsapp/webhook/route.ts`
-- Driver complete flow: `app/jo/[token]/page.tsx` → PATCH `/api/jo/[token]`
-- Driver portal: `app/driver/portal/page.tsx`
-- Forwarding shell UI: `app/sbu/forwarding/` (mock only, belum connect DB)
-
-## Relevant Files
-- `/190726.md`: PRD SBU Forwarding + Driver Coin plan
-- `supabase/migrations/170_add_driver_document_photos.sql`: Migration terakhir
-- `app/(dashboard)/hq/master/drivers/page.tsx`: Driver master (sudah +upload SIM/KTP/STNK)
-- `app/(dashboard)/hq/reporting/page.tsx`: Reporting (sudah +vendor filter)
-- `app/(dashboard)/hq/ops-dashboard/page.tsx`: Ops dashboard (JO fulfillment fixed)
-- `app/(dashboard)/hq/work-orders/components/AddForwardingItemModal.tsx`: Modal forwarding HQ (FCL/LCL, hybrid address)
-- `app/(dashboard)/hq/work-orders/components/CreateWOForm.tsx`: WO form (sudah integrasi forwarding)
+- `lib/utils/geoUtils.ts`: Haversine distance, formatDistance, formatSpeed
+- `lib/utils/dateUtils.ts`: parseUTC utility
+- `lib/hooks/useDriverGpsPing.ts`: GPS ping engine (PWA + Capacitor bridge)
+- `lib/offline/offlineSyncEngine.ts`: Offline GPS queue + sync
+- `android/app/src/main/java/com/sentralogis/driver/GpsForegroundService.java`: Android native foreground service
+- `android/app/src/main/java/com/sentralogis/driver/OfflineGpsDbHelper.java`: Offline SQLite storage
+- `app/(dashboard)/sbu/trucking/reporting/gps-tracking/page.tsx`: GPS Tracking Report + Telemetry Playback
+- `app/api/jo/[token]/route.ts`: JO API (geofence, ping handler, recorded_at support)
+- `supabase/migrations/190_add_recorded_at_to_job_tracking.sql`: Add recorded_at column
+- `supabase/migrations/180_add_geofence_columns_to_job_routes.sql`: Geofence columns
