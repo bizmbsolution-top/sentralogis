@@ -255,6 +255,7 @@ export async function PATCH(
       pod_photo_name,
       lat,
       lng,
+      recorded_at,
       rejection_note,
       route_notes,
       container_number,
@@ -304,13 +305,17 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
 
       // 1. Dual-write to job_tracking AND tracking_updates so Ops LiveTrackingMap sees it real-time
-      const { error: pingErr } = await supabase.from("job_tracking").insert({
+      const pingPayload: any = {
         job_order_id: jo.id,
         status_update: "GPS_PING",
         latitude: lat,
         longitude: lng,
         notes: "Auto GPS ping dari driver (10-Sec Interval)",
-      });
+      };
+      if (recorded_at) {
+        pingPayload.recorded_at = recorded_at;
+      }
+      const { error: pingErr } = await supabase.from("job_tracking").insert(pingPayload);
 
       // [AI] Update device health if health info is provided from Native app
       if (
@@ -355,6 +360,7 @@ export async function PATCH(
         longitude: lng,
         status_update: "GPS_PING",
         whatsapp_sent: false,
+        ...(recorded_at ? { recorded_at } : {}),
       });
 
       if (pingErr)

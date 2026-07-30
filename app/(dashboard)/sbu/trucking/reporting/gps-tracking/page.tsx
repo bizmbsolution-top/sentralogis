@@ -423,7 +423,7 @@ export default function GPSTrackingReportPage() {
       );
       const routes: any[] = routesRes.data || [];
 
-      const matched = rawPings.map((ping: any) => {
+        const matched = rawPings.map((ping: any) => {
         let nearestDist: number | null = null;
         let nearestRoute: any = null;
 
@@ -444,6 +444,7 @@ export default function GPSTrackingReportPage() {
         return {
           id: ping.id,
           created_at: ping.created_at,
+          recorded_at: ping.recorded_at || null,
           latitude: ping.latitude,
           longitude: ping.longitude,
           speed: ping.speed ?? null,
@@ -1302,9 +1303,12 @@ export default function GPSTrackingReportPage() {
                   >
                     <td className="px-3 py-1.5 text-slate-400 font-bold">{idx + 1}</td>
                     <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
-                      {ping.created_at
-                        ? format(new Date(ping.created_at), "dd MMM HH:mm:ss")
-                        : "-"}
+                      {(() => {
+                        const ts = ping.recorded_at || ping.created_at;
+                        if (!ts) return "-";
+                        const d = new Date(ts);
+                        return format(d, "dd MMM HH:mm:ss");
+                      })()}
                     </td>
                     <td className="px-3 py-1.5">
                       <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
