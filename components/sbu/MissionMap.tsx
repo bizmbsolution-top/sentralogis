@@ -4,8 +4,7 @@ import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { GoogleMap, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { Loader2, Truck, MapPin, Clock, Activity } from 'lucide-react';
-// [AI] Import format to format timestamps correctly in the InfoWindow popups
-import { format } from 'date-fns';
+import { parseUTC } from '@/lib/utils/dateUtils';
 
 const containerStyle = {
   width: '100%',
@@ -362,12 +361,12 @@ export default function MissionMap({ stops = [], tracking = [], fleetIcon, focus
                   </p>
                   {selectedMarker.actual_arrival && (
                     <p className="text-[9px] font-bold text-slate-700">
-                      Tiba: {format(new Date(selectedMarker.actual_arrival), 'HH:mm:ss')}
+                      Tiba: {parseUTC(selectedMarker.actual_arrival)?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </p>
                   )}
                   {selectedMarker.actual_departure && (
                     <p className="text-[9px] font-bold text-slate-700">
-                      Selesai: {format(new Date(selectedMarker.actual_departure), 'HH:mm:ss')}
+                      Selesai: {parseUTC(selectedMarker.actual_departure)?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </p>
                   )}
                 </>

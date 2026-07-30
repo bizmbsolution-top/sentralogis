@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { format } from 'date-fns';
 import { 
   ShieldCheck, MapPin, Clock, Truck, 
   Activity, CheckCircle2, Image as ImageIcon,
   ChevronRight, AlertCircle, Camera
 } from 'lucide-react';
+import { parseUTC } from '@/lib/utils/dateUtils';
 
 interface MissionTimelineProps {
   routes: any[];
@@ -29,7 +29,8 @@ export default function MissionTimeline({
   const formatTime = (dateStr: string) => {
     if (!dateStr) return "-";
     try {
-      return format(new Date(dateStr), 'HH:mm');
+      const d = parseUTC(dateStr);
+      return d ? d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : "-";
     } catch {
       return "-";
     }

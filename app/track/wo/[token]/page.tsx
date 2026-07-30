@@ -6,6 +6,7 @@ import { Truck, MapPin, Phone, MessageSquare, ChevronRight, User, CheckCircle2, 
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import LanguageSelector from '@/components/LanguageSelector';
+import { parseUTC } from '@/lib/utils/dateUtils';
 
 const formatWA = (phone: string | null | undefined) => {
   if (!phone) return '';
@@ -15,7 +16,8 @@ const formatWA = (phone: string | null | undefined) => {
 const formatTimestamp = (dateStr: string | null | undefined, onlyTime: boolean = false) => {
   if (!dateStr) return '--:--';
   try {
-    const d = new Date(dateStr);
+    const d = parseUTC(dateStr);
+    if (!d) return '--:--';
     if (onlyTime) {
       return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     }
@@ -27,8 +29,10 @@ const formatTimestamp = (dateStr: string | null | undefined, onlyTime: boolean =
 
 const formatDuration = (start: string | null | undefined, end: string | null | undefined = null) => {
   if (!start) return null;
-  const startTime = new Date(start).getTime();
-  const endTime = end ? new Date(end).getTime() : new Date().getTime();
+  const startD = parseUTC(start);
+  if (!startD) return null;
+  const startTime = startD.getTime();
+  const endTime = end ? (parseUTC(end)?.getTime() ?? Date.now()) : Date.now();
   const diffMs = endTime - startTime;
   if (diffMs < 0) return null;
   

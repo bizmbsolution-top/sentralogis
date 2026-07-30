@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Printer, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseUTC } from '@/lib/utils/dateUtils';
 
 interface BATBGeneratorProps {
   receipt: any;
@@ -143,7 +144,7 @@ export default function BATBGenerator({ receipt, items, damageRecords = [] }: BA
               </tr>
               <tr>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Tgl/Jam Kedatangan</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {format(new Date(receipt.actual_arrival || receipt.created_at), 'dd MMM yyyy HH:mm')}</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {format(parseUTC(receipt.actual_arrival) || new Date(receipt.created_at), 'dd MMM yyyy HH:mm')}</td>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 'bold' }}>Selesai Bongkar</td>
                 <td style={{ border: '1px solid #000', padding: '4px 6px' }}>: {receipt.unloading_end_time ? format(new Date(receipt.unloading_end_time), 'dd MMM yyyy HH:mm') : '-'}</td>
               </tr>

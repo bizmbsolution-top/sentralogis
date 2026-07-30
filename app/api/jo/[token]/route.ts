@@ -513,7 +513,15 @@ export async function PATCH(
               Number(route.latitude),
               Number(route.longitude),
             );
-            if (distM > 300) {
+
+            // Skip departure if arrival was very recent (within 30s) —
+            // prevents simultaneous arrival+departure when GPS coords fall in overlap zone (300-500m)
+            if (route.actual_arrival) {
+              const arrivalTime = new Date(route.actual_arrival).getTime();
+              if (Date.now() - arrivalTime < 30_000) continue;
+            }
+
+            if (distM > 500) {
               departedStopName =
                 route.location_name || `Stop #${route.sequence}`;
 

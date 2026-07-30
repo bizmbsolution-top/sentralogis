@@ -40,6 +40,7 @@ import {
 } from "@react-google-maps/api";
 import { useDriverGpsPing } from "@/lib/hooks/useDriverGpsPing";
 import { subscribeToPushNotifications } from "@/lib/push/client";
+import { parseUTC } from "@/lib/utils/dateUtils";
 
 interface RouteStop {
   id: string;
@@ -724,10 +725,11 @@ export default function DriverTrackingPage({
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleTimeString("id-ID", {
+    const d = parseUTC(dateStr);
+    return d ? d.toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
-    });
+    }) : "-";
   };
 
   const formatDuration = (fromMs: number, toMs: number) => {
@@ -1705,7 +1707,7 @@ export default function DriverTrackingPage({
                               <div className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                                 <span className="text-[8px] font-bold text-blue-600 uppercase tracking-wide">
-                                  {formatDuration(new Date(stop.actual_arrival).getTime(), now)}
+                                  {formatDuration(parseUTC(stop.actual_arrival)?.getTime() ?? Date.now(), now)}
                                 </span>
                               </div>
                             ) : null}

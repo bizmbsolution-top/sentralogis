@@ -15,6 +15,7 @@ import {
   Satellite,
 } from 'lucide-react';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
+import { parseUTC } from '@/lib/utils/dateUtils';
 import { Card } from '@/components/ui/Card';
 
 interface RouteStop {
@@ -250,12 +251,12 @@ export default function DriverTrackingPage() {
                   <div className="flex gap-4 mt-1">
                     {stop.actual_arrival && (
                       <span className="text-xs text-green-600 font-medium">
-                        Tiba: {new Date(stop.actual_arrival).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        Tiba: {parseUTC(stop.actual_arrival)?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
                     {stop.actual_departure && (
                       <span className="text-xs text-blue-600 font-medium">
-                        Berangkat: {new Date(stop.actual_departure).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        Berangkat: {parseUTC(stop.actual_departure)?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
                   </div>

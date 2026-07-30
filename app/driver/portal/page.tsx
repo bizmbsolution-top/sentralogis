@@ -48,6 +48,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { useGoogleMaps } from '@/lib/google-maps-context';
 import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from '@react-google-maps/api';
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
+import { parseUTC } from '@/lib/utils/dateUtils';
 import SetupWizard from './components/SetupWizard';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
@@ -153,7 +154,8 @@ export default function DriverPortal() {
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const d = parseUTC(dateStr);
+    return d ? d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
   };
 
   // Theme Sync on Mount, SW Registration, & PWA Install Prompts

@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { parseUTC } from "@/lib/utils/dateUtils";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -430,10 +431,10 @@ export default function GPSTrackingReportPage() {
               Lokasi: stop.location_name,
               Alamat: stop.address || "",
               Tiba: stop.actual_arrival
-                ? format(new Date(stop.actual_arrival), "dd MMM yyyy HH:mm")
+                ? format(parseUTC(stop.actual_arrival)!, "dd MMM yyyy HH:mm")
                 : "-",
               Berangkat: stop.actual_departure
-                ? format(new Date(stop.actual_departure), "dd MMM yyyy HH:mm")
+                ? format(parseUTC(stop.actual_departure)!, "dd MMM yyyy HH:mm")
                 : "-",
               "Lama Berhenti": formatDuration(stop.dwell_seconds),
               Perjalanan: formatDuration(stop.travel_seconds),
@@ -832,16 +833,16 @@ export default function GPSTrackingReportPage() {
                                 <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">
                                   {stop.actual_arrival ? (
                                     <span className="flex flex-col leading-tight">
-                                      <span>{format(new Date(stop.actual_arrival), "EEEE", { locale: id })}</span>
-                                      <span className="font-semibold">{format(new Date(stop.actual_arrival), "dd MMM yyyy HH:mm")}</span>
+                                      <span>{format(parseUTC(stop.actual_arrival)!, "EEEE", { locale: id })}</span>
+                                      <span className="font-semibold">{format(parseUTC(stop.actual_arrival)!, "dd MMM yyyy HH:mm")}</span>
                                     </span>
                                   ) : "-"}
                                 </td>
                                 <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">
                                   {stop.actual_departure ? (
                                     <span className="flex flex-col leading-tight">
-                                      <span>{format(new Date(stop.actual_departure), "EEEE", { locale: id })}</span>
-                                      <span className="font-semibold">{format(new Date(stop.actual_departure), "dd MMM yyyy HH:mm")}</span>
+                                      <span>{format(parseUTC(stop.actual_departure)!, "EEEE", { locale: id })}</span>
+                                      <span className="font-semibold">{format(parseUTC(stop.actual_departure)!, "dd MMM yyyy HH:mm")}</span>
                                     </span>
                                   ) : "-"}
                                 </td>
@@ -887,12 +888,12 @@ export default function GPSTrackingReportPage() {
                                     <span className="text-[9px] text-slate-400 ml-2 font-normal normal-case">
                                       (
                                       {format(
-                                        new Date(firstStop.actual_arrival),
+                                        parseUTC(firstStop.actual_arrival)!,
                                         "dd MMM HH:mm",
                                       )}{" "}
                                       →{" "}
                                       {format(
-                                        new Date(lastStop.actual_departure),
+                                        parseUTC(lastStop.actual_departure)!,
                                         "dd MMM HH:mm",
                                       )}
                                       )
