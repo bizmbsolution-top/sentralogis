@@ -23,6 +23,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { parseUTC } from "@/lib/utils/dateUtils";
+import { haversineDistance, formatDistance, formatSpeed } from "@/lib/utils/geoUtils";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -33,7 +34,8 @@ const TRUCKING_SBU_ROLES = [
 const GLOBAL_ROLES = ["owner_sentralogis", "tenant_superadmin", "tenant_admin"];
 
 function formatDuration(seconds: number | null): string {
-  if (!seconds || seconds <= 0) return "-";
+  if (seconds === null || seconds < 0) return "-";
+  if (seconds === 0) return "0d";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
@@ -73,6 +75,14 @@ export default function GPSTrackingReportPage() {
   const [selectedWoId, setSelectedWoId] = useState<string>("all");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("all");
   const [selectedVendorId, setSelectedVendorId] = useState<string>("all");
+
+  // Telemetry Playback
+  const [activeTab, setActiveTab] = useState<"stops" | "playback">("stops");
+  const [playbackJoId, setPlaybackJoId] = useState<string>("");
+  const [playbackPings, setPlaybackPings] = useState<any[]>([]);
+  const [playbackRoutes, setPlaybackRoutes] = useState<any[]>([]);
+  const [playbackLoading, setPlaybackLoading] = useState(false);
+  const GEOFENCE_RADIUS = 500;
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
   const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
@@ -139,7 +149,7 @@ export default function GPSTrackingReportPage() {
       const { data: routes, error } = await supabase
         .from("job_routes")
         .select(
-          "id, sequence, stop_type, location_name, address, actual_arrival, actual_departure, status, job_order_id",
+          "id, sequence, stop_type, location_name, address, actual_arrival, actual_departure, status, job_order_id, latitude, longitude",
         )
         .not("actual_arrival", "is", null)
         .gte("actual_arrival", startDate)
@@ -258,6 +268,7 @@ export default function GPSTrackingReportPage() {
 
         // Calculate stats per stop
         let totalDurationSeconds = 0;
+        let totalDistanceMeters = 0;
         const firstArrivalTime = stops[0]?.actual_arrival
           ? new Date(stops[0].actual_arrival).getTime()
           : null;
@@ -265,20 +276,38 @@ export default function GPSTrackingReportPage() {
           const prev = stops[idx - 1] || null;
           const dwellSeconds =
             stop.actual_departure && stop.actual_arrival
-              ? Math.floor(
+              ? Math.max(0, Math.floor(
                   (new Date(stop.actual_departure).getTime() -
                     new Date(stop.actual_arrival).getTime()) /
                     1000,
-                )
+                ))
               : null;
           const travelSeconds =
             prev && prev.actual_departure && stop.actual_arrival
-              ? Math.floor(
+              ? Math.max(0, Math.floor(
                   (new Date(stop.actual_arrival).getTime() -
                     new Date(prev.actual_departure).getTime()) /
                     1000,
-                )
+                ))
               : null;
+
+          // Distance from previous stop (haversine)
+          let distanceMeters: number | null = null;
+          if (
+            prev && prev.latitude && prev.longitude &&
+            stop.latitude && stop.longitude
+          ) {
+            distanceMeters = haversineDistance(
+              Number(prev.latitude), Number(prev.longitude),
+              Number(stop.latitude), Number(stop.longitude),
+            );
+          }
+
+          // Speed = distance / travel time (m/s)
+          let speedMps: number | null = null;
+          if (distanceMeters && travelSeconds && travelSeconds > 0) {
+            speedMps = distanceMeters / travelSeconds;
+          }
 
           // Cumulative seconds from first arrival
           let cumulativeSeconds: number | null = null;
@@ -295,15 +324,20 @@ export default function GPSTrackingReportPage() {
             stop_type: stop.stop_type || "DROPOFF",
             location_name: stop.location_name || `Stop #${stop.sequence}`,
             address: stop.address || null,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
             actual_arrival: stop.actual_arrival,
             actual_departure: stop.actual_departure,
             dwell_seconds: dwellSeconds,
             travel_seconds: travelSeconds,
             cumulative_seconds: cumulativeSeconds,
+            distance_meters: distanceMeters,
+            speed_mps: speedMps,
           };
         });
 
-        // Total duration: from first arrival to last departure
+        // Total duration + distance
+        let totalDistanceKm = 0;
         const firstArrival = stops[0]?.actual_arrival;
         const lastDeparture = stops[stops.length - 1]?.actual_departure;
         if (firstArrival && lastDeparture) {
@@ -313,6 +347,14 @@ export default function GPSTrackingReportPage() {
               1000,
           );
         }
+        stopDetails.forEach((s: any) => {
+          if (s.distance_meters) totalDistanceKm += s.distance_meters;
+        });
+        totalDistanceMeters = totalDistanceKm;
+        // Average speed across entire trip
+        const avgSpeedMps = totalDurationSeconds > 0
+          ? totalDistanceMeters / totalDurationSeconds
+          : null;
 
         const joInfo = stops[0];
         const woKey = joInfo.wo_id || joInfo.wo_number || `wo-${joId}`;
@@ -334,6 +376,8 @@ export default function GPSTrackingReportPage() {
           truck_type: joInfo.truck_type || "-",
           stops: stopDetails,
           total_duration_seconds: totalDurationSeconds,
+          total_distance_meters: totalDistanceMeters,
+          avg_speed_mps: avgSpeedMps,
           first_arrival: firstArrival,
           last_departure: lastDeparture,
         });
@@ -354,6 +398,72 @@ export default function GPSTrackingReportPage() {
       setLoading(false);
     }
   }, [startDate, endDate, tenantId, canAccess]);
+
+  const loadTelemetry = useCallback(async (joId: string) => {
+    if (!joId || !tenantId) return;
+    setPlaybackLoading(true);
+    try {
+      const [pingsRes, routesRes] = await Promise.all([
+        supabase
+          .from("job_tracking")
+          .select("*")
+          .eq("job_order_id", joId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("job_routes")
+          .select("*")
+          .eq("job_order_id", joId)
+          .order("sequence", { ascending: true }),
+      ]);
+      if (pingsRes.error) throw pingsRes.error;
+      if (routesRes.error) throw routesRes.error;
+
+      const rawPings: any[] = (pingsRes.data || []).filter(
+        (p: any) => p.latitude != null && p.longitude != null,
+      );
+      const routes: any[] = routesRes.data || [];
+
+      const matched = rawPings.map((ping: any) => {
+        let nearestDist: number | null = null;
+        let nearestRoute: any = null;
+
+        for (const route of routes) {
+          if (route.latitude && route.longitude) {
+            const dist = haversineDistance(
+              Number(ping.latitude), Number(ping.longitude),
+              Number(route.latitude), Number(route.longitude),
+            );
+            if (nearestDist === null || dist < nearestDist) {
+              nearestDist = dist;
+              nearestRoute = route;
+            }
+          }
+        }
+
+        const isAtLocation = nearestDist !== null && nearestDist <= GEOFENCE_RADIUS;
+        return {
+          id: ping.id,
+          created_at: ping.created_at,
+          latitude: ping.latitude,
+          longitude: ping.longitude,
+          speed: ping.speed ?? null,
+          accuracy: ping.accuracy ?? null,
+          status_update: ping.status_update || "GPS_PING",
+          nearest_stop_name: isAtLocation ? (nearestRoute?.location_name || `Stop #${nearestRoute?.sequence}`) : null,
+          nearest_stop_id: isAtLocation ? nearestRoute?.id : null,
+          nearest_distance_m: nearestDist != null ? Math.round(nearestDist) : null,
+          location_status: isAtLocation ? "AT_LOCATION" : "IN_TRANSIT",
+        };
+      });
+
+      setPlaybackPings(matched);
+      setPlaybackRoutes(routes);
+    } catch (err: any) {
+      toast.error("Gagal memuat telemetry: " + (err.message || "Unknown"));
+    } finally {
+      setPlaybackLoading(false);
+    }
+  }, [supabase, tenantId, GEOFENCE_RADIUS]);
 
   const filteredData = useMemo(() => {
     let data = groupedData;
@@ -412,6 +522,8 @@ export default function GPSTrackingReportPage() {
               : "-",
             "Lama Berhenti": "",
             Perjalanan: "",
+            Jarak: formatDistance(jo.total_distance_meters),
+            Kecepatan: jo.avg_speed_mps != null ? formatSpeed(jo.avg_speed_mps) : "",
             Kumulatif: "",
             "Total Durasi": formatDurationDetail(jo.total_duration_seconds),
           });
@@ -438,6 +550,8 @@ export default function GPSTrackingReportPage() {
                 : "-",
               "Lama Berhenti": formatDuration(stop.dwell_seconds),
               Perjalanan: formatDuration(stop.travel_seconds),
+              Jarak: formatDistance(stop.distance_meters),
+              Kecepatan: formatSpeed(stop.speed_mps),
               Kumulatif: formatDuration(stop.cumulative_seconds),
               "Total Durasi": "",
             });
@@ -489,6 +603,8 @@ export default function GPSTrackingReportPage() {
   const sumJO = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.length, 0);
   const sumVendors = [...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter(Boolean))].length;
   const sumCheckpoints = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.reduce((sum: number, jo: any) => sum + jo.stops.length, 0), 0);
+  const sumDistanceAll = groupedData.reduce((acc: number, wo: any) =>
+    acc + wo.jos.reduce((sum: number, jo: any) => sum + (jo.total_distance_meters || 0), 0), 0);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
@@ -675,6 +791,15 @@ export default function GPSTrackingReportPage() {
                   </span>
                 </p>
               </div>
+              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+              <div className="flex flex-col">
+                <p className="text-xl sm:text-2xl font-extrabold text-cyan-300 leading-none">
+                  {formatDistance(sumDistanceAll)}{" "}
+                  <span className="text-[10px] text-cyan-500/70 uppercase tracking-wider font-bold block sm:inline sm:ml-1">
+                    Total Jarak
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
           {/* Decorative Elements */}
@@ -682,6 +807,32 @@ export default function GPSTrackingReportPage() {
           <div className="absolute -bottom-24 -right-12 w-48 h-48 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
         </div>
 
+        {/* Tab Toggle */}
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit mb-3">
+          <button
+            onClick={() => setActiveTab("stops")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+              activeTab === "stops"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Ringkasan Perhentian
+          </button>
+          <button
+            onClick={() => setActiveTab("playback")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+              activeTab === "playback"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Telemetry Playback
+          </button>
+        </div>
+
+        {/* --- Stops Tab --- */}
+        {activeTab === "stops" && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-40">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
@@ -766,6 +917,14 @@ export default function GPSTrackingReportPage() {
                             <span className="text-[10px] text-slate-500 flex items-center gap-1">
                               Vendor: {jo.vendor_name}
                             </span>
+                            <span className="text-[10px] font-semibold text-cyan-700">
+                              {formatDistance(jo.total_distance_meters)}
+                            </span>
+                            {jo.avg_speed_mps != null && (
+                              <span className="text-[10px] font-semibold text-blue-600">
+                                {formatSpeed(jo.avg_speed_mps)}
+                              </span>
+                            )}
                             <span className="text-[10px] font-semibold text-emerald-700 ml-auto">
                               Total:{" "}
                               {formatDurationDetail(jo.total_duration_seconds)}
@@ -798,6 +957,12 @@ export default function GPSTrackingReportPage() {
                               </th>
                               <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
                                 Perjalanan
+                              </th>
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                Jarak
+                              </th>
+                              <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                Kecepatan
                               </th>
                               <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
                                 Kumulatif
@@ -864,6 +1029,24 @@ export default function GPSTrackingReportPage() {
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
+                                <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap">
+                                  {stop.distance_meters != null ? (
+                                    <span className="text-cyan-700">
+                                      {formatDistance(stop.distance_meters)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap">
+                                  {stop.speed_mps != null ? (
+                                    <span className="text-blue-600">
+                                      {formatSpeed(stop.speed_mps)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
                                 <td className="px-3 py-2.5 text-xs font-bold text-right whitespace-nowrap text-indigo-600">
                                   {stop.cumulative_seconds
                                     ? formatDuration(stop.cumulative_seconds)
@@ -901,7 +1084,7 @@ export default function GPSTrackingReportPage() {
                                   )}
                               </td>
                               <td
-                                colSpan={3}
+                                colSpan={5}
                                 className="px-3 py-2.5 text-xs font-bold text-right text-blue-700"
                               >
                                 {formatDuration(jo.total_duration_seconds)}
@@ -990,6 +1173,186 @@ export default function GPSTrackingReportPage() {
           </div>
         )}
       </div>
+    )}
+
+    {/* --- Playback Tab --- */}
+    {activeTab === "playback" && (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* Header with JO Selector */}
+      <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center gap-4">
+        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+          Telemetry Playback
+        </h3>
+        <div className="flex items-center gap-2 ml-auto">
+          <select
+            value={playbackJoId}
+            onChange={(e) => {
+              setPlaybackJoId(e.target.value);
+              setPlaybackPings([]);
+              setPlaybackRoutes([]);
+            }}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
+          >
+            <option value="">Pilih JO...</option>
+            {groupedData.flatMap((wo: any) =>
+              wo.jos.map((jo: any) => (
+                <option key={jo.jo_id} value={jo.jo_id}>
+                  {jo.jo_number} — {jo.plate_number} — {jo.driver_name}
+                </option>
+              ))
+            )}
+          </select>
+          <button
+            onClick={() => loadTelemetry(playbackJoId)}
+            disabled={!playbackJoId || playbackLoading}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-40 flex items-center gap-2"
+          >
+            {playbackLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            Muat Telemetry
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      {playbackPings.length > 0 && (
+        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-col">
+              <span className="text-lg font-extrabold text-slate-900">{playbackPings.length}</span>
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Total Pings</span>
+            </div>
+            <div className="w-px h-8 bg-slate-200"></div>
+            <div className="flex flex-col">
+              <span className="text-lg font-extrabold text-emerald-600">
+                {playbackPings.filter((p: any) => p.location_status === "AT_LOCATION").length}
+              </span>
+              <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">At Location</span>
+            </div>
+            <div className="w-px h-8 bg-slate-200"></div>
+            <div className="flex flex-col">
+              <span className="text-lg font-extrabold text-blue-600">
+                {playbackPings.filter((p: any) => p.location_status === "IN_TRANSIT").length}
+              </span>
+              <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">In Transit</span>
+            </div>
+            <div className="w-px h-8 bg-slate-200"></div>
+            <div className="flex flex-wrap gap-3">
+              {playbackRoutes.filter((r: any) =>
+                playbackPings.some((p: any) => p.nearest_stop_id === r.id)
+              ).map((r: any) => {
+                const count = playbackPings.filter((p: any) => p.nearest_stop_id === r.id).length;
+                return (
+                  <span key={r.id} className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-1 rounded-lg border border-slate-200">
+                    {r.location_name || `Stop #${r.sequence}`}: <span className="text-indigo-600">{count}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!playbackJoId && (
+        <div className="py-20 text-center opacity-40 grayscale flex flex-col items-center">
+          <MapPin className="w-14 h-14 text-slate-400 mb-2" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pilih Job Order</p>
+          <p className="text-[9px] text-slate-400 mt-1">Pilih JO lalu klik Muat Telemetry</p>
+        </div>
+      )}
+
+      {playbackJoId && playbackPings.length === 0 && !playbackLoading && (
+        <div className="py-20 text-center opacity-40 grayscale flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-slate-400 mb-2" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Klik Muat Telemetry</p>
+        </div>
+      )}
+
+      {/* Ping Table */}
+      {playbackPings.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50/80">
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">#</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">Waktu</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lokasi Matching</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">Jarak (m)</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">Kecepatan</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">Koordinat</th>
+                <th className="px-3 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">Event</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 font-mono">
+              {playbackPings.map((ping: any, idx: number) => {
+                const isAtLoc = ping.location_status === "AT_LOCATION";
+                return (
+                  <tr
+                    key={ping.id || idx}
+                    className={`text-[11px] transition-all ${
+                      isAtLoc
+                        ? "bg-emerald-50/60 hover:bg-emerald-100/60"
+                        : "hover:bg-slate-50/50"
+                    }`}
+                  >
+                    <td className="px-3 py-1.5 text-slate-400 font-bold">{idx + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                      {ping.created_at
+                        ? format(new Date(ping.created_at), "dd MMM HH:mm:ss")
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
+                        isAtLoc
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {isAtLoc ? "DI LOKASI" : "DALAM PERJALANAN"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      {ping.nearest_stop_name ? (
+                        <span className="font-semibold text-emerald-800">{ping.nearest_stop_name}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      {ping.nearest_distance_m != null ? (
+                        <span className={isAtLoc ? "text-emerald-600 font-bold" : "text-slate-500"}>
+                          {ping.nearest_distance_m}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-slate-600">
+                      {ping.speed != null ? `${(Number(ping.speed) * 3.6).toFixed(1)} km/h` : "-"}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-500 text-[10px]">
+                      {Number(ping.latitude).toFixed(4)}, {Number(ping.longitude).toFixed(4)}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-500 text-[10px] max-w-[200px] truncate" title={ping.status_update}>
+                      {ping.status_update === "GPS_PING" ? (
+                        <span className="text-slate-400">Ping</span>
+                      ) : (
+                        <span>{ping.status_update}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+    )}
     </div>
   </div>
   );
