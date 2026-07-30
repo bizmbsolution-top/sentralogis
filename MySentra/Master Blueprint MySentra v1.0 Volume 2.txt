@@ -1,0 +1,777 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 2
+
+# Business Process Blueprint
+
+---
+
+# Chapter 1
+
+# Business Architecture
+
+MySentra dibangun sebagai **Operational Experience Layer** di atas Sentralogis Core.
+
+```text
+                    SENTRALOGIS
+
+──────────────────────────────────────────
+
+Executive Suite
+
+(System of Record)
+
+──────────────────────────────────────────
+
+Customer
+
+Work Order
+
+Job Order
+
+Finance
+
+Warehouse
+
+Master Data
+
+Reporting
+
+──────────────────────────────────────────
+
+             Business API Layer
+
+──────────────────────────────────────────
+
+               MySentra
+
+(System of Engagement)
+
+──────────────────────────────────────────
+
+VRM
+
+Ground Staff
+
+Driver
+
+AI Assistant
+
+Timeline
+
+Notification
+
+```
+
+Executive Suite tetap menjadi pusat administrasi perusahaan.
+
+MySentra menjadi pusat aktivitas operasional.
+
+---
+
+# Chapter 2
+
+# Operational Philosophy
+
+Seluruh aktivitas operasional mengikuti prinsip berikut.
+
+## Principle 1
+
+People do not update systems.
+
+People perform work.
+
+AI updates the system.
+
+Artinya staf tidak fokus mengisi form.
+
+Staf fokus bekerja.
+
+AI membantu mengubah aktivitas menjadi data.
+
+---
+
+## Principle 2
+
+Every Communication is Data.
+
+Semua komunikasi dapat diproses.
+
+Contoh:
+
+* WhatsApp
+* Foto
+* Voice
+* PDF
+* Screenshot
+* Camera
+
+Semuanya dapat menjadi sumber update.
+
+---
+
+## Principle 3
+
+Every Update belongs to Timeline.
+
+Tidak ada update yang hilang.
+
+Semua update harus masuk Timeline.
+
+---
+
+## Principle 4
+
+Nothing updates database directly.
+
+Semua update harus melalui Business Engine.
+
+---
+
+# Chapter 3
+
+# Actors
+
+Pada versi pertama hanya terdapat empat actor.
+
+---
+
+## Actor 1
+
+HQ Customer Service
+
+Responsibilities
+
+* Create Customer
+* Create Work Order
+* Assign SBU
+* Monitoring
+
+Portal
+
+Executive Suite
+
+---
+
+## Actor 2
+
+VRM
+
+Responsibilities
+
+* Generate JO
+* Assign Vendor
+* Assign Driver
+* Monitor Remaining JO
+
+Portal
+
+MySentra
+
+---
+
+## Actor 3
+
+Ground Staff
+
+Responsibilities
+
+* Gate In
+* Gate Out
+* Loading
+* Photo Documentation
+* Status Update
+
+Portal
+
+MySentra
+
+---
+
+## Actor 4
+
+Driver
+
+Responsibilities
+
+* Attendance
+* Vehicle Inspection
+* Accept Job
+* Navigation
+* POD
+
+Portal
+
+MySentra
+
+---
+
+# Chapter 4
+
+# End-to-End Workflow
+
+## Step 1
+
+Customer places order
+
+↓
+
+HQ CS
+
+↓
+
+Create Work Order
+
+↓
+
+Assign SBU Trucking
+
+↓
+
+Completed
+
+---
+
+## Step 2
+
+VRM receives Assignment
+
+MySentra Notification
+
+↓
+
+Assigned Work Order
+
+↓
+
+Remaining JO
+
+↓
+
+AI Assistant
+
+---
+
+## Step 3
+
+Vendor sends Truck List
+
+Via
+
+WhatsApp
+
+↓
+
+VRM
+
+↓
+
+Paste
+
+↓
+
+AI Parse
+
+↓
+
+Preview
+
+↓
+
+Generate JO
+
+↓
+
+Assign Vendor
+
+↓
+
+Assign Driver
+
+↓
+
+Completed
+
+---
+
+## Step 4
+
+Ground Staff
+
+Truck arrives
+
+↓
+
+Camera
+
+↓
+
+AI OCR
+
+↓
+
+Find Truck
+
+↓
+
+Find JO
+
+↓
+
+Update Timeline
+
+↓
+
+Gate In
+
+---
+
+## Step 5
+
+Driver
+
+Accept JO
+
+↓
+
+Loading
+
+↓
+
+Delivery
+
+↓
+
+POD
+
+↓
+
+Completed
+
+---
+
+## Step 6
+
+Executive Suite
+
+Realtime Monitoring
+
+↓
+
+Timeline
+
+↓
+
+Analytics
+
+---
+
+# Chapter 5
+
+# Communication Driven Workflow
+
+Semua komunikasi operasional diproses sebagai Event.
+
+Contoh.
+
+Vendor mengirim.
+
+```text
+UPDATE
+
+WO123456
+
+5 Truck
+```
+
+↓
+
+Communication Event
+
+↓
+
+AI Parsing
+
+↓
+
+WO Matching
+
+↓
+
+Validation
+
+↓
+
+Generate Action
+
+↓
+
+Operator Approval
+
+↓
+
+Database Update
+
+↓
+
+Timeline Event
+
+---
+
+Ground Staff upload foto.
+
+↓
+
+OCR
+
+↓
+
+Plate Recognition
+
+↓
+
+Truck Matching
+
+↓
+
+JO Matching
+
+↓
+
+Status Suggestion
+
+↓
+
+Approval
+
+↓
+
+Timeline Update
+
+---
+
+# Chapter 6
+
+# AI Assisted Workflow
+
+Contoh.
+
+VRM.
+
+User
+
+```
+Ada update truck.
+```
+
+AI
+
+```
+Silakan paste data WhatsApp.
+```
+
+User paste.
+
+↓
+
+AI
+
+```
+Saya menemukan.
+
+WO123456
+
+Remaining
+
+20
+
+Saya menemukan
+
+5 Truck
+
+Apakah ingin membuat
+
+5 Job Order?
+```
+
+↓
+
+Submit
+
+↓
+
+JO Created
+
+---
+
+Ground Staff
+
+Upload Foto
+
+↓
+
+AI
+
+```
+Saya membaca
+
+B9765UEJ
+
+JO333
+
+Status sekarang
+
+Assigned
+
+Apakah ingin menjadi
+
+Arrived Pickup?
+```
+
+↓
+
+Submit
+
+↓
+
+Timeline
+
+---
+
+# Chapter 7
+
+# Operational Timeline
+
+Timeline adalah sumber kebenaran operasional.
+
+Semua aktivitas masuk Timeline.
+
+Contoh.
+
+```text
+08:10
+
+WO Assigned
+
+HQ-CS
+
+-------------
+
+08:35
+
+5 JO Generated
+
+VRM
+
+-------------
+
+09:02
+
+Truck Assigned
+
+VRM
+
+-------------
+
+10:10
+
+Gate In
+
+Ground Staff
+
+-------------
+
+11:40
+
+Loading Complete
+
+Ground Staff
+
+-------------
+
+15:50
+
+Delivered
+
+Driver
+
+-------------
+
+17:10
+
+POD Uploaded
+
+Driver
+```
+
+Timeline tidak hanya menampilkan status, tetapi juga:
+
+* sumber update (AI, manual, OCR)
+* pengguna yang melakukan konfirmasi
+* lampiran foto/dokumen
+* hasil AI (confidence score jika relevan)
+
+---
+
+# Chapter 8
+
+# AI Collaboration
+
+MySentra bukan chatbot.
+
+AI bekerja sebagai Co-Worker.
+
+Contoh.
+
+User
+
+```
+Ada order baru.
+```
+
+↓
+
+AI
+
+```
+Siapa customer?
+```
+
+↓
+
+User
+
+```
+PT ABC
+```
+
+↓
+
+AI
+
+Search Customer
+
+↓
+
+Tidak ada.
+
+↓
+
+AI
+
+```
+Customer belum ada.
+
+Apakah ingin saya buatkan?
+```
+
+↓
+
+User
+
+```
+Ya
+```
+
+↓
+
+Customer Created
+
+↓
+
+AI melanjutkan proses WO.
+
+AI selalu menjaga konteks percakapan hingga proses selesai atau dibatalkan.
+
+---
+
+# Chapter 9
+
+# Operational Events
+
+Seluruh sistem MySentra menggunakan konsep Event.
+
+Event Type:
+
+* Work Order Assigned
+* Vendor Assigned
+* Driver Assigned
+* Truck Changed
+* Driver Changed
+* Gate In
+* Loading
+* Gate Out
+* Delivered
+* POD Uploaded
+* Customer Revision
+* Photo Uploaded
+* OCR Detected
+* AI Suggestion
+* Approval Required
+* Approval Completed
+
+Dengan model event ini, timeline, notifikasi, audit trail, dan analitik menggunakan sumber data yang sama.
+
+---
+
+# Chapter 10
+
+# Version 1.0 Scope
+
+Yang dibangun:
+
+✅ VRM Portal
+
+✅ Ground Staff Portal
+
+✅ Driver Portal
+
+✅ AI Assistant
+
+✅ Timeline
+
+✅ Notification
+
+✅ OCR Photo
+
+✅ WhatsApp Paste
+
+Yang belum dibangun:
+
+* Voice Assistant
+* WhatsApp Business API
+* GPS Live Tracking
+* AI Predictive ETA
+* Warehouse
+* Clearance
+* Finance AI
+* Executive AI Analytics
+
+---
+
+# Penutup Volume 2
+
+Volume 2 mendefinisikan **cara kerja operasional MySentra**, bukan sekadar daftar fitur. Fokus utamanya adalah mengubah aktivitas lapangan menjadi alur kerja berbasis event, di mana AI membantu menghubungkan komunikasi, dokumen, dan tindakan operasional tanpa menghilangkan SOP yang sudah berlaku.
+
+---
+
+## 📌 Saran penting sebelum kita masuk Volume 3
+
+Dari semua diskusi kita beberapa hari terakhir, saya melihat ada satu konsep yang menurut saya akan menjadi **keunikan MySentra dibanding TMS lain**.
+
+Saya ingin menambahkan satu prinsip inti pada blueprint:
+
+> **"Everything is an Event."**
+
+Artinya, apa pun yang terjadi—paste WhatsApp, upload foto, pergantian driver, gate in, revisi customer, bahkan jawaban AI—semuanya direkam sebagai **Operational Event**. Dari event inilah sistem membangun:
+
+* Timeline operasional.
+* Audit trail.
+* Notifikasi.
+* Dashboard.
+* KPI.
+* AI Summary.
+
+Dengan arsitektur ini, MySentra tidak lagi hanya menyimpan "status terakhir", tetapi juga **sejarah lengkap bagaimana status tersebut terjadi**. Menurut saya, inilah fondasi yang akan membuat platform ini sangat kuat untuk analitik, AI, dan kebutuhan audit di masa depan.
+
+**Berikutnya kita masuk ke Volume 3 – Functional PRD**, yang akan menguraikan setiap layar, setiap tombol, setiap workflow, setiap validasi, hingga acceptance criteria sehingga bisa langsung dijadikan backlog oleh tim developer.

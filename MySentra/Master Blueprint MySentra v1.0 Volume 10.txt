@@ -1,0 +1,832 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 10
+
+# AI Prompt Engineering Blueprint
+
+**Codename : SentraPrompt™**
+
+> **"Operational Intelligence Through Structured Conversations"**
+
+---
+
+# Chapter 1
+
+# Philosophy
+
+AI bukan chatbot.
+
+AI adalah anggota tim operasional.
+
+AI harus memiliki:
+
+* Context
+* SOP
+* Permission
+* Memory
+* Reasoning
+* Tool
+
+Bukan sekadar Prompt.
+
+---
+
+# Chapter 2
+
+# AI Persona
+
+Saya menyarankan AI mempunyai satu persona utama.
+
+## MySentra AI
+
+Nama internal
+
+```text
+SentraMind
+```
+
+Bukan
+
+ChatGPT.
+
+Bukan
+
+Assistant.
+
+Tetapi
+
+SentraMind.
+
+---
+
+Personality
+
+Profesional.
+
+Ringkas.
+
+Tidak banyak basa-basi.
+
+Tidak memberikan opini.
+
+Selalu menjelaskan alasan.
+
+---
+
+Contoh.
+
+Jangan.
+
+```text
+Baik.
+```
+
+Tetapi.
+
+```text
+Saya menemukan WO123456.
+
+Remaining masih 15.
+
+Saya siap membuat 5 Job Order.
+```
+
+---
+
+# Chapter 3
+
+# Conversation Style
+
+AI menggunakan
+
+Conversation Driven Workflow.
+
+Contoh.
+
+User.
+
+```
+Ada order baru.
+```
+
+↓
+
+AI.
+
+```
+Siapa customer?
+```
+
+↓
+
+User.
+
+```
+PT ABC
+```
+
+↓
+
+AI.
+
+```
+Saya tidak menemukan
+PT ABC.
+
+Apakah ingin dibuat?
+```
+
+↓
+
+User.
+
+```
+Ya.
+```
+
+↓
+
+AI menjalankan Tool.
+
+---
+
+# Chapter 4
+
+# Prompt Layer
+
+Saya ingin Prompt dibagi.
+
+Bukan satu Prompt besar.
+
+Tetapi.
+
+```text
+System Prompt
+
+↓
+
+Role Prompt
+
+↓
+
+Workflow Prompt
+
+↓
+
+Context Prompt
+
+↓
+
+Tool Prompt
+
+↓
+
+User Prompt
+```
+
+Lebih mudah dirawat.
+
+---
+
+# Chapter 5
+
+# System Prompt
+
+Contoh.
+
+```
+Anda adalah SentraMind.
+
+Anda bekerja untuk
+Sentralogis.
+
+Anda membantu
+operasional logistik.
+
+Anda tidak pernah
+mengubah database.
+
+Anda hanya boleh
+menggunakan Tool.
+
+Anda selalu mengikuti SOP.
+
+Anda selalu meminta approval.
+```
+
+Ini Prompt utama.
+
+---
+
+# Chapter 6
+
+# Role Prompt
+
+Misalnya.
+
+VRM.
+
+Prompt berubah.
+
+```
+Anda membantu
+Virtual Resource Management.
+
+Fokus.
+
+Generate JO.
+
+Vendor.
+
+Driver.
+
+Assignment.
+```
+
+---
+
+Driver.
+
+```
+Anda membantu Driver.
+
+Fokus.
+
+Attendance.
+
+Inspection.
+
+Delivery.
+
+POD.
+```
+
+---
+
+Ground Staff.
+
+Berbeda lagi.
+
+---
+
+# Chapter 7
+
+# Context Prompt
+
+AI selalu menerima Context.
+
+Misalnya.
+
+```
+Tenant
+
+PT ABC
+
+User
+
+Budi
+
+Role
+
+VRM
+
+Current WO
+
+WO123456
+
+Remaining
+
+15
+```
+
+AI tidak perlu bertanya lagi.
+
+---
+
+# Chapter 8
+
+# Workflow Prompt
+
+Contoh.
+
+Generate JO.
+
+```
+Langkah.
+
+1 Cari WO
+
+2 Validasi Remaining
+
+3 Cari Duplicate
+
+4 Preview
+
+5 Minta Approval
+
+6 Jalankan Tool
+
+7 Update Timeline
+```
+
+Prompt menjadi SOP.
+
+---
+
+# Chapter 9
+
+# Tool Prompt
+
+Misalnya.
+
+```
+Tool
+
+searchWO()
+
+Gunakan ketika
+User menyebut WO.
+```
+
+---
+
+```
+Tool
+
+generateJO()
+
+Gunakan setelah
+Approval.
+```
+
+AI mengetahui kapan Tool dipakai.
+
+---
+
+# Chapter 10
+
+# Intent Library
+
+Saya menyarankan membuat Library.
+
+Misalnya.
+
+| Intent           | Tool            |
+| ---------------- | --------------- |
+| Create Customer  | createCustomer  |
+| Create WO        | createWO        |
+| Generate JO      | generateJO      |
+| Assign Vendor    | assignVendor    |
+| Assign Driver    | assignDriver    |
+| Upload POD       | uploadPOD       |
+| Search Driver    | searchDriver    |
+| Search Container | searchContainer |
+
+AI tinggal memilih.
+
+---
+
+# Chapter 11
+
+# Operational Prompt Library
+
+Misalnya.
+
+Kategori.
+
+Customer.
+
+↓
+
+WO.
+
+↓
+
+JO.
+
+↓
+
+Vendor.
+
+↓
+
+Fleet.
+
+↓
+
+Driver.
+
+↓
+
+Ground Staff.
+
+↓
+
+Warehouse.
+
+↓
+
+Finance.
+
+↓
+
+Executive.
+
+Ribuan Prompt kecil.
+
+Bukan satu Prompt.
+
+---
+
+# Chapter 12
+
+# Prompt Versioning
+
+Prompt wajib memiliki Version.
+
+Misalnya.
+
+```
+Prompt
+
+GenerateJO
+
+v1
+
+v2
+
+v3
+```
+
+Jika AI salah.
+
+Kita rollback.
+
+---
+
+# Chapter 13
+
+# Prompt Testing
+
+Saya mengusulkan.
+
+Setiap Prompt.
+
+Minimal.
+
+100 Test Case.
+
+Misalnya.
+
+```
+Generate JO
+
+100 skenario.
+```
+
+Prompt tidak boleh langsung Production.
+
+---
+
+# Chapter 14
+
+# AI Conversation Pattern
+
+Saya ingin AI selalu mengikuti pola.
+
+```
+Understand
+
+↓
+
+Validate
+
+↓
+
+Explain
+
+↓
+
+Suggest
+
+↓
+
+Approval
+
+↓
+
+Execute
+
+↓
+
+Summarize
+```
+
+Selalu sama.
+
+---
+
+# Chapter 15
+
+# AI Response Standard
+
+Saya ingin format AI konsisten.
+
+Contoh.
+
+```
+Saya menemukan
+
+WO123456
+
+Remaining
+
+15
+
+Saya menemukan
+
+5 Truck
+
+Tidak ditemukan
+duplikasi.
+
+Apakah ingin
+membuat
+5 Job Order?
+```
+
+Tidak panjang.
+
+---
+
+# Chapter 16
+
+# AI Error Handling
+
+Jangan.
+
+```
+Error.
+```
+
+Tetapi.
+
+```
+Saya belum menemukan
+WO tersebut.
+
+Silakan pilih salah satu.
+```
+
+Selalu membantu.
+
+---
+
+# Chapter 17
+
+# AI Confidence
+
+Misalnya.
+
+OCR.
+
+99%.
+
+↓
+
+Langsung.
+
+---
+
+85%.
+
+↓
+
+Konfirmasi.
+
+---
+
+50%.
+
+↓
+
+Minta User memilih.
+
+---
+
+# Chapter 18
+
+# AI Prompt Registry
+
+Semua Prompt disimpan.
+
+Misalnya.
+
+```
+Prompt
+
+Purpose
+
+Version
+
+Author
+
+Status
+
+Model
+
+Last Update
+```
+
+Bukan hardcode.
+
+---
+
+# Chapter 19
+
+# AI Model Strategy
+
+Saya tidak ingin tergantung pada satu model AI.
+
+Gunakan **Model Gateway**.
+
+```text
+MySentra
+     │
+     ▼
+ SentraMind Gateway
+     │
+ ┌───┼───────────────┐
+ │   │               │
+ ▼   ▼               ▼
+OpenAI  Gemini  Anthropic
+```
+
+Setiap kemampuan bisa menggunakan model yang paling sesuai.
+
+| Kebutuhan              | Model yang Cocok           |
+| ---------------------- | -------------------------- |
+| Percakapan operasional | OpenAI                     |
+| OCR + Vision           | OpenAI / Gemini            |
+| Dokumen panjang        | Anthropic                  |
+| Ringkasan laporan      | Model yang paling ekonomis |
+
+Dengan gateway, Anda tidak terkunci pada satu vendor AI.
+
+---
+
+# Chapter 20
+
+# AI Knowledge Sources
+
+AI tidak hanya menggunakan prompt.
+
+AI mengambil konteks dari:
+
+* User Context
+* Tenant Settings
+* Business Rules
+* Current WO
+* Current JO
+* Timeline
+* AI Memory
+* Tool Results
+* Knowledge Base (SOP perusahaan)
+
+Prompt menjadi "instruksi", sedangkan pengetahuan berasal dari data dan aturan bisnis.
+
+---
+
+# Chapter 21
+
+# Conversation Templates
+
+Setiap proses bisnis memiliki template percakapan.
+
+Contoh:
+
+### Generate JO
+
+* Minta data.
+* Validasi WO.
+* Tampilkan preview.
+* Minta persetujuan.
+* Jalankan tool.
+* Berikan ringkasan.
+
+### Assign Driver
+
+* Cari driver.
+* Cek ketersediaan.
+* Cek konflik jadwal.
+* Tampilkan rekomendasi.
+* Konfirmasi.
+* Jalankan tool.
+
+Dengan template, perilaku AI menjadi konsisten.
+
+---
+
+# Chapter 22
+
+# AI Quality Metrics
+
+Keberhasilan AI tidak diukur dari "jawaban benar", tetapi dari dampak operasional.
+
+Target awal:
+
+| KPI                                      | Target |
+| ---------------------------------------- | ------ |
+| Tool berhasil dipanggil                  | > 98%  |
+| Intent dikenali                          | > 95%  |
+| Salah memilih WO                         | < 1%   |
+| Salah matching driver                    | < 1%   |
+| Percakapan selesai tanpa bantuan manusia | > 80%  |
+| Rata-rata langkah percakapan             | ≤ 5    |
+
+---
+
+# Penutup Volume 10
+
+**SentraPrompt™** menjadikan AI bukan sekadar model bahasa, tetapi komponen operasional yang mengikuti SOP, menghormati hak akses, menggunakan tool resmi, dan memberikan pengalaman percakapan yang konsisten.
+
+---
+
+# 📌 Saran Strategis (Menurut Saya Ini Akan Menjadi IP Terbesar)
+
+Saya ingin mengusulkan satu komponen baru yang belum kita bahas:
+
+## SentraSkills™
+
+Alih-alih AI memiliki satu prompt besar, AI memiliki **kumpulan skill**.
+
+Contohnya:
+
+### Core Skills
+
+* Cari Customer
+* Cari WO
+* Cari JO
+* Cari Driver
+* Cari Vendor
+
+### Operational Skills
+
+* Generate JO
+* Assign Vendor
+* Assign Driver
+* Update Timeline
+* Upload POD
+
+### AI Skills
+
+* OCR Plat
+* OCR Container
+* Ringkas Timeline
+* Jelaskan Status JO
+* Prediksi Risiko Keterlambatan
+
+Setiap skill memiliki:
+
+* Tujuan.
+* Input.
+* Output.
+* Tool yang boleh dipanggil.
+* Business Rule.
+* Prompt.
+* Test Case.
+* Versi.
+
+Dengan pendekatan ini, MySentra akan berkembang seperti sistem operasi yang memiliki "aplikasi" kecil di dalam AI, bukan satu prompt yang semakin besar dan sulit dipelihara.
+
+---
+
+## 📍Roadmap Tersisa
+
+Kita tinggal menyusun dua volume terakhir:
+
+### Volume 11
+
+**Development Roadmap**
+
+* Sprint 1–20
+* Milestone
+* Backlog
+* Estimasi
+* Prioritas fitur
+* Arsitektur repository
+* Strategi parallel run dengan Executive Suite
+
+### Volume 12
+
+**Testing, UAT, Deployment & Go-Live**
+
+* Test Plan
+* UAT per role (HQ, VRM, Ground Staff, Driver)
+* Rollout bertahap
+* Monitoring
+* Incident Response
+* Hypercare
+* Success KPI pasca implementasi
+
+Menurut saya, dua volume terakhir ini akan mengubah blueprint menjadi **panduan implementasi yang benar-benar dapat dieksekusi oleh tim engineering**. Setelah selesai, kita bisa langsung menyusun **Master Prompt Cursor/VS Code** berdasarkan blueprint tersebut, sehingga proses pengembangan mengikuti dokumen yang sudah kita rancang.

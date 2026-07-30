@@ -1,0 +1,861 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 3
+
+# Functional Product Requirement Document (PRD)
+
+---
+
+# Module 1
+
+# Authentication & User Context
+
+---
+
+## Objective
+
+Memberikan autentikasi yang aman, sederhana, dan otomatis mengarahkan pengguna ke portal sesuai role.
+
+---
+
+## Business Goal
+
+User tidak perlu memilih menu yang rumit.
+
+Setelah login, MySentra langsung mengetahui:
+
+* Tenant
+* SBU
+* Role
+* Permission
+* Default Landing Page
+
+---
+
+## Actors
+
+* VRM
+* Dispatcher
+* Ground Staff
+* Driver
+
+---
+
+## Login Flow
+
+```text
+Open MySentra
+
+↓
+
+Email / PIN / OTP
+
+↓
+
+Authentication
+
+↓
+
+Load User Context
+
+↓
+
+Load Role
+
+↓
+
+Load Permission
+
+↓
+
+Redirect Dashboard
+```
+
+---
+
+## User Context
+
+Setelah login AI harus mengetahui
+
+```text
+Tenant
+
+PT ABC Logistics
+
+SBU
+
+Trucking
+
+Role
+
+VRM
+
+Location
+
+Jakarta
+
+Language
+
+Indonesia
+
+Device
+
+Android
+
+Permission
+
+Generate JO
+Assign Vendor
+Assign Driver
+```
+
+Context ini dipakai seluruh AI Conversation.
+
+---
+
+# Functional Requirement
+
+### Login
+
+FR-001
+
+User dapat login menggunakan akun Sentralogis.
+
+---
+
+FR-002
+
+Session mengikuti Executive Suite.
+
+---
+
+FR-003
+
+JWT Token otomatis diperbarui.
+
+---
+
+FR-004
+
+Logout menghapus seluruh cache lokal.
+
+---
+
+# Acceptance Criteria
+
+✅ Login < 3 detik
+
+✅ Redirect otomatis
+
+✅ Session aman
+
+---
+
+---
+
+# Module 2
+
+# Dashboard VRM
+
+---
+
+## Objective
+
+Menampilkan pekerjaan yang perlu segera dilakukan.
+
+Dashboard bukan laporan.
+
+Dashboard adalah Action Center.
+
+---
+
+## Layout
+
+Header
+
+```text
+Selamat Pagi,
+
+Budi
+
+VRM
+
+PT ABC
+```
+
+---
+
+Card
+
+Assigned WO
+
+Pending JO
+
+Today's Assignment
+
+Need Approval
+
+Timeline
+
+---
+
+Bagian bawah
+
+AI Assistant
+
+---
+
+# Dashboard Widgets
+
+## Assigned WO
+
+```text
+WO123456
+
+Customer
+
+PT ABC
+
+Remaining JO
+
+20
+
+Status
+
+Waiting Assignment
+
+[ Open ]
+```
+
+---
+
+## Pending Assignment
+
+```text
+Driver
+
+8
+
+Vendor
+
+3
+
+Truck
+
+5
+```
+
+---
+
+## AI Suggestion
+
+```text
+AI
+
+WO123456
+
+Masih tersisa
+
+20 JO
+
+Vendor belum lengkap.
+
+```
+
+---
+
+# Functional Requirement
+
+FR-101
+
+Menampilkan Assigned WO.
+
+---
+
+FR-102
+
+Menampilkan Remaining JO.
+
+---
+
+FR-103
+
+Refresh realtime.
+
+---
+
+FR-104
+
+Click membuka Detail WO.
+
+---
+
+# Acceptance
+
+Dashboard terbuka <2 detik.
+
+---
+
+# Module 3
+
+Assigned Work Order
+
+---
+
+Tujuan
+
+VRM hanya melihat WO miliknya.
+
+---
+
+List
+
+```text
+WO123456
+
+PT ABC
+
+20 Container
+
+Remaining
+
+20
+
+Status
+
+Waiting Assignment
+```
+
+---
+
+Click
+
+↓
+
+Detail WO
+
+---
+
+Detail
+
+Customer
+
+Container
+
+Qty
+
+Remaining
+
+Timeline
+
+Generate JO
+
+AI Assistant
+
+---
+
+# Functional Requirement
+
+Search
+
+Filter
+
+Status
+
+Remaining
+
+Sort
+
+Date
+
+---
+
+---
+
+# Module 4
+
+AI Assistant
+
+Ini adalah modul paling penting.
+
+---
+
+## Objective
+
+Menggantikan form panjang menjadi percakapan.
+
+---
+
+## Layout
+
+Seperti ChatGPT.
+
+```text
+────────────────────
+
+Conversation
+
+────────────────────
+
+User
+
+AI
+
+User
+
+AI
+
+_____________________
+
+📷 📎 🎤
+
+Type here...
+```
+
+---
+
+Supported Input
+
+Text
+
+Paste
+
+Photo
+
+PDF
+
+Voice (Future)
+
+---
+
+Conversation Type
+
+Create WO
+
+Generate JO
+
+Assign Vendor
+
+Assign Driver
+
+Update Status
+
+Search
+
+Question
+
+Summary
+
+---
+
+# Functional Requirement
+
+FR-401
+
+AI mengingat konteks percakapan.
+
+---
+
+FR-402
+
+AI mengenali Role.
+
+---
+
+FR-403
+
+AI hanya menawarkan aksi sesuai permission.
+
+---
+
+FR-404
+
+Semua aksi membutuhkan konfirmasi.
+
+---
+
+FR-405
+
+Semua aksi dicatat ke AI Audit Log.
+
+---
+
+# Acceptance
+
+Tidak ada AI yang langsung mengubah database.
+
+---
+
+# Module 5
+
+Generate Job Order
+
+---
+
+Business Goal
+
+Mengurangi input manual.
+
+---
+
+Flow
+
+Paste WA
+
+↓
+
+AI Parse
+
+↓
+
+Search WO
+
+↓
+
+Remaining Validation
+
+↓
+
+Preview
+
+↓
+
+Submit
+
+↓
+
+Generate JO
+
+---
+
+Validation
+
+WO harus ada.
+
+Remaining cukup.
+
+Container tidak duplicate.
+
+Truck tidak duplicate.
+
+Driver tidak duplicate.
+
+---
+
+Preview
+
+```text
+Saya menemukan
+
+WO123456
+
+5 Truck
+
+5 Driver
+
+5 Container
+
+Generate
+
+5 Job Order?
+```
+
+---
+
+Klik Submit.
+
+---
+
+Result
+
+```text
+JO333
+
+JO334
+
+JO335
+
+JO336
+
+JO337
+
+Created
+```
+
+---
+
+Acceptance
+
+Generate 5 JO <10 detik.
+
+---
+
+# Module 6
+
+Assignment
+
+---
+
+Vendor
+
+Driver
+
+Truck
+
+---
+
+AI membantu.
+
+Contoh.
+
+User
+
+```text
+Vendor CIA
+```
+
+↓
+
+AI
+
+Search Vendor
+
+↓
+
+Found
+
+↓
+
+Assign
+
+---
+
+Driver sama.
+
+---
+
+Truck sama.
+
+---
+
+Validation
+
+Tidak boleh Driver aktif di JO lain.
+
+Truck maintenance tidak boleh dipilih.
+
+Vendor nonaktif tidak boleh dipilih.
+
+---
+
+# Module 7
+
+Ground Staff Update
+
+---
+
+Dashboard
+
+Today's JO
+
+↓
+
+Camera
+
+↓
+
+OCR
+
+↓
+
+AI Matching
+
+↓
+
+Update Timeline
+
+---
+
+Status
+
+Arrived Pickup
+
+Gate In
+
+Loading
+
+Gate Out
+
+Delivered
+
+---
+
+Validation
+
+Urutan status tidak boleh dilompati.
+
+---
+
+# Module 8
+
+Driver Portal
+
+---
+
+Dashboard
+
+Attendance
+
+Inspection
+
+Today's JO
+
+Navigation
+
+POD
+
+Timeline
+
+---
+
+Attendance wajib sebelum menerima JO.
+
+---
+
+Inspection wajib sebelum berangkat.
+
+---
+
+AI hanya membantu.
+
+---
+
+# Module 9
+
+Timeline
+
+---
+
+Semua Event
+
+↓
+
+Satu Timeline
+
+Contoh
+
+```text
+08:10
+
+WO Assigned
+
+08:25
+
+Vendor Assigned
+
+08:30
+
+JO Generated
+
+09:05
+
+Gate In
+
+11:10
+
+Loading
+
+14:00
+
+Delivered
+
+16:20
+
+POD Uploaded
+```
+
+Timeline menjadi pusat histori operasional.
+
+---
+
+# Module 10
+
+Notification Center
+
+---
+
+AI
+
+Approval
+
+Reminder
+
+Late Driver
+
+New Assignment
+
+Customer Revision
+
+WO Update
+
+Semua menjadi Notification Event.
+
+---
+
+# Non Functional Requirement (NFR)
+
+### Performance
+
+* Dashboard < 2 detik.
+* AI Parsing < 5 detik.
+* Generate JO < 10 detik.
+* OCR < 3 detik (target).
+
+### Security
+
+* Semua API memakai JWT.
+* Semua aksi dicek RBAC (Role-Based Access Control).
+* Tidak ada akses langsung AI ke database.
+* Semua perubahan data melalui Business Service Layer.
+
+### Reliability
+
+* Semua event memiliki audit trail.
+* Retry otomatis jika jaringan putus.
+* Sinkronisasi saat koneksi kembali (untuk mobile).
+
+### Usability
+
+* Mobile-first.
+* Satu tangan (thumb-friendly).
+* Tombol utama selalu mudah dijangkau.
+* AI tidak mengganggu workflow, tetapi membantu di setiap langkah.
+
+---
+
+# Penutup Volume 3
+
+Volume ini mendefinisikan kebutuhan fungsional untuk MVP MySentra Trucking. Setiap modul memiliki tujuan bisnis, alur kerja, kebutuhan fungsional, validasi, dan acceptance criteria sehingga dapat langsung dipecah menjadi backlog sprint.
+
+---
+
+## 📌 Menurut saya, setelah Volume 3 ada satu dokumen yang akan menjadi "mahkota" MySentra
+
+Bukan Volume 4 UI.
+
+Tetapi:
+
+> **Volume 4 – AI Operational Blueprint**
+
+Di sanalah kita akan merancang:
+
+* AI Memory (bagaimana AI mengingat konteks pekerjaan).
+* Tool Calling (AI tidak pernah mengakses database langsung).
+* AI Workflow Engine (AI mengikuti SOP perusahaan).
+* AI Matching Engine (WO ↔ JO ↔ Driver ↔ Truck ↔ Container ↔ Vendor).
+* Prompt Orchestrator.
+* Operational Knowledge Graph.
+* AI Confidence Score.
+* AI Human Approval.
+
+Menurut saya, **Volume 4 inilah yang akan menjadi intellectual property (IP) utama MySentra**, karena bagian ini sangat sulit ditiru oleh kompetitor. UI bisa ditiru, database bisa disalin, tetapi cara AI memahami operasional logistik dan mengubah percakapan menjadi tindakan operasional akan menjadi pembeda terbesar MySentra.

@@ -1,0 +1,819 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 7
+
+# Enterprise Data Blueprint
+
+**Codename : SentraData™**
+
+> **One Logistics Data Model**
+
+---
+
+# Chapter 1
+
+# Philosophy
+
+Database bukan tempat menyimpan tabel.
+
+Database adalah representasi digital seluruh operasional perusahaan.
+
+Setiap object mempunyai identitas.
+
+Misalnya
+
+```
+Customer
+
+↓
+
+Work Order
+
+↓
+
+Job Order
+
+↓
+
+Vendor
+
+↓
+
+Fleet
+
+↓
+
+Driver
+
+↓
+
+Container
+
+↓
+
+Timeline
+
+↓
+
+Documents
+
+↓
+
+Finance
+```
+
+Semuanya saling terhubung.
+
+---
+
+# Chapter 2
+
+# Data Domain
+
+Saya membagi seluruh database menjadi beberapa Domain.
+
+```
+Foundation Domain
+
+Organization Domain
+
+Customer Domain
+
+Operation Domain
+
+Fleet Domain
+
+People Domain
+
+AI Domain
+
+Communication Domain
+
+Document Domain
+
+Finance Domain
+
+Analytics Domain
+```
+
+Bukan berdasarkan menu.
+
+Tetapi berdasarkan bisnis.
+
+---
+
+# Chapter 3
+
+# Foundation Domain
+
+Ini pondasi seluruh sistem.
+
+```
+tenant
+
+company
+
+branch
+
+department
+
+role
+
+permission
+
+user
+
+audit_log
+
+setting
+
+lookup
+```
+
+Tidak ada modul yang boleh membuat tabel role sendiri.
+
+---
+
+# Chapter 4
+
+# Customer Domain
+
+```
+customers
+
+customer_contacts
+
+customer_addresses
+
+customer_documents
+
+customer_contracts
+```
+
+Satu customer dapat memiliki banyak contact.
+
+Banyak lokasi.
+
+Banyak kontrak.
+
+---
+
+# Chapter 5
+
+# Operational Domain
+
+Ini adalah jantung Sentralogis.
+
+```
+work_orders
+
+work_order_items
+
+job_orders
+
+job_order_tasks
+
+operational_events
+
+timeline
+
+assignment
+
+status_history
+```
+
+Perhatikan.
+
+Saya ingin **status_history** dipisah.
+
+Jangan update status langsung di job_orders.
+
+---
+
+# Chapter 6
+
+# Fleet Domain
+
+```
+fleet
+
+fleet_documents
+
+fleet_inspection
+
+fleet_maintenance
+
+fleet_photo
+
+gps_device
+```
+
+Satu truk memiliki histori.
+
+Bukan hanya status terakhir.
+
+---
+
+# Chapter 7
+
+# Driver Domain
+
+```
+drivers
+
+driver_documents
+
+driver_attendance
+
+driver_license
+
+driver_training
+
+driver_medical
+
+driver_assignment
+```
+
+Besok Warehouse juga memakai Driver.
+
+Tidak perlu tabel baru.
+
+---
+
+# Chapter 8
+
+# Vendor Domain
+
+```
+vendors
+
+vendor_contract
+
+vendor_documents
+
+vendor_rating
+
+vendor_services
+```
+
+AI nanti bisa memilih vendor terbaik.
+
+---
+
+# Chapter 9
+
+# Container Domain
+
+```
+containers
+
+container_event
+
+container_damage
+
+container_photo
+
+container_location
+```
+
+Container mempunyai histori.
+
+---
+
+# Chapter 10
+
+# AI Domain
+
+Ini domain baru.
+
+```
+ai_conversations
+
+ai_messages
+
+ai_context
+
+ai_actions
+
+ai_memory
+
+ai_reasoning
+
+ai_confidence
+
+ai_tool_logs
+
+ai_prompt_logs
+```
+
+Ini menurut saya sangat penting.
+
+AI harus dapat diaudit.
+
+---
+
+# Chapter 11
+
+# Communication Domain
+
+Semua komunikasi.
+
+```
+communication_threads
+
+communication_messages
+
+attachments
+
+mentions
+
+reaction
+
+share_history
+```
+
+Nanti bukan hanya AI.
+
+Internal Chat juga memakai ini.
+
+---
+
+# Chapter 12
+
+# Document Domain
+
+```
+documents
+
+document_versions
+
+document_relation
+
+document_tag
+
+ocr_results
+```
+
+Satu file dapat dipakai banyak modul.
+
+Misalnya POD.
+
+---
+
+# Chapter 13
+
+# Timeline Domain
+
+Menurut saya Timeline harus menjadi tabel sendiri.
+
+```
+timeline_events
+
+timeline_actor
+
+timeline_attachment
+
+timeline_comment
+
+timeline_ai_summary
+```
+
+Timeline bukan hasil query.
+
+Timeline adalah Entity.
+
+---
+
+# Chapter 14
+
+# Analytics Domain
+
+```
+kpi_snapshot
+
+daily_summary
+
+monthly_summary
+
+ai_summary
+
+dashboard_cache
+```
+
+Dashboard membaca Summary.
+
+Bukan query langsung.
+
+---
+
+# Chapter 15
+
+# Relationship
+
+```
+Customer
+
+↓
+
+Work Order
+
+↓
+
+Work Order Item
+
+↓
+
+Job Order
+
+↓
+
+Assignment
+
+↓
+
+Driver
+
+↓
+
+Fleet
+
+↓
+
+Timeline
+
+↓
+
+POD
+
+↓
+
+Invoice
+```
+
+Semuanya satu jalur.
+
+---
+
+# Chapter 16
+
+# Event Model
+
+Saya ingin semua perubahan menghasilkan Event.
+
+```
+WorkOrderCreated
+
+↓
+
+WOAssigned
+
+↓
+
+JOGenerated
+
+↓
+
+VendorAssigned
+
+↓
+
+DriverAssigned
+
+↓
+
+GateIn
+
+↓
+
+Loading
+
+↓
+
+GateOut
+
+↓
+
+Delivered
+
+↓
+
+PODUploaded
+
+↓
+
+InvoiceGenerated
+```
+
+Semua masuk.
+
+```
+operational_events
+```
+
+---
+
+# Chapter 17
+
+# AI Relationship
+
+```
+Conversation
+
+↓
+
+Message
+
+↓
+
+Intent
+
+↓
+
+Tool
+
+↓
+
+Business Action
+
+↓
+
+Timeline
+
+↓
+
+Audit
+```
+
+AI tidak pernah berdiri sendiri.
+
+---
+
+# Chapter 18
+
+# Universal Attachment
+
+Saya sangat menyarankan ini.
+
+Daripada.
+
+```
+jo_photo
+
+driver_photo
+
+truck_photo
+
+customer_photo
+```
+
+Gunakan.
+
+```
+attachments
+
+entity_type
+
+entity_id
+```
+
+Misalnya.
+
+```
+entity_type
+
+job_order
+
+entity_id
+
+JO333
+```
+
+atau.
+
+```
+entity_type
+
+driver
+```
+
+Lebih fleksibel.
+
+---
+
+# Chapter 19
+
+# Universal Timeline
+
+Jangan membuat.
+
+```
+driver_timeline
+
+customer_timeline
+
+wo_timeline
+```
+
+Gunakan.
+
+```
+timeline_events
+
+entity_type
+
+entity_id
+
+event_type
+```
+
+Contoh.
+
+```
+entity_type
+
+job_order
+
+event
+
+GateIn
+```
+
+atau.
+
+```
+entity_type
+
+driver
+
+event
+
+Attendance
+```
+
+Semuanya satu engine.
+
+---
+
+# Chapter 20
+
+# Data Growth Strategy
+
+Hari ini.
+
+```
+Trucking
+```
+
+Besok.
+
+```
+Warehouse
+```
+
+Lusa.
+
+```
+Depot
+```
+
+Kemudian.
+
+```
+Forwarding
+```
+
+Kemudian.
+
+```
+SentraBulk
+```
+
+Database tidak berubah.
+
+Hanya menambah Entity baru.
+
+---
+
+# Chapter 21
+
+# Entity Relationship Philosophy
+
+Saya mengusulkan seluruh sistem mengikuti pola:
+
+```
+Entity
+
+↓
+
+Event
+
+↓
+
+Timeline
+
+↓
+
+Document
+
+↓
+
+AI Summary
+```
+
+Contoh.
+
+```
+Job Order
+
+↓
+
+20 Event
+
+↓
+
+Timeline
+
+↓
+
+Photo
+
+↓
+
+POD
+
+↓
+
+AI Summary
+```
+
+AI tidak membaca hanya satu tabel.
+
+AI membaca keseluruhan "kehidupan" sebuah Job Order.
+
+---
+
+# Chapter 22
+
+# Enterprise Data Standards
+
+Semua tabel wajib memiliki kolom standar:
+
+| Kolom      | Keterangan                                          |
+| ---------- | --------------------------------------------------- |
+| id         | UUID                                                |
+| tenant_id  | Multi-tenant                                        |
+| created_at | Waktu dibuat                                        |
+| updated_at | Waktu terakhir diubah                               |
+| created_by | User pembuat                                        |
+| updated_by | User terakhir mengubah                              |
+| status     | Status aktif/nonaktif atau status bisnis            |
+| version    | Optimistic locking untuk menghindari konflik update |
+| metadata   | JSONB untuk atribut tambahan tanpa migrasi schema   |
+
+Dengan standar ini, seluruh modul memiliki pola yang konsisten.
+
+---
+
+# Chapter 23
+
+# AI-Ready Data Model
+
+Semua entity penting sebaiknya memiliki:
+
+* Ringkasan AI (`ai_summary`)
+* Tag otomatis (`ai_tags`)
+* Confidence score bila berasal dari OCR/AI
+* Relasi ke percakapan AI yang menghasilkan perubahan
+* Audit terhadap tool yang dipanggil
+
+Dengan demikian, setiap data operasional dapat ditelusuri hingga asal percakapannya.
+
+---
+
+# Penutup Volume 7
+
+**SentraData™** dirancang sebagai **Enterprise Logistics Data Model** yang mendukung satu sumber data untuk seluruh ekosistem Sentralogis. Struktur ini memungkinkan Trucking, Warehouse, Depot, Forwarding, Clearance, hingga SentraBulk berbagi fondasi yang sama tanpa duplikasi tabel atau logika bisnis.
+
+---
+
+# 📌 Saran Strategis yang Menurut Saya Sangat Penting
+
+Dari semua ide yang telah kita susun, saya melihat Sentralogis sebenarnya sedang berkembang menjadi **platform logistik**, bukan sekadar aplikasi operasional.
+
+Karena itu saya menyarankan agar mulai sekarang kita membedakan tiga lapisan utama dalam seluruh dokumentasi:
+
+## 1. Sentralogis Core
+
+Business Rules, Master Data, Workflow, Finance, Security.
+
+## 2. MySentra
+
+Pengalaman pengguna (VRM, Driver, Ground Staff, AI Assistant).
+
+## 3. SentraMind™
+
+AI Operating Layer yang memahami konteks, menjalankan tool, dan membantu pengguna mengikuti SOP.
+
+Pemisahan ini akan membuat pengembangan jauh lebih terarah. Tim backend fokus pada **Core**, tim frontend fokus pada **MySentra**, dan tim AI fokus pada **SentraMind™**. Ketiganya berkembang secara independen tetapi tetap menggunakan fondasi data yang sama.
+
+Menurut saya, ini adalah arsitektur yang cukup kuat untuk membawa Sentralogis berkembang menjadi platform logistik enterprise dalam jangka panjang.

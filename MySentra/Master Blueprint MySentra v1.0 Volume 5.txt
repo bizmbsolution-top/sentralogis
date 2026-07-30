@@ -1,0 +1,710 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 5
+
+# UI / UX Blueprint
+
+**Codename:** **Zero Training Experience**
+
+> **"Pengguna baru harus bisa bekerja tanpa diajarkan."**
+
+---
+
+# Chapter 1
+
+# Design Philosophy
+
+MySentra bukan ERP.
+
+MySentra bukan Dashboard.
+
+MySentra bukan Form Entry.
+
+MySentra adalah **Operational Workspace**.
+
+Artinya:
+
+User membuka aplikasi.
+
+↓
+
+Melihat pekerjaan.
+
+↓
+
+Menyelesaikan pekerjaan.
+
+↓
+
+Selesai.
+
+Bukan mencari menu.
+
+---
+
+# Chapter 2
+
+# UX Principles
+
+## Principle 1
+
+One Screen One Mission
+
+Setiap halaman hanya memiliki satu tujuan.
+
+Contoh.
+
+Driver Dashboard.
+
+Tujuan:
+
+Hari ini saya harus apa?
+
+Bukan melihat 30 menu.
+
+---
+
+## Principle 2
+
+Thumb First
+
+Semua tombol utama berada di bawah.
+
+Karena digunakan satu tangan.
+
+---
+
+## Principle 3
+
+AI Always Available
+
+AI selalu ada.
+
+Tidak perlu buka menu.
+
+Tidak perlu klik chatbot.
+
+---
+
+## Principle 4
+
+Zero Learning Curve
+
+Staf baru.
+
+Install.
+
+Login.
+
+Langsung bisa bekerja.
+
+---
+
+## Principle 5
+
+No Hidden Information
+
+Semua informasi penting langsung terlihat.
+
+---
+
+# Chapter 3
+
+# Navigation
+
+Saya tidak ingin Bottom Navigation berisi 5 menu seperti aplikasi biasa.
+
+Saya ingin seperti ini.
+
+```text
+────────────────────────────
+
+🏠 Home
+
+📋 Jobs
+
+🤖 AI
+
+🔔 Activity
+
+👤 Me
+
+────────────────────────────
+```
+
+Hanya lima.
+
+Tidak lebih.
+
+---
+
+# Chapter 4
+
+# Home Dashboard
+
+Contoh VRM.
+
+```text
+────────────────────────────
+
+Selamat Pagi
+
+Budi
+
+VRM
+
+────────────────────────────
+
+Assigned WO
+
+18
+
+Pending JO
+
+12
+
+Need Approval
+
+3
+
+────────────────────────────
+
+Today's Activity
+
+────────────────────────────
+
+WO123456
+
+Remaining
+
+20
+
+[ Open ]
+
+────────────────────────────
+
+🤖
+
+Ada yang bisa saya bantu?
+
+────────────────────────────
+```
+
+Tidak ada grafik.
+
+Tidak ada chart.
+
+Dashboard harus actionable.
+
+---
+
+# Chapter 5
+
+# Jobs Screen
+
+Semua pekerjaan.
+
+```text
+WO123456
+
+PT ABC
+
+Remaining
+
+20
+
+Status
+
+Waiting Assignment
+```
+
+Klik.
+
+↓
+
+Detail.
+
+---
+
+# Chapter 6
+
+# Work Order Detail
+
+Ini menurut saya adalah halaman terpenting.
+
+```text
+WO123456
+
+PT ABC
+
+────────────────────────────
+
+Container
+
+20
+
+Generated JO
+
+5
+
+Remaining
+
+15
+
+────────────────────────────
+
+Vendor
+
+CIA
+
+ATM
+
+────────────────────────────
+
+Timeline
+
+────────────────────────────
+
+🤖 AI Assistant
+
+────────────────────────────
+
+Generate JO
+```
+
+Semuanya dalam satu layar.
+
+Tidak berpindah-pindah.
+
+---
+
+# Chapter 7
+
+# AI Screen
+
+Ini bukan chatbot.
+
+Ini Workspace.
+
+```text
+────────────────────────────
+
+Conversation
+
+────────────────────────────
+
+AI
+
+Halo Budi.
+
+WO123456 masih tersisa
+15 JO.
+
+────────────────────────────
+
+Paste WhatsApp
+
+Upload Photo
+
+Upload PDF
+
+Voice
+
+────────────────────────────
+
+Type here...
+```
+
+AI sudah mengetahui konteks.
+
+---
+
+# Chapter 8
+
+# Camera Experience
+
+Ground Staff.
+
+Klik Camera.
+
+```text
+📷
+```
+
+Tidak ada menu.
+
+↓
+
+Ambil Foto.
+
+↓
+
+Preview.
+
+↓
+
+AI membaca.
+
+↓
+
+Hasil.
+
+```text
+Saya menemukan
+
+Truck
+
+B9198UEM
+
+JO333
+
+Status sekarang
+
+Assigned
+
+Apakah ingin menjadi
+
+Gate In?
+```
+
+↓
+
+Submit.
+
+Selesai.
+
+---
+
+# Chapter 9
+
+# Driver Experience
+
+Dashboard.
+
+```text
+Hari Ini
+
+────────────────────
+
+□ Absen
+
+□ Inspection
+
+□ 3 Job Order
+
+□ Timeline
+
+────────────────────
+
+🤖
+
+Ada yang bisa saya bantu?
+```
+
+Checklist menjadi indikator SOP.
+
+---
+
+# Chapter 10
+
+# Timeline
+
+Saya ingin Timeline seperti GitHub Activity.
+
+Bukan tabel.
+
+```text
+08:10
+
+WO Assigned
+
+────────────────────
+
+08:35
+
+Generate JO
+
+────────────────────
+
+09:10
+
+Truck Assigned
+
+────────────────────
+
+10:00
+
+Gate In
+
+────────────────────
+
+11:20
+
+Loading
+
+────────────────────
+
+15:30
+
+Delivered
+
+────────────────────
+
+17:10
+
+POD Uploaded
+```
+
+Semua event terlihat.
+
+---
+
+# Chapter 11
+
+# Notification
+
+Saya tidak suka Notification Center penuh.
+
+Saya ingin seperti AI Inbox.
+
+```text
+AI
+
+WO123456
+
+Remaining
+
+5 JO
+
+────────────────────
+
+Ground Staff
+
+Upload baru
+
+────────────────────
+
+Driver
+
+Belum Inspection
+
+────────────────────
+
+Customer
+
+Revisi Pickup Time
+```
+
+Semuanya actionable.
+
+---
+
+# Chapter 12
+
+# Visual Language
+
+Color.
+
+Primary
+
+Sentralogis Blue
+
+Secondary
+
+Emerald
+
+Danger
+
+Red
+
+Warning
+
+Amber
+
+Success
+
+Green
+
+Background
+
+Off White
+
+Dark Mode wajib tersedia.
+
+---
+
+Typography.
+
+Inter.
+
+Size.
+
+Large.
+
+Karena digunakan outdoor.
+
+---
+
+Icon.
+
+Lucide Icons.
+
+Minimal.
+
+---
+
+Spacing.
+
+8pt Grid System.
+
+---
+
+# Chapter 13
+
+# Motion Design
+
+Animation harus cepat.
+
+Tidak lebih dari:
+
+200ms.
+
+Loading menggunakan Skeleton.
+
+Tidak boleh spinner lama.
+
+---
+
+# Chapter 14
+
+# AI Interaction Pattern
+
+AI tidak pernah berkata.
+
+```text
+Saya tidak tahu.
+```
+
+Tetapi.
+
+```text
+Saya belum menemukan
+Work Order tersebut.
+
+Silakan pilih salah satu.
+
+WO123451
+
+WO123452
+
+WO123453
+```
+
+Selalu menawarkan solusi.
+
+---
+
+# Chapter 15
+
+# Accessibility
+
+* Tombol minimal 48px.
+* Kontras tinggi.
+* Bisa dipakai di bawah sinar matahari.
+* Font dapat diperbesar.
+* Semua fitur dapat dioperasikan dengan satu tangan.
+
+---
+
+# Chapter 16
+
+# UX KPI
+
+Target UX:
+
+* Login < 3 detik.
+* Generate JO ≤ 3 langkah.
+* Update status ≤ 2 langkah.
+* Upload POD ≤ 3 langkah.
+* Tidak lebih dari 5 menu utama.
+* 80% tugas selesai tanpa membuka menu tambahan.
+
+---
+
+# Penutup Volume 5
+
+MySentra dirancang berdasarkan filosofi **Zero Training Experience**: pengguna tidak perlu menghafal menu atau mengikuti pelatihan panjang. Sistem harus memandu pengguna melalui pekerjaan yang harus dilakukan, sementara AI selalu siap membantu ketika dibutuhkan.
+
+---
+
+# 📌 Saya ingin mengusulkan satu konsep terakhir untuk UI yang menurut saya akan menjadi ciri khas MySentra
+
+## Dynamic Workspace
+
+Daripada semua role memiliki dashboard yang sama, setiap role mendapatkan **workspace yang berbeda**.
+
+Misalnya:
+
+### HQ-CS
+
+Fokus:
+
+* Work Order
+* Approval
+* Customer
+
+### VRM
+
+Fokus:
+
+* Remaining JO
+* Generate JO
+* Vendor
+* Driver
+
+### Ground Staff
+
+Fokus:
+
+* Kamera
+* Scan
+* Update Status
+
+### Driver
+
+Fokus:
+
+* Absen
+* Inspeksi
+* JO Hari Ini
+* POD
+
+### Owner
+
+Fokus:
+
+* KPI
+* Alert
+* AI Summary
+
+Artinya **bukan hanya hak akses (permission) yang berbeda**, tetapi **pengalaman menggunakan aplikasi juga berbeda**. Jadi ketika seorang driver login, ia merasa aplikasi ini memang dibuat khusus untuk driver. Ketika VRM login, tampilannya berubah menjadi pusat pengelolaan assignment. Dan ketika Owner login, ia langsung melihat insight dan ringkasan AI.
+
+Menurut saya, **Dynamic Workspace** akan menjadi salah satu keunggulan terbesar MySentra karena setiap pengguna hanya melihat apa yang benar-benar relevan dengan pekerjaannya. Ini akan membuat aplikasi terasa jauh lebih sederhana meskipun di belakangnya Sentralogis memiliki modul yang sangat kompleks.
+
+## Saya juga mengusulkan perubahan roadmap blueprint
+
+Awalnya kita merencanakan 10 volume. Setelah melihat kedalaman produk ini, saya menyarankan kita memperluasnya menjadi sekitar **12 volume**, agar benar-benar setara dengan dokumen arsitektur produk enterprise:
+
+1. Vision & Strategy ✅
+2. Business Process Blueprint ✅
+3. Functional PRD ✅
+4. AI Operational Blueprint ✅
+5. UI/UX Blueprint ✅
+6. Technical Architecture
+7. Database Blueprint
+8. API & Integration Blueprint
+9. Security & Permission Blueprint
+10. AI Prompt Engineering Blueprint
+11. Development Roadmap (Sprint Plan)
+12. Testing, UAT & Deployment
+

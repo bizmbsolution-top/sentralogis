@@ -1,0 +1,764 @@
+# MASTER BLUEPRINT MYSENTRA v1.0
+
+# Volume 6
+
+# Technical Architecture Blueprint
+
+**Codename:** **SentraCore + SentraMind Architecture**
+
+> *One Core. Multiple Experiences. Zero Duplication.*
+
+---
+
+# Chapter 1
+
+# Architecture Philosophy
+
+MySentra **bukan aplikasi yang berdiri sendiri**.
+
+MySentra adalah **Experience Layer**.
+
+```text
+                User
+
+──────────────────────────────────────
+
+MySentra
+
+Mobile Experience Layer
+
+──────────────────────────────────────
+
+AI Engine
+
+Conversation Engine
+
+Workflow Engine
+
+──────────────────────────────────────
+
+Business Service Layer
+
+──────────────────────────────────────
+
+Sentralogis Core
+
+──────────────────────────────────────
+
+Supabase
+```
+
+Prinsip utama:
+
+> **Satu database, satu business logic, banyak pengalaman pengguna.**
+
+---
+
+# Chapter 2
+
+# Architecture Principles
+
+## Principle 1
+
+Single Source of Truth
+
+Semua data berada di Sentralogis Core.
+
+Bukan di MySentra.
+
+---
+
+## Principle 2
+
+Business Logic Exists Once
+
+Contoh:
+
+Generate JO.
+
+Hanya ada SATU fungsi.
+
+Baik Executive Suite maupun MySentra memanggil service yang sama.
+
+Tidak boleh ada:
+
+```text
+Executive
+
+GenerateJO()
+
+MySentra
+
+GenerateJO()
+```
+
+Harus menjadi:
+
+```text
+Business Layer
+
+GenerateJO()
+```
+
+---
+
+## Principle 3
+
+Frontend Never Knows Database
+
+Frontend hanya mengenal Service API.
+
+---
+
+## Principle 4
+
+AI Never Talks to Database
+
+AI hanya memanggil Tool Layer.
+
+---
+
+# Chapter 3
+
+# System Architecture
+
+```text
+                    Internet
+
+                         │
+
+────────────────────────────────────────────
+
+              Vercel
+
+Next.js
+
+Executive Suite
+
+Next.js
+
+MySentra
+
+────────────────────────────────────────────
+
+Business Service Layer
+
+────────────────────────────────────────────
+
+Supabase
+
+Database
+
+Auth
+
+Storage
+
+Realtime
+
+Edge Function
+
+────────────────────────────────────────────
+```
+
+---
+
+# Chapter 4
+
+# Layered Architecture
+
+Saya ingin menggunakan **Clean Architecture**.
+
+```text
+Presentation Layer
+
+↓
+
+Application Layer
+
+↓
+
+Domain Layer
+
+↓
+
+Infrastructure Layer
+```
+
+---
+
+## Presentation Layer
+
+UI
+
+Pages
+
+Components
+
+Hooks
+
+---
+
+## Application Layer
+
+Use Cases
+
+Business Workflow
+
+Validation
+
+---
+
+## Domain Layer
+
+Entities
+
+Business Rules
+
+Policies
+
+---
+
+## Infrastructure Layer
+
+Supabase
+
+Storage
+
+OCR
+
+Notification
+
+External API
+
+---
+
+# Chapter 5
+
+# Folder Structure
+
+```text
+apps/
+
+    executive-suite/
+
+    mysentra/
+
+packages/
+
+    ui/
+
+    ai/
+
+    services/
+
+    domain/
+
+    database/
+
+    auth/
+
+    notification/
+
+```
+
+Monorepo.
+
+Semua berbagi library.
+
+---
+
+# Chapter 6
+
+# Shared Packages
+
+Misalnya.
+
+```text
+packages/ui
+
+Button
+
+Card
+
+Modal
+
+Timeline
+
+Chat
+
+Avatar
+```
+
+---
+
+```text
+packages/services
+
+GenerateJO
+
+AssignVendor
+
+AssignDriver
+
+UpdateTimeline
+```
+
+---
+
+```text
+packages/domain
+
+WorkOrder
+
+JobOrder
+
+Driver
+
+Vendor
+
+Fleet
+```
+
+---
+
+AI cukup memakai package yang sama.
+
+---
+
+# Chapter 7
+
+# Service Layer
+
+Contoh.
+
+User klik.
+
+Generate JO.
+
+↓
+
+Frontend.
+
+↓
+
+GenerateJOService.
+
+↓
+
+Validation.
+
+↓
+
+Repository.
+
+↓
+
+Supabase.
+
+↓
+
+Result.
+
+Tidak boleh langsung.
+
+```text
+React
+
+↓
+
+Supabase
+```
+
+---
+
+# Chapter 8
+
+# AI Tool Layer
+
+AI.
+
+↓
+
+searchWO()
+
+↓
+
+Service.
+
+↓
+
+Repository.
+
+↓
+
+Database.
+
+---
+
+Bukan.
+
+```text
+LLM
+
+↓
+
+SQL
+```
+
+Ini prinsip wajib.
+
+---
+
+# Chapter 9
+
+# Repository Pattern
+
+Semua Entity.
+
+Memiliki Repository.
+
+Misalnya.
+
+```text
+WorkOrderRepository
+
+JobOrderRepository
+
+DriverRepository
+
+VendorRepository
+
+TimelineRepository
+
+NotificationRepository
+```
+
+Service tidak mengenal Supabase.
+
+Service hanya mengenal Repository.
+
+---
+
+# Chapter 10
+
+# Event Bus
+
+Ini menurut saya akan menjadi masa depan MySentra.
+
+Semua perubahan menghasilkan Event.
+
+Misalnya.
+
+Generate JO.
+
+↓
+
+Publish Event.
+
+↓
+
+Timeline.
+
+↓
+
+Notification.
+
+↓
+
+Analytics.
+
+↓
+
+Audit.
+
+↓
+
+Realtime.
+
+Semua membaca Event.
+
+---
+
+# Chapter 11
+
+# Event Driven Architecture
+
+Misalnya.
+
+GenerateJO.
+
+↓
+
+JobOrderCreated.
+
+↓
+
+Notification.
+
+↓
+
+Timeline.
+
+↓
+
+Driver.
+
+↓
+
+Dashboard.
+
+Tidak perlu update manual satu-satu.
+
+---
+
+# Chapter 12
+
+# Realtime Strategy
+
+Supabase Realtime.
+
+Dipakai hanya untuk.
+
+* Timeline
+* Assignment
+* Notification
+* Dashboard Counter
+* Chat AI Status
+
+Tidak digunakan untuk query besar.
+
+---
+
+# Chapter 13
+
+# Offline Strategy
+
+Driver.
+
+Ground Staff.
+
+Harus tetap bekerja.
+
+Saat offline.
+
+↓
+
+Local Queue.
+
+↓
+
+Sync ketika Online.
+
+↓
+
+Conflict Resolution.
+
+↓
+
+Timeline.
+
+---
+
+# Chapter 14
+
+# Storage Strategy
+
+Supabase Storage.
+
+Bucket.
+
+```text
+pod/
+
+truck/
+
+container/
+
+inspection/
+
+ocr/
+
+chat/
+
+documents/
+```
+
+Semua file memiliki metadata:
+
+* uploader
+* tenant
+* wo_id
+* jo_id
+* event_id
+* timestamp
+* hash
+
+---
+
+# Chapter 15
+
+# OCR Pipeline
+
+```text
+Photo
+
+↓
+
+Upload
+
+↓
+
+OCR Engine
+
+↓
+
+Confidence
+
+↓
+
+Matching
+
+↓
+
+AI Suggestion
+
+↓
+
+Approval
+
+↓
+
+Timeline
+```
+
+Tidak langsung update.
+
+---
+
+# Chapter 16
+
+# Notification Engine
+
+Semua Event.
+
+↓
+
+Notification Queue.
+
+↓
+
+Role Filter.
+
+↓
+
+Push.
+
+↓
+
+Inbox.
+
+↓
+
+Read.
+
+↓
+
+Archive.
+
+---
+
+# Chapter 17
+
+# Performance Target
+
+Dashboard.
+
+<2 detik.
+
+Generate JO.
+
+<10 detik.
+
+OCR.
+
+<3 detik.
+
+Chat AI.
+
+<5 detik.
+
+Search.
+
+<500ms.
+
+---
+
+# Chapter 18
+
+# Scalability
+
+Support.
+
+100 Tenant.
+
+↓
+
+1.000 Tenant.
+
+↓
+
+10.000 Tenant.
+
+Tanpa ubah arsitektur.
+
+---
+
+# Chapter 19
+
+# Deployment
+
+Frontend.
+
+Vercel.
+
+Backend.
+
+Supabase.
+
+AI.
+
+OpenAI API / Model Gateway.
+
+Notification.
+
+Firebase Cloud Messaging (Android).
+
+Future:
+
+Apple Push Notification (iOS).
+
+---
+
+# Chapter 20
+
+# Disaster Recovery
+
+Backup Database.
+
+Backup Storage.
+
+Audit Event.
+
+Retry Queue.
+
+Idempotent API.
+
+Zero Data Loss Target.
+
+---
+
+# Penutup Volume 6
+
+Arsitektur MySentra dirancang dengan prinsip **Clean Architecture + Event Driven + AI Tool Calling**. Dengan pendekatan ini, Executive Suite dan MySentra tetap berbagi satu inti bisnis (Sentralogis Core), tetapi dapat berkembang secara independen tanpa duplikasi logika maupun data.
+
+---

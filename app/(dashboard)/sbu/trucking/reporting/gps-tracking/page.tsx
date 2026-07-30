@@ -98,6 +98,7 @@ export default function GPSTrackingReportPage() {
   const [playbackPings, setPlaybackPings] = useState<any[]>([]);
   const [playbackRoutes, setPlaybackRoutes] = useState<any[]>([]);
   const [playbackLoading, setPlaybackLoading] = useState(false);
+  const [avgTimeDiff, setAvgTimeDiff] = useState<number>(0);
   const GEOFENCE_RADIUS = 500;
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
@@ -419,62 +420,85 @@ export default function GPSTrackingReportPage() {
     if (!joId || !tenantId) return;
     setPlaybackLoading(true);
     try {
-      const [pingsRes, routesRes] = await Promise.all([
-        supabase
-          .from("job_tracking")
-          .select("*")
-          .eq("job_order_id", joId)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("job_routes")
-          .select("*")
-          .eq("job_order_id", joId)
-          .order("sequence", { ascending: true }),
-      ]);
+const [pingsRes, routesRes] = await Promise.all([
+         supabase
+           .from("job_tracking")
+           .select("*")
+           .eq("job_order_id", joId)
+           .order("created_at", { ascending: true }),
+         supabase
+           .from("job_routes")
+           .select("*")
+           .eq("job_order_id", joId)
+           .order("sequence", { ascending: true }),
+       ]);
       if (pingsRes.error) throw pingsRes.error;
       if (routesRes.error) throw routesRes.error;
 
-      const rawPings: any[] = (pingsRes.data || []).filter(
-        (p: any) => p.latitude != null && p.longitude != null,
-      );
-      const routes: any[] = routesRes.data || [];
+const rawPings: any[] = (pingsRes.data || []).filter(
+         (p: any) => p.latitude != null && p.longitude != null,
+       );
+       // Sort by recorded_at (device time) when available, falling back to created_at (server time)
+       rawPings.sort((a: any, b: any) => {
+         const ta = a.recorded_at || a.created_at;
+         const tb = b.recorded_at || b.created_at;
+         if (!ta && !tb) return 0;
+         if (!ta) return 1;
+         if (!tb) return -1;
+         return new Date(ta).getTime() - new Date(tb).getTime();
+       });
+       const routes: any[] = routesRes.data || [];
 
-        const matched = rawPings.map((ping: any) => {
-        let nearestDist: number | null = null;
-        let nearestRoute: any = null;
+const matched = rawPings.map((ping: any) => {
+         let nearestDist: number | null = null;
+         let nearestRoute: any = null;
 
-        for (const route of routes) {
-          if (route.latitude && route.longitude) {
-            const dist = haversineDistance(
-              Number(ping.latitude), Number(ping.longitude),
-              Number(route.latitude), Number(route.longitude),
-            );
-            if (nearestDist === null || dist < nearestDist) {
-              nearestDist = dist;
-              nearestRoute = route;
-            }
-          }
-        }
+         for (const route of routes) {
+           if (route.latitude && route.longitude) {
+             const dist = haversineDistance(
+               Number(ping.latitude), Number(ping.longitude),
+               Number(route.latitude), Number(route.longitude),
+             );
+             if (nearestDist === null || dist < nearestDist) {
+               nearestDist = dist;
+               nearestRoute = route;
+             }
+           }
+         }
 
-        const isAtLocation = nearestDist !== null && nearestDist <= GEOFENCE_RADIUS;
-        return {
-          id: ping.id,
-          created_at: ping.created_at,
-          recorded_at: ping.recorded_at || null,
-          latitude: ping.latitude,
-          longitude: ping.longitude,
-          speed: ping.speed ?? null,
-          accuracy: ping.accuracy ?? null,
-          status_update: ping.status_update || "GPS_PING",
-          nearest_stop_name: isAtLocation ? (nearestRoute?.location_name || `Stop #${nearestRoute?.sequence}`) : null,
-          nearest_stop_id: isAtLocation ? nearestRoute?.id : null,
-          nearest_distance_m: nearestDist != null ? Math.round(nearestDist) : null,
-          location_status: isAtLocation ? "AT_LOCATION" : "IN_TRANSIT",
-        };
-      });
+         const isAtLocation = nearestDist !== null && nearestDist <= GEOFENCE_RADIUS;
+         return {
+           id: ping.id,
+           created_at: ping.created_at,
+           recorded_at: ping.recorded_at || null,
+           latitude: ping.latitude,
+           longitude: ping.longitude,
+           speed: ping.speed ?? null,
+           accuracy: ping.accuracy ?? null,
+           status_update: ping.status_update || "GPS_PING",
+           nearest_stop_name: isAtLocation ? (nearestRoute?.location_name || `Stop #${nearestRoute?.sequence}`) : null,
+           nearest_stop_id: isAtLocation ? nearestRoute?.id : null,
+           nearest_distance_m: nearestDist != null ? Math.round(nearestDist) : null,
+           location_status: isAtLocation ? "AT_LOCATION" : "IN_TRANSIT",
+         };
+       });
 
-      setPlaybackPings(matched);
-      setPlaybackRoutes(routes);
+       // Calculate average time difference between device time and server time
+       const timeDiffs = matched
+         .filter(ping => ping.recorded_at && ping.created_at)
+         .map(ping => {
+           const deviceTime = new Date(ping.recorded_at!).getTime();
+           const serverTime = new Date(ping.created_at).getTime();
+           return deviceTime - serverTime; // Positive = device ahead, negative = device behind
+         });
+
+       const avgTimeDiff = timeDiffs.length > 0
+         ? timeDiffs.reduce((sum, diff) => sum + diff, 0) / timeDiffs.length
+         : 0;
+
+       setPlaybackPings(matched);
+       setPlaybackRoutes(routes);
+       setAvgTimeDiff(avgTimeDiff);
     } catch (err: any) {
       toast.error("Gagal memuat telemetry: " + (err.message || "Unknown"));
     } finally {
@@ -1235,43 +1259,52 @@ export default function GPSTrackingReportPage() {
       </div>
 
       {/* Summary Cards */}
-      {playbackPings.length > 0 && (
-        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex flex-col">
-              <span className="text-lg font-extrabold text-slate-900">{playbackPings.length}</span>
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Total Pings</span>
-            </div>
-            <div className="w-px h-8 bg-slate-200"></div>
-            <div className="flex flex-col">
-              <span className="text-lg font-extrabold text-emerald-600">
-                {playbackPings.filter((p: any) => p.location_status === "AT_LOCATION").length}
-              </span>
-              <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">At Location</span>
-            </div>
-            <div className="w-px h-8 bg-slate-200"></div>
-            <div className="flex flex-col">
-              <span className="text-lg font-extrabold text-blue-600">
-                {playbackPings.filter((p: any) => p.location_status === "IN_TRANSIT").length}
-              </span>
-              <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">In Transit</span>
-            </div>
-            <div className="w-px h-8 bg-slate-200"></div>
-            <div className="flex flex-wrap gap-3">
-              {playbackRoutes.filter((r: any) =>
-                playbackPings.some((p: any) => p.nearest_stop_id === r.id)
-              ).map((r: any) => {
-                const count = playbackPings.filter((p: any) => p.nearest_stop_id === r.id).length;
-                return (
-                  <span key={r.id} className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-1 rounded-lg border border-slate-200">
-                    {r.location_name || `Stop #${r.sequence}`}: <span className="text-indigo-600">{count}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+{playbackPings.length > 0 && (
+         <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+           <div className="flex flex-wrap items-center gap-6">
+             <div className="flex flex-col">
+               <span className="text-lg font-extrabold text-slate-900">{playbackPings.length}</span>
+               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Total Pings</span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div className="flex flex-col">
+               <span className="text-lg font-extrabold text-emerald-600">
+                 {playbackPings.filter((p: any) => p.location_status === "AT_LOCATION").length}
+               </span>
+               <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">At Location</span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div className="flex flex-col">
+               <span className="text-lg font-extrabold text-blue-600">
+                 {playbackPings.filter((p: any) => p.location_status === "IN_TRANSIT").length}
+               </span>
+               <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">In Transit</span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div className="flex flex-col">
+               <span className="text-lg font-extrabold text-amber-600">
+                 {Math.abs(avgTimeDiff).toFixed(0)}s
+               </span>
+               <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider">
+                 {avgTimeDiff >= 0 ? "Device Ahead" : "Device Behind"}
+               </span>
+             </div>
+             <div className="w-px h-8 bg-slate-200"></div>
+             <div className="flex flex-wrap gap-3">
+               {playbackRoutes.filter((r: any) =>
+                 playbackPings.some((p: any) => p.nearest_stop_id === r.id)
+               ).map((r: any) => {
+                 const count = playbackPings.filter((p: any) => p.nearest_stop_id === r.id).length;
+                 return (
+                   <span key={r.id} className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-1 rounded-lg border border-slate-200">
+                     {r.location_name || `Stop #${r.sequence}`}: <span className="text-indigo-600">{count}</span>
+                   </span>
+                 );
+               })}
+             </div>
+           </div>
+         </div>
+       )}
 
       {/* Empty State */}
       {!playbackJoId && (

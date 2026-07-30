@@ -1,0 +1,282 @@
+> **Master Blueprint MySentra v1.0**
+> *AI Operational Assistant Platform for Sentralogis*
+
+Dokumen ini akan menjadi "kitab" pengembangan MySentra.
+
+---
+
+# Struktur Dokumen
+
+```
+Master Blueprint MySentra v1.0
+
+Volume 1
+Vision & Product Strategy
+
+Volume 2
+Business Process Blueprint
+
+Volume 3
+Functional PRD
+
+Volume 4
+AI Blueprint
+
+Volume 5
+UI / UX Blueprint
+
+Volume 6
+Technical Architecture
+
+Volume 7
+Database Blueprint
+
+Volume 8
+API & Integration Blueprint
+
+Volume 9
+Development Roadmap
+
+Volume 10
+Testing, Deployment & Go Live
+
+Appendix
+Prompt Engineering Library
+```
+
+---
+
+# Hari ini kita mulai
+
+## Volume 1
+
+# Vision & Product Strategy
+
+---
+
+# 1. Document Information
+
+**Document Name**
+
+Master Blueprint MySentra v1.0
+
+**Product**
+
+MySentra
+
+**Platform**
+
+AI Operational Assistant Platform
+
+**Parent Product**
+
+Sentralogis Enterprise Platform
+
+**Version**
+
+1.0
+
+**Status**
+
+Draft
+
+---
+
+# 2. Executive Summary
+
+MySentra adalah aplikasi operasional berbasis Artificial Intelligence yang dirancang sebagai pendamping kerja seluruh personel lapangan dan operasional di ekosistem Sentralogis.
+
+Berbeda dengan Executive Suite yang berfungsi sebagai pusat administrasi, monitoring, dan pengambilan keputusan, MySentra dirancang sebagai AI Operational Assistant yang membantu pengguna menyelesaikan pekerjaan operasional sehari-hari melalui antarmuka percakapan (Conversational Interface) dan workflow yang sederhana.
+
+MySentra tidak menggantikan Executive Suite. Keduanya menggunakan database, business rules, dan security yang sama. Executive Suite tetap menjadi pusat kendali perusahaan (System of Record), sedangkan MySentra menjadi antarmuka kerja operasional (System of Engagement).
+
+---
+
+# 3. Background
+
+Operasional logistik modern masih sangat bergantung pada media komunikasi informal seperti WhatsApp, telepon, foto, dan spreadsheet.
+
+Akibatnya:
+
+* Informasi operasional tersebar.
+* Update status sering terlambat.
+* Banyak proses input ganda.
+* Timeline pekerjaan tidak lengkap.
+* Sulit melakukan audit operasional.
+* Knowledge hilang ketika staf berganti.
+
+Di sisi lain, Sentralogis telah memiliki Executive Suite yang mengelola Work Order, Job Order, Customer, Vendor, Driver, Fleet, Finance, dan modul lainnya.
+
+Namun sebagian besar aktivitas lapangan masih dilakukan di luar sistem.
+
+MySentra dibangun untuk menjembatani kesenjangan tersebut.
+
+---
+
+# 4. Vision
+
+> **Menjadikan MySentra sebagai AI Operational Assistant yang mampu membantu setiap personel operasional logistik menyelesaikan pekerjaannya secara cepat, akurat, dan terdokumentasi tanpa meninggalkan workflow perusahaan.**
+
+---
+
+# 5. Mission
+
+MySentra memiliki lima misi utama.
+
+1. Mengurangi ketergantungan terhadap komunikasi manual melalui WhatsApp.
+
+2. Mengubah komunikasi menjadi data operasional yang terstruktur.
+
+3. Mempercepat proses assignment dan update Job Order.
+
+4. Memberikan AI Assistant yang memahami konteks operasional logistik.
+
+5. Menjadi pintu masuk operasional seluruh modul Sentralogis.
+
+---
+
+# 6. Product Philosophy
+
+MySentra dibangun berdasarkan lima prinsip.
+
+### Principle 1
+
+**AI as Co-Worker**
+
+AI bukan chatbot.
+
+AI adalah rekan kerja digital.
+
+---
+
+### Principle 2
+
+**Conversation First**
+
+User berbicara.
+
+AI mengubah percakapan menjadi aksi.
+
+---
+
+### Principle 3
+
+**Workflow Never Broken**
+
+AI tidak boleh melewati SOP perusahaan.
+
+Semua approval tetap mengikuti workflow.
+
+---
+
+### Principle 4
+
+**Core is Stable**
+
+Executive Suite tetap menjadi sumber data utama.
+
+---
+
+### Principle 5
+
+**Experience Evolves**
+
+MySentra bebas berkembang tanpa mengganggu Executive Suite.
+
+---
+
+# 7. Product Positioning
+
+```
+                 SENTRALOGIS
+
+                        │
+
+        ┌───────────────┴───────────────┐
+
+ Executive Suite               MySentra
+
+ System of Record        System of Engagement
+
+ Dashboard               AI Assistant
+
+ Master Data             Mobile Operations
+
+ Finance                 Field Operations
+
+ Analytics               AI Conversation
+
+ Administration          Operational Workflow
+```
+
+---
+
+# 8. Product Scope Version 1.0
+
+Fokus awal hanya pada **SBU Trucking**.
+
+Role yang didukung:
+
+* HQ Customer Service (monitoring hasil)
+* VRM / Dispatcher
+* Ground Staff
+* Driver
+
+Workflow yang dicakup:
+
+* Penerimaan WO dari Executive Suite
+* Generate JO
+* Assignment Vendor
+* Assignment Driver
+* Update Status JO
+* Upload POD
+* Timeline Operasional
+* AI Assistant
+
+---
+
+# 9. Success Indicators
+
+Target implementasi fase pertama:
+
+* Waktu pembuatan JO turun dari beberapa menit menjadi kurang dari satu menit untuk data yang sudah siap.
+* Pengurangan input manual melalui copy-paste atau pengisian ulang data.
+* Timeline operasional lebih lengkap karena update dilakukan langsung dari MySentra.
+* Pengurangan penggunaan grup WhatsApp sebagai sumber informasi utama.
+* Seluruh update lapangan memiliki jejak audit (siapa, kapan, dari mana, dan terhadap WO/JO mana).
+
+---
+
+# 10. Long-Term Vision
+
+Setelah Trucking stabil, MySentra akan diperluas ke:
+
+* Warehouse
+* CFS
+* Depot Container
+* Freight Forwarding
+* Customs Clearance
+* Shipping Agency
+* Bulk Logistics (SentraBulk)
+* Executive AI Assistant
+
+Dengan satu AI Engine yang sama, namun perilaku dan kemampuan disesuaikan berdasarkan role pengguna.
+
+---
+
+## Penutup Volume 1
+
+Volume 1 menetapkan arah strategis MySentra: bukan sekadar aplikasi mobile, melainkan **AI Operational Assistant** yang bekerja berdampingan dengan Executive Suite. Arsitektur ini memungkinkan inovasi cepat di sisi pengalaman pengguna tanpa mengganggu stabilitas sistem inti Sentralogis.
+
+---
+
+## Langkah Berikutnya
+
+Saya menyarankan kita menyusun blueprint secara bertahap dengan urutan berikut:
+
+* **Volume 2:** Business Process Blueprint (detail proses HQ → VRM → Ground Staff → Driver)
+* **Volume 3:** Functional PRD (fitur lengkap beserta user story dan acceptance criteria)
+* **Volume 4:** AI Blueprint (Conversation Engine, Tool Calling, AI Memory, Matching Engine)
+* **Volume 5:** UI/UX Blueprint (desain layar dan komponen)
+* **Volume 6–10:** Arsitektur teknis, database, API, roadmap pengembangan, pengujian, dan deployment.
+

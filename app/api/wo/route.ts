@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     // Get Customer Code
     let customerCode = 'CUS';
     const { data: customerData } = await supabaseAdmin.from('md_entities').select('entity_code, name').eq('id', customer_id).single();
-    if (customerData) customerCode = customerData.entity_code || customerData.name?.substring(0, 3).toUpperCase() || 'CUS';
+    if (customerData) customerCode = customerData.name?.substring(0, 4).toUpperCase() || customerData.entity_code || 'CUS';
     
     // Get sequence
     const { count } = await supabaseAdmin.from('work_orders').select('*', { count: 'exact', head: true });
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
     if (tenant_id) {
       const { data: tenantData } = await supabaseAdmin.from('md_tenants').select('tenant_code, name, initial').eq('id', tenant_id).single();
       if (tenantData) {
-        tenantCode = tenantData.initial || tenantData.tenant_code?.split('-')[0] || tenantData.name?.substring(0, 4).toUpperCase() || 'HQ';
+        tenantCode = tenantData.name?.substring(0, 4).toUpperCase() || tenantData.initial || tenantData.tenant_code?.split('-')[0] || 'HQ';
       }
     }
     

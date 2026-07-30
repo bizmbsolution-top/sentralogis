@@ -325,7 +325,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       let woNumber = '';
       let woId = editId;
 
-      const tenantInitial = profile?.tenant_code || (profile?.tenants as any)?.tenant_code || (profile?.tenants as any)?.name || 'HQ';
+      const tenantInitial = (profile?.tenants as any)?.name || profile?.tenant_code || 'HQ';
 
       if (editId) {
         step = 'fetch-existing-wo';
@@ -333,7 +333,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         woNumber = existingWO?.wo_number || '';
       } else {
         const customer = customers.find(c => c.id === formData.customer_id);
-        const customerInitial = customer?.entity_code || customer?.name || 'CUS';
+        const customerInitial = customer?.name || customer?.entity_code || 'CUS';
         woNumber = await generateWONumber(profile.tenant_id, tenantInitial, customerInitial);
       }
       
@@ -387,14 +387,13 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
       const sbuCounts: Record<string, number> = {};
 
-      for (const [index, item] of woItems.entries()) {
+for (const [index, item] of woItems.entries()) {
         const sbuKey = item.sbu_type === 'TRUCKING' ? 'TR' : 
                        item.sbu_type === 'CLEARANCE' ? 'CC' :
                        item.sbu_type === 'WAREHOUSE' ? 'WH' :
                        item.sbu_type === 'FORWARDING' ? 'FW' : 'OT';
-        
-        sbuCounts[sbuKey] = (sbuCounts[sbuKey] || 0) + 1;
-        const itemCode = `${woNumber}/${sbuKey}${sbuCounts[sbuKey].toString().padStart(2, '0')}`;
+        const unitQty = item.quantity || item.item_data?.unit_count || 1;
+        const itemCode = `${woNumber}/${sbuKey}${unitQty.toString().padStart(2, '0')}`;
         
         const isExistingItem = Boolean(editId && item.id && existingDbItemIds.includes(item.id));
         let woItemId = item.id;
