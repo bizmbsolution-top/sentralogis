@@ -181,6 +181,7 @@ export function useDriverGpsPing(
             action: "gps_ping",
             lat,
             lng,
+            recorded_at: new Date().toISOString(),
             source,
             battery,
             speed,

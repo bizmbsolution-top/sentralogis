@@ -40,6 +40,7 @@ import org.json.JSONObject;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -179,6 +180,7 @@ public class GpsForegroundService extends Service implements SensorEventListener
                 payload.put("action", "gps_ping");
                 payload.put("lat", location.getLatitude());
                 payload.put("lng", location.getLongitude());
+                payload.put("recorded_at", Instant.now().toString());
                 payload.put("source", "native_android");
                 payload.put("battery", battery);
                 payload.put("speed", location.getSpeed());
@@ -199,6 +201,7 @@ public class GpsForegroundService extends Service implements SensorEventListener
                         offPayload.put("action", "gps_ping");
                         offPayload.put("lat", loc.lat);
                         offPayload.put("lng", loc.lng);
+                        offPayload.put("recorded_at", Instant.ofEpochMilli(loc.timestamp).toString());
                         offPayload.put("source", "native_android_offline");
                         offPayload.put("battery", loc.battery);
                         offPayload.put("speed", loc.speed);

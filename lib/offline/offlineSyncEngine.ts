@@ -341,6 +341,7 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
           latitude: ping.lat,
           longitude: ping.lng,
           notes: 'Offline GPS ping (queued)',
+          recorded_at: ping.timestamp,
           created_at: ping.timestamp,
         });
       if (error) throw error;
