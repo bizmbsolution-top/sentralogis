@@ -373,11 +373,17 @@ export default function DriverTrackingPage({
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () =>
+
+    const handleJoCompleted = () => fetchJobOrder(true);
+    window.addEventListener("sentralogis:jo_completed", handleJoCompleted);
+
+    return () => {
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
       );
+      window.removeEventListener("sentralogis:jo_completed", handleJoCompleted);
+    };
   }, [jobOrder?.driver?.id, isStandalone]);
 
   useEffect(() => {
@@ -444,7 +450,7 @@ export default function DriverTrackingPage({
         arrived_stop: evt.arrived_stop,
         distance_m: evt.distance_m,
       });
-      fetchJobOrder();
+      fetchJobOrder(true);
     }
   };
 
@@ -456,9 +462,9 @@ export default function DriverTrackingPage({
     jobOrder?.started_at,
   );
 
-  const fetchJobOrder = async () => {
+  const fetchJobOrder = async (background = false) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       const response = await fetch(`/api/jo/${token}`, {
         headers: { "ngrok-skip-browser-warning": "true" },
       });
@@ -505,7 +511,7 @@ export default function DriverTrackingPage({
             .then((res) => {
               if (res.success) {
                 console.log("[JO Auto-Start] Success");
-                fetchJobOrder();
+                fetchJobOrder(true);
               }
             })
             .catch((err) => console.error("[JO Auto-Start] Error:", err));
@@ -519,7 +525,7 @@ export default function DriverTrackingPage({
           : err.message,
       );
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
@@ -558,7 +564,7 @@ export default function DriverTrackingPage({
       if (!response.ok)
         throw new Error(res.error || "Gagal menyimpan data kontainer");
       toast.success("Nomor Kontainer & Seal berhasil disimpan!");
-      await fetchJobOrder();
+      await fetchJobOrder(true);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -590,7 +596,7 @@ export default function DriverTrackingPage({
 
       toast.success(`Status diperbarui ke: ${newStatus.toUpperCase()}`);
       setLastError(null);
-      await fetchJobOrder();
+      await fetchJobOrder(true);
     } catch (err: any) {
       console.error("Update Status Error:", err);
       setLastError(err.message);
@@ -627,7 +633,7 @@ export default function DriverTrackingPage({
       }
 
       toast.success(`Berhasil: ${routeStatus.toUpperCase()}`);
-      await fetchJobOrder();
+      await fetchJobOrder(true);
     } catch (err: any) {
       console.error("Update Route Error:", err);
       setLastError(err.message);
@@ -690,7 +696,7 @@ export default function DriverTrackingPage({
       }
 
       toast.success("Foto berhasil diunggah");
-      await fetchJobOrder();
+      await fetchJobOrder(true);
     } catch (err: any) {
       console.error("Upload error:", err);
       toast.error("Gagal upload: " + err.message);
@@ -1354,27 +1360,47 @@ export default function DriverTrackingPage({
               </div>
 
               {/* Milestone Dots */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <div className="flex items-start gap-1 overflow-x-auto pb-1">
                 {milestones.map((m, idx) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center gap-1.5 shrink-0"
-                  >
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 transition-all ${
-                        m.status === "completed"
-                          ? "bg-emerald-500 text-white"
-                          : m.status === "current"
-                            ? "bg-blue-600 text-white animate-pulse"
-                            : "bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      {m.status === "completed" ? <Check size={10} /> : idx + 1}
+                  <div key={m.id} className="flex items-start gap-1 shrink-0">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 transition-all ${
+                          m.status === "completed"
+                            ? "bg-emerald-500 text-white"
+                            : m.status === "current"
+                              ? "bg-blue-600 text-white animate-pulse ring-2 ring-blue-300"
+                              : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        {m.status === "completed" ? (
+                          <Check size={12} />
+                        ) : (
+                          (m.label || idx + 1).substring(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <span
+                        className={`text-[7px] font-semibold leading-tight text-center max-w-[56px] truncate ${
+                          m.status === "completed"
+                            ? "text-emerald-600"
+                            : m.status === "current"
+                              ? "text-blue-600"
+                              : "text-slate-400"
+                        }`}
+                      >
+                        {m.label === "MULAI"
+                          ? "Start"
+                          : m.label === "SELESAI"
+                            ? "Selesai"
+                            : m.label}
+                      </span>
                     </div>
                     {idx < milestones.length - 1 && (
-                      <div
-                        className={`w-4 h-[2px] rounded-full ${m.status === "completed" ? "bg-emerald-300" : "bg-slate-200"}`}
-                      />
+                      <div className="self-center mt-3">
+                        <div
+                          className={`w-3 h-[2px] rounded-full ${m.status === "completed" ? "bg-emerald-300" : "bg-slate-200"}`}
+                        />
+                      </div>
                     )}
                   </div>
                 ))}

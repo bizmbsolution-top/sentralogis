@@ -426,20 +426,23 @@ export async function PATCH(
                 })
                 .eq("id", route.id);
 
-              // 2. Auto-complete any prior skipped stops
-              const skippedStops = activeRoutes.filter(
+              // 2. Auto-complete any prior stops (pending → completed, arrived → completed)
+              const priorStops = activeRoutes.filter(
                 (r: any) =>
-                  r.sequence < route.sequence && r.status === "pending",
+                  r.sequence < route.sequence && r.status !== "completed",
               );
-              for (const skipped of skippedStops) {
+              for (const prior of priorStops) {
+                const update: any = {
+                  status: "completed",
+                  actual_departure: new Date().toISOString(),
+                };
+                if (!prior.actual_arrival) {
+                  update.actual_arrival = new Date().toISOString();
+                }
                 await supabase
                   .from("job_routes")
-                  .update({
-                    status: "completed",
-                    actual_arrival: new Date().toISOString(),
-                    actual_departure: new Date().toISOString(),
-                  })
-                  .eq("id", skipped.id);
+                  .update(update)
+                  .eq("id", prior.id);
               }
 
               let newJoStatus: string | null = null;
@@ -642,10 +645,17 @@ export async function PATCH(
                   Number(route.longitude),
                 );
                 if (distM <= 300) {
+                  // Debounce: skip if already triggered in last 5 minutes
+                  if (route.geofence_triggered_at) {
+                    const lastTrigger = new Date(route.geofence_triggered_at).getTime();
+                    if (Date.now() - lastTrigger < 5 * 60 * 1000) {
+                      continue;
+                    }
+                  }
                   geofenceTriggered = true;
                   await supabase
                     .from("job_routes")
-                    .update({ status: "arrived", actual_departure: null })
+                    .update({ status: "arrived", actual_departure: null, geofence_triggered_at: new Date().toISOString() })
                     .eq("id", route.id);
 
                   await supabase
@@ -673,12 +683,21 @@ export async function PATCH(
         }
       }
 
+      // Fetch final JO status so client can stop GPS if done
+      const { data: finalJo } = await supabase
+        .from("job_orders")
+        .select("status")
+        .eq("id", jo.id)
+        .single();
+      const currentStatus = finalJo?.status || jo.status;
+
       return NextResponse.json({
         success: true,
         geofence_triggered: geofenceTriggered,
         arrived_stop: arrivedStopName,
         distance_m: geofenceDistanceM,
         departed_stop: departedStopName,
+        jo_status: currentStatus,
       });
     }
 

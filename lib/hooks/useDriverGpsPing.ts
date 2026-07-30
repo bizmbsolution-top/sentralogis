@@ -48,7 +48,7 @@ const ACTIVE_STATUSES = [
   "SELESAI BONGKAR",
 ];
 
-const DONE_STATUSES = [
+export const DONE_STATUSES = [
   "COMPLETED",
   "PEKERJAAN SELESAI",
   "SELESAI",
@@ -118,6 +118,7 @@ export function useDriverGpsPing(
   const isIdleRef = useRef<boolean>(false);
   const isStoppedRef = useRef<boolean>(false);
   const pingCountRef = useRef<number>(0);
+  const doneRef = useRef<boolean>(false);
 
   const emitPingState = useCallback(
     (patch: Partial<GpsPingState>) => {
@@ -201,6 +202,26 @@ export function useDriverGpsPing(
           });
 
           const result = await response.json();
+
+          // Stop GPS if JO is done on server
+          if (result && result.jo_status && DONE_STATUSES.includes(result.jo_status)) {
+            doneRef.current = true;
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            try { NativeGps.stopTracking(); } catch {}
+            emitPingState({ status: "inactive" });
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("sentralogis:jo_completed", {
+                  detail: { status: result.jo_status },
+                }),
+              );
+            }
+            return;
+          }
+
           if (result && result.geofence_triggered) {
             console.log("📍 [Geofence Triggered]", result);
             if (typeof navigator !== "undefined" && navigator.vibrate) {
@@ -260,7 +281,8 @@ export function useDriverGpsPing(
       !token ||
       !isActiveTransitStatus(status, startedAt) ||
       isPingingRef.current ||
-      isStoppedRef.current
+      isStoppedRef.current ||
+      doneRef.current
     )
       return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -346,6 +368,7 @@ export function useDriverGpsPing(
 
     // Reset stopped state when conditions are met again
     isStoppedRef.current = false;
+    doneRef.current = false;
     emitPingState({ status: "loading" });
 
     if (isNative) {

@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
     const {
       job_order_id, event_type, site_id, latitude, longitude,
       photo_base64, ocr_json, container_number, notes,
+      verification_type, verified_against, verified_match,
+      documents,
     } = body;
 
     if (!job_order_id || !event_type) {
@@ -70,13 +72,15 @@ export async function POST(request: NextRequest) {
         ocr_json: ocr_json || {},
         notes: notes || null,
         source: "ground_staff",
+        verification_type: verification_type || null,
+        verified_against: verified_against || null,
+        verified_match: verified_match ?? null,
       })
       .select()
       .single();
 
     if (eventErr) throw eventErr;
 
-    // Auto-update JO status based on event sequence
     const statusUpdate: Record<string, string> = {
       GATE_IN_DEPOT: "TIBA DI LOKASI MUAT",
       GATE_OUT_DEPOT: "BERANGKAT DARI LOKASI MUAT",
@@ -87,6 +91,10 @@ export async function POST(request: NextRequest) {
       LOADING_START: "LOADING",
       LOADING_FINISH: "LOADING_SELESAI",
       POD: "MENUNGGU SELESAI",
+      PIC1_GATE_IN: "TIBA DI LOKASI MUAT",
+      PIC2_GATE_OUT: "BERANGKAT DARI LOKASI MUAT",
+      PIC1_DROPOFF_ARRIVE: "TIBA DI LOKASI BONGKAR",
+      PIC_DROPOFF_DOCUMENT: null,
     };
 
     const newStatus = statusUpdate[event_type];
@@ -111,21 +119,24 @@ export async function POST(request: NextRequest) {
         .eq("id", job_order_id);
     }
 
-    // Log to job_tracking for timeline
     const eventLabels: Record<string, string> = {
-      GATE_IN_DEPOT: "🚧 Gate In Depot",
-      GATE_OUT_DEPOT: "🚛 Gate Out Depot",
-      GATE_IN_FACTORY: "🏭 Gate In Factory",
-      GATE_OUT_FACTORY: "🚚 Gate Out Factory",
-      GATE_IN_PORT: "⚓ Gate In Port",
-      GATE_OUT_PORT: "🚢 Gate Out Port",
-      LOADING_START: "📦 Loading Start",
-      LOADING_FINISH: "✅ Loading Finish",
-      DOCUMENT_HANDOVER: "📄 Dokumen Diserahkan",
-      CONTAINER_INSPECTION: "🔍 Inspeksi Kontainer",
-      DAMAGE_REPORT: "⚠️ Laporan Kerusakan",
-      SEAL_INSPECTION: "🔒 Inspeksi Seal",
-      POD: "📋 Proof of Delivery",
+      GATE_IN_DEPOT: "Gate In Depot",
+      GATE_OUT_DEPOT: "Gate Out Depot",
+      GATE_IN_FACTORY: "Gate In Factory",
+      GATE_OUT_FACTORY: "Gate Out Factory",
+      GATE_IN_PORT: "Gate In Port",
+      GATE_OUT_PORT: "Gate Out Port",
+      LOADING_START: "Loading Start",
+      LOADING_FINISH: "Loading Finish",
+      DOCUMENT_HANDOVER: "Dokumen Diserahkan",
+      CONTAINER_INSPECTION: "Inspeksi Kontainer",
+      DAMAGE_REPORT: "Laporan Kerusakan",
+      SEAL_INSPECTION: "Inspeksi Seal",
+      POD: "Proof of Delivery",
+      PIC1_GATE_IN: "PIC1 Gate In (Plat + SIM)",
+      PIC2_GATE_OUT: "PIC2 Gate Out (Dokumen + Plat)",
+      PIC1_DROPOFF_ARRIVE: "PIC Dropoff Truck Tiba",
+      PIC_DROPOFF_DOCUMENT: "PIC Dropoff Dokumen",
     };
 
     await supabase.from("job_tracking").insert({
@@ -136,6 +147,17 @@ export async function POST(request: NextRequest) {
       notes: notes || null,
       photo_url: photoUrl,
     });
+
+    if (documents && Array.isArray(documents) && documents.length > 0) {
+      const docInserts = documents.map((doc: any) => ({
+        ground_event_id: eventData.id,
+        job_order_id,
+        document_type: doc.document_type || "other",
+        file_url: doc.file_url,
+        notes: doc.notes || null,
+      }));
+      await supabase.from("ground_documents").insert(docInserts);
+    }
 
     return NextResponse.json({ success: true, event: eventData });
   } catch (err: any) {

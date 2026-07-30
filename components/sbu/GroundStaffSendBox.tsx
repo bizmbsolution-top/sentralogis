@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, type ReactNode } from 'react';
-import { X, Send, Calendar, Clock, Hash, Truck, Users } from 'lucide-react';
+import { X, Send, Calendar, Clock, Hash, Truck, Users, UserCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { buildGroundStaffNotificationMessage, buildWaLink } from '@/lib/domain/phone';
 import { supabase } from '@/lib/supabase/client';
@@ -14,6 +14,10 @@ interface GroundStaffSendBoxProps {
   executionDate: string;
   executionTime: string;
   tenantId: string;
+  jobOrderIds?: string[];
+  origin?: string;
+  destination?: string;
+  truckCount?: number;
 }
 
 export default function GroundStaffSendBox({
@@ -24,10 +28,17 @@ export default function GroundStaffSendBox({
   executionDate,
   executionTime,
   tenantId,
+  jobOrderIds,
+  origin,
+  destination,
+  truckCount,
 }: GroundStaffSendBoxProps) {
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [pic1StaffId, setPic1StaffId] = useState<string>('');
+  const [pic2StaffId, setPic2StaffId] = useState<string>('');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     if (!open || !tenantId) return;
@@ -53,7 +64,32 @@ export default function GroundStaffSendBox({
     );
   };
 
-  const handleSend = () => {
+  const handleAssignPIC = async () => {
+    if (!jobOrderIds || jobOrderIds.length === 0) return;
+    setAssigning(true);
+    try {
+      for (const joId of jobOrderIds) {
+        await fetch('/api/ground/assign-pic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            job_order_id: joId,
+            pic1_staff_id: pic1StaffId || null,
+            pic2_staff_id: pic2StaffId || null,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('[Ground SendBox] Assign PIC error:', err);
+    }
+    setAssigning(false);
+  };
+
+  const handleSend = async () => {
+    if (jobOrderIds && jobOrderIds.length > 0) {
+      await handleAssignPIC();
+    }
+
     const message = buildGroundStaffNotificationMessage({
       woNumber,
       tenantName,
@@ -62,10 +98,10 @@ export default function GroundStaffSendBox({
         : '-',
       executionTime: executionTime || '-',
       siteName: '',
-      origin: '',
-      destination: '',
-      truckCount: 0,
-      link: `${window.location.origin}/ground/dashboard`,
+      origin: origin || '',
+      destination: destination || '',
+      truckCount: truckCount || 0,
+      link: `${window.location.origin}/ground/dashboard?wo=${woNumber}`,
     });
 
     const staffWithPhone = staff.filter((s) => selectedStaffIds.includes(s.id) && s.phone);
@@ -89,7 +125,7 @@ export default function GroundStaffSendBox({
             </div>
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Send to Ground Staff</h3>
-              <p className="text-xs text-slate-400">Notifikasi WA ke ground staff lapangan</p>
+              <p className="text-xs text-slate-400">Notifikasi WA + assign PIC ke ground staff</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -108,6 +144,37 @@ export default function GroundStaffSendBox({
             <ReadOnlyField icon={<Clock size={12} />} label="Jam" value={executionTime || '-'} />
             <ReadOnlyField icon={<Truck size={12} />} label="Tenant" value={tenantName} />
           </div>
+
+          {jobOrderIds && jobOrderIds.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <UserCheck size={14} className="text-blue-600" />
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Assign PIC</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">PIC1 — Gate In (Plat + SIM)</label>
+                <select value={pic1StaffId} onChange={(e) => setPic1StaffId(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                  <option value="">Pilih Staff PIC1</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} {s.phone ? `(${s.phone})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">PIC2 — Gate Out (Dokumen + Plat)</label>
+                <select value={pic2StaffId} onChange={(e) => setPic2StaffId(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                  <option value="">Pilih Staff PIC2</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} {s.phone ? `(${s.phone})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
@@ -154,10 +221,10 @@ export default function GroundStaffSendBox({
           </button>
           <button
             onClick={handleSend}
-            disabled={selectedStaffIds.length === 0}
+            disabled={selectedStaffIds.length === 0 || assigning}
             className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold flex items-center gap-2"
           >
-            <Send size={14} /> Kirim ({selectedStaffIds.length})
+            <Send size={14} /> {assigning ? 'Menyimpan...' : `Kirim (${selectedStaffIds.length})`}
           </button>
         </div>
       </Card>

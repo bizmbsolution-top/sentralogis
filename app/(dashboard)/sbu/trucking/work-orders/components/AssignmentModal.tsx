@@ -1645,6 +1645,10 @@ export default function AssignmentModal({ item, onClose, onSuccess, onHandover, 
         executionDate={item?.work_orders?.execution_date || ''}
         executionTime={item?.work_orders?.execution_time || ''}
         tenantId={profile?.tenant_id || ''}
+        origin={itemData?.shipper_name || ''}
+        destination={itemData?.recipient_name || ''}
+        truckCount={itemData?.unit_count || existingJOs.length || 1}
+        jobOrderIds={(existingJOs || []).map((j: any) => j.id)}
       />
 
       {/* Document Preview Modal */}

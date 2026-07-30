@@ -23,11 +23,19 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const userEmail = email || `${name.toLowerCase().replace(/\s+/g, '.')}.${Date.now()}@ground.sentralogis.local`;
+    const userEmail = email || `${name.toLowerCase().replace(/\s+/g, '.')}@ground.sentralogis.local`;
+    // Check if email already exists, append number if taken
+    const { data: existingUser } = await supabase.auth.admin.listUsers();
+    let finalEmail = userEmail;
+    let suffix = 1;
+    while (existingUser?.users?.some(u => u.email === finalEmail)) {
+      finalEmail = userEmail.replace('@', `${suffix}@`);
+      suffix++;
+    }
     const password = Math.random().toString(36).slice(2, 10) + "Aa1!";
 
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-      email: userEmail,
+      email: finalEmail,
       password,
       email_confirm: true,
     });
@@ -52,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        email: userEmail,
+        email: finalEmail,
         password,
         name,
       },

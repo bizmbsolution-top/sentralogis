@@ -1055,6 +1055,10 @@ export default function WorkOrderDetailPage() {
         executionDate={wo?.execution_date || ''}
         executionTime={wo?.execution_time || ''}
         tenantId={profile?.tenant_id || ''}
+        origin={(items[0]?.item_data as any)?.shipper_name || ''}
+        destination={(items[0]?.item_data as any)?.recipient_name || ''}
+        truckCount={(items || []).reduce((sum: number, i: any) => sum + (Number(i.item_data?.unit_count) || 1), 0)}
+        jobOrderIds={(allJOs || []).map((j: any) => j.id)}
       />
     </div>
   );

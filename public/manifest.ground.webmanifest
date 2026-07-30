@@ -1,26 +1,17 @@
 {
-  "name": "Sentralogis Ground Staff",
+  "name": "SentraLogis Ground Staff",
   "short_name": "Ground Staff",
-  "description": "Sentralogis Ground Staff Field Operations - Track and manage ground events",
+  "description": "Gate In / Gate Out Operations",
+  "start_url": "/ground/dashboard",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#059669",
   "icons": [
     {
-      "src": "/logo2sentralogis.png",
-      "sizes": "512x512",
+      "src": "/sentralogis_logo.png",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/sentralogis_logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
     }
-  ],
-  "start_url": "/ground/dashboard",
-  "scope": "/ground",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#10b981",
-  "categories": ["logistics", "transportation", "business"],
-  "lang": "id"
+  ]
 }
