@@ -55,6 +55,8 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     private static final long HEARTBEAT_INTERVAL_MS = 300_000;    // 5 menit
     private static final long MOTION_TIMEOUT_MS = 120_000;        // 2 menit
+    private static final float STILL_SPEED_THRESHOLD = 5.0f;     // < 5 km/h = stationary
+    private static final long STILL_PING_INTERVAL_MS = 60_000;   // 60s when stationary
 
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
@@ -68,6 +70,11 @@ public class GpsForegroundService extends Service implements SensorEventListener
     private boolean isScreenOff = false;
     private boolean highAccuracyForced = false;
     private long lastMotionTime = 0;
+
+    // [Phase 3.1] Still-detection: throttle pings when stationary
+    private long lastPingTime = 0;
+    private double lastPingLat = 0;
+    private double lastPingLng = 0;
 
     // Sensors
     private SensorManager sensorManager;
@@ -154,6 +161,14 @@ public class GpsForegroundService extends Service implements SensorEventListener
                 listener.onLocationUpdate(data);
             }
 
+            // [Phase 3.1] Still-detection: skip API ping if stationary and last ping < 60s ago
+            float speedKmh = location.getSpeed() * 3.6f; // m/s → km/h
+            long now = System.currentTimeMillis();
+            if (speedKmh < STILL_SPEED_THRESHOLD && lastPingTime > 0 && (now - lastPingTime) < STILL_PING_INTERVAL_MS) {
+                Log.d("GpsService", "Stationary (" + String.format("%.1f", speedKmh) + " km/h), skipping API ping (" + ((now - lastPingTime) / 1000) + "s since last)");
+                return;
+            }
+
             sendPingToApi(location, batLevel);
         } catch (Exception e) {
             Log.e("GpsService", "Error broadcasting location", e);
@@ -195,6 +210,11 @@ public class GpsForegroundService extends Service implements SensorEventListener
                     dbHelper.insertLocation(currentJobId, location.getLatitude(), location.getLongitude(),
                             location.getAccuracy(), location.getSpeed(), battery);
                 } else {
+                    // [Phase 3.1] Track last successful ping
+                    lastPingTime = System.currentTimeMillis();
+                    lastPingLat = location.getLatitude();
+                    lastPingLng = location.getLongitude();
+
                     List<OfflineGpsDbHelper.OfflineLocation> offlineList = dbHelper.getAllLocations();
                     for (OfflineGpsDbHelper.OfflineLocation loc : offlineList) {
                         JSONObject offPayload = new JSONObject();
@@ -326,9 +346,9 @@ public class GpsForegroundService extends Service implements SensorEventListener
         try {
             LocationRequest locationRequest;
             if (isScreenOff && !highAccuracyForced) {
-                Log.d("GpsService", "Using BALANCED_POWER (screen off, no motion)");
-                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30000)
-                        .setMinUpdateIntervalMillis(20000)
+                Log.d("GpsService", "Using BALANCED_POWER (screen off, no motion) — 60s interval");
+                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60000)
+                        .setMinUpdateIntervalMillis(45000)
                         .build();
             } else {
                 Log.d("GpsService", "Using HIGH_ACCURACY");

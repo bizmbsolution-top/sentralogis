@@ -75,6 +75,7 @@ export default function GPSTrackingReportPage() {
   const [loading, setLoading] = useState(false);
   const [groupedData, setGroupedData] = useState<any[]>([]);
   const [totalJO, setTotalJO] = useState(0);
+  const [vendorList, setVendorList] = useState<any[]>([]);
   const [expandedWOs, setExpandedWOs] = useState<Set<string>>(new Set());
 
   const [startDate, setStartDate] = useState(
@@ -99,6 +100,9 @@ export default function GPSTrackingReportPage() {
   const [playbackRoutes, setPlaybackRoutes] = useState<any[]>([]);
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [avgTimeDiff, setAvgTimeDiff] = useState<number>(0);
+  const [playbackPage, setPlaybackPage] = useState(1);
+  const [playbackTotalPings, setPlaybackTotalPings] = useState(0);
+  const PLAYBACK_PAGE_SIZE = 200;
   const GEOFENCE_RADIUS = 500;
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
@@ -144,6 +148,21 @@ export default function GPSTrackingReportPage() {
     : resolvedTenantId;
   const canAccess = !!tenantId && (isTruckingSbu || isGlobalRole);
 
+  useEffect(() => {
+    if (!tenantId) return;
+    const fetchVendors = async () => {
+      const { data } = await supabase
+        .from("md_entities")
+        .select("id, name, legal_name")
+        .eq("is_vendor", true)
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .order("name");
+      if (data) setVendorList(data);
+    };
+    fetchVendors();
+  }, [tenantId]);
+
   const toggleWO = (woId: string) => {
     setExpandedWOs((prev) => {
       const next = new Set(prev);
@@ -171,7 +190,8 @@ export default function GPSTrackingReportPage() {
         .not("actual_arrival", "is", null)
         .gte("actual_arrival", startDate)
         .lte("actual_arrival", endDate + "T23:59:59")
-        .order("sequence", { ascending: true });
+        .order("sequence", { ascending: true })
+        .limit(1000000);
 
       if (error) throw error;
 
@@ -193,7 +213,8 @@ export default function GPSTrackingReportPage() {
         `,
         )
         .in("id", joIds)
-        .eq("tenant_id", tenantId);
+        .eq("tenant_id", tenantId)
+        .limit(1000000);
 
       if (joError) throw joError;
 
@@ -212,7 +233,8 @@ export default function GPSTrackingReportPage() {
           .from("wo_items")
           .select("id, wo_id, item_code, item_data")
           .in("id", woItemIds)
-          .eq("tenant_id", tenantId);
+          .eq("tenant_id", tenantId)
+          .limit(1000000);
 
         if (woItems) {
           woItems.forEach((wi: any) => {
@@ -227,7 +249,8 @@ export default function GPSTrackingReportPage() {
                 "id, wo_number, customer_id, customers:md_entities!customer_id (id, name, legal_name)",
               )
               .in("id", woIds)
-              .eq("tenant_id", tenantId);
+              .eq("tenant_id", tenantId)
+              .limit(1000000);
 
             if (wos) {
               wos.forEach((wo: any) => {
@@ -255,6 +278,7 @@ export default function GPSTrackingReportPage() {
           wo_number: wo.wo_number || "-",
           customer_name: wo.customer_name || "-",
           wo_id: woItem.wo_id || null,
+          transporter_id: jo.transporter_id,
           vendor_name: jo.vendor?.legal_name || jo.vendor?.name || "-",
         };
       });
@@ -273,6 +297,7 @@ export default function GPSTrackingReportPage() {
           truck_type: joInfo.truck_type || "-",
           wo_number: joInfo.wo_number || "-",
           customer_name: joInfo.customer_name || "-",
+          transporter_id: joInfo.transporter_id,
           vendor_name: joInfo.vendor_name || "-",
         });
       });
@@ -391,6 +416,8 @@ export default function GPSTrackingReportPage() {
           driver_name: joInfo.driver_name || "-",
           plate_number: joInfo.plate_number || "-",
           truck_type: joInfo.truck_type || "-",
+          transporter_id: joInfo.transporter_id,
+          vendor_name: joInfo.vendor_name,
           stops: stopDetails,
           total_duration_seconds: totalDurationSeconds,
           total_distance_meters: totalDistanceMeters,
@@ -400,8 +427,27 @@ export default function GPSTrackingReportPage() {
         });
       });
 
-      // Convert to array
-      const groupedArray = Object.values(woGroups);
+      // Sort JOs within each WO by first_arrival descending (newest first)
+      Object.values(woGroups).forEach((wo: any) => {
+        wo.jos.sort((a: any, b: any) => {
+          const aTime = a.first_arrival ? new Date(a.first_arrival).getTime() : 0;
+          const bTime = b.first_arrival ? new Date(b.first_arrival).getTime() : 0;
+          return bTime - aTime;
+        });
+      });
+
+      // Convert to array and sort WO groups by newest JO first_arrival descending
+      const groupedArray = Object.values(woGroups).sort((a: any, b: any) => {
+        const aTime = Math.max(
+          ...a.jos.map((jo: any) => jo.first_arrival ? new Date(jo.first_arrival).getTime() : 0),
+          0,
+        );
+        const bTime = Math.max(
+          ...b.jos.map((jo: any) => jo.first_arrival ? new Date(jo.first_arrival).getTime() : 0),
+          0,
+        );
+        return bTime - aTime;
+      });
       setTotalJO(groupedArray.length);
       setGroupedData(groupedArray as any[]);
     } catch (err: any) {
@@ -419,13 +465,15 @@ export default function GPSTrackingReportPage() {
   const loadTelemetry = useCallback(async (joId: string) => {
     if (!joId || !tenantId) return;
     setPlaybackLoading(true);
+    setPlaybackPage(1);
     try {
 const [pingsRes, routesRes] = await Promise.all([
          supabase
            .from("job_tracking")
-           .select("*")
+           .select("*", { count: "exact" })
            .eq("job_order_id", joId)
-           .order("created_at", { ascending: true }),
+           .order("created_at", { ascending: true })
+           .range(0, 4999),
          supabase
            .from("job_routes")
            .select("*")
@@ -434,6 +482,8 @@ const [pingsRes, routesRes] = await Promise.all([
        ]);
       if (pingsRes.error) throw pingsRes.error;
       if (routesRes.error) throw routesRes.error;
+
+      setPlaybackTotalPings(pingsRes.count || pingsRes.data?.length || 0);
 
 const rawPings: any[] = (pingsRes.data || []).filter(
          (p: any) => p.latitude != null && p.longitude != null,
@@ -516,7 +566,7 @@ const matched = rawPings.map((ping: any) => {
     }
     if (selectedVendorId !== "all") {
       data = data.filter((wo: any) =>
-        wo.jos.some((jo: any) => jo.vendor_name === selectedVendorId)
+        wo.jos.some((jo: any) => jo.transporter_id === selectedVendorId)
       );
     }
     return data;
@@ -642,7 +692,7 @@ const matched = rawPings.map((ping: any) => {
   // Derived metrics for summary
   const sumWO = groupedData.length;
   const sumJO = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.length, 0);
-  const sumVendors = [...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter(Boolean))].length;
+  const sumVendors = [...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter((v: string) => v && v !== "-"))].length;
   const sumCheckpoints = groupedData.reduce((acc: number, wo: any) => acc + wo.jos.reduce((sum: number, jo: any) => sum + jo.stops.length, 0), 0);
   const sumDistanceAll = groupedData.reduce((acc: number, wo: any) =>
     acc + wo.jos.reduce((sum: number, jo: any) => sum + (jo.total_distance_meters || 0), 0), 0);
@@ -765,8 +815,8 @@ const matched = rawPings.map((ping: any) => {
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500 transition-all cursor-pointer"
             >
               <option value="all">Semua Vendor</option>
-              {[...new Set(groupedData.flatMap((wo: any) => wo.jos.map((jo: any) => jo.vendor_name)).filter(Boolean))].sort().map((name) => (
-                <option key={name} value={name}>{name}</option>
+              {vendorList.map((v: any) => (
+                <option key={v.id} value={v.id}>{v.legal_name || v.name}</option>
               ))}
             </select>
           </div>
@@ -1263,9 +1313,14 @@ const matched = rawPings.map((ping: any) => {
          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
            <div className="flex flex-wrap items-center gap-6">
              <div className="flex flex-col">
-               <span className="text-lg font-extrabold text-slate-900">{playbackPings.length}</span>
+               <span className="text-lg font-extrabold text-slate-900">{playbackTotalPings.toLocaleString()}</span>
                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Total Pings</span>
              </div>
+             {playbackTotalPings > 5000 && (
+               <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
+                 Menampilkan 5.000 dari {playbackTotalPings.toLocaleString()}
+               </span>
+             )}
              <div className="w-px h-8 bg-slate-200"></div>
              <div className="flex flex-col">
                <span className="text-lg font-extrabold text-emerald-600">
@@ -1325,6 +1380,43 @@ const matched = rawPings.map((ping: any) => {
       {/* Ping Table */}
       {playbackPings.length > 0 && (
         <div className="overflow-x-auto">
+          {playbackPings.length > PLAYBACK_PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+              <span className="text-[10px] font-semibold text-slate-500">
+                Halaman {playbackPage} / {Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE)}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPlaybackPage(1)}
+                  disabled={playbackPage === 1}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'<<'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(p => Math.max(1, p - 1))}
+                  disabled={playbackPage === 1}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'<'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(p => Math.min(Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE), p + 1))}
+                  disabled={playbackPage >= Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE)}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'>'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE))}
+                  disabled={playbackPage >= Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE)}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'>>'}
+                </button>
+              </div>
+            </div>
+          )}
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/80">
@@ -1339,18 +1431,21 @@ const matched = rawPings.map((ping: any) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 font-mono">
-              {playbackPings.map((ping: any, idx: number) => {
+              {playbackPings
+                .slice((playbackPage - 1) * PLAYBACK_PAGE_SIZE, playbackPage * PLAYBACK_PAGE_SIZE)
+                .map((ping: any, idx: number) => {
+                const globalIdx = (playbackPage - 1) * PLAYBACK_PAGE_SIZE + idx;
                 const isAtLoc = ping.location_status === "AT_LOCATION";
                 return (
                   <tr
-                    key={ping.id || idx}
+                    key={ping.id || globalIdx}
                     className={`text-[11px] transition-all ${
                       isAtLoc
                         ? "bg-emerald-50/60 hover:bg-emerald-100/60"
                         : "hover:bg-slate-50/50"
                     }`}
                   >
-                    <td className="px-3 py-1.5 text-slate-400 font-bold">{idx + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-400 font-bold">{globalIdx + 1}</td>
                     <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
                       {formatPingTime(ping.recorded_at || ping.created_at)}
                     </td>
@@ -1397,6 +1492,43 @@ const matched = rawPings.map((ping: any) => {
               })}
             </tbody>
           </table>
+          {playbackPings.length > PLAYBACK_PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-t border-slate-200">
+              <span className="text-[10px] font-semibold text-slate-500">
+                Menampilkan {((playbackPage - 1) * PLAYBACK_PAGE_SIZE) + 1}–{Math.min(playbackPage * PLAYBACK_PAGE_SIZE, playbackPings.length)} dari {playbackPings.length.toLocaleString()}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPlaybackPage(1)}
+                  disabled={playbackPage === 1}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'<<'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(p => Math.max(1, p - 1))}
+                  disabled={playbackPage === 1}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'<'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(p => Math.min(Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE), p + 1))}
+                  disabled={playbackPage >= Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE)}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'>'}
+                </button>
+                <button
+                  onClick={() => setPlaybackPage(Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE))}
+                  disabled={playbackPage >= Math.ceil(playbackPings.length / PLAYBACK_PAGE_SIZE)}
+                  className="px-2 py-1 text-[10px] font-bold rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-30"
+                >
+                  {'>>'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

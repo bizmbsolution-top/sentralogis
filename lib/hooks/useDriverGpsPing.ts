@@ -77,9 +77,12 @@ export function isActiveTransitStatus(
   return !!startedAt;
 }
 
-// [Phase 2.1] Adaptive intervals: 10s when active, 30s when idle/background
+// [Phase 3.1] Adaptive intervals: 10s active moving, 30s screen-off, 60s still/no-motion
 const GPS_PING_INTERVAL_ACTIVE_MS = 10_000;
 const GPS_PING_INTERVAL_IDLE_MS = 30_000;
+const GPS_PING_INTERVAL_STILL_MS = 60_000;
+const STILL_SPEED_THRESHOLD_KMH = 5; // < 5 km/h = considered stationary
+const STILL_DURATION_MS = 120_000; // 2 min without motion → switch to 60s
 const MAX_CONSECUTIVE_FAILURES = 10;
 const BACKOFF_FAILURE_THRESHOLD = 3;
 
@@ -97,6 +100,7 @@ export interface GpsPingState {
   pingCount: number;
   consecutiveFailures: number;
   isIdle: boolean;
+  isStill: boolean;
   offlineQueueLength: number;
 }
 
@@ -119,6 +123,11 @@ export function useDriverGpsPing(
   const isStoppedRef = useRef<boolean>(false);
   const pingCountRef = useRef<number>(0);
   const doneRef = useRef<boolean>(false);
+
+  // [Phase 3.1] Still-detection refs (speed-based throttling)
+  const lastSpeedRef = useRef<number>(0);
+  const lastMovingTimeRef = useRef<number>(Date.now());
+  const isStillRef = useRef<boolean>(false);
 
   const emitPingState = useCallback(
     (patch: Partial<GpsPingState>) => {
@@ -157,6 +166,27 @@ export function useDriverGpsPing(
       accuracy?: number,
     ) => {
       if (!token) return;
+
+      // [Phase 3.1] Track speed for still-detection
+      if (speed !== undefined && speed !== null) {
+        lastSpeedRef.current = speed;
+        if (speed >= STILL_SPEED_THRESHOLD_KMH) {
+          lastMovingTimeRef.current = Date.now();
+          if (isStillRef.current) {
+            isStillRef.current = false;
+            emitPingState({ isStill: false });
+          }
+        } else if (
+          !isStillRef.current &&
+          Date.now() - lastMovingTimeRef.current > STILL_DURATION_MS
+        ) {
+          isStillRef.current = true;
+          emitPingState({ isStill: true });
+          console.log(
+            `[GPS Ping] Driver stationary for ${STILL_DURATION_MS / 1000}s (speed: ${speed} km/h) → switching to 60s interval`,
+          );
+        }
+      }
 
       // [Phase 2.2] If offline, queue GPS ping to IndexedDB instead of sending to API
       if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -301,6 +331,9 @@ export function useDriverGpsPing(
         pos.coords.latitude,
         pos.coords.longitude,
         "pwa",
+        undefined,
+        pos.coords.speed ?? undefined,
+        pos.coords.accuracy ?? undefined,
       );
     } catch (e) {
       console.warn("[GPS Browser Ping] failed:", e);
@@ -404,11 +437,15 @@ export function useDriverGpsPing(
       // Browser Fallback
       requestWakeLock();
       pingBrowser();
-      // [Phase 2.1] Adaptive interval: 10s active, 30s idle
-      const currentInterval = isIdleRef.current
-        ? GPS_PING_INTERVAL_IDLE_MS
-        : GPS_PING_INTERVAL_ACTIVE_MS;
-      intervalRef.current = setInterval(pingBrowser, currentInterval);
+
+      // [Phase 3.1] 3-tier adaptive interval: 10s moving, 30s screen-off, 60s still
+      const getCurrentInterval = () => {
+        if (isStillRef.current) return GPS_PING_INTERVAL_STILL_MS;
+        if (isIdleRef.current) return GPS_PING_INTERVAL_IDLE_MS;
+        return GPS_PING_INTERVAL_ACTIVE_MS;
+      };
+
+      intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
 
       // [Phase 2.1] Visibility change → adaptive idle/active
       const handleVisibilityChange = () => {
@@ -420,21 +457,15 @@ export function useDriverGpsPing(
           emitPingState({ isIdle: true });
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(
-              pingBrowser,
-              GPS_PING_INTERVAL_IDLE_MS,
-            );
+            intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
           }
         } else {
-          // Screen on / foreground → active mode (10s interval)
+          // Screen on / foreground → active mode (10s interval, unless still)
           isIdleRef.current = false;
           emitPingState({ isIdle: false });
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(
-              pingBrowser,
-              GPS_PING_INTERVAL_ACTIVE_MS,
-            );
+            intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
           }
           if (isActiveTransitStatus(status, startedAt)) {
             requestWakeLock();
@@ -447,21 +478,26 @@ export function useDriverGpsPing(
         document.addEventListener("visibilitychange", handleVisibilityChange);
       }
 
-      // [Phase 2.1] Backoff check on interval: if 3+ consecutive failures, backoff to 30s
+      // [Phase 3.1] Re-evaluate interval every 30s to catch still→moving transitions
+      const intervalCheckId = setInterval(() => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
+        }
+      }, 30_000);
+
+      // [Phase 2.1] Backoff check on interval: if 3+ consecutive failures, backoff to 60s
       const backoffCheckId = setInterval(() => {
         if (
           consecutiveFailuresRef.current >= BACKOFF_FAILURE_THRESHOLD &&
           !isIdleRef.current
         ) {
           console.log(
-            `[GPS Ping] Backoff: ${consecutiveFailuresRef.current} failures, switching to 30s interval`,
+            `[GPS Ping] Backoff: ${consecutiveFailuresRef.current} failures, switching to 60s interval`,
           );
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(
-              pingBrowser,
-              GPS_PING_INTERVAL_IDLE_MS,
-            );
+            intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_STILL_MS);
           }
         }
       }, GPS_PING_INTERVAL_ACTIVE_MS * 2);
@@ -471,6 +507,7 @@ export function useDriverGpsPing(
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
+        clearInterval(intervalCheckId);
         clearInterval(backoffCheckId);
         if (wakeLockRef.current) {
           try {

@@ -299,18 +299,44 @@ export async function PATCH(
       });
     }
 
-    // [AI] GPS Ping — driver's phone sends lat/lng every 10 seconds while page is open (Dual-write & Geofence check)
+    // [Phase 3.1] GPS Ping — driver's phone sends lat/lng at adaptive intervals (10s moving / 30s screen-off / 60s still)
     if (action === "gps_ping") {
       if (!lat || !lng)
         return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
 
-      // 1. Dual-write to job_tracking AND tracking_updates so Ops LiveTrackingMap sees it real-time
+      // [Phase 3.1] Server-side debounce: skip insert if same coords within 60s
+      const { data: lastPing } = await supabase
+        .from("job_tracking")
+        .select("latitude, longitude, created_at")
+        .eq("job_order_id", jo.id)
+        .eq("status_update", "GPS_PING")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastPing && lastPing.latitude && lastPing.longitude) {
+        const distM = calculateHaversineDistance(
+          Number(lat), Number(lng),
+          Number(lastPing.latitude), Number(lastPing.longitude),
+        );
+        const timeSinceMs = Date.now() - new Date(lastPing.created_at).getTime();
+        if (distM < 50 && timeSinceMs < 60_000) {
+          // Same area (< 50m) and recent (< 60s) — skip DB insert
+          return NextResponse.json({
+            success: true,
+            skipped: true,
+            reason: "duplicate_coords",
+            geofence_triggered: false,
+          });
+        }
+      }
+
       const pingPayload: any = {
         job_order_id: jo.id,
         status_update: "GPS_PING",
         latitude: lat,
         longitude: lng,
-        notes: "Auto GPS ping dari driver (10-Sec Interval)",
+        notes: "Auto GPS ping dari driver (Adaptive Interval)",
       };
       if (recorded_at) {
         pingPayload.recorded_at = recorded_at;
@@ -354,19 +380,10 @@ export async function PATCH(
         });
       }
 
-      await supabase.from("tracking_updates").insert({
-        job_order_id: jo.id,
-        latitude: lat,
-        longitude: lng,
-        status_update: "GPS_PING",
-        whatsapp_sent: false,
-        ...(recorded_at ? { recorded_at } : {}),
-      });
-
       if (pingErr)
         return NextResponse.json({ error: pingErr.message }, { status: 500 });
 
-      // 2. Geofence Check (<= 500 meters from any pending/arrived stop) — with debounce
+      // [Phase 3.1] Geofence Check (<= 500 meters from any pending/arrived stop) — with debounce
       const { data: activeRoutes } = await supabase
         .from("job_routes")
         .select("*")
@@ -489,15 +506,6 @@ export async function PATCH(
                 ...(recorded_at ? { recorded_at } : {}),
               });
 
-              await supabase.from("tracking_updates").insert({
-                job_order_id: jo.id,
-                latitude: lat,
-                longitude: lng,
-                status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
-                whatsapp_sent: false,
-                ...(recorded_at ? { recorded_at } : {}),
-              });
-
               await supabase.from("notifications").insert({
                 role: "tenant_admin",
                 tenant_id: jo.tenant_id || null,
@@ -575,15 +583,6 @@ export async function PATCH(
                 latitude: lat,
                 longitude: lng,
                 notes: `Otomatis terdeteksi keluar dari radius ${Math.round(distM)}m dari titik rute.`,
-                ...(recorded_at ? { recorded_at } : {}),
-              });
-
-              await supabase.from("tracking_updates").insert({
-                job_order_id: jo.id,
-                latitude: lat,
-                longitude: lng,
-                status_update: `🚦 Keluar dari ${departedStopName} (Geofence Auto)`,
-                whatsapp_sent: false,
                 ...(recorded_at ? { recorded_at } : {}),
               });
 
@@ -747,15 +746,6 @@ export async function PATCH(
           latitude: lat,
           longitude: lng,
           notes: notesText,
-          ...(recorded_at ? { recorded_at } : {}),
-        });
-
-        await supabase.from("tracking_updates").insert({
-          job_order_id: jo.id,
-          latitude: lat,
-          longitude: lng,
-          status_update: statusUpdateText,
-          whatsapp_sent: false,
           ...(recorded_at ? { recorded_at } : {}),
         });
       }
