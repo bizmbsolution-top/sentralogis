@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -50,13 +50,14 @@ const sbuRolesMap: any = {
   ],
 };
 
-export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus, warehouses }: any) {
+export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus, warehouses, regions }: any) {
   const [loading, setLoading] = useState(false);
   const [isActive, setIsActive] = useState(staff.is_active);
   const [fullName, setFullName] = useState(staff.full_name);
   const [roleCode, setRoleCode] = useState(staff.role_code);
   const [sbuId, setSbuId] = useState(staff.sbu_id || '');
   const [warehouseId, setWarehouseId] = useState(staff.warehouse_id || '');
+  const [regionId, setRegionId] = useState(staff.region_id || '');
   const [division, setDivision] = useState(() => {
     const allRoles = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
     const found = allRoles.find((r: any) => r.code === staff.role_code);
@@ -75,6 +76,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
   const handleSbuChange = (newSbuId: string) => {
     setSbuId(newSbuId);
     setWarehouseId('');
+    setRegionId('');
 
     if (!newSbuId) {
       // Switched to Central HQ
@@ -110,6 +112,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
           role_code: roleCode,
           sbu_id: sbuId || null,
           warehouse_id: sbuId ? (warehouseId || null) : null,
+          region_id: sbuId ? (regionId || null) : null,
           division: sbuId ? null : (division || null),
           is_active: isActive,
           updated_at: new Date().toISOString()
@@ -118,6 +121,19 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
 
       if (error) throw error;
       
+      // Sync assigned_region_id to wo_organization_users for SBU Trucking region filtering
+      if (sbuId) {
+        const { error: woOrgError } = await supabaseAdmin
+          .from('wo_organization_users')
+          .update({ assigned_region_id: regionId || null })
+          .eq('user_id', staff.user_id)
+          .eq('tenant_id', staff.tenant_id);
+
+        if (woOrgError) {
+          console.error('[EditStaffModal] Failed to update wo_organization_users:', woOrgError);
+        }
+      }
+
       // Also update profile full_name and role for consistency
       await supabase.from('profiles').update({ 
         full_name: fullName,
@@ -282,21 +298,38 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
                   </div>
                </div>
 
-              {sbuId && warehouses?.filter((w: any) => w.sbu_id === sbuId).length > 0 && (
-                <div className="space-y-1.5">
-                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Warehouse Assignment</label>
-                   <select 
-                     value={warehouseId}
-                     onChange={e => setWarehouseId(e.target.value)}
-                     className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
-                   >
-                     <option value="">-- All SBU Warehouses --</option>
-                     {warehouses.filter((w: any) => w.sbu_id === sbuId).map((w: any) => (
-                       <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                     ))}
-                   </select>
-                </div>
-              )}
+{sbuId && warehouses?.filter((w: any) => w.sbu_id === sbuId).length > 0 && (
+                 <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Warehouse Assignment</label>
+                    <select 
+                      value={warehouseId}
+                      onChange={e => setWarehouseId(e.target.value)}
+                      className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                    >
+                      <option value="">-- All SBU Warehouses --</option>
+                      {warehouses.filter((w: any) => w.sbu_id === sbuId).map((w: any) => (
+                        <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                      ))}
+                    </select>
+                 </div>
+               )}
+
+               {sbuId && (
+                 <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Region Assignment (Required for Trucking)</label>
+                    <select 
+                      value={regionId}
+                      onChange={e => setRegionId(e.target.value)}
+                      className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/10"
+                      required
+                    >
+                      <option value="">-- Select Region --</option>
+                      {(regions || []).map((r: any) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                 </div>
+               )}
 
               <button 
                 type="button"

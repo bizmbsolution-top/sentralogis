@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -143,16 +143,44 @@ export default function WorkOrderPlanningPage() {
     }
 
     setLoading(true);
+
+    // Resolve user region for filtering
+    let userRegionId: string | null = null;
+    if (!isGlobalRole) {
+      // Check wo_organization_users first (for HQ/CS roles assigned via org), then fall back to tenant_users / profile
+      const { data: orgUser } = await supabase
+        .from("wo_organization_users")
+        .select("assigned_region_id")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      userRegionId = orgUser?.assigned_region_id || profile?.region_id || null;
+
+      // If no region from wo_organization_users, check tenant_users (where SBU staff region is stored)
+      if (!userRegionId) {
+        const { data: tenantUser } = await supabase
+          .from("tenant_users")
+          .select("region_id")
+          .eq("user_id", profile.id)
+          .maybeSingle();
+        userRegionId = tenantUser?.region_id || null;
+      }
+    }
     
-    const { data: baseItems, error: baseError } = await supabase
-      .from('wo_items')
-      .select(`
-        id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
-        work_orders!inner(id, wo_number, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
-      `)
-      .eq('tenant_id', tenantId)
-      .eq('sbu_type', 'TRUCKING')
-      .order('created_at', { ascending: false });
+let query = supabase
+       .from('wo_items')
+       .select(`
+         id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
+         work_orders!inner(id, wo_number, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
+       `)
+       .eq('tenant_id', tenantId)
+       .eq('sbu_type', 'TRUCKING');
+
+     if (userRegionId) {
+       query = query.eq('work_orders.region_id', userRegionId);
+     }
+
+     const { data: baseItems, error: baseError } = await query
+       .order('created_at', { ascending: false });
 
     if (baseError) {
       toast.error('Gagal mengambil data operasional');
@@ -711,14 +739,14 @@ const filteredItems = useMemo(() => {
                             const diffMs = (30 * 60 * 1000) - (now - assignedTime);
                             
                             if (diffMs <= 0) {
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Auto-start dimulai...</Badge>;
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Auto-start dimulai...</Badge>;
                             } else {
                               const m = Math.floor(diffMs / 60000);
                               const secs = Math.floor((diffMs % 60000) / 1000);
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
                             }
                           } else {
-                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">⏱️ Menunggu...</Badge>;
+                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Menunggu...</Badge>;
                           }
                         }
 
@@ -731,7 +759,7 @@ const filteredItems = useMemo(() => {
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{jo.jo_number || `JO-${idx+1}`}</div>
                                 <div className="text-xs text-slate-500">
-                                  {jo.transporter?.name || 'Assigned'} • {jo.driver?.name || 'No Driver'}
+                                  {jo.transporter?.name || 'Assigned'} â€¢ {jo.driver?.name || 'No Driver'}
                                 </div>
                               </div>
                             </div>
@@ -761,7 +789,7 @@ const filteredItems = useMemo(() => {
                                     setShowRejectModal(true);
                                   }}
                                 >
-                                  ❌ Reject
+                                  âŒ Reject
                                 </Button>
                               )}
                             </div>

@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+﻿import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { email, password, full_name, organization_id, role, sbu_access: req_sbu_access, assigned_warehouse_id } = await req.json();
+    const { email, password, full_name, organization_id, role, sbu_access: req_sbu_access, assigned_warehouse_id, assigned_region_id } = await req.json();
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const siteUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
             organization_id: organization_id,
             user_id: authUser.user.id,
             role_code: role || 'viewer',
-            assigned_warehouse_id: assigned_warehouse_id || null
+            assigned_warehouse_id: assigned_warehouse_id, assigned_region_id: assigned_region_id || null
           }, { onConflict: 'organization_id, user_id, role_code' });
        }
     }

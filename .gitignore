@@ -42,3 +42,33 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+# MySentra docs
+MySentra/
+
+# Local phase scripts & debug files
+phase*.js
+step*.js
+scaffold_*.js
+audit_*.js
+certify_*.js
+generate_docs.js
+run_*_tests.ts
+local_types.ts
+typecheck_*.txt
+tsc_errors.txt
+openapi.json
+debug_*.js
+debug_*.ts
+check_*.js
+check_*.mjs
+test-*.js
+test-*.ts
+fix_*.js
+reset_*.sql
+schema_new.sql
+temp-output.txt
+build-output*.txt
+lint_output.txt
+err.txt
+dev.log

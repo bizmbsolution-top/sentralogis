@@ -131,17 +131,18 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       submenu: [
         { label: 'Contacts', icon: '📇', href: '/tenant/master/contacts' },
         { label: 'Locations', icon: '📍', href: '/tenant/master/locations' },
+        { label: 'Wilayah Kerja', icon: '📍', href: '/tenant/master/trucking-regions' },
       ]
     },
-    {
+{
       label: 'SBU Trucking', icon: '🚛', href: '#', requiresSbu: 'tr',
-      submenu: [
-        { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
-        { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
-        { label: 'Fleets', icon: '🚚', href: '/tenant/master/fleets' },
-        { label: 'Drivers', icon: '👤', href: '/tenant/master/drivers' },
-      ]
-    },
+       submenu: [
+         { label: 'SBU Config', icon: '⚙️', href: '/tenant/trucking' },
+         { label: 'Fleet Types', icon: '🚛', href: '/tenant/master/fleet-types' },
+         { label: 'Fleets', icon: '🚚', href: '/tenant/master/fleets' },
+         { label: 'Drivers', icon: '👤', href: '/tenant/master/drivers' },
+       ]
+     },
     { label: 'Token Balance', icon: '💰', href: '/tenant/token' },
     { label: 'Business Intelligence', icon: '📊', href: '/hq/business' },
     {

@@ -29,6 +29,7 @@ export default function TenantOrganizationPage() {
   const [sbus, setSbus] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [groundStaff, setGroundStaff] = useState<any[]>([]);
+  const [regions, setRegions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'hq' | 'sbu' | 'manage_sbu' | 'field_ops'>('all');
@@ -65,15 +66,16 @@ export default function TenantOrganizationPage() {
       }
 
       // 2. Fetch Raw Data (Decoupled to prevent join failures)
-      const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffRes] = await Promise.all([
-        supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
-        supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
-        supabase.from('tenant_roles').select('*'),
-        supabase.from('profiles').select('id, email, full_name, role'),
-        supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id),
-        supabase.from('md_warehouse_staff').select('*, md_warehouses(name)').eq('tenant_id', tenant.id),
-        supabase.from('ground_staff_profiles').select('*').eq('tenant_id', tenant.id)
-      ]);
+const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffRes, regionsRes] = await Promise.all([
+         supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
+         supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
+         supabase.from('tenant_roles').select('*'),
+         supabase.from('profiles').select('id, email, full_name, role'),
+         supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id),
+         supabase.from('md_warehouse_staff').select('*, md_warehouses(name)').eq('tenant_id', tenant.id),
+         supabase.from('ground_staff_profiles').select('*').eq('tenant_id', tenant.id),
+         supabase.from('md_trucking_regions').select('*').order('name')
+       ]);
 
       if (staffRes.error) throw staffRes.error;
 
@@ -96,6 +98,7 @@ export default function TenantOrganizationPage() {
       setSbus(sbuRes.data || []);
       setWarehouses(whRes.data || []);
       setGroundStaff(groundStaffRes.data || []);
+      setRegions(regionsRes.data || []);
       
       console.log('[OrganizationPage] Loaded:', enrichedStaff.length, 'staff members');
     } catch (err: any) {
@@ -416,24 +419,26 @@ export default function TenantOrganizationPage() {
         </div>
       )}
 
-      <AddStaffModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        onSuccess={fetchData}
-        sbus={sbus}
-        warehouses={warehouses}
-      />
+<AddStaffModal 
+         isOpen={isAddModalOpen} 
+         onClose={() => setIsAddModalOpen(false)} 
+         onSuccess={fetchData}
+         sbus={sbus}
+         warehouses={warehouses}
+         regions={regions}
+       />
 
       {selectedStaff && (
         <>
-          <EditStaffModal 
-            isOpen={isEditModalOpen}
-            staff={selectedStaff}
-            onClose={() => { setIsEditModalOpen(false); setSelectedStaff(null); }}
-            onSuccess={fetchData}
-            sbus={sbus}
-            warehouses={warehouses}
-          />
+<EditStaffModal 
+             isOpen={isEditModalOpen}
+             staff={selectedStaff}
+             onClose={() => { setIsEditModalOpen(false); setSelectedStaff(null); }}
+             onSuccess={fetchData}
+             sbus={sbus}
+             warehouses={warehouses}
+             regions={regions}
+           />
           <ResetPasswordModal
             isOpen={isResetModalOpen}
             staff={selectedStaff}

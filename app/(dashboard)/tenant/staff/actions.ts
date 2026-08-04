@@ -1,4 +1,4 @@
-'use server';
+﻿'use server';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,6 +15,7 @@ export async function createStaffAdmin(payload: {
   tenantCode: string;
   sbuCode?: string | null;
   warehouseId?: string | null;
+  regionId?: string | null;
   whatsapp?: string;
   division?: string;
 }) {
@@ -70,19 +71,45 @@ export async function createStaffAdmin(payload: {
     }
 
     // 3. Assign to Specific Warehouse or Division if provided
-    if (payload.warehouseId || payload.division) {
-       const updateData: any = {};
-       if (payload.warehouseId) updateData.warehouse_id = payload.warehouseId;
-       if (payload.division) updateData.division = payload.division;
+    if (payload.warehouseId || payload.division || payload.regionId) {
+       const tenantUsersUpdate: any = {};
+       if (payload.warehouseId) tenantUsersUpdate.warehouse_id = payload.warehouseId;
+       if (payload.regionId) tenantUsersUpdate.region_id = payload.regionId;
+       if (payload.division) tenantUsersUpdate.division = payload.division;
 
-       const { error: updateError } = await supabaseAdmin
+       const { error: tenantUsersError } = await supabaseAdmin
          .from('tenant_users')
-         .update(updateData)
+         .update(tenantUsersUpdate)
          .eq('user_id', userId);
-       
-       if (updateError) {
-         console.error('[createStaffAdmin] Failed to update extra fields:', updateError);
+      
+       if (tenantUsersError) {
+         console.error('[createStaffAdmin] Failed to update tenant_users extra fields:', tenantUsersError);
        }
+
+        // Also sync region_id to wo_organization_users as fallback (for HQ/CS roles that use org-based queries)
+        if (payload.regionId) {
+          const { data: tuData } = await supabaseAdmin
+            .from('tenant_users')
+            .select('tenant_id, user_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (tuData?.tenant_id) {
+            const { error: woOrgUpsertError } = await supabaseAdmin
+              .from('wo_organization_users')
+              .upsert({
+                tenant_id: tuData.tenant_id,
+                user_id: userId,
+                organization_id: null,
+                role_code: payload.roleCode || 'staff',
+                assigned_region_id: payload.regionId,
+              }, { onConflict: 'tenant_id, user_id' });
+
+            if (woOrgUpsertError) {
+              console.error('[createStaffAdmin] Failed to sync wo_organization_users:', woOrgUpsertError);
+            }
+          }
+        }
     }
 
     console.log('[createStaffAdmin] Success for:', payload.email);

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -56,12 +56,13 @@ const sbuRolesMap: any = {
   ],
 };
 
-export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, warehouses }: any) {
+export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, warehouses, regions }: any) {
   const [loading, setLoading] = useState(false);
   const [staffType, setStaffType] = useState<'hq' | 'sbu'>('hq');
   const [jobLevel, setJobLevel] = useState<string>('');
   const [selectedSbu, setSelectedSbu] = useState<any>(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('');
   const [successData, setSuccessData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -92,6 +93,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
         roleCode: formData.roleCode,
         sbuCode: staffType === 'sbu' ? selectedSbu?.sbu_code : null,
         warehouseId: staffType === 'sbu' && selectedWarehouseId ? selectedWarehouseId : null,
+        regionId: staffType === 'sbu' && selectedRegionId ? selectedRegionId : null,
         whatsapp: formData.whatsapp,
         password: formData.password,
         division: formData.division
@@ -162,14 +164,14 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
             <div className="grid grid-cols-2 gap-4 p-1.5 bg-slate-100 rounded-2xl">
               <button
                 type="button"
-                onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseId(''); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
+onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseId(''); setSelectedRegionId(''); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'hq' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 HQ Staff
               </button>
               <button
                 type="button"
-                onClick={() => { setStaffType('sbu'); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
+                onClick={() => { setStaffType('sbu'); setJobLevel(''); setSelectedRegionId(''); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'sbu' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 SBU Staff
@@ -331,22 +333,40 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
                      </select>
                   </div>
 
-                  {staffType === 'sbu' && selectedSbu && warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
-                    <div className="space-y-1.5 md:col-span-2 mt-2">
-                       <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
-                       <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>
-                       <select 
-                         className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
-                         value={selectedWarehouseId}
-                         onChange={e => setSelectedWarehouseId(e.target.value)}
-                       >
-                         <option value="">-- All SBU Warehouses --</option>
-                         {warehouses.filter((w: any) => w.sbu_id === selectedSbu.id).map((w: any) => (
-                           <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                         ))}
-                       </select>
-                    </div>
-                  )}
+{staffType === 'sbu' && selectedSbu && warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
+                     <div className="space-y-1.5 md:col-span-2 mt-2">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
+                        <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>
+                        <select 
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                          value={selectedWarehouseId}
+                          onChange={e => setSelectedWarehouseId(e.target.value)}
+                        >
+                          <option value="">-- All SBU Warehouses --</option>
+                          {warehouses.filter((w: any) => w.sbu_id === selectedSbu.id).map((w: any) => (
+                            <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                          ))}
+                        </select>
+                     </div>
+                   )}
+
+                   {staffType === 'sbu' && selectedSbu && (
+                     <div className="space-y-1.5 md:col-span-2 mt-2">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Assign to Region (Required for Trucking)</label>
+                        <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">Staff will only see WO assignments for this region.</p>
+                        <select 
+                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                          value={selectedRegionId}
+                          onChange={e => setSelectedRegionId(e.target.value)}
+                          required
+                        >
+                          <option value="">-- Select Region --</option>
+                          {(regions || []).map((r: any) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                     </div>
+                   )}
                 </>
               )}
            </div>

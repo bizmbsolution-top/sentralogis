@@ -115,19 +115,21 @@ export default function HQDriversPage() {
         .eq('vendor_type', 'TRANSPORTER')
         .eq('is_active', true);
 
-      // Fetch the actual internal entity
+      // Fetch the actual internal entity (vendor_type IS NULL = pure internal HQ)
+      const companyName = profile?.tenants?.name || 'INTERNAL HQ';
+
       const { data: internalEntity } = await supabase
         .from('md_entities')
         .select('id, name')
         .eq('tenant_id', tenantId)
         .eq('is_vendor', false)
-        .eq('name', profile?.tenants.company_name || 'INTERNAL HQ')
+        .is('vendor_type', null)
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const ownEntity = internalEntity 
         ? [{ id: internalEntity.id, name: `(OWN) ${internalEntity.name}` }] 
-        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${profile?.tenants.company_name || 'INTERNAL HQ'}` }];
+        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${companyName}` }];
 
       setVendors([...ownEntity, ...(vendorData || [])]);
       setDrivers(driverData || []);
@@ -182,14 +184,16 @@ if (!formData.sim_expiry) {
       // Handle OWN selection
       if (formData.entity_id === 'NEW_INTERNAL') {
           console.log('Creating new internal entity...');
-          const entityCode = `INT-${(profile?.tenants.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+          const companyName = profile?.tenants?.name || 'INTERNAL HQ';
+          const entityCode = `INT-${companyName.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
           const { data: newEntity, error: createError } = await supabase
             .from('md_entities')
             .insert({
               tenant_id: tenantId,
               entity_code: entityCode,
-              name: profile?.tenants.company_name || 'INTERNAL HQ',
+              name: companyName,
               is_vendor: false,
+              vendor_type: null,
               is_active: true
             })
             .select()

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -7,7 +7,7 @@ import { SBU_MAP, type SBUType } from '@/lib/utils/sbuMapping';
 import { toast } from 'react-hot-toast';
 import { 
   Plus, Trash2, ArrowLeft, Loader2, Send, Save, Edit2, 
-  MapPin, Truck, ChevronRight, User, ShieldCheck,
+  MapPin, AlertCircle, Truck, ChevronRight, User, ShieldCheck,
   Building2, Calendar, MessageSquare, Package, Globe, Warehouse,
   ChevronDown, Check, Search, X
 } from 'lucide-react';
@@ -24,7 +24,7 @@ interface CreateWOFormProps {
   editId?: string | null;
 }
 
-// [AI] Dynamic SBU options — replaced hardcoded list with DB-driven data
+// [AI] Dynamic SBU options â€” replaced hardcoded list with DB-driven data
 export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState<'draft' | 'submit' | null>(null);
@@ -70,7 +70,11 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     execution_date: todayLocal(),
     execution_time: nowLocalTime(),
     notes: '',
+    region_id: '',
   });
+  const [regions, setRegions] = useState<any[]>([]);
+  const [loadingRegions, setLoadingRegions] = useState(false);
+
   const [woStatus, setWoStatus] = useState<string | null>(null);
   const [woItems, setWoItems] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -283,6 +287,22 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     fetchCustomers();
   }, [profile?.tenant_id]);
 
+  // Fetch trucking regions for region picker
+  useEffect(() => {
+    if (!profile?.tenant_id) return;
+    setLoadingRegions(true);
+    supabase
+      .from("md_trucking_regions")
+      .select("id, name, level")
+      .eq("tenant_id", profile.tenant_id)
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data) setRegions(data);
+        setLoadingRegions(false);
+      });
+  }, [profile?.tenant_id]);
+
   const handleAddItem = (item: any) => {
     if (editingItem) {
       setWoItems(prev => prev.map(i => i.id === editingItem.id ? { ...item, id: editingItem.id } : i));
@@ -302,6 +322,12 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     if (!profile?.tenant_id) return;
     if (!formData.customer_id || woItems.length === 0) {
       toast.error('Customer dan Minimal 1 Item wajib diisi.');
+      return;
+    }
+
+    // [VALIDATION] Region required when TRUCKING SBU is active
+    if (activeSbuTypes.has("tr") && !formData.region_id) {
+      toast.error("Wilayah tujuan wajib dipilih untuk SBU Trucking.");
       return;
     }
 
@@ -346,6 +372,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         execution_date: formData.execution_date,
         execution_time: formData.execution_time,
         notes: formData.notes,
+        region_id: formData.region_id || null,
         status,
         updated_by: profile?.id
       };
@@ -884,7 +911,7 @@ for (const [index, item] of woItems.entries()) {
                       if (!invalid) return null;
                       return (
                         <p className="text-[10px] font-bold text-rose-600 mt-1 ml-1 flex items-center gap-1">
-                          ⚠ Waktu eksekusi ({formData.execution_date} {formData.execution_time}) tidak boleh sebelum Order Time ({formData.order_date} {formData.order_time}).
+                          âš  Waktu eksekusi ({formData.execution_date} {formData.execution_time}) tidak boleh sebelum Order Time ({formData.order_date} {formData.order_time}).
                         </p>
                       );
                     })()}
@@ -906,6 +933,27 @@ for (const [index, item] of woItems.entries()) {
                 />
               </div>
             </Card>
+
+            {activeSbuTypes.has("tr") && (
+              <Card className="p-6 border-slate-200 shadow-none !rounded-[2rem]">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <MapPin size={12} /> Wilayah Tujuan (Kota Surabaya) *
+                  </label>
+                  <select
+                    disabled={isReadOnly || loadingRegions}
+                    value={formData.region_id}
+                    onChange={(e) => setFormData({...formData, region_id: e.target.value})}
+                    className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-600/5 outline-none transition-all disabled:opacity-70"
+                  >
+                    <option value="">Pilih Wilayah Kerja</option>
+                    {regions.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}{r.level ? ` - ${r.level}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </Card>
+            )}
 
             <div className="space-y-4">
                <h3 className="text-xs font-black text-black uppercase tracking-[0.3em] ml-2 italic">Select SBU Modules</h3>
@@ -976,7 +1024,7 @@ for (const [index, item] of woItems.entries()) {
                             </div>
                           ) : item.sbu_type === 'FORWARDING' ? (
                             <div className="mt-2 text-sm font-bold text-black">
-                               {item.item_data?.service_type || 'FCL'} | {item.item_data?.origin_port_name || '?'} → {item.item_data?.destination_port_name || '?'}
+                               {item.item_data?.service_type || 'FCL'} | {item.item_data?.origin_port_name || '?'} â†’ {item.item_data?.destination_port_name || '?'}
                             </div>
                           ) : (
                             <div className="text-sm font-bold text-black mt-1">
@@ -1098,3 +1146,4 @@ for (const [index, item] of woItems.entries()) {
     </div>
   );
 }
+
