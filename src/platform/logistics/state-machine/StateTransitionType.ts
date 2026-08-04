@@ -1,0 +1,1 @@
+export enum StateTransitionType { MANUAL='MANUAL', AUTOMATIC='AUTOMATIC', SYSTEM='SYSTEM' }

@@ -275,8 +275,8 @@ export default function CustomerInboundPage() {
                     <tbody className="divide-y divide-white/5">
                       {receiptItems.map((item) => {
                         const sku = item.md_product_skus || {};
-                        const exp = Number((item as any).expected_qty || (item as any).quantity_expected || 0);
-                        const rec = Number((item as any).actual_good_qty || (item as any).quantity_received || 0);
+                        const exp = Number(item.expected_qty || item.quantity_expected || 0);
+                        const rec = Number(item.actual_good_qty || item.quantity_received || 0);
                         const match = rec === exp && exp > 0;
                         return (
                           <tr key={item.id} className="hover:bg-white/[0.03]">

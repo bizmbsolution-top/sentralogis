@@ -47,7 +47,7 @@ export default function SBUTruckingReportingPage() {
   const [endDate, setEndDate] = useState(
     new Date().toISOString().split("T")[0],
   );
-  const [statusFilter, setStatusFilter] = useState<string[]>(["done", "rejected"]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [customerFilter, setCustomerFilter] = useState("");
   const [truckTypeFilter, setTruckTypeFilter] = useState("");
   const [transporterFilter, setTransporterFilter] = useState("all");

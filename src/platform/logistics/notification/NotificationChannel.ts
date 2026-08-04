@@ -1,0 +1,1 @@
+export enum NotificationChannel { WHATSAPP='WHATSAPP', EMAIL='EMAIL', SMS='SMS', PUSH='PUSH', WEBHOOK='WEBHOOK' }

@@ -1,0 +1,17 @@
+# Local phase scripts & temp files that break the build
+phase*.js
+step*.js
+scaffold_*.js
+audit_*.js
+certify_*.js
+generate_docs.js
+run_domain_tests.ts
+local_types.ts
+typecheck_*.txt
+tsc_errors.txt
+openapi.json
+public/mysentra.json
+public/sentralogis_faticon.ico
+docs/
+MySentra/
+middleware.ts

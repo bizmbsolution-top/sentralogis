@@ -1,0 +1,4 @@
+// Phase 1A shim — re-export legacy component
+// TODO: Remove after domain migration completes
+export * from "../../../components/invoice/InvoiceTemplateBase";
+export { default } from "../../../components/invoice/InvoiceTemplateBase";

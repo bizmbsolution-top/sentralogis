@@ -157,25 +157,21 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
         assignment_documents: jo.assignment_documents || [],
       };
 
-      const result = await saveAssignmentsAction({
-        tenantId: profile.tenant_id,
-        woItem: {
-          id: woItem.id,
-          wo_id: woItem.wo?.id || woItem.wo_id,
-          status: woItem.status || 'assigned',
-          item_code: woItem.item_code,
-          work_orders: woItem.wo ? { wo_number: woItem.wo.wo_number } : undefined,
-          item_data: woItem.item_data,
-        },
-        assignments: [assignmentSlot],
-        mode: 'confirm',
-        dealPrice: Number(parseItemData(woItem.item_data).deal_price) || 0,
-        transporters,
-        drivers: drivers.map(d => ({ id: d.id, name: d.name, md_entities: d.md_entities })),
-        fleets: fleets.map(f => ({ id: f.id, fleet_type_id: f.fleet_type_id })),
+      const response = await fetch(`/api/trucking/job-orders/${jo.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId: selectedDriverId || null,
+          vehicleId: selectedFleetId || null,
+          transporterId: selectedTransporterId || null,
+          purchasePrice: Number(purchasePrice.replace(/\\D/g, '')) || 0,
+          notes: notes || undefined
+        })
       });
 
-      if (!result.success) {
+      const result = await response.json();
+
+      if (!response.ok) {
         toast.error(result.error || 'Gagal menyimpan perubahan');
         return;
       }

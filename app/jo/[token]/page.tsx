@@ -54,6 +54,12 @@ interface RouteStop {
   actual_arrival: string;
   actual_departure: string;
   pod_photo_url?: string;
+  route_photos?: Array<{
+    id: string;
+    file_url: string;
+    document_name?: string;
+    created_at?: string;
+  }>;
   latitude?: number;
   longitude?: number;
 }
@@ -1741,46 +1747,59 @@ export default function DriverTrackingPage({
                           />
                           <label
                             htmlFor={`photo-${stop.id}`}
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all border cursor-pointer ${
-                              stop.pod_photo_url
+                            className={`relative w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all border cursor-pointer ${
+                              stop.route_photos?.length || stop.pod_photo_url
                                 ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                                 : "bg-slate-50 text-slate-400 border-slate-100"
                             }`}
                           >
                             {photoLoading === stop.id ? (
                               <Loader2 size={14} className="animate-spin" />
-                            ) : stop.pod_photo_url ? (
-                              <Check size={14} />
+                            ) : stop.route_photos?.length || stop.pod_photo_url ? (
+                              <Camera size={14} />
                             ) : (
                               <Camera size={14} />
+                            )}
+                            {(stop.route_photos?.length || 0) > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center">
+                                {stop.route_photos!.length}
+                              </span>
                             )}
                           </label>
                         </div>
                       </div>
                     </div>
 
-                    {/* POD Photo Thumbnail */}
-                    {stop.pod_photo_url && (
-                      <div
-                        onClick={() =>
-                          setSelectedPhotoPreview(stop.pod_photo_url!)
-                        }
-                        className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
-                      >
-                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                          <img
-                            src={stop.pod_photo_url}
-                            alt="POD"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
+                    {/* Photos Thumbnails */}
+                    {(Array.isArray(stop.route_photos) && stop.route_photos.length > 0 || !!stop.pod_photo_url) && (
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Camera size={12} className="text-emerald-600" />
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            Foto POD
+                            Foto Lokasi ({Array.isArray(stop.route_photos) ? stop.route_photos.length : 1})
                           </p>
-                          <p className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
-                            <Eye size={10} /> Lihat Foto
-                          </p>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto">
+                          {(Array.isArray(stop.route_photos) && stop.route_photos.length
+                            ? stop.route_photos
+                            : stop.pod_photo_url
+                              ? [{ id: stop.id, file_url: stop.pod_photo_url! }]
+                              : []
+                          ).map((photo: any, idx: number) => (
+                            <div
+                              key={photo.id || idx}
+                              onClick={() =>
+                                setSelectedPhotoPreview(photo.file_url)
+                              }
+                              className="w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer active:scale-[0.98] transition-all"
+                            >
+                              <img
+                                src={photo.file_url}
+                                alt={`Foto lokasi ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -2162,10 +2181,10 @@ export default function DriverTrackingPage({
                   />
                   <label
                     htmlFor={`photo-bottom`}
-                    className={`flex flex-col items-center gap-1.5 active:scale-95 transition-all cursor-pointer group ${activeStop?.pod_photo_url ? "text-emerald-600" : "text-slate-700"}`}
+                    className={`relative flex flex-col items-center gap-1.5 active:scale-95 transition-all cursor-pointer group ${activeStop?.route_photos?.length ? "text-emerald-600" : "text-slate-700"}`}
                   >
                     <div
-                      className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${activeStop?.pod_photo_url ? "bg-emerald-50" : "bg-slate-100 group-hover:bg-slate-200"}`}
+                      className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${activeStop?.route_photos?.length ? "bg-emerald-50" : "bg-slate-100 group-hover:bg-slate-200"}`}
                     >
                       {activeStop ? (
                         photoLoading === activeStop.id ? (
@@ -2173,8 +2192,6 @@ export default function DriverTrackingPage({
                             size={22}
                             className="animate-spin text-emerald-600"
                           />
-                        ) : activeStop.pod_photo_url ? (
-                          <Check size={22} className="text-emerald-600" />
                         ) : (
                           <Camera size={22} className="text-slate-600" />
                         )
@@ -2182,8 +2199,13 @@ export default function DriverTrackingPage({
                         <Camera size={22} className="text-slate-600" />
                       )}
                     </div>
+                    {activeStop?.route_photos?.length ? (
+                      <span className="absolute -top-1 right-4 min-w-4 h-4 px-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center">
+                        {activeStop.route_photos.length}
+                      </span>
+                    ) : null}
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
-                      Foto POD
+                      Foto Lokasi
                     </span>
                   </label>
                 </div>

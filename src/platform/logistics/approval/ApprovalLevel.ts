@@ -1,0 +1,1 @@
+export enum ApprovalLevel { SYSTEM=0, MANAGER=1, DIRECTOR=2, VP=3 }

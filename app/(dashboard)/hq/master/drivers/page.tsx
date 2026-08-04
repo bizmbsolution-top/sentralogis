@@ -121,13 +121,13 @@ export default function HQDriversPage() {
         .select('id, name')
         .eq('tenant_id', tenantId)
         .eq('is_vendor', false)
-        .eq('name', (profile?.tenants as any)?.company_name || 'INTERNAL HQ')
+        .eq('name', profile?.tenants.company_name || 'INTERNAL HQ')
         .limit(1)
         .single();
 
       const ownEntity = internalEntity 
         ? [{ id: internalEntity.id, name: `(OWN) ${internalEntity.name}` }] 
-        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${(profile?.tenants as any)?.company_name || 'INTERNAL HQ'}` }];
+        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${profile?.tenants.company_name || 'INTERNAL HQ'}` }];
 
       setVendors([...ownEntity, ...(vendorData || [])]);
       setDrivers(driverData || []);
@@ -182,13 +182,13 @@ if (!formData.sim_expiry) {
       // Handle OWN selection
       if (formData.entity_id === 'NEW_INTERNAL') {
           console.log('Creating new internal entity...');
-          const entityCode = `INT-${((profile?.tenants as any)?.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+          const entityCode = `INT-${(profile?.tenants.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
           const { data: newEntity, error: createError } = await supabase
             .from('md_entities')
             .insert({
               tenant_id: tenantId,
               entity_code: entityCode,
-              name: (profile?.tenants as any)?.company_name || 'INTERNAL HQ',
+              name: profile?.tenants.company_name || 'INTERNAL HQ',
               is_vendor: false,
               is_active: true
             })
@@ -333,21 +333,21 @@ if (!formData.sim_expiry) {
         sim_number: driver.sim_number || '',
         sim_class: driver.sim_class || 'B1',
         sim_expiry: driver.sim_expiry,
-        sim_photo_url: (driver as any).sim_photo_url || '',
-        ktp_photo_url: (driver as any).ktp_photo_url || '',
-        stnk_photo_url: (driver as any).stnk_photo_url || '',
+        sim_photo_url: driver.sim_photo_url || '',
+        ktp_photo_url: driver.ktp_photo_url || '',
+        stnk_photo_url: driver.stnk_photo_url || '',
         status: driver.status,
         is_active: driver.is_active,
-        bank_name: (driver as any).bank_name || '',
-        bank_account: (driver as any).bank_account || '',
-        bank_account_name: (driver as any).bank_account_name || '',
-        pin: (driver as any).pin || '',
-        photo_url: (driver as any).photo_url || '',
+        bank_name: driver.bank_name || '',
+        bank_account: driver.bank_account || '',
+        bank_account_name: driver.bank_account_name || '',
+        pin: driver.pin || '',
+        photo_url: driver.photo_url || '',
       });
-      setPhotoPreview((driver as any).photo_url || null);
-      setSimPhotoPreview((driver as any).sim_photo_url || null);
-      setKtpPhotoPreview((driver as any).ktp_photo_url || null);
-      setStnkPhotoPreview((driver as any).stnk_photo_url || null);
+      setPhotoPreview(driver.photo_url || null);
+      setSimPhotoPreview(driver.sim_photo_url || null);
+      setKtpPhotoPreview(driver.ktp_photo_url || null);
+      setStnkPhotoPreview(driver.stnk_photo_url || null);
     } else {
       setSelectedDriver(null);
       setFormData({
@@ -432,7 +432,7 @@ if (!formData.sim_expiry) {
     let matchesVendor = true;
     if (filterVendor !== 'all') {
       if (filterVendor === 'OWN') {
-        matchesVendor = (d.md_entities as any)?.is_vendor === false;
+        matchesVendor = d.md_entities.is_vendor === false;
       } else {
         matchesVendor = d.entity_id === filterVendor;
       }
@@ -594,8 +594,8 @@ if (!formData.sim_expiry) {
                               </td>
                               <td className="px-4 py-3">
                                  <div className="flex items-center gap-3">
-                                   {(d as any).photo_url ? (
-                                     <img src={(d as any).photo_url} alt={d.name} className="w-9 h-9 rounded-full object-cover" />
+                                   {d.photo_url ? (
+                                     <img src={d.photo_url} alt={d.name} className="w-9 h-9 rounded-full object-cover" />
                                    ) : (
                                      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
                                        <UserCircle size={18} className="text-slate-400" />

@@ -104,13 +104,13 @@ export default function HQFleetsPage() {
         .select('id, name')
         .eq('tenant_id', tenantId)
         .eq('is_vendor', false)
-        .eq('name', (profile?.tenants as any)?.company_name || 'INTERNAL HQ')
+        .eq('name', profile?.tenants.company_name || 'INTERNAL HQ')
         .limit(1)
         .single();
 
       const ownEntity = internalEntity 
         ? [{ id: internalEntity.id, name: `(OWN) ${internalEntity.name}` }] 
-        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${(profile?.tenants as any)?.company_name || 'INTERNAL HQ'}` }];
+        : [{ id: 'NEW_INTERNAL', name: `(OWN) ${profile?.tenants.company_name || 'INTERNAL HQ'}` }];
 
       setVendors([...ownEntity, ...(vendorData || [])]);
       setFleets(fleetData || []);
@@ -154,13 +154,13 @@ export default function HQFleetsPage() {
       // Handle OWN selection
       if (formData.entity_id === 'NEW_INTERNAL') {
           // Create a dedicated internal entity
-          const entityCode = `INT-${((profile?.tenants as any)?.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+          const entityCode = `INT-${(profile?.tenants.company_name || 'HQ').substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
           const { data: newEntity, error: createError } = await supabase
             .from('md_entities')
             .insert({
               tenant_id: tenantId,
               entity_code: entityCode,
-              name: (profile?.tenants as any)?.company_name || 'INTERNAL HQ',
+              name: profile?.tenants.company_name || 'INTERNAL HQ',
               is_vendor: false,
               is_active: true
             })

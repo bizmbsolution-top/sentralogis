@@ -89,9 +89,9 @@ export default function CustomerWarehouseDashboardPage() {
         });
 
         (invData || []).forEach((row) => {
-          const qOnHand = Number((row as any).quantity || 0);
-          const qAlloc = Number((row as any).reserved_quantity || 0);
-          const qAvail = Number((row as any).available_quantity || (qOnHand - qAlloc));
+          const qOnHand = Number(row.quantity || 0);
+          const qAlloc = Number(row.reserved_quantity || 0);
+          const qAvail = Number(row.available_quantity || (qOnHand - qAlloc));
           
           soh += qOnHand;
           rsv += qAlloc;

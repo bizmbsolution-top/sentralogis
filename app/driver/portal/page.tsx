@@ -642,6 +642,31 @@ export default function DriverPortal() {
     return job;
   };
 
+  const attachRoutePhotos = async (routes: any[], jobId: string) => {
+    if (!routes || routes.length === 0) return routes;
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('id, job_route_id, file_url, document_name, created_at')
+      .eq('job_order_id', jobId)
+      .eq('doc_type', 'LOCATION_PHOTO')
+      .order('created_at', { ascending: true });
+    const byRoute: Record<string, any[]> = {};
+    (docs || []).forEach((d: any) => {
+      if (!d.job_route_id) return;
+      if (!byRoute[d.job_route_id]) byRoute[d.job_route_id] = [];
+      byRoute[d.job_route_id].push({
+        id: d.id,
+        file_url: d.file_url,
+        document_name: d.document_name,
+        created_at: d.created_at,
+      });
+    });
+    return routes.map((r: any) => ({
+      ...r,
+      route_photos: byRoute[r.id] || [],
+    }));
+  };
+
   const fetchInspections = async () => {
     const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
@@ -915,7 +940,7 @@ export default function DriverPortal() {
                 if (newRoutes) finalRoutes = newRoutes;
             }
             
-            reloadedJob.routes = finalRoutes.sort((a: any, b: any) => a.sequence - b.sequence);
+            reloadedJob.routes = (await attachRoutePhotos(finalRoutes, reloadedJob.id)).sort((a: any, b: any) => a.sequence - b.sequence);
             setSelectedJob(reloadedJob);
         }
       }
@@ -977,7 +1002,7 @@ export default function DriverPortal() {
             reloadedJob.wo_items = wo;
           }
           const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
-          reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          reloadedJob.routes = (await attachRoutePhotos(routes || [], reloadedJob.id)).sort((a: any, b: any) => a.sequence - b.sequence);
           setSelectedJob(reloadedJob);
       }
       fetchJobOrders();
@@ -1026,7 +1051,7 @@ export default function DriverPortal() {
             reloadedJob.wo_items = wo;
           }
           const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
-          reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+          reloadedJob.routes = (await attachRoutePhotos(routes || [], reloadedJob.id)).sort((a: any, b: any) => a.sequence - b.sequence);
           setSelectedJob(reloadedJob);
       }
     } catch (err: any) {
@@ -1187,7 +1212,7 @@ export default function DriverPortal() {
       const reloadedJob = await reloadJobWithFleet(selectedJob.id);
       if (reloadedJob) {
         const { data: routes } = await supabase.from('job_routes').select('*').eq('job_order_id', reloadedJob.id).order('sequence', { ascending: true });
-        reloadedJob.routes = (routes || []).sort((a: any, b: any) => a.sequence - b.sequence);
+        reloadedJob.routes = (await attachRoutePhotos(routes || [], reloadedJob.id)).sort((a: any, b: any) => a.sequence - b.sequence);
         setSelectedJob(reloadedJob);
       }
     } catch (err: any) {
@@ -2712,35 +2737,50 @@ export default function DriverPortal() {
                           />
                           <label 
                             htmlFor={`photo-${stop.id}`}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border cursor-pointer ${
-                              stop.pod_photo_url ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                            className={`relative w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm border cursor-pointer ${
+                              stop.route_photos?.length || stop.pod_photo_url ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
                             }`}
                           >
                             {photoLoading === stop.id ? (
                               <Loader2 size={16} className="animate-spin" />
-                            ) : stop.pod_photo_url ? (
-                              <Check size={18} />
                             ) : (
                               <Camera size={18} />
+                            )}
+                            {(stop.route_photos?.length || 0) > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center">
+                                {stop.route_photos!.length}
+                              </span>
                             )}
                           </label>
                         </div>
                       </div>
                     </div>
 
-                    {/* Photo POD Preview Thumbnail */}
-                    {stop.pod_photo_url && (
+                    {/* Photos Thumbnail Grid */}
+                    {(stop.route_photos?.length > 0 || stop.pod_photo_url) && (
                       <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
-                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block leading-none">Foto Bukti POD</span>
-                         <div 
-                           onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
-                           className="relative w-24 h-24 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer active:scale-95 transition-all group shadow-sm bg-slate-100"
-                         >
-                           <img src={stop.pod_photo_url} alt="POD Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                             <Expand size={16} />
-                           </div>
-                         </div>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block leading-none">
+                          Foto Lokasi ({stop.route_photos?.length || 1})
+                        </span>
+                        <div className="flex gap-2 overflow-x-auto">
+                          {(stop.route_photos?.length
+                            ? stop.route_photos
+                            : stop.pod_photo_url
+                              ? [{ id: stop.id, file_url: stop.pod_photo_url }]
+                              : []
+                          ).map((photo: any, idx: number) => (
+                            <div
+                              key={photo.id || idx}
+                              onClick={() => setSelectedPhotoPreview(photo.file_url)}
+                              className="relative w-24 h-24 shrink-0 rounded-2xl overflow-hidden border border-slate-200/80 cursor-pointer active:scale-95 transition-all group shadow-sm bg-slate-100"
+                            >
+                              <img src={photo.file_url} alt={`Foto lokasi ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                <Expand size={16} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 

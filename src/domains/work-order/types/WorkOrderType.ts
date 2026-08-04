@@ -1,0 +1,5 @@
+export enum WorkOrderType {
+  STANDARD = 'STANDARD',
+  EMERGENCY = 'EMERGENCY',
+  PREVENTIVE = 'PREVENTIVE'
+}

@@ -281,8 +281,8 @@ export default function CustomerOutboundPage() {
                     <tbody className="divide-y divide-white/5">
                       {shipmentItems.map((item) => {
                         const sku = item.md_product_skus || {};
-                        const ord = Number((item as any).requested_qty || (item as any).quantity_ordered || 0);
-                        const pck = Number((item as any).picked_qty || (item as any).quantity_picked || 0);
+                        const ord = Number(item.requested_qty || item.quantity_ordered || 0);
+                        const pck = Number(item.picked_qty || item.quantity_picked || 0);
                         const match = pck === ord && ord > 0;
                         return (
                           <tr key={item.id} className="hover:bg-white/[0.03]">

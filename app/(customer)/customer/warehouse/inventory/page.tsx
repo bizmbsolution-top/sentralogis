@@ -86,9 +86,9 @@ export default function CustomerInventoryPage() {
       (invRows || []).forEach((row) => {
         const sid = row.product_sku_id;
         if (sid && skuMap[sid]) {
-          const qOnHand = Number((row as any).quantity || 0);
-          const qAlloc = Number((row as any).reserved_quantity || 0);
-          const qAvail = Number((row as any).available_quantity || (qOnHand - qAlloc));
+          const qOnHand = Number(row.quantity || 0);
+          const qAlloc = Number(row.reserved_quantity || 0);
+          const qAvail = Number(row.available_quantity || (qOnHand - qAlloc));
 
           skuMap[sid].quantity_on_hand += qOnHand;
           skuMap[sid].quantity_allocated += qAlloc;

@@ -74,16 +74,20 @@ export default function RejectReassignModal({ show, jobOrder, onClose, onSuccess
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.rpc('ops_reject_reassign_jo', {
-        p_jo_id: jobOrder.id,
-        p_rejection_reason: rejectionReason,
-        p_new_transporter_id: selectedTransporterId,
-        p_new_fleet_id: selectedFleetId,
-        p_new_driver_id: selectedDriverId,
-        p_rejection_note: rejectionNote || null,
+      const response = await fetch(`/api/trucking/job-orders/${jobOrder.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: rejectionReason,
+          driverId: selectedDriverId || null,
+          vehicleId: selectedFleetId || null,
+          transporterId: selectedTransporterId || null,
+          note: rejectionNote || null
+        })
       });
-
-      if (error) throw error;
+      
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to cancel/reassign');
 
       // Auto-push notifications for reassignment
       try {
