@@ -4,6 +4,7 @@ import { TrackingService } from "@/src/application/tracking/services/TrackingSer
 import { SupabaseTrackingRepository } from "@/src/infrastructure/repositories/tracking/SupabaseTrackingRepository";
 import { DriverPortalQuery } from "@/src/infrastructure/repositories/trucking/DriverPortalQuery";
 import { DriverPortalCommandRepository } from "@/src/infrastructure/repositories/trucking/DriverPortalCommandRepository";
+import { JoAutoCompleteService } from "@/src/application/trucking/services/JoAutoCompleteService";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,9 +118,18 @@ export async function GET(
       return NextResponse.json({ error: "Job Order tidak ditemukan" }, { status: 404 });
     }
 
+    // Lazy auto-complete: if this JO is waiting for completion and the driver
+    // (or anyone) is fetching it, finish it without waiting for the cron window.
+    if (jobOrderData.status === "MENUNGGU SELESAI") {
+      const autoComplete = new JoAutoCompleteService(supabase);
+      await autoComplete.maybeAutoComplete(jobOrderData.id);
+    }
+
+    const refreshed = await queryService.getJobOrderData(token);
+
     return NextResponse.json({
       success: true,
-      data: jobOrderData,
+      data: refreshed,
     });
   } catch (err: any) {
     console.error("[API] GET error:", err);
