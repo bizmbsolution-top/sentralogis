@@ -72,7 +72,8 @@ export default function WOLevelReportingPage() {
     if (isGlobalRole) {
       const fetchTenant = async () => {
         const { data } = await supabase.from("tenants").select("id").limit(1);
-        if (data && data.length > 0) setResolvedTenantId(data[0].id);
+        if (data && data.length > 0)
+          setResolvedTenantId((data[0] as { id: string }).id);
       };
       fetchTenant();
     }
@@ -87,7 +88,9 @@ export default function WOLevelReportingPage() {
         .order("tenant_code");
       if (data && data.length > 0) {
         setTenantList(data);
-        setSelectedTenantId((prev) => prev || resolvedTenantId || data[0].id);
+        setSelectedTenantId(
+          (prev) => prev || resolvedTenantId || (data[0] as { id: string }).id,
+        );
       }
     };
     fetchTenantList();
@@ -98,15 +101,30 @@ export default function WOLevelReportingPage() {
     : resolvedTenantId;
   const canAccess = !!tenantId && (isTruckingSbu || isGlobalRole);
 
-  // Load customers
+  // Load customers — include all entities referenced by WOs, not just is_customer=true
   useEffect(() => {
     const loadCustomers = async () => {
       if (!tenantId) return;
+      // Get distinct customer_ids from work_orders for this tenant
+      const { data: woCustomers } = await supabase
+        .from("work_orders")
+        .select("customer_id")
+        .eq("tenant_id", tenantId)
+        .not("customer_id", "is", null);
+
+      const customerIds = [
+        ...new Set((woCustomers || []).map((w: any) => w.customer_id)),
+      ];
+
+      if (customerIds.length === 0) {
+        setCustomers([]);
+        return;
+      }
+
       const { data } = await supabase
         .from("md_entities")
         .select("id, name, legal_name")
-        .eq("is_customer", true)
-        .eq("tenant_id", tenantId)
+        .in("id", customerIds)
         .order("name");
       setCustomers(data || []);
     };
@@ -170,26 +188,19 @@ export default function WOLevelReportingPage() {
       const formatJoStatus = (status: string | null | undefined) => {
         if (!status) return "-";
         const upper = status.toUpperCase();
-        if (upper === "PENDING" || upper === "ASSIGNED" || upper === "ACCEPTED") return "MENUNGGU BERANGKAT";
-        if (upper === "IN_PROGRESS" || upper === "ON_JOURNEY") return "DALAM PERJALANAN";
-        if (upper === "COMPLETED" || upper === "DONE" || upper === "FINISHED") return "SELESAI";
+        if (upper === "PENDING" || upper === "ASSIGNED" || upper === "ACCEPTED")
+          return "MENUNGGU BERANGKAT";
+        if (upper === "IN_PROGRESS" || upper === "ON_JOURNEY")
+          return "DALAM PERJALANAN";
+        if (upper === "COMPLETED" || upper === "DONE" || upper === "FINISHED")
+          return "SELESAI";
         if (upper === "REJECTED" || upper === "CANCELLED") return "DIBATALKAN";
         return upper.replace(/_/g, " ");
       };
 
-      // Filter and group by WO
-      const filtered = (woData || []).filter((wo: any) => {
-        if (!woSearch) return true;
-        const term = woSearch.toLowerCase();
-        return (
-          (wo.wo_number || "").toLowerCase().includes(term) ||
-          (wo.customers?.name || "").toLowerCase().includes(term) ||
-          (wo.customers?.legal_name || "").toLowerCase().includes(term)
-        );
-      });
-
+      // Group by WO (woSearch applied client-side via useMemo)
       const grouped: any[] = [];
-      filtered.forEach((wo: any) => {
+      (woData || []).forEach((wo: any) => {
         const truckingItems = (wo.wo_items || []).filter(
           (i: any) => i.sbu_type?.toLowerCase() === "trucking",
         );
@@ -282,7 +293,7 @@ export default function WOLevelReportingPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, customerFilter, woSearch, tenantId, canAccess]);
+  }, [startDate, endDate, customerFilter, tenantId, canAccess]);
 
   useEffect(() => {
     fetchReportData();
@@ -303,19 +314,37 @@ export default function WOLevelReportingPage() {
     return num.toLocaleString("id-ID");
   };
 
+  // Client-side WO search filter (no DB re-fetch on keystroke)
+  const filteredData = useMemo(() => {
+    if (!woSearch) return allData;
+    const term = woSearch.toLowerCase();
+    return allData.filter(
+      (wo: any) =>
+        (wo.wo_number || "").toLowerCase().includes(term) ||
+        (wo.customer_name || "").toLowerCase().includes(term),
+    );
+  }, [allData, woSearch]);
+
   const data = useMemo(() => {
-    if (pageSize === 999999) return allData;
+    if (pageSize === 999999) return filteredData;
     const startIdx = (page - 1) * pageSize;
-    return allData.slice(startIdx, startIdx + pageSize);
-  }, [allData, page, pageSize]);
+    return filteredData.slice(startIdx, startIdx + pageSize);
+  }, [filteredData, page, pageSize]);
 
   // Bottom Summary metrics calculations
   const totalWOs = data.length;
   const totalJOs = data.reduce((sum, d) => sum + (d.total_jo || 0), 0);
-  const totalRevenue = data.reduce((sum, d) => sum + Number(d.total_ar || 0), 0);
+  const totalRevenue = data.reduce(
+    (sum, d) => sum + Number(d.total_ar || 0),
+    0,
+  );
   const totalCost = data.reduce((sum, d) => sum + Number(d.total_cost || 0), 0);
-  const totalGrossMargin = data.reduce((sum, d) => sum + Number(d.margin || 0), 0);
-  const marginRatio = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0;
+  const totalGrossMargin = data.reduce(
+    (sum, d) => sum + Number(d.margin || 0),
+    0,
+  );
+  const marginRatio =
+    totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0;
 
   const handleExportExcel = async () => {
     if (data.length === 0) return toast.error("No data to export");
@@ -372,7 +401,7 @@ export default function WOLevelReportingPage() {
   };
 
   // Pagination
-  const totalRows = allData.length;
+  const totalRows = filteredData.length;
   const startRecord = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRecord = Math.min(page * pageSize, totalRows);
   const totalPages =
@@ -400,10 +429,22 @@ export default function WOLevelReportingPage() {
 
   // Derived metrics for summary
   const sumWO = allData.length;
-  const sumRitase = allData.reduce((acc: number, wo: any) => acc + (wo.total_jo || 0), 0);
-  const sumRevenue = allData.reduce((acc: number, wo: any) => acc + (wo.total_ar || 0), 0);
-  const sumCost = allData.reduce((acc: number, wo: any) => acc + (wo.total_cost || 0), 0);
-  const sumMargin = allData.reduce((acc: number, wo: any) => acc + (wo.margin || 0), 0);
+  const sumRitase = allData.reduce(
+    (acc: number, wo: any) => acc + (wo.total_jo || 0),
+    0,
+  );
+  const sumRevenue = allData.reduce(
+    (acc: number, wo: any) => acc + (wo.total_ar || 0),
+    0,
+  );
+  const sumCost = allData.reduce(
+    (acc: number, wo: any) => acc + (wo.total_cost || 0),
+    0,
+  );
+  const sumMargin = allData.reduce(
+    (acc: number, wo: any) => acc + (wo.margin || 0),
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
@@ -586,313 +627,336 @@ export default function WOLevelReportingPage() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-40">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-            Work Order Financial Matrix
-          </h3>
-          {loading && (
-            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-          )}
-        </div>
-
-        <div className="overflow-auto w-full max-h-[600px] relative">
-          <div className="min-w-[1000px]">
-            {/* Table Header */}
-            <div className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center gap-3">
-              <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">WO Number</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer</span>
-                </div>
-                <div className="col-span-3">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Route</span>
-                </div>
-                <div className="col-span-1">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Truck</span>
-                </div>
-                <div className="col-span-1 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">JOs</span>
-                </div>
-                <div className="col-span-1 text-right">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revenue (AR)</span>
-                </div>
-                <div className="col-span-1 text-right">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cost (AP)</span>
-                </div>
-                <div className="col-span-1 text-right">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Margin</span>
-                </div>
-              </div>
-              <div className="shrink-0 w-4"></div>
-            </div>
-
-            {/* WO Rows */}
-            <div className="divide-y divide-slate-100">
-              {data.map((wo: any) => (
-              <div key={wo.id} className="hover:bg-slate-50/30 transition-all">
-                {/* WO Header Row */}
-                <div
-                  className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
-                  onClick={() => toggleWO(wo.id)}
-                >
-                  <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-2">
-                      <span className="text-xs font-bold text-blue-600 font-mono">
-                        {wo.wo_number}
-                      </span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-xs font-semibold text-slate-700 truncate block">
-                        {wo.customer_name}
-                      </span>
-                    </div>
-                    <div className="col-span-3">
-                      <span className="text-xs text-slate-500 truncate block">
-                        {wo.route}
-                      </span>
-                    </div>
-                    <div className="col-span-1">
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {wo.truck_type}
-                      </span>
-                    </div>
-                    <div className="col-span-1 text-center">
-                      <span className="text-xs font-bold text-slate-600">
-                        {wo.total_jo}
-                      </span>
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <span className="text-xs font-semibold text-emerald-600">
-                        Rp {formatNumber(wo.total_ar)}
-                      </span>
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <span className="text-xs font-semibold text-amber-600">
-                        Rp {formatNumber(wo.total_cost)}
-                      </span>
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <span
-                        className={`text-xs font-bold ${wo.margin >= 0 ? "text-blue-600" : "text-rose-600"}`}
-                      >
-                        Rp {formatNumber(wo.margin)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-slate-300">
-                    {expandedWOs.has(wo.id) ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Expanded JO Details */}
-                {expandedWOs.has(wo.id) && (
-                  <div className="bg-slate-50/70 border-t border-slate-100">
-                    {wo.jos && wo.jos.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="bg-slate-100/50">
-                              <th className="px-5 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                JO Number
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Status
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Driver
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Plate
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                Transporter
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
-                                Advance
-                              </th>
-                              <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
-                                Vendor Cost
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {wo.jos.map((jo: any) => (
-                              <tr
-                                key={jo.id}
-                                className="hover:bg-white transition-all"
-                              >
-                                <td className="px-5 py-2.5">
-                                  <span className="text-xs font-mono font-medium text-blue-600">
-                                    {jo.jo_number}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  <span
-                                    className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                      jo.status === "SELESAI"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : jo.status === "DALAM PERJALANAN"
-                                          ? "bg-blue-50 text-blue-700"
-                                          : jo.status === "DIBATALKAN"
-                                            ? "bg-rose-50 text-rose-700"
-                                            : jo.status === "MENUNGGU BERANGKAT"
-                                              ? "bg-amber-50 text-amber-700"
-                                              : "bg-slate-100 text-slate-600"
-                                    }`}
-                                  >
-                                    {jo.status || "-"}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-xs text-slate-700">
-                                  {jo.driver_name}
-                                </td>
-                                <td className="px-4 py-2.5 text-xs font-semibold text-slate-600">
-                                  {jo.plate_number}
-                                </td>
-                                <td className="px-4 py-2.5 text-xs text-slate-500">
-                                  {jo.transporter_name}
-                                </td>
-                                <td className="px-4 py-2.5 text-xs text-right font-semibold text-slate-700">
-                                  Rp {formatNumber(jo.advance_amount)}
-                                </td>
-                                <td className="px-4 py-2.5 text-xs text-right font-semibold text-amber-700">
-                                  Rp {formatNumber(jo.purchase_price)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="px-5 py-4 text-center text-xs text-slate-400 italic">
-                        No Job Orders for this Work Order
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-40">
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+              Work Order Financial Matrix
+            </h3>
+            {loading && (
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            )}
           </div>
 
-          {/* Summary Footer */}
-          {data.length > 0 && (
-            <div className="sticky bottom-0 z-20 bg-slate-50 border-t border-slate-200 px-5 py-4">
-              <div className="flex items-center gap-3 min-w-[1000px]">
+          <div className="overflow-auto w-full max-h-[600px] relative">
+            <div className="min-w-[1000px]">
+              {/* Table Header */}
+              <div className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center gap-3">
                 <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-7 flex justify-end">
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-widest mr-4">
-                      Total
+                  <div className="col-span-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      WO Number
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Customer
+                    </span>
+                  </div>
+                  <div className="col-span-3">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Route
+                    </span>
+                  </div>
+                  <div className="col-span-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Truck
                     </span>
                   </div>
                   <div className="col-span-1 text-center">
-                    <span className="text-sm font-bold text-slate-800">
-                      {totalJOs}
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      JOs
                     </span>
                   </div>
                   <div className="col-span-1 text-right">
-                    <span className="text-sm font-bold text-emerald-600">
-                      Rp {formatNumber(totalRevenue)}
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Revenue (AR)
                     </span>
                   </div>
                   <div className="col-span-1 text-right">
-                    <span className="text-sm font-bold text-amber-600">
-                      Rp {formatNumber(totalCost)}
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Cost (AP)
                     </span>
                   </div>
-                  <div className="col-span-1 text-right flex flex-col items-end">
-                    <span
-                      className={`text-sm font-bold ${totalGrossMargin >= 0 ? "text-blue-600" : "text-rose-600"}`}
-                    >
-                      Rp {formatNumber(totalGrossMargin)}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">
-                      {marginRatio.toFixed(1)}% Margin
+                  <div className="col-span-1 text-right">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Margin
                     </span>
                   </div>
                 </div>
                 <div className="shrink-0 w-4"></div>
               </div>
-            </div>
-          )}
 
-          {data.length === 0 && !loading && (
-            <div className="py-24 text-center opacity-25 grayscale flex flex-col items-center justify-center">
-              <Inbox className="w-16 h-16 mb-2 text-slate-400" />
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                No Work Order Data Found
-              </p>
-            </div>
-          )}
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {data.length > 0 && (
-          <div className="px-5 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white">
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Showing {startRecord}-{endRecord} of {totalRows} records
-              </span>
-              <select
-                value={pageSize === 999999 ? "all" : pageSize}
-                onChange={(e) => {
-                  setPageSize(
-                    e.target.value === "all" ? 999999 : Number(e.target.value),
-                  );
-                  setPage(1);
-                }}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500"
-              >
-                <option value="10">10 / page</option>
-                <option value="20">20 / page</option>
-                <option value="50">50 / page</option>
-                <option value="all">All lines</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                <ChevronLeftIcon size={14} className="text-slate-600" />
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let pageNum: number;
-                  if (totalPages <= 5) pageNum = i + 1;
-                  else if (page <= 3) pageNum = i + 1;
-                  else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
-                  else pageNum = page - 2 + i;
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setPage(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-[10px] font-bold transition-all ${page === pageNum ? "bg-blue-600 text-white shadow-md" : "hover:bg-slate-100 text-slate-600"}`}
+              {/* WO Rows */}
+              <div className="divide-y divide-slate-100">
+                {data.map((wo: any) => (
+                  <div
+                    key={wo.id}
+                    className="hover:bg-slate-50/30 transition-all"
+                  >
+                    {/* WO Header Row */}
+                    <div
+                      className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
+                      onClick={() => toggleWO(wo.id)}
                     >
-                      {pageNum}
-                    </button>
-                  );
-                })}
+                      <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-2">
+                          <span className="text-xs font-bold text-blue-600 font-mono">
+                            {wo.wo_number}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-xs font-semibold text-slate-700 truncate block">
+                            {wo.customer_name}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          <span className="text-xs text-slate-500 truncate block">
+                            {wo.route}
+                          </span>
+                        </div>
+                        <div className="col-span-1">
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {wo.truck_type}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-center">
+                          <span className="text-xs font-bold text-slate-600">
+                            {wo.total_jo}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <span className="text-xs font-semibold text-emerald-600">
+                            Rp {formatNumber(wo.total_ar)}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <span className="text-xs font-semibold text-amber-600">
+                            Rp {formatNumber(wo.total_cost)}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <span
+                            className={`text-xs font-bold ${wo.margin >= 0 ? "text-blue-600" : "text-rose-600"}`}
+                          >
+                            Rp {formatNumber(wo.margin)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-slate-300">
+                        {expandedWOs.has(wo.id) ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded JO Details */}
+                    {expandedWOs.has(wo.id) && (
+                      <div className="bg-slate-50/70 border-t border-slate-100">
+                        {wo.jos && wo.jos.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="bg-slate-100/50">
+                                  <th className="px-5 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    JO Number
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Status
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Driver
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Plate
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Transporter
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                    Advance
+                                  </th>
+                                  <th className="px-4 py-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider text-right">
+                                    Vendor Cost
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {wo.jos.map((jo: any) => (
+                                  <tr
+                                    key={jo.id}
+                                    className="hover:bg-white transition-all"
+                                  >
+                                    <td className="px-5 py-2.5">
+                                      <span className="text-xs font-mono font-medium text-blue-600">
+                                        {jo.jo_number}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                      <span
+                                        className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                          jo.status === "SELESAI"
+                                            ? "bg-emerald-50 text-emerald-700"
+                                            : jo.status === "DALAM PERJALANAN"
+                                              ? "bg-blue-50 text-blue-700"
+                                              : jo.status === "DIBATALKAN"
+                                                ? "bg-rose-50 text-rose-700"
+                                                : jo.status ===
+                                                    "MENUNGGU BERANGKAT"
+                                                  ? "bg-amber-50 text-amber-700"
+                                                  : "bg-slate-100 text-slate-600"
+                                        }`}
+                                      >
+                                        {jo.status || "-"}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-xs text-slate-700">
+                                      {jo.driver_name}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-xs font-semibold text-slate-600">
+                                      {jo.plate_number}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-xs text-slate-500">
+                                      {jo.transporter_name}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-xs text-right font-semibold text-slate-700">
+                                      Rp {formatNumber(jo.advance_amount)}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-xs text-right font-semibold text-amber-700">
+                                      Rp {formatNumber(jo.purchase_price)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="px-5 py-4 text-center text-xs text-slate-400 italic">
+                            No Job Orders for this Work Order
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                <ChevronRightIcon size={14} className="text-slate-600" />
-              </button>
+
+              {/* Summary Footer */}
+              {data.length > 0 && (
+                <div className="sticky bottom-0 z-20 bg-slate-50 border-t border-slate-200 px-5 py-4">
+                  <div className="flex items-center gap-3 min-w-[1000px]">
+                    <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-7 flex justify-end">
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest mr-4">
+                          Total
+                        </span>
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <span className="text-sm font-bold text-slate-800">
+                          {totalJOs}
+                        </span>
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <span className="text-sm font-bold text-emerald-600">
+                          Rp {formatNumber(totalRevenue)}
+                        </span>
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <span className="text-sm font-bold text-amber-600">
+                          Rp {formatNumber(totalCost)}
+                        </span>
+                      </div>
+                      <div className="col-span-1 text-right flex flex-col items-end">
+                        <span
+                          className={`text-sm font-bold ${totalGrossMargin >= 0 ? "text-blue-600" : "text-rose-600"}`}
+                        >
+                          Rp {formatNumber(totalGrossMargin)}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">
+                          {marginRatio.toFixed(1)}% Margin
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 w-4"></div>
+                  </div>
+                </div>
+              )}
+
+              {data.length === 0 && !loading && (
+                <div className="py-24 text-center opacity-25 grayscale flex flex-col items-center justify-center">
+                  <Inbox className="w-16 h-16 mb-2 text-slate-400" />
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    No Work Order Data Found
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Pagination */}
+          {data.length > 0 && (
+            <div className="px-5 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Showing {startRecord}-{endRecord} of {totalRows} records
+                </span>
+                <select
+                  value={pageSize === 999999 ? "all" : pageSize}
+                  onChange={(e) => {
+                    setPageSize(
+                      e.target.value === "all"
+                        ? 999999
+                        : Number(e.target.value),
+                    );
+                    setPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500"
+                >
+                  <option value="10">10 / page</option>
+                  <option value="20">20 / page</option>
+                  <option value="50">50 / page</option>
+                  <option value="all">All lines</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeftIcon size={14} className="text-slate-600" />
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (page <= 3) pageNum = i + 1;
+                    else if (page >= totalPages - 2)
+                      pageNum = totalPages - 4 + i;
+                    else pageNum = page - 2 + i;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`w-8 h-8 rounded-lg text-[10px] font-bold transition-all ${page === pageNum ? "bg-blue-600 text-white shadow-md" : "hover:bg-slate-100 text-slate-600"}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronRightIcon size={14} className="text-slate-600" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
   );
 }
