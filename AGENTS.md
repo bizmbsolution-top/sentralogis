@@ -31,9 +31,22 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Status badge MENUNGGU SELESAI
   - Migration `185_add_assigned_at_to_job_orders.sql`
   - Fix `web-push` `isSetupDone()` bundling bug
+- **[NEW] EasyGo GPS Provider Integration** (ATM tenant)
+  - EasyGo API client (`src/infrastructure/external/EasyGoClient.ts`)
+  - Vehicle sync: 33 armada ATM linked ke EasyGo
+  - GPS sync: cron tiap 5 menit → `fleet_gps_status` + `tracking_points`
+  - Fleet Performance dashboard: Live Fleet Status tab (GPS source, engine, speed, address)
+  - Cleanup-fleets API untuk merge armada duplikat
+  - Migration: `20260805_easygo_integration.sql`, `20260805_fleet_gps_status.sql`
+  - Deploy ke Vercel Pro (cron support)
 
 ### In Progress
-- (none)
+- **[NEW] Dual GPS Source + Cross-Tenant Vendor Integration** (PRD: `docs/prd-dual-gps-vendor-integration.md`)
+  - Phase 1: GPS phone → `fleet_gps_status` (update `/api/jo/[token]`)
+  - Phase 2: Cross-tenant schema (`vendor_tenant_id` on entities/JOs/fleets)
+  - Phase 3: API updates (`/api/fleet-status` cross-tenant query)
+  - Phase 4: Frontend (GPS source badge, vendor badge, filters)
+  - Estimasi: ~5-6 jam (3 hari kerja)
 
 ### Blocked
 - (none)
@@ -50,6 +63,10 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - 1 WO item = 1 set pickup/delivery address (untuk LCL tahap awal)
 - GPS ping timestamps pakai `recorded_at` (jam HP driver), fallback `created_at` (server)
 - Telemetry Playback: raw ping table dengan geofence matching (500m threshold) ke nearest stop
+- GPS provider: EasyGo (hardware) + PWA/Android (phone) → `fleet_gps_status`
+- Fleet code format: `EG-{nopol}` untuk EasyGo-synced fleets
+- GPS sync interval: 5 menit (Vercel Pro cron)
+- Cross-tenant vendor: `vendor_tenant_id` on entities/JOs/fleets (PRD ready)
 
 ## Next Steps
 - **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
@@ -80,6 +97,7 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 
 ## Relevant Files
 - `/190726.md`: PRD SBU Forwarding + Driver Coin plan
+- `docs/prd-dual-gps-vendor-integration.md`: PRD Dual GPS + Cross-Tenant Vendor
 - `lib/utils/geoUtils.ts`: Haversine distance, formatDistance, formatSpeed
 - `lib/utils/dateUtils.ts`: parseUTC utility
 - `lib/hooks/useDriverGpsPing.ts`: GPS ping engine (PWA + Capacitor bridge)
@@ -90,3 +108,15 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - `app/api/jo/[token]/route.ts`: JO API (geofence, ping handler, recorded_at support)
 - `supabase/migrations/190_add_recorded_at_to_job_tracking.sql`: Add recorded_at column
 - `supabase/migrations/180_add_geofence_columns_to_job_routes.sql`: Geofence columns
+- `src/infrastructure/external/EasyGoClient.ts`: EasyGo API client (getVehicles, getLastPosition, getHistoryData)
+- `src/application/gps/EasyGoSyncService.ts`: Orchestrates vehicle + GPS sync with dedup logic
+- `app/api/easygo/sync-vehicles/route.ts`: POST - trigger vehicle sync from EasyGo
+- `app/api/easygo/sync-gps/route.ts`: POST/GET - sync GPS positions (GET handles cron)
+- `app/api/easygo/config/route.ts`: GET/POST - manage EasyGo provider config per tenant
+- `app/api/easygo/test-connection/route.ts`: POST - test EasyGo API connectivity
+- `app/api/fleet-status/route.ts`: GET - fleet live status (GPS + engine + DB status)
+- `app/(dashboard)/hq/fleet-performance/page.tsx`: Fleet Performance with Live Fleet Status tab
+- `app/(dashboard)/sbu/trucking/fleet-performance/page.tsx`: SBU Trucking Fleet Performance
+- `supabase/migrations/20260805_easygo_integration.sql`: GPS provider config + EasyGo columns
+- `supabase/migrations/20260805_fleet_gps_status.sql`: fleet_gps_status table
+- `vercel.json`: Cron job for EasyGo GPS sync (every 5 minutes)
