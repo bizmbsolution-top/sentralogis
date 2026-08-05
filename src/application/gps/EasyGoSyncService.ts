@@ -439,7 +439,7 @@ export class EasyGoSyncService {
           const referenceId = activeJO ? activeJO.id : fleet.id;
 
           let sessionId: string | null = null;
-          const { data: session } = await this.supabase
+          const { data: session, error: sessErr } = await this.supabase
             .from('tracking_sessions')
             .select('id')
             .eq('reference_type', referenceType)
@@ -448,10 +448,14 @@ export class EasyGoSyncService {
             .limit(1)
             .single();
 
+          if (sessErr && sessErr.code !== 'PGRST116') {
+            // PGRST116 = no rows found, which is expected
+          }
+
           if (session) {
             sessionId = session.id;
           } else {
-            const { data: newSession } = await this.supabase
+            const { data: newSession, error: newSessErr } = await this.supabase
               .from('tracking_sessions')
               .insert({
                 tenant_id: tenantId,
@@ -461,6 +465,9 @@ export class EasyGoSyncService {
               })
               .select('id')
               .single();
+            if (newSessErr) {
+              result.errors.push(`Session create failed for ${pos.nopol} (${referenceType}/${referenceId}): ${newSessErr.message}`);
+            }
             sessionId = newSession?.id || null;
           }
 
@@ -474,7 +481,13 @@ export class EasyGoSyncService {
               accuracy: 10,
               recorded_at: pos.gps_time_iso || new Date().toISOString(),
             });
-            if (!tpError) result.tracking_points_inserted++;
+            if (tpError) {
+              result.errors.push(`TP insert failed for ${pos.nopol}: ${tpError.message}`);
+            } else {
+              result.tracking_points_inserted++;
+            }
+          } else {
+            result.errors.push(`No session for ${pos.nopol} (${referenceType}/${referenceId})`);
           }
 
           result.synced++;
