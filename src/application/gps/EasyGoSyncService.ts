@@ -261,8 +261,8 @@ export class EasyGoSyncService {
                 result.vehicles.push({ nopol, fleet_id: existingByPlate.id, status: 'updated' });
               }
             } else {
-              // Insert new fleet
-              const { data: newFleet, error } = await this.supabase
+              // Try insert
+              const { data: newFleet, error: insertError } = await this.supabase
                 .from('md_fleets')
                 .insert({
                   tenant_id: tenantId,
@@ -284,8 +284,42 @@ export class EasyGoSyncService {
                 .select('id')
                 .single();
 
-              if (error) {
-                result.errors.push(`Insert failed for ${nopol}: ${error.message}`);
+              if (insertError) {
+                if (insertError.message.includes('unique constraint') || insertError.message.includes('duplicate key')) {
+                  // Global plate_number unique constraint violated - find and link
+                  const { data: globalMatch } = await this.supabase
+                    .from('md_fleets')
+                    .select('id')
+                    .eq('plate_number', nopol)
+                    .limit(1)
+                    .single();
+
+                  if (globalMatch) {
+                    const { error: linkError } = await this.supabase
+                      .from('md_fleets')
+                      .update({
+                        easygo_vehicle_id: vehicle.vehicle_id,
+                        easygo_nopol: nopol,
+                        brand: vehicle.brand || undefined,
+                        model: vehicle.model || undefined,
+                        engine_number: vehicle.engine_no || undefined,
+                        chassis_number: vehicle.chasis_no || undefined,
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq('id', globalMatch.id);
+
+                    if (linkError) {
+                      result.errors.push(`Global link failed for ${nopol}: ${linkError.message}`);
+                    } else {
+                      result.updated++;
+                      result.vehicles.push({ nopol, fleet_id: globalMatch.id, status: 'updated' });
+                    }
+                  } else {
+                    result.errors.push(`Insert + no global match for ${nopol}: ${insertError.message}`);
+                  }
+                } else {
+                  result.errors.push(`Insert failed for ${nopol}: ${insertError.message}`);
+                }
               } else if (newFleet) {
                 result.created++;
                 result.vehicles.push({ nopol, fleet_id: newFleet.id, status: 'created' });
