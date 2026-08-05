@@ -490,6 +490,25 @@ export class EasyGoSyncService {
             result.errors.push(`No session for ${pos.nopol} (${referenceType}/${referenceId})`);
           }
 
+          // Always upsert fleet_gps_status (live dashboard)
+          await this.supabase.from('fleet_gps_status').upsert({
+            fleet_id: fleet.id,
+            tenant_id: tenantId,
+            latitude: pos.lat,
+            longitude: pos.lon,
+            speed: pos.speed || 0,
+            heading: parseFloat(pos.direction) || 0,
+            address: pos.addr || null,
+            gps_time: pos.gps_time_iso || new Date().toISOString(),
+            status_vehicle: pos.status_vehicle || 0,
+            engine_on: pos.acc === '1' || pos.acc === 'on',
+            fuel_level: pos.fuel_level || null,
+            odometer: pos.odometer || null,
+            provider: 'easygo',
+            raw_json: pos as any,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'fleet_id' });
+
           result.synced++;
         } catch (err: any) {
           result.errors.push(`Error syncing GPS for ${pos.nopol}: ${err.message}`);
