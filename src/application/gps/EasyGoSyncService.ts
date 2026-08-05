@@ -14,6 +14,10 @@ export interface SyncVehiclesResult {
 
 export interface SyncGpsResult {
   synced: number;
+  skipped_no_coords: number;
+  skipped_duplicate: number;
+  tracking_points_inserted: number;
+  job_trackings_inserted: number;
   errors: string[];
 }
 
@@ -343,10 +347,10 @@ export class EasyGoSyncService {
   async syncLastPositions(tenantId: string): Promise<SyncGpsResult> {
     const client = await this.getEasyGoClient(tenantId);
     if (!client) {
-      return { synced: 0, errors: ['EasyGo not configured for this tenant'] };
+      return { synced: 0, skipped_no_coords: 0, skipped_duplicate: 0, tracking_points_inserted: 0, job_trackings_inserted: 0, errors: ['EasyGo not configured for this tenant'] };
     }
 
-    const result: SyncGpsResult = { synced: 0, errors: [] };
+    const result: SyncGpsResult = { synced: 0, skipped_no_coords: 0, skipped_duplicate: 0, tracking_points_inserted: 0, job_trackings_inserted: 0, errors: [] };
 
     try {
       // Get all fleets with easygo_vehicle_id for this tenant
@@ -358,7 +362,7 @@ export class EasyGoSyncService {
         .not('easygo_vehicle_id', 'is', null);
 
       if (fleetError || !fleets || fleets.length === 0) {
-        return { synced: 0, errors: ['No fleets with EasyGo mapping found'] };
+        return { synced: 0, skipped_no_coords: 0, skipped_duplicate: 0, tracking_points_inserted: 0, job_trackings_inserted: 0, errors: ['No fleets with EasyGo mapping found'] };
       }
 
       // Get nopol list for EasyGo API
@@ -376,24 +380,34 @@ export class EasyGoSyncService {
           // Skip if no valid coordinates
           if (!pos.lat || !pos.lon) continue;
 
-          // Check for duplicate (same position within 50m and 60s)
-          const { data: lastPing } = await this.supabase
-            .from('job_tracking')
-            .select('latitude, longitude, created_at')
-            .eq('fleet_id', fleet.id)
-            .order('created_at', { ascending: false })
+          // Check for duplicate via last tracking_points for this fleet session
+          const { data: lastFleetSession } = await this.supabase
+            .from('tracking_sessions')
+            .select('id')
+            .eq('reference_type', 'FLEET')
+            .eq('reference_id', fleet.id)
+            .eq('status', 'ACTIVE')
             .limit(1)
             .single();
 
-          if (lastPing) {
-            const timeDiff =
-              (new Date().getTime() - new Date(lastPing.created_at).getTime()) / 1000;
-            if (timeDiff < 60) {
-              // Skip if same position within 60 seconds
-              const latDiff = Math.abs(lastPing.latitude - pos.lat);
-              const lonDiff = Math.abs(lastPing.longitude - pos.lon);
-              if (latDiff < 0.0005 && lonDiff < 0.0005) {
-                continue;
+          if (lastFleetSession) {
+            const { data: lastPoint } = await this.supabase
+              .from('tracking_points')
+              .select('latitude, longitude, recorded_at')
+              .eq('session_id', lastFleetSession.id)
+              .order('recorded_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (lastPoint) {
+              const timeDiff =
+                (new Date().getTime() - new Date(lastPoint.recorded_at).getTime()) / 1000;
+              if (timeDiff < 60) {
+                const latDiff = Math.abs(lastPoint.latitude - pos.lat);
+                const lonDiff = Math.abs(lastPoint.longitude - pos.lon);
+                if (latDiff < 0.0005 && lonDiff < 0.0005) {
+                  continue;
+                }
               }
             }
           }
@@ -408,16 +422,15 @@ export class EasyGoSyncService {
             .single();
 
           if (activeJO) {
-            await this.supabase.from('job_tracking').insert({
+            const { error: jtError } = await this.supabase.from('job_tracking').insert({
               job_order_id: activeJO.id,
               latitude: pos.lat,
               longitude: pos.lon,
-              speed: pos.speed,
-              heading: parseFloat(pos.direction) || 0,
               recorded_at: pos.gps_time_iso || new Date().toISOString(),
               source: 'easygo',
               notes: pos.addr || undefined,
             });
+            if (!jtError) result.job_trackings_inserted++;
           }
 
           // Always insert to tracking_points for fleet-level telemetry
@@ -452,7 +465,7 @@ export class EasyGoSyncService {
           }
 
           if (sessionId) {
-            await this.supabase.from('tracking_points').insert({
+            const { error: tpError } = await this.supabase.from('tracking_points').insert({
               session_id: sessionId,
               latitude: pos.lat,
               longitude: pos.lon,
@@ -461,6 +474,7 @@ export class EasyGoSyncService {
               accuracy: 10,
               recorded_at: pos.gps_time_iso || new Date().toISOString(),
             });
+            if (!tpError) result.tracking_points_inserted++;
           }
 
           result.synced++;
