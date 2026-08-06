@@ -490,18 +490,23 @@ export class EasyGoSyncService {
             result.errors.push(`No session for ${pos.nopol} (${referenceType}/${referenceId})`);
           }
 
+          // Calculate status_vehicle from speed as fallback when EasyGo returns 0
+          const speedKmh = pos.speed || 0;
+          const statusVehicle = pos.status_vehicle || (speedKmh > 5 ? 2 : speedKmh > 0 ? 1 : 0);
+          const engineOn = pos.acc === '1' || pos.acc === 'on' || speedKmh > 0;
+
           // Always upsert fleet_gps_status (live dashboard)
           await this.supabase.from('fleet_gps_status').upsert({
             fleet_id: fleet.id,
             tenant_id: tenantId,
             latitude: pos.lat,
             longitude: pos.lon,
-            speed: pos.speed || 0,
+            speed: speedKmh,
             heading: parseFloat(pos.direction) || 0,
             address: pos.addr || null,
             gps_time: pos.gps_time_iso || new Date().toISOString(),
-            status_vehicle: pos.status_vehicle || 0,
-            engine_on: pos.acc === '1' || pos.acc === 'on',
+            status_vehicle: statusVehicle,
+            engine_on: engineOn,
             fuel_level: pos.fuel_level || null,
             odometer: pos.odometer || null,
             provider: 'easygo',
