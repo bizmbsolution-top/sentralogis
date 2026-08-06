@@ -32,11 +32,24 @@ interface Fleet {
   md_fleet_types: { type_name: string; icon_url?: string };
 }
 
+interface FleetGpsStatus {
+  fleet_id: string;
+  latitude: number;
+  longitude: number;
+  speed: number;
+  status_vehicle: number;
+  engine_on: boolean;
+  provider: string;
+  gps_time: string;
+  address: string | null;
+}
+
 export default function HQFleetsPage() {
   const { profile, loading: loadingAuth } = useAuth();
   const { syncStatus, loading: syncLoading, lastSync, lastResult } = useStatusSync({ autoSync: false });
   
   const [fleets, setFleets] = useState<Fleet[]>([]);
+  const [gpsMap, setGpsMap] = useState<Record<string, FleetGpsStatus>>({});
   const [vendors, setVendors] = useState<{id: string, name: string}[]>([]);
   const [fleetTypes, setFleetTypes] = useState<{id: string, type_name: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +130,21 @@ export default function HQFleetsPage() {
       setVendors([...ownEntity, ...(vendorData || [])]);
       setFleets(fleetData || []);
       setFleetTypes(typeData || []);
+
+      // Fetch live GPS status for all fleets
+      const fleetIds = (fleetData || []).map((f: any) => f.id);
+      if (fleetIds.length > 0) {
+        const { data: gpsData } = await supabase
+          .from('fleet_gps_status')
+          .select('fleet_id, latitude, longitude, speed, status_vehicle, engine_on, provider, gps_time, address')
+          .in('fleet_id', fleetIds);
+
+        const map: Record<string, FleetGpsStatus> = {};
+        for (const g of gpsData || []) {
+          map[g.fleet_id] = g;
+        }
+        setGpsMap(map);
+      }
     } catch (error: any) {
       toast.error('Gagal mengambil data master');
     } finally {
@@ -307,12 +335,37 @@ export default function HQFleetsPage() {
       return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Exp. Soon</span>;
     }
 
+    let dbBadge: React.ReactNode;
     switch (fleet.status) {
-      case 'available': return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Available</span>;
-      case 'on_road': return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full uppercase tracking-wider">On Road</span>;
-      case 'maintenance': return <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Maintenance</span>;
-      default: return <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-full uppercase tracking-wider">{fleet.status}</span>;
+      case 'available': dbBadge = <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Available</span>; break;
+      case 'on_road': dbBadge = <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full uppercase tracking-wider">On Road</span>; break;
+      case 'maintenance': dbBadge = <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full uppercase tracking-wider">Maintenance</span>; break;
+      default: dbBadge = <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-full uppercase tracking-wider">{fleet.status}</span>;
     }
+
+    const gps = gpsMap[fleet.id];
+    let gpsBadge: React.ReactNode = null;
+    if (gps) {
+      const gpsAge = gps.gps_time ? (Date.now() - new Date(gps.gps_time).getTime()) / 1000 / 60 : Infinity;
+      if (gpsAge > 30) {
+        gpsBadge = <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[10px] font-bold rounded-full">Stale</span>;
+      } else if (gps.status_vehicle === 2) {
+        gpsBadge = <span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full">{gps.speed > 0 ? `${gps.speed}km/h` : 'Driving'}</span>;
+      } else if (gps.status_vehicle === 1) {
+        gpsBadge = <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full">Idle</span>;
+      } else {
+        gpsBadge = <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full">Parked</span>;
+      }
+    } else {
+      gpsBadge = <span className="px-2 py-0.5 bg-slate-50 text-slate-400 text-[10px] font-bold rounded-full">No GPS</span>;
+    }
+
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {dbBadge}
+        {gpsBadge}
+      </div>
+    );
   };
 
   const filteredFleets = fleets.filter(f => {
@@ -414,10 +467,16 @@ export default function HQFleetsPage() {
                  Available: {fleets.filter(f => f.status === 'available').length}
                </span>
                <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">
-                 On Road: {fleets.filter(f => f.status === 'on_road').length}
+                 Driving: {Object.values(gpsMap).filter(g => g.status_vehicle === 2).length}
                </span>
                <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded-full font-medium">
                  Maintenance: {fleets.filter(f => f.status === 'maintenance').length}
+               </span>
+               <span className="px-2 py-1 bg-slate-50 text-slate-600 rounded-full font-medium">
+                 GPS Active: {Object.values(gpsMap).filter(g => {
+                   const age = g.gps_time ? (Date.now() - new Date(g.gps_time).getTime()) / 1000 / 60 : Infinity;
+                   return age <= 30;
+                 }).length}/{fleets.length}
                </span>
              </div>
           </div>
