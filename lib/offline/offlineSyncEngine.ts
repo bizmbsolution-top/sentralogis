@@ -63,6 +63,10 @@ export interface GpsPing {
   timestamp: string;
   status: 'PENDING' | 'SYNCED' | 'FAILED';
   retry_count: number;
+  source?: string;
+  battery?: number;
+  speed?: number;
+  accuracy?: number;
 }
 
 const GPS_PING_QUEUE_KEY = 'offline_gps_ping_queue';
@@ -261,7 +265,11 @@ async function removeMutationFromQueue(id: string): Promise<void> {
 export async function enqueueGpsPing(
   jobOrderId: string,
   lat: number,
-  lng: number
+  lng: number,
+  source?: string,
+  battery?: number,
+  speed?: number,
+  accuracy?: number,
 ): Promise<GpsPing> {
   const ping: GpsPing = {
     id: `gps_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -271,6 +279,10 @@ export async function enqueueGpsPing(
     timestamp: new Date().toISOString(),
     status: 'PENDING',
     retry_count: 0,
+    source,
+    battery,
+    speed,
+    accuracy,
   };
 
   await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
@@ -326,25 +338,36 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
   }
 
   // Step 1: Sync GPS pings first (highest priority)
+  // Use the PATCH API endpoint to get full processing: debounce, job_tracking, fleet_gps_status, geofence
   const gpsPings = await getPendingGpsPings();
   let syncedGps = 0;
   let failedCount = 0;
 
   for (const ping of gpsPings) {
     try {
-      await updateGpsPingStatus(ping.id, 'SYNCED');
-      const { error } = await supabase
-        .from('job_tracking')
-        .insert({
-          job_order_id: ping.job_order_id,
-          status_update: 'GPS_PING',
-          latitude: ping.lat,
-          longitude: ping.lng,
-          notes: 'Offline GPS ping (queued)',
+      const response = await fetch(`/api/jo/${ping.job_order_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          action: 'gps_ping',
+          lat: ping.lat,
+          lng: ping.lng,
           recorded_at: ping.timestamp,
-          created_at: ping.timestamp,
-        });
-      if (error) throw error;
+          source: ping.source || 'pwa',
+          battery: ping.battery,
+          speed: ping.speed,
+          accuracy: ping.accuracy,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API ${response.status}: ${errText}`);
+      }
+
       await removeGpsPingFromQueue(ping.id);
       syncedGps++;
     } catch (err: any) {

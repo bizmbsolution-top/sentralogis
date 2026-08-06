@@ -190,7 +190,7 @@ export function useDriverGpsPing(
 
       // [Phase 2.2] If offline, queue GPS ping to IndexedDB instead of sending to API
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        await enqueueGpsPing(token, lat, lng);
+        await enqueueGpsPing(token, lat, lng, source, battery, speed, accuracy);
         console.log(
           `[GPS Ping] Queued offline GPS ping for JO: ${token} from ${source}`,
         );
@@ -335,6 +335,21 @@ export function useDriverGpsPing(
         pos.coords.speed ?? undefined,
         pos.coords.accuracy ?? undefined,
       );
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("sentralogis:native_gps_update", {
+            detail: {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              heading: pos.coords.heading ?? undefined,
+              speed: pos.coords.speed ?? undefined,
+              accuracy: pos.coords.accuracy ?? undefined,
+              battery: undefined,
+            },
+          }),
+        );
+      }
     } catch (e) {
       console.warn("[GPS Browser Ping] failed:", e);
     } finally {
