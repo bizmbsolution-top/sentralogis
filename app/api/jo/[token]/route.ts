@@ -11,9 +11,14 @@ export const revalidate = 0;
 
 // Fake permission engine and request context for interim
 const mockPermissionEngine = {
-  can: () => true
+  can: () => true,
 };
-const mockCtx = { tenantId: 'SYSTEM', userId: 'SYSTEM', role: 'system', trace: { traceId: 'jo', spanId: 'jo' } };
+const mockCtx = {
+  tenantId: "SYSTEM",
+  userId: "SYSTEM",
+  role: "system",
+  trace: { traceId: "jo", spanId: "jo" },
+};
 
 function calculateHaversineDistance(
   lat1: number,
@@ -45,12 +50,14 @@ async function uploadPhotoToStorage(
   const base64Data = base64.split(",")[1] || base64;
   const buffer = Buffer.from(base64Data, "base64");
   const fileExt = (name?.split(".").pop() || "jpg").toLowerCase();
-  const safeExt = ["jpg", "jpeg", "png", "webp"].includes(fileExt) ? fileExt : "jpg";
+  const safeExt = ["jpg", "jpeg", "png", "webp"].includes(fileExt)
+    ? fileExt
+    : "jpg";
   const fileName = `${joId}/${routeId}-photo-${Date.now()}.${safeExt}`;
   const filePath = `location-photos/${fileName}`;
 
   let uploadBucket = "pod_documents";
-  let { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from(uploadBucket)
     .upload(filePath, buffer, {
       contentType: `image/${safeExt === "jpg" ? "jpeg" : safeExt}`,
@@ -108,14 +115,20 @@ export async function GET(
     const supabase = createAdminClient();
 
     if (!token) {
-      return NextResponse.json({ error: "Token tidak ditemukan" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Token tidak ditemukan" },
+        { status: 400 },
+      );
     }
 
     const queryService = new DriverPortalQuery(supabase);
     const jobOrderData = await queryService.getJobOrderData(token);
 
     if (!jobOrderData) {
-      return NextResponse.json({ error: "Job Order tidak ditemukan" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Job Order tidak ditemukan" },
+        { status: 404 },
+      );
     }
 
     // Lazy auto-complete: if this JO is waiting for completion and the driver
@@ -158,6 +171,8 @@ export async function PATCH(
       route_notes,
       pod_photo_base64,
       pod_photo_name,
+      speed,
+      source,
     } = body;
 
     const supabase = createAdminClient();
@@ -165,11 +180,15 @@ export async function PATCH(
     const commandRepo = new DriverPortalCommandRepository(supabase);
 
     const trackingRepo = new SupabaseTrackingRepository(supabase);
-    const trackingService = new TrackingService(mockPermissionEngine as any, trackingRepo);
+    const trackingService = new TrackingService(
+      mockPermissionEngine as any,
+      trackingRepo,
+    );
 
     // Identify JO
     const jo = await queryService.getJobOrderData(token);
-    if (!jo) return NextResponse.json({ error: "JO not found" }, { status: 404 });
+    if (!jo)
+      return NextResponse.json({ error: "JO not found" }, { status: 404 });
 
     // ─────────────────────────────────────────────────────────────────────
     // PHOTO UPLOAD — multiple photos per location (no action required)
@@ -184,7 +203,13 @@ export async function PATCH(
           pod_photo_base64,
           pod_photo_name,
         );
-        await insertLocationPhoto(supabase, jo, route_id, publicUrl, pod_photo_name);
+        await insertLocationPhoto(
+          supabase,
+          jo,
+          route_id,
+          publicUrl,
+          pod_photo_name,
+        );
 
         // Legacy backfill: keep the latest photo on job_routes for old readers
         try {
@@ -232,7 +257,12 @@ export async function PATCH(
     // ─────────────────────────────────────────────────────────────────────
     switch (action) {
       case "update_container":
-        await commandRepo.updateContainer(jo.id, container_number, seal_number, jo.sbu_metadata);
+        await commandRepo.updateContainer(
+          jo.id,
+          container_number,
+          seal_number,
+          jo.sbu_metadata,
+        );
         return NextResponse.json({ success: true });
 
       case "accept":
@@ -245,8 +275,16 @@ export async function PATCH(
 
       case "route_status":
         if (!route_id || !route_status)
-          return NextResponse.json({ error: "Missing route info" }, { status: 400 });
-        await commandRepo.updateRouteStatus(route_id, route_status, route_notes, body.pod_photo_url);
+          return NextResponse.json(
+            { error: "Missing route info" },
+            { status: 400 },
+          );
+        await commandRepo.updateRouteStatus(
+          route_id,
+          route_status,
+          route_notes,
+          body.pod_photo_url,
+        );
         return NextResponse.json({ success: true });
 
       // ─────────────────────────────────────────────────────────────────
@@ -255,7 +293,10 @@ export async function PATCH(
       // ─────────────────────────────────────────────────────────────────
       case "gps_ping": {
         if (!lat || !lng)
-          return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
+          return NextResponse.json(
+            { error: "Missing lat/lng" },
+            { status: 400 },
+          );
 
         const nLat = Number(lat);
         const nLng = Number(lng);
@@ -271,7 +312,10 @@ export async function PATCH(
           body.accuracy,
         );
         if (result.isFailure) {
-          console.warn("[Tracking] tracking_points ping failed (non-fatal):", result.error);
+          console.warn(
+            "[Tracking] tracking_points ping failed (non-fatal):",
+            result.error,
+          );
         }
 
         // 1. Server-side debounce: skip insert if same coords within 60s
@@ -286,10 +330,13 @@ export async function PATCH(
 
         if (lastPing && lastPing.latitude && lastPing.longitude) {
           const distM = calculateHaversineDistance(
-            nLat, nLng,
-            Number(lastPing.latitude), Number(lastPing.longitude),
+            nLat,
+            nLng,
+            Number(lastPing.latitude),
+            Number(lastPing.longitude),
           );
-          const timeSinceMs = Date.now() - new Date(lastPing.created_at).getTime();
+          const timeSinceMs =
+            Date.now() - new Date(lastPing.created_at).getTime();
           if (distM < 50 && timeSinceMs < 60_000) {
             return NextResponse.json({
               success: true,
@@ -310,9 +357,36 @@ export async function PATCH(
           notes: "Auto GPS ping dari driver (Adaptive Interval)",
         };
         if (recorded_at) pingPayload.recorded_at = recorded_at;
-        const { error: pingErr } = await supabase.from("job_tracking").insert(pingPayload);
+        const { error: pingErr } = await supabase
+          .from("job_tracking")
+          .insert(pingPayload);
         if (pingErr)
           return NextResponse.json({ error: pingErr.message }, { status: 500 });
+
+        // 2b. Upsert fleet_gps_status so Fleet Performance shows phone GPS
+        if (jo.fleet_id && jo.tenant_id) {
+          const nSpeed = Number(speed) || 0;
+          const gpsSource = source || "pwa";
+          try {
+            await supabase.from("fleet_gps_status").upsert(
+              {
+                fleet_id: jo.fleet_id,
+                tenant_id: jo.tenant_id,
+                latitude: nLat,
+                longitude: nLng,
+                speed: nSpeed,
+                gps_time: recorded_at || new Date().toISOString(),
+                status_vehicle: nSpeed > 5 ? 2 : nSpeed > 0 ? 1 : 0,
+                engine_on: true,
+                provider: gpsSource,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "fleet_id" },
+            );
+          } catch (e) {
+            console.warn("[API] fleet_gps_status upsert skipped:", e);
+          }
+        }
 
         // 3. Device health update if provided by native app
         if (
@@ -342,7 +416,9 @@ export async function PATCH(
             .eq("id", jo.id);
         }
 
-        // 4. Geofence check (<= 500m from any pending/arrived stop)
+        // 4. Geofence check (<= 2000m from nearest pending stop)
+        // Supports out-of-sequence: driver can arrive at any stop, skipped stops auto-completed
+        const GEOFENCE_RADIUS_M = 2000;
         const { data: activeRoutes } = await supabase
           .from("job_routes")
           .select("*")
@@ -361,61 +437,99 @@ export async function PATCH(
         let departedStopName: string | null = null;
 
         if (activeRoutes && activeRoutes.length > 0) {
-          const pendingRoutes = activeRoutes.filter((r: any) => r.status === "pending");
-          const arrivedRoutes = activeRoutes.filter((r: any) => r.status === "arrived");
-          const completedRoutes = activeRoutes.filter((r: any) => r.status === "completed");
+          const pendingRoutes = activeRoutes.filter(
+            (r: any) => r.status === "pending",
+          );
+          const arrivedRoutes = activeRoutes.filter(
+            (r: any) => r.status === "arrived",
+          );
+          const completedRoutes = activeRoutes.filter(
+            (r: any) => r.status === "completed",
+          );
 
-          // 4a. Arrivals (pending -> arrived)
+          // 4a. Arrivals — find NEAREST pending stop within radius (supports out-of-sequence)
+          let nearestPending: any = null;
+          let nearestDist = Infinity;
+
           for (const route of pendingRoutes) {
             if (route.latitude && route.longitude) {
               const distM = calculateHaversineDistance(
-                nLat, nLng,
+                nLat,
+                nLng,
                 Number(route.latitude),
                 Number(route.longitude),
               );
 
+              // Skip if recently triggered (5 min cooldown)
               if (route.geofence_triggered_at) {
-                const lastTrigger = new Date(route.geofence_triggered_at).getTime();
+                const lastTrigger = new Date(
+                  route.geofence_triggered_at,
+                ).getTime();
                 if (Date.now() - lastTrigger < 5 * 60 * 1000) {
                   continue;
                 }
               }
 
-              if (distM <= 500) {
-                geofenceTriggered = true;
-                arrivedStopName = route.location_name || `Stop #${route.sequence}`;
-                geofenceDistanceM = Math.round(distM);
+              if (distM <= GEOFENCE_RADIUS_M && distM < nearestDist) {
+                nearestDist = distM;
+                nearestPending = route;
+              }
+            }
+          }
 
-                await supabase
-                  .from("job_routes")
-                  .update({
-                    status: "arrived",
-                    actual_arrival: new Date().toISOString(),
-                    geofence_triggered_at: new Date().toISOString(),
-                  })
-                  .eq("id", route.id);
+          if (nearestPending) {
+            geofenceTriggered = true;
+            arrivedStopName =
+              nearestPending.location_name || `Stop #${nearestPending.sequence}`;
+            geofenceDistanceM = Math.round(nearestDist);
 
-                // Auto-complete any prior stops
-                const priorStops = activeRoutes.filter(
-                  (r: any) => r.sequence < route.sequence && r.status !== "completed",
-                );
-                for (const prior of priorStops) {
-                  const update: any = {
-                    status: "completed",
-                    actual_departure: new Date().toISOString(),
-                  };
-                  if (!prior.actual_arrival) {
-                    update.actual_arrival = new Date().toISOString();
-                  }
-                  await supabase.from("job_routes").update(update).eq("id", prior.id);
-                }
+            // Mark this stop as arrived
+            await supabase
+              .from("job_routes")
+              .update({
+                status: "arrived",
+                actual_arrival: new Date().toISOString(),
+                geofence_triggered_at: new Date().toISOString(),
+              })
+              .eq("id", nearestPending.id);
+
+            // Auto-complete ALL prior stops (skipped stops get marked completed)
+            const priorStops = activeRoutes.filter(
+              (r: any) =>
+                r.sequence < nearestPending.sequence && r.status !== "completed",
+            );
+            for (const prior of priorStops) {
+              const update: any = {
+                status: "completed",
+                actual_departure: new Date().toISOString(),
+              };
+              if (!prior.actual_arrival) {
+                update.actual_arrival = new Date().toISOString();
+                update.notes = "Auto-completed (driver arrived at later stop)";
+              }
+              await supabase
+                .from("job_routes")
+                .update(update)
+                .eq("id", prior.id);
+
+              // Log skipped stop
+              await supabase.from("job_tracking").insert({
+                job_order_id: jo.id,
+                job_route_id: prior.id,
+                status_update: `⏭️ Stop dilewati: ${prior.location_name || `Stop #${prior.sequence}`}`,
+                latitude: nLat,
+                longitude: nLng,
+                notes: `Otomatis dilompati karena driver tiba di ${arrivedStopName} terlebih dahulu.`,
+                ...(recorded_at ? { recorded_at } : {}),
+              });
+            }
 
                 let newJoStatus: string | null = null;
-                if (route.sequence === 1 || route.stop_type === "PICKUP") {
+                if (nearestPending.sequence === 1 || nearestPending.stop_type === "PICKUP") {
                   newJoStatus = "TIBA DI LOKASI MUAT";
                 } else if (
-                  route.stop_type === "DROPOFF" ||
-                  route.sequence === activeRoutes.length
+                  nearestPending.stop_type === "DROPOFF" ||
+                  nearestPending.sequence === activeRoutes.length
                 ) {
                   newJoStatus = "TIBA DI LOKASI BONGKAR";
                 } else {
@@ -432,12 +546,15 @@ export async function PATCH(
                     updateJoPayload.started_at = new Date().toISOString();
                     updateJoPayload.driver_response = "accepted";
                   }
-                  await supabase.from("job_orders").update(updateJoPayload).eq("id", jo.id);
+                  await supabase
+                    .from("job_orders")
+                    .update(updateJoPayload)
+                    .eq("id", jo.id);
                 }
 
                 await supabase.from("job_tracking").insert({
                   job_order_id: jo.id,
-                  job_route_id: route.id,
+                  job_route_id: nearestPending.id,
                   status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
                   latitude: nLat,
                   longitude: nLng,
@@ -453,17 +570,14 @@ export async function PATCH(
                   message: `Truk untuk JO ${jo.jo_number} otomatis terdeteksi tiba di ${arrivedStopName} (Radius ${geofenceDistanceM}m via Geofence).`,
                   link: `/sbu/trucking/work-orders/${jo.id}`,
                 });
-
-                break;
-              }
-            }
           }
 
           // 4b. Departures (arrived -> completed)
           for (const route of arrivedRoutes) {
             if (route.latitude && route.longitude) {
               const distM = calculateHaversineDistance(
-                nLat, nLng,
+                nLat,
+                nLng,
                 Number(route.latitude),
                 Number(route.longitude),
               );
@@ -474,7 +588,8 @@ export async function PATCH(
               }
 
               if (distM > 500) {
-                departedStopName = route.location_name || `Stop #${route.sequence}`;
+                departedStopName =
+                  route.location_name || `Stop #${route.sequence}`;
 
                 await supabase
                   .from("job_routes")
@@ -498,14 +613,18 @@ export async function PATCH(
                 ) {
                   departJoStatus = "MENUNGGU SELESAI";
                   updateJoPayload.unloaded_at = new Date().toISOString();
-                  updateJoPayload.departure_detected_at = new Date().toISOString();
+                  updateJoPayload.departure_detected_at =
+                    new Date().toISOString();
                 } else {
                   departJoStatus = "MELANJUTKAN PERJALANAN";
                 }
 
                 updateJoPayload.status = departJoStatus;
 
-                await supabase.from("job_orders").update(updateJoPayload).eq("id", jo.id);
+                await supabase
+                  .from("job_orders")
+                  .update(updateJoPayload)
+                  .eq("id", jo.id);
 
                 await supabase.from("job_tracking").insert({
                   job_order_id: jo.id,
@@ -538,13 +657,16 @@ export async function PATCH(
               ) {
                 if (route.latitude && route.longitude) {
                   const distM = calculateHaversineDistance(
-                    nLat, nLng,
+                    nLat,
+                    nLng,
                     Number(route.latitude),
                     Number(route.longitude),
                   );
                   if (distM <= 300) {
                     if (route.geofence_triggered_at) {
-                      const lastTrigger = new Date(route.geofence_triggered_at).getTime();
+                      const lastTrigger = new Date(
+                        route.geofence_triggered_at,
+                      ).getTime();
                       if (Date.now() - lastTrigger < 5 * 60 * 1000) {
                         continue;
                       }
@@ -610,7 +732,8 @@ export async function PATCH(
       case "panic_button": {
         const panicType = body.panic_type || "general";
         const reason = body.reason || "Kondisi Darurat di Jalan";
-        const hasCargo = body.has_cargo !== undefined ? Boolean(body.has_cargo) : true;
+        const hasCargo =
+          body.has_cargo !== undefined ? Boolean(body.has_cargo) : true;
         const cargoText = hasCargo
           ? "⚠️ ADA MUATAN DI ATAS TRUK"
           : "Kosong (Truk Tanpa Muatan)";
@@ -666,7 +789,13 @@ export async function PATCH(
               pod_photo_base64,
               pod_photo_name,
             );
-            await insertLocationPhoto(supabase, jo, route_id, uploadedPublicUrl, pod_photo_name);
+            await insertLocationPhoto(
+              supabase,
+              jo,
+              route_id,
+              uploadedPublicUrl,
+              pod_photo_name,
+            );
           }
 
           let matchedRouteId = route_id;
@@ -690,8 +819,10 @@ export async function PATCH(
               for (const r of allRoutes) {
                 if (r.latitude && r.longitude) {
                   const d = calculateHaversineDistance(
-                    Number(lat), Number(lng),
-                    Number(r.latitude), Number(r.longitude),
+                    Number(lat),
+                    Number(lng),
+                    Number(r.latitude),
+                    Number(r.longitude),
                   );
                   if (d < minDist) {
                     minDist = d;
@@ -896,6 +1027,27 @@ export async function PATCH(
               review_notes: "Tugas diselesaikan melalui Driver Portal",
               tenant_id: jo.tenant_id,
             });
+
+            // 🪙 Award driver coin (1 koin = Rp 5.000) — idempotent via RPC
+            try {
+              const { data: coinAwarded, error: coinErr } = await supabase.rpc(
+                "award_driver_coin",
+                {
+                  p_driver_id: jo.driver_id,
+                  p_tenant_id: jo.tenant_id,
+                  p_job_order_id: jo.id,
+                },
+              );
+              if (coinErr) {
+                console.warn("[API] Coin award failed:", coinErr.message);
+              } else if (coinAwarded) {
+                console.log(
+                  `[API] 🪙 Coin awarded to driver ${jo.driver_id} for JO ${jo.jo_number}`,
+                );
+              }
+            } catch (e) {
+              console.warn("[API] Coin award error:", e);
+            }
           } catch (e) {
             console.error("[API] Driver stats update failed:", e);
           }

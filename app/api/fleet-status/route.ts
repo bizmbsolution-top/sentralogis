@@ -1,5 +1,5 @@
 // GET /api/fleet-status?tenant_id=xxx
-// Returns fleet status combined with GPS live data
+// Returns fleet status combined with GPS live data (supports cross-tenant vendor fleets)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -17,33 +17,52 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'tenant_id required' }, { status: 400 });
     }
 
-    // 1. Get all active fleets
+    // 1. Get all active fleets (include vendor_tenant_id for cross-tenant)
     const { data: fleets, error: fleetError } = await supabase
       .from('md_fleets')
-      .select('id, fleet_code, plate_number, status, brand, model, is_active, entity_id')
+      .select('id, fleet_code, plate_number, status, brand, model, is_active, entity_id, vendor_tenant_id')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .order('plate_number');
 
     if (fleetError) throw fleetError;
 
-    // 2. Get GPS status for these fleets
+    // 2. Get GPS status for tenant's own fleets
     const fleetIds = (fleets || []).map(f => f.id);
-    const { data: gpsStatuses } = await supabase
+    const { data: ownGpsStatuses } = await supabase
       .from('fleet_gps_status')
       .select('*')
       .in('fleet_id', fleetIds);
 
-    const gpsMap = new Map((gpsStatuses || []).map(g => [g.fleet_id, g]));
+    const gpsMap = new Map((ownGpsStatuses || []).map(g => [g.fleet_id, g]));
 
-    // 3. Get active JOs per fleet
+    // 3. Cross-tenant GPS: for vendor fleets, also query vendor tenant's fleet_gps_status
+    const vendorTenantIds = [...new Set(
+      (fleets || [])
+        .filter(f => f.vendor_tenant_id && f.vendor_tenant_id !== tenantId)
+        .map(f => f.vendor_tenant_id)
+    )];
+
+    if (vendorTenantIds.length > 0) {
+      const { data: vendorGpsStatuses } = await supabase
+        .from('fleet_gps_status')
+        .select('*')
+        .in('tenant_id', vendorTenantIds);
+
+      // Vendor GPS takes priority over own GPS for cross-tenant fleets
+      for (const vg of vendorGpsStatuses || []) {
+        gpsMap.set(vg.fleet_id, vg);
+      }
+    }
+
+    // 4. Get active JOs per fleet
     const { data: activeJOs } = await supabase
       .from('job_orders')
       .select('id, fleet_id, jo_number, status')
       .eq('tenant_id', tenantId)
-      .in('status', ['assigned', 'in_progress', 'DISPATCHED']);
+      .in('status', ['ASSIGNED', 'DALAM PERJALANAN', 'DISPATCHED']);
 
-    const joMap = new Map<string, typeof activeJOs>();
+    const joMap = new Map<string, any[]>();
     for (const jo of activeJOs || []) {
       if (!jo.fleet_id) continue;
       const list = joMap.get(jo.fleet_id) || [];
@@ -51,10 +70,11 @@ export async function GET(req: NextRequest) {
       joMap.set(jo.fleet_id, list);
     }
 
-    // 4. Combine data
+    // 5. Combine data
     const result = (fleets || []).map(fleet => {
       const gps = gpsMap.get(fleet.id);
       const activeJOs = joMap.get(fleet.id) || [];
+      const isVendorFleet = !!fleet.vendor_tenant_id && fleet.vendor_tenant_id !== tenantId;
 
       // Determine live status
       let liveStatus: string = 'NO_SIGNAL';
@@ -62,11 +82,13 @@ export async function GET(req: NextRequest) {
       let lastSeen: string | null = null;
       let lastAddress: string | null = null;
       let speed: number = 0;
+      let gpsSource: string | null = null;
 
       if (gps) {
         lastSeen = gps.gps_time;
         lastAddress = gps.address;
         speed = gps.speed || 0;
+        gpsSource = gps.provider || null;
 
         // Check if GPS data is stale (>30 min)
         const gpsAge = gps.gps_time
@@ -98,6 +120,8 @@ export async function GET(req: NextRequest) {
         speed,
         last_seen: lastSeen,
         last_address: lastAddress,
+        gps_source: gpsSource,
+        is_vendor_fleet: isVendorFleet,
         active_jo_count: activeJOs.length,
         active_jos: activeJOs.map(j => ({ id: j.id, jo_number: j.jo_number, status: j.status })),
       };
@@ -115,6 +139,7 @@ export async function GET(req: NextRequest) {
         stale: result.filter(f => f.live_status === 'STALE').length,
         engine_on: result.filter(f => f.engine_status === 'ON').length,
         on_job: result.filter(f => f.active_jo_count > 0).length,
+        vendor_fleets: result.filter(f => f.is_vendor_fleet).length,
       },
     });
   } catch (error: any) {

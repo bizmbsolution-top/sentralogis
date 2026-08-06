@@ -29,6 +29,7 @@ import {
   MessageSquare,
   Satellite,
   WifiOff,
+  Coins,
 } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
 import { useGoogleMaps } from "@/lib/google-maps-context";
@@ -140,7 +141,10 @@ export default function DriverTrackingPage({
 
   const [showBatteryOptIn, setShowBatteryOptIn] = useState(false);
   const [batteryOptChecked, setBatteryOptChecked] = useState(false);
-  const [deviceInfo, setDeviceInfo] = useState<{ manufacturer: string; model: string } | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<{
+    manufacturer: string;
+    model: string;
+  } | null>(null);
 
   const [containerNo, setContainerNo] = useState("");
   const [sealNo, setSealNo] = useState("");
@@ -236,6 +240,14 @@ export default function DriverTrackingPage({
         setGpsBattery(e.detail.battery || null);
         setGpsSpeed(e.detail.speed || null);
         setGpsPingCount((prev) => prev + 1);
+        
+        if (e.detail.latitude && e.detail.longitude) {
+          setDriverPosition({
+            lat: e.detail.latitude,
+            lng: e.detail.longitude,
+            heading: e.detail.heading,
+          });
+        }
       }
     };
     window.addEventListener("sentralogis:native_gps_update", handleNativeGps);
@@ -292,7 +304,7 @@ export default function DriverTrackingPage({
       );
       clearInterval(healthInterval);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // Battery optimization check for native Android
@@ -300,9 +312,9 @@ export default function DriverTrackingPage({
     let cancelled = false;
     async function checkBatteryOpt() {
       try {
-        const { Capacitor, registerPlugin } = await import('@capacitor/core');
+        const { Capacitor, registerPlugin } = await import("@capacitor/core");
         if (!Capacitor.isNativePlatform()) return;
-        const gpsPlugin = registerPlugin<any>('NativeGps');
+        const gpsPlugin = registerPlugin<any>("NativeGps");
         const info = await gpsPlugin.getDeviceInfo();
         if (cancelled) return;
         setDeviceInfo({ manufacturer: info.manufacturer, model: info.model });
@@ -311,21 +323,23 @@ export default function DriverTrackingPage({
           setShowBatteryOptIn(true);
         }
       } catch (e) {
-        console.log('[BatteryOpt] Check skipped:', e);
+        console.log("[BatteryOpt] Check skipped:", e);
         if (!cancelled) setBatteryOptChecked(true);
       }
     }
     checkBatteryOpt();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleOpenBatterySettings = async () => {
     try {
-      const { registerPlugin } = await import('@capacitor/core');
-      const gpsPlugin = registerPlugin<any>('NativeGps');
+      const { registerPlugin } = await import("@capacitor/core");
+      const gpsPlugin = registerPlugin<any>("NativeGps");
       await gpsPlugin.openBatterySettings();
     } catch (e) {
-      console.error('[BatteryOpt] Failed to open settings:', e);
+      console.error("[BatteryOpt] Failed to open settings:", e);
     }
   };
 
@@ -336,14 +350,20 @@ export default function DriverTrackingPage({
   const oemGuide: Record<string, string> = {
     oppo: "Oppo: Buka Settings > Battery > Power Saving Mode > Pilih 'Don't Optimize' untuk SentraLogis",
     vivo: "Vivo: Buka Settings > Battery > Background App Management > Pilih SentraLogis > Allow Background Running",
-    xiaomi: "Xiaomi: Buka Settings > Battery & Performance > App Battery Saver > Pilih SentraLogis > No Restrictions",
-    realme: "Realme: Buka Settings > Battery > Power Saving Mode > App Quick Freeze > Nonaktifkan untuk SentraLogis",
-    samsung: "Samsung: Buka Settings > Battery > Background Usage Limits > Never Sleeping Apps > Tambah SentraLogis",
-    huawei: "Huawei: Buka Settings > Battery > Launch > Pilih SentraLogis > Manage Manually > Aktifkan semua",
+    xiaomi:
+      "Xiaomi: Buka Settings > Battery & Performance > App Battery Saver > Pilih SentraLogis > No Restrictions",
+    realme:
+      "Realme: Buka Settings > Battery > Power Saving Mode > App Quick Freeze > Nonaktifkan untuk SentraLogis",
+    samsung:
+      "Samsung: Buka Settings > Battery > Background Usage Limits > Never Sleeping Apps > Tambah SentraLogis",
+    huawei:
+      "Huawei: Buka Settings > Battery > Launch > Pilih SentraLogis > Manage Manually > Aktifkan semua",
   };
 
-  const manufacturerKey = (deviceInfo?.manufacturer || '').toLowerCase();
-  const oemTip = Object.entries(oemGuide).find(([key]) => manufacturerKey.includes(key));
+  const manufacturerKey = (deviceInfo?.manufacturer || "").toLowerCase();
+  const oemTip = Object.entries(oemGuide).find(([key]) =>
+    manufacturerKey.includes(key),
+  );
 
   // [Phase 4.2] Online/offline event listeners for offline banner
   useEffect(() => {
@@ -650,18 +670,29 @@ export default function DriverTrackingPage({
     }
   };
 
-  const compressImage = (file: File, maxW = 1200, quality = 0.7): Promise<string> => {
+  const compressImage = (
+    file: File,
+    maxW = 1200,
+    quality = 0.7,
+  ): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         let { width, height } = img;
-        if (width > maxW) { height = (maxW / width) * height; width = maxW; }
-        if (height > maxW) { width = (maxW / height) * width; height = maxW; }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
+        if (width > maxW) {
+          height = (maxW / width) * height;
+          width = maxW;
+        }
+        if (height > maxW) {
+          width = (maxW / height) * width;
+          height = maxW;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
       img.onerror = reject;
       img.src = URL.createObjectURL(file);
@@ -698,7 +729,11 @@ export default function DriverTrackingPage({
       if (!response.ok) {
         const text = await response.text();
         let msg: string;
-        try { msg = JSON.parse(text).error || "Gagal simpan foto ke database"; } catch { msg = text || "Gagal simpan foto ke database"; }
+        try {
+          msg = JSON.parse(text).error || "Gagal simpan foto ke database";
+        } catch {
+          msg = text || "Gagal simpan foto ke database";
+        }
         throw new Error(msg);
       }
 
@@ -732,10 +767,12 @@ export default function DriverTrackingPage({
   const formatTime = (dateStr: string) => {
     if (!dateStr) return "-";
     const d = parseUTC(dateStr);
-    return d ? d.toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }) : "-";
+    return d
+      ? d.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "-";
   };
 
   const formatDuration = (fromMs: number, toMs: number) => {
@@ -905,27 +942,8 @@ export default function DriverTrackingPage({
   const nextStopName =
     activeStop?.location_name?.toUpperCase() || "LOKASI TUJUAN";
 
-  // Live driver GPS position — placed BEFORE early returns to keep hook count consistent
-  useEffect(() => {
-    if (!isLoaded) return;
-    let watchId: number | null = null;
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setDriverPosition({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            heading: pos.coords.heading ?? undefined,
-          });
-        },
-        (err) => console.warn("[Driver Position] watch error:", err),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-      );
-    }
-    return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    };
-  }, [isLoaded]);
+  // Live driver GPS position is now updated by the GPS ping event handler
+  // to avoid conflicts between watchPosition and getCurrentPosition polling
 
   if (loading) {
     return (
@@ -987,19 +1005,19 @@ export default function DriverTrackingPage({
             Sentralogis Driver.
           </p>
           <button
- onClick={() => {
-                console.log('[JO Page] Buka di Aplikasi clicked, token:', token);
-                // Android Intent URL — paling reliable dari Chrome / WebView
-                // Format: intent://{path}#Intent;scheme={scheme};package={pkg};S.browser_fallback_url={url};end
-                const intentUrl =
-                  `intent://jo/${token}` +
-                  '#Intent;' +
-                  'scheme=sentralogis;' +
-                  'package=com.sentralogis.driver;' +
-                  `S.browser_fallback_url=https://www.sentralogis.com/jo/${token}?browser=1;` +
-                  'end';
-                window.location.href = intentUrl;
-              }}
+            onClick={() => {
+              console.log("[JO Page] Buka di Aplikasi clicked, token:", token);
+              // Android Intent URL — paling reliable dari Chrome / WebView
+              // Format: intent://{path}#Intent;scheme={scheme};package={pkg};S.browser_fallback_url={url};end
+              const intentUrl =
+                `intent://jo/${token}` +
+                "#Intent;" +
+                "scheme=sentralogis;" +
+                "package=com.sentralogis.driver;" +
+                `S.browser_fallback_url=https://www.sentralogis.com/jo/${token}?browser=1;` +
+                "end";
+              window.location.href = intentUrl;
+            }}
             className="w-full block bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-200 uppercase tracking-widest mb-6"
           >
             Buka di Aplikasi
@@ -1427,7 +1445,8 @@ export default function DriverTrackingPage({
                       KONEKSI TERPUTUS
                     </h3>
                     <p className="text-[10px] font-bold text-amber-100 leading-relaxed">
-                      GPS ping akan diantrekan dan dikirim otomatis saat koneksi kembali.
+                      GPS ping akan diantrekan dan dikirim otomatis saat koneksi
+                      kembali.
                     </p>
                   </div>
                 </div>
@@ -1558,21 +1577,24 @@ export default function DriverTrackingPage({
                     )}
                     {driverPosition && (
                       <MarkerF
-                        position={{ lat: driverPosition.lat, lng: driverPosition.lng }}
+                        position={{
+                          lat: driverPosition.lat,
+                          lng: driverPosition.lng,
+                        }}
                         icon={{
                           path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
-          fillColor: "#2563eb",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2,
-          scale: 1.5,
-          anchor: new google.maps.Point(12, 22),
+                          fillColor: "#2563eb",
+                          fillOpacity: 1,
+                          strokeColor: "#ffffff",
+                          strokeWeight: 2,
+                          scale: 1.5,
+                          anchor: new google.maps.Point(12, 22),
                         }}
                         label={{
                           text: "●",
-              color: "#2563eb",
-              fontSize: "24px",
-              fontWeight: "black",
+                          color: "#2563eb",
+                          fontSize: "24px",
+                          fontWeight: "black",
                         }}
                         title="Posisi Anda (GPS)"
                       />
@@ -1709,11 +1731,16 @@ export default function DriverTrackingPage({
                                   {formatTime(stop.actual_departure)}
                                 </span>
                               </div>
-                            ) : stop.status === "arrived" && stop.actual_arrival ? (
+                            ) : stop.status === "arrived" &&
+                              stop.actual_arrival ? (
                               <div className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                                 <span className="text-[8px] font-bold text-blue-600 uppercase tracking-wide">
-                                  {formatDuration(parseUTC(stop.actual_arrival)?.getTime() ?? Date.now(), now)}
+                                  {formatDuration(
+                                    parseUTC(stop.actual_arrival)?.getTime() ??
+                                      Date.now(),
+                                    now,
+                                  )}
                                 </span>
                               </div>
                             ) : null}
@@ -1736,6 +1763,15 @@ export default function DriverTrackingPage({
                             className="opacity-80"
                           />
                         </button>
+                        {stop.status === "pending" && (
+                          <button
+                            onClick={() => updateRouteStatus(stop.id, "arrived")}
+                            className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center active:scale-95 transition-all border border-emerald-100"
+                            title="Tiba di Lokasi"
+                          >
+                            <MapPin size={14} />
+                          </button>
+                        )}
                         <div className="relative">
                           <input
                             type="file"
@@ -1755,7 +1791,8 @@ export default function DriverTrackingPage({
                           >
                             {photoLoading === stop.id ? (
                               <Loader2 size={14} className="animate-spin" />
-                            ) : stop.route_photos?.length || stop.pod_photo_url ? (
+                            ) : stop.route_photos?.length ||
+                              stop.pod_photo_url ? (
                               <Camera size={14} />
                             ) : (
                               <Camera size={14} />
@@ -1767,20 +1804,36 @@ export default function DriverTrackingPage({
                             )}
                           </label>
                         </div>
+                        {stop.status === "arrived" && (
+                          <button
+                            onClick={() => updateRouteStatus(stop.id, "completed")}
+                            className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center active:scale-95 transition-all border border-blue-100"
+                            title="Selesai Bongkar/Muat"
+                          >
+                            <Check size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {/* Photos Thumbnails */}
-                    {(Array.isArray(stop.route_photos) && stop.route_photos.length > 0 || !!stop.pod_photo_url) && (
+                    {((Array.isArray(stop.route_photos) &&
+                      stop.route_photos.length > 0) ||
+                      !!stop.pod_photo_url) && (
                       <div className="mt-3 pt-3 border-t border-slate-100">
                         <div className="flex items-center gap-2 mb-2">
                           <Camera size={12} className="text-emerald-600" />
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            Foto Lokasi ({Array.isArray(stop.route_photos) ? stop.route_photos.length : 1})
+                            Foto Lokasi (
+                            {Array.isArray(stop.route_photos)
+                              ? stop.route_photos.length
+                              : 1}
+                            )
                           </p>
                         </div>
                         <div className="flex gap-2 overflow-x-auto">
-                          {(Array.isArray(stop.route_photos) && stop.route_photos.length
+                          {(Array.isArray(stop.route_photos) &&
+                          stop.route_photos.length
                             ? stop.route_photos
                             : stop.pod_photo_url
                               ? [{ id: stop.id, file_url: stop.pod_photo_url! }]
@@ -1935,6 +1988,40 @@ export default function DriverTrackingPage({
                   </p>
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-emerald-200 text-emerald-700 font-black text-xs uppercase tracking-widest">
                     <CheckCircle2 size={14} /> {jobOrder.status.toUpperCase()}
+                  </div>
+
+                  {/* 🪙 Coin Reward Animation */}
+                  <div className="mt-6 pt-6 border-t-2 border-dashed border-emerald-200">
+                    <div className="relative flex items-center justify-center">
+                      <style>{`
+                        @keyframes coinFloat {
+                          0%, 100% { transform: translateY(0) rotateY(0deg); }
+                          25% { transform: translateY(-8px) rotateY(180deg); }
+                          50% { transform: translateY(0) rotateY(360deg); }
+                          75% { transform: translateY(-4px) rotateY(180deg); }
+                        }
+                        @keyframes coinGlow {
+                          0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
+                          50% { box-shadow: 0 0 40px rgba(245, 158, 11, 0.6); }
+                        }
+                        .coin-animate {
+                          animation: coinFloat 2s ease-in-out infinite, coinGlow 1.5s ease-in-out infinite;
+                        }
+                      `}</style>
+                      <div className="coin-animate w-20 h-20 bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 rounded-full flex items-center justify-center border-4 border-amber-200 shadow-xl">
+                        <Coins size={36} className="text-amber-800" />
+                      </div>
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-400 text-amber-900 rounded-full flex items-center justify-center text-xs font-black border-2 border-amber-200 shadow-md animate-bounce">
+                        +1
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm font-black text-amber-700 uppercase tracking-widest">
+                      +1 Koin (Rp 5.000)
+                    </p>
+                    <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                      Reward telah ditambahkan ke saldo koin Anda. Ketik "KOIN"
+                      di WhatsApp untuk cek saldo.
+                    </p>
                   </div>
                 </div>
               </div>

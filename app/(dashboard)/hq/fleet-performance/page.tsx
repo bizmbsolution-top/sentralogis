@@ -24,6 +24,8 @@ interface Fleet {
   speed: number;
   last_seen: string | null;
   last_address: string | null;
+  gps_source: string | null;
+  is_vendor_fleet: boolean;
   active_jo_count: number;
   active_jos: Array<{ id: string; jo_number: string; status: string }>;
 }
@@ -422,11 +424,22 @@ export default function FleetPerformancePage() {
                         </div>
                       </div>
 
-                      {/* GPS Status */}
+                      {/* GPS Status + Source */}
                       <div className="flex items-center gap-2 md:w-36">
                         <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${liveCfg.bg} ${liveCfg.color}`}>
                           {liveCfg.label}
                         </span>
+                        {fleet.gps_source && (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            fleet.gps_source === 'easygo'
+                              ? 'bg-violet-100 text-violet-700'
+                              : fleet.gps_source === 'native_android'
+                                ? 'bg-cyan-100 text-cyan-700'
+                                : 'bg-sky-100 text-sky-700'
+                          }`}>
+                            {fleet.gps_source === 'easygo' ? 'EasyGo' : fleet.gps_source === 'native_android' ? 'App' : 'PWA'}
+                          </span>
+                        )}
                         {fleet.speed > 0 && (
                           <span className="text-[10px] text-slate-500 font-medium flex items-center gap-0.5">
                             <Gauge size={10} /> {Math.round(fleet.speed)} km/h
@@ -456,6 +469,15 @@ export default function FleetPerformancePage() {
                           {dbCfg.label}
                         </span>
                       </div>
+
+                      {/* Vendor Badge */}
+                      {fleet.is_vendor_fleet && (
+                        <div className="md:w-20">
+                          <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-purple-100 text-purple-700">
+                            Vendor
+                          </span>
+                        </div>
+                      )}
 
                       {/* Active JO */}
                       <div className="md:w-24">
