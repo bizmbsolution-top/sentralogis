@@ -95,7 +95,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
 
       setStaff(enrichedStaff);
       setFieldStaff(fieldStaffRes.data || []);
-      setSbus(sbuRes.data || []);
+      setSbus((sbuRes.data || []).filter((s: any) => s.status === 'active'));
       setWarehouses(whRes.data || []);
       setGroundStaff(groundStaffRes.data || []);
       setRegions(regionsRes.data || []);
