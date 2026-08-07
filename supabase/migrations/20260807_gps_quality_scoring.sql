@@ -12,73 +12,54 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   RETURN QUERY
-  SELECT
-    -- Score: 0-100 (higher is better)
-    ROUND(
-      GREATEST(0, LEAST(100,
-        (COALESCE(coverage_score, 0) * 40) +     -- 40% weight: daily coverage
-        (COALESCE(frequency_score, 0) * 35) +    -- 35% weight: ping frequency
-        (COALESCE(recency_score, 0) * 25)        -- 25% weight: last ping freshness
-      )),
-    1) AS quality_score,
-    ROUND(avg_interval, 1) AS avg_interval_sec,
-    ROUND(COALESCE(coverage_pct, 0) * 100, 1) AS coverage_pct,
-    ROUND(COALESCE(last_gps_age, 999), 1) AS last_gps_age_min,
-    COALESCE(total_pings, 0) AS total_pings,
-    most_common_source AS gps_source
-  FROM (
+  WITH pings AS (
+    -- Raw pings with interval to previous ping (LAG must be here, outside aggregates)
     SELECT
-      -- Coverage: days with GPS / total days in period
-      COUNT(DISTINCT DATE(jt.created_at))::NUMERIC / 
-        GREATEST(EXTRACT(DAY FROM MAX(jt.created_at) - MIN(jt.created_at)) + 1, 1) AS coverage_pct,
-      
-      -- Coverage score: 100 if >80%, 50 if >50%, else proportional
-      CASE 
-        WHEN COUNT(DISTINCT DATE(jt.created_at))::NUMERIC / 
-          GREATEST(EXTRACT(DAY FROM MAX(jt.created_at) - MIN(jt.created_at)) + 1, 1) > 0.8 THEN 100
-        WHEN COUNT(DISTINCT DATE(jt.created_at))::NUMERIC / 
-          GREATEST(EXTRACT(DAY FROM MAX(jt.created_at) - MIN(jt.created_at)) + 1, 1) > 0.5 THEN 75
-        WHEN COUNT(DISTINCT DATE(jt.created_at))::NUMERIC / 
-          GREATEST(EXTRACT(DAY FROM MAX(jt.created_at) - MIN(jt.created_at)) + 1, 1) > 0.3 THEN 50
-        ELSE 25
-      END AS coverage_score,
-      
-      -- Average interval between pings
-      AVG(EXTRACT(EPOCH FROM (
+      jt.created_at,
+      jt.source,
+      EXTRACT(EPOCH FROM (
         jt.created_at - LAG(jt.created_at) OVER (ORDER BY jt.created_at)
-      ))) AS avg_interval,
-      
-      -- Frequency score: 100 if <60s, 75 if <120s, 50 if <300s, else 25
-      CASE 
-        WHEN AVG(EXTRACT(EPOCH FROM (jt.created_at - LAG(jt.created_at) OVER (ORDER BY jt.created_at)))) < 60 THEN 100
-        WHEN AVG(EXTRACT(EPOCH FROM (jt.created_at - LAG(jt.created_at) OVER (ORDER BY jt.created_at)))) < 120 THEN 75
-        WHEN AVG(EXTRACT(EPOCH FROM (jt.created_at - LAG(jt.created_at) OVER (ORDER BY jt.created_at)))) < 300 THEN 50
-        ELSE 25
-      END AS frequency_score,
-      
-      -- Last GPS ping age in minutes
-      EXTRACT(EPOCH FROM (NOW() - MAX(jt.created_at))) / 60 AS last_gps_age,
-      
-      -- Recency score: 100 if <5min, 75 if <30min, 50 if <60min, 0 if >60min
-      CASE 
-        WHEN EXTRACT(EPOCH FROM (NOW() - MAX(jt.created_at))) / 60 < 5 THEN 100
-        WHEN EXTRACT(EPOCH FROM (NOW() - MAX(jt.created_at))) / 60 < 30 THEN 75
-        WHEN EXTRACT(EPOCH FROM (NOW() - MAX(jt.created_at))) / 60 < 60 THEN 50
-        ELSE 0
-      END AS recency_score,
-      
-      -- Total pings in period
-      COUNT(*) AS total_pings,
-      
-      -- Most common GPS source
-      MODE() WITHIN GROUP (ORDER BY jt.source) AS most_common_source
-      
+      )) AS interval_sec
     FROM job_tracking jt
     JOIN job_orders jo ON jt.job_order_id = jo.id
     WHERE jo.driver_id = p_driver_id
       AND jt.created_at > NOW() - INTERVAL '7 days'
       AND jt.latitude IS NOT NULL
-  ) stats;
+  ),
+  stats AS (
+    -- Now aggregate from the CTE (no window functions inside aggregates)
+    SELECT
+      COUNT(*) AS total_pings,
+      COUNT(DISTINCT DATE(created_at))::NUMERIC /
+        GREATEST(EXTRACT(DAY FROM MAX(created_at) - MIN(created_at)) + 1, 1) AS coverage_pct,
+      AVG(interval_sec) AS avg_interval,
+      EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 60 AS last_gps_age,
+      MODE() WITHIN GROUP (ORDER BY source) AS most_common_source
+    FROM pings
+  )
+  SELECT
+    ROUND(
+      GREATEST(0, LEAST(100,
+        (CASE WHEN s.coverage_pct > 0.8 THEN 100
+              WHEN s.coverage_pct > 0.5 THEN 75
+              WHEN s.coverage_pct > 0.3 THEN 50
+              ELSE 25 END * 0.40) +
+        (CASE WHEN s.avg_interval < 60 THEN 100
+              WHEN s.avg_interval < 120 THEN 75
+              WHEN s.avg_interval < 300 THEN 50
+              ELSE 25 END * 0.35) +
+        (CASE WHEN s.last_gps_age < 5 THEN 100
+              WHEN s.last_gps_age < 30 THEN 75
+              WHEN s.last_gps_age < 60 THEN 50
+              ELSE 0 END * 0.25)
+      )),
+    1) AS quality_score,
+    ROUND(s.avg_interval, 1) AS avg_interval_sec,
+    ROUND(COALESCE(s.coverage_pct, 0) * 100, 1) AS coverage_pct,
+    ROUND(COALESCE(s.last_gps_age, 999), 1) AS last_gps_age_min,
+    COALESCE(s.total_pings, 0) AS total_pings,
+    s.most_common_source AS gps_source
+  FROM stats s;
 END;
 $$ LANGUAGE plpgsql;
 
