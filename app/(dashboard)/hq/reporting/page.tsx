@@ -162,15 +162,16 @@ export default function HQReportingPage() {
   const fetchMasterData = async () => {
     if (!tenantId) return;
     try {
-      const [{ data: ct }, { data: ctChildren }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
-        supabase.from("md_entities").select("id, name, legal_name").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).is("parent_id", null).order("name"),
-        supabase.from("md_entities").select("id, parent_id").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).not("parent_id", "is", null),
+      const [{ data: allCt }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
+        supabase.from("md_entities").select("id, name, legal_name, parent_id").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).order("name"),
         supabase.from("wo_items").select("item_data").eq("sbu_type", "TRUCKING").eq("tenant_id", tenantId),
         supabase.from("md_warehouses").select("id, name").eq("tenant_id", tenantId).order("name"),
         supabase.from("md_entities").select("id, name, vendor_type").eq("is_vendor", true).eq("tenant_id", tenantId).eq("is_active", true).order("name"),
       ]);
-      setCustomers(ct || []);
-      setCustomerChildren(ctChildren || []);
+      const parentCustomers = (allCt || []).filter((c: any) => !c.parent_id);
+      const childCustomers = (allCt || []).filter((c: any) => c.parent_id);
+      setCustomers(parentCustomers);
+      setCustomerChildren(childCustomers);
       setWarehouses(wh || []);
       setTransporters(tr || []);
       const types = (tt || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
