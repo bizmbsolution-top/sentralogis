@@ -250,6 +250,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           execution_date: wo.execution_date || todayLocal(),
           execution_time: wo.execution_time || nowLocalTime(),
           notes: wo.notes || '',
+          region_id: wo.region_id || '',
         });
         setWoItems(woItemsWithJobs);
 
