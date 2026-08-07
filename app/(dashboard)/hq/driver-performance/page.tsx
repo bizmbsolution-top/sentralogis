@@ -17,6 +17,8 @@ interface Driver {
   name: string;
   phone: string;
   status: string;
+  has_native_app: boolean;
+  last_app_open_at: string | null;
   total_km_driven: number;
   total_distance_km: number;
   total_jobs_completed: number;
@@ -24,6 +26,16 @@ interface Driver {
   avg_review_score: number;
   photo_url: string;
   md_entities: { name: string };
+}
+
+interface DriverGpsQuality {
+  driver_id: string;
+  quality_score: number;
+  avg_interval_sec: number | null;
+  coverage_pct: number;
+  last_gps_age_min: number;
+  total_pings: number;
+  gps_source: string | null;
 }
 
 interface PerfLog {
@@ -57,6 +69,8 @@ export default function DriverPerformancePage() {
   const [selectedDriverHistory, setSelectedDriverHistory] = useState<any[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [attendanceHistoryLoading, setAttendanceHistoryLoading] = useState(false);
+  // GPS quality state
+  const [gpsQualityMap, setGpsQualityMap] = useState<Map<string, DriverGpsQuality>>(new Map());
 
   const fetchData = useCallback(async () => {
     if (!profile?.tenant_id) return;
@@ -81,6 +95,16 @@ export default function DriverPerformancePage() {
         .limit(100);
       
       if (!logError) setPerfLogs(logs || []);
+
+      // Fetch GPS quality data
+      const { data: gpsData, error: gpsError } = await supabase
+        .rpc('calc_tenant_gps_quality', { p_tenant_id: profile.tenant_id });
+      
+      if (!gpsError && gpsData) {
+        const map = new Map<string, DriverGpsQuality>();
+        (gpsData as DriverGpsQuality[]).forEach((item) => map.set(item.driver_id, item));
+        setGpsQualityMap(map);
+      }
     } catch (error: any) {
       toast.error('Gagal mengambil data performance');
     } finally {
@@ -400,6 +424,8 @@ export default function DriverPerformancePage() {
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Driver</th>
                   <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-center">App</th>
+                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-center">GPS</th>
                   <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Distance (km)</th>
                   <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Jobs</th>
                   <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide text-right">Reviews</th>
@@ -409,14 +435,14 @@ export default function DriverPerformancePage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
                       <p className="text-xs text-slate-400">Loading performance data...</p>
                     </td>
                   </tr>
                 ) : getSortedDrivers().length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <p className="text-xs text-slate-400">No drivers found</p>
                     </td>
                   </tr>
@@ -439,6 +465,34 @@ export default function DriverPerformancePage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">{getStatusBadge(d.status)}</td>
+                      <td className="px-4 py-3 text-center">
+                        {d.has_native_app ? (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">Installed</span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full">PWA</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const gps = gpsQualityMap.get(d.id);
+                          if (!gps || gps.total_pings === 0) {
+                            return <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full">No Data</span>;
+                          }
+                          const isStale = gps.last_gps_age_min > 60;
+                          const quality = gps.quality_score;
+                          let colorClass = 'bg-emerald-100 text-emerald-700';
+                          if (quality < 50) colorClass = 'bg-amber-100 text-amber-700';
+                          if (quality < 30) colorClass = 'bg-rose-100 text-rose-700';
+                          return (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className={`px-2 py-0.5 ${colorClass} text-[10px] font-bold rounded-full`}>
+                                {gps.gps_source === 'native_android' ? 'Native' : 'PWA'}
+                              </span>
+                              {isStale && <span className="text-[9px] text-rose-500 font-medium">Stale</span>}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-sm font-semibold text-slate-900">
                           {(d.total_km_driven || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 })}
