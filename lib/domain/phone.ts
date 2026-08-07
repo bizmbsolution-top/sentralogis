@@ -19,13 +19,26 @@ export function buildDriverAssignmentMessage(params: {
   isInternal: boolean;
   link: string;
   joNumber?: string;
+  hasNativeApp?: boolean;
 }): string {
-  const { driverName, isInternal, link, joNumber } = params;
+  const { driverName, isInternal, link, joNumber, hasNativeApp } = params;
   const joText = joNumber ? ` (${joNumber})` : '';
   if (isInternal) {
     return `Halo ${driverName}, Anda mendapat tugas baru${joText}. Silakan buka aplikasi Driver Portal Anda untuk mengecek dan menerima tugas: ${link}`;
   }
-  return `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda${joText}: ${link}`;
+  
+  // Vendor driver: conditional APK link
+  let msg = `Halo ${driverName}, berikut link untuk konfirmasi tugas Anda${joText}: ${link}`;
+  
+  if (!hasNativeApp) {
+    msg += `\n\n⚠️ *Download Aplikasi SentraLogis:*`;
+    msg += `\nhttps://www.sentralogis.com/driver/install-apk`;
+    msg += `\n\nSetelah install, buka link tugas dari WhatsApp untuk GPS yang lebih akurat.`;
+  } else {
+    msg += `\n\nBuka link dari aplikasi untuk GPS yang lebih akurat.`;
+  }
+  
+  return msg;
 }
 
 export function buildCustomerTrackingMessage(params: {

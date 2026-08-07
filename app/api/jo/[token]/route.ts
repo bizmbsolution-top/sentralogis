@@ -121,6 +121,10 @@ export async function GET(
       );
     }
 
+    // Detect native app via User Agent
+    const userAgent = request.headers.get("user-agent") || "";
+    const isNativeApp = userAgent.includes("SentraLogis_AndroidApp");
+
     const queryService = new DriverPortalQuery(supabase);
     const jobOrderData = await queryService.getJobOrderData(token);
 
@@ -129,6 +133,17 @@ export async function GET(
         { error: "Job Order tidak ditemukan" },
         { status: 404 },
       );
+    }
+
+    // Update driver's native app status if detected
+    if (isNativeApp && jobOrderData.driver_id) {
+      await supabase
+        .from("md_drivers")
+        .update({
+          has_native_app: true,
+          last_app_open_at: new Date().toISOString(),
+        })
+        .eq("id", jobOrderData.driver_id);
     }
 
     // Lazy auto-complete: if this JO is waiting for completion and the driver

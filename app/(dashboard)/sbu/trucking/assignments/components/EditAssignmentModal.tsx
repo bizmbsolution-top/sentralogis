@@ -203,6 +203,7 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
       isInternal: Boolean(isInternal),
       link,
       joNumber: jo.jo_number,
+      hasNativeApp: (driver as any)?.has_native_app || false,
     });
 
     let formattedPhone = phone.replace(/\D/g, '');

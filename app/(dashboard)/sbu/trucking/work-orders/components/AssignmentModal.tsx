@@ -1830,6 +1830,7 @@ export default function AssignmentModal({
                                     isInternal: Boolean(isInternal && driver),
                                     link,
                                     joNumber,
+                                    hasNativeApp: (driver as any)?.has_native_app || false,
                                   });
                                   window.open(
                                     buildWaLink(phone, msg),
