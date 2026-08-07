@@ -11,7 +11,7 @@ export default async function PublicTrackingPage({ params }: { params: Promise<{
     const query = supabaseAdmin
         .from('job_orders')
         .select(`
-            id, jo_number, status, work_order_id, wo_item_id, fleet_id, driver_id, driver_link_token, tracking_token,
+            id, jo_number, status, wo_item_id, fleet_id, driver_id, driver_link_token, tracking_token,
             created_at, updated_at
         `);
 
@@ -39,7 +39,7 @@ export default async function PublicTrackingPage({ params }: { params: Promise<{
         );
     }
 
-    const isTrackable = ['accepted', 'picking_up', 'delivering', 'delivered'].includes(job.status);
+    const isTrackable = job.status && !['PEKERJAAN SELESAI', 'REJECTED', 'CANCELLED'].includes(job.status);
     if (!isTrackable) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-10 text-center">
@@ -53,10 +53,7 @@ export default async function PublicTrackingPage({ params }: { params: Promise<{
     }
 
     // Fetch related data separately to avoid FK schema mismatch issues
-    const [woRes, woItemRes, fleetRes, trackingRes, docsRes] = await Promise.all([
-        job.work_order_id
-            ? supabaseAdmin.from('work_orders').select('id, wo_number, execution_date, notes, entity_id').eq('id', job.work_order_id).maybeSingle()
-            : { data: null },
+    const [woItemRes, fleetRes, trackingRes, docsRes] = await Promise.all([
         job.wo_item_id
             ? supabaseAdmin.from('wo_items').select('id, item_code, item_data, wo_id').eq('id', job.wo_item_id).maybeSingle()
             : { data: null },
@@ -67,11 +64,21 @@ export default async function PublicTrackingPage({ params }: { params: Promise<{
         supabaseAdmin.from('documents').select('id, file_url, doc_type, created_at').eq('job_order_id', job.id),
     ]);
 
-    const wo = woRes.data;
     const woItem = woItemRes.data;
     const fleet = fleetRes.data;
     const trackingUpdates = trackingRes.data || [];
     const documents = docsRes.data || [];
+
+    // Fetch work order via wo_item's wo_id
+    let wo = null;
+    if (woItem?.wo_id) {
+        const { data: woData } = await supabaseAdmin
+            .from('work_orders')
+            .select('id, wo_number, execution_date, notes, entity_id')
+            .eq('id', woItem.wo_id)
+            .maybeSingle();
+        wo = woData;
+    }
 
     let entity = null;
     if (wo?.entity_id) {
