@@ -57,6 +57,13 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - GPS Quality Scoring: `calc_gps_quality()` + `calc_tenant_gps_quality()` functions
   - Stale GPS Detection: `detect_stale_gps()` + `v_gps_status_overview` view
   - Migrations: `20260807_gps_quality_scoring.sql`, `20260807_stale_gps_detection.sql`
+- **[NEW] Smart APK Distribution** (Vendor driver → native app adoption)
+  - Auto-detect native app via User Agent (`SentraLogis_AndroidApp`)
+  - WA message: conditional APK link untuk driver belum install
+  - Download page: `/driver/install-apk` (fitur, instruksi install)
+  - APK hosted di Vercel: `/sentralogis-driver.apk` (8.1 MB)
+  - Tracking: `has_native_app`, `last_app_version`, `last_app_open_at` di `md_drivers`
+  - Migration: `20260807_add_native_app_tracking.sql`
 
 ### Blocked
 - (none)
@@ -131,5 +138,9 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - `supabase/migrations/20260805_fleet_gps_status.sql`: fleet_gps_status table
 - `supabase/migrations/20260807_gps_quality_scoring.sql`: GPS quality scoring functions
 - `supabase/migrations/20260807_stale_gps_detection.sql`: Stale GPS detection + overview view
+- `supabase/migrations/20260807_add_native_app_tracking.sql`: Native app detection columns
 - `public/gps-worker.js`: PWA Web Worker for background GPS ping
+- `public/sentralogis-driver.apk`: APK file for vendor drivers (8.1 MB)
+- `app/driver/install-apk/page.tsx`: Download page APK
+- `lib/domain/phone.ts`: WA message templates (conditional APK link)
 - `vercel.json`: Cron job for EasyGo GPS sync (every 5 minutes)
