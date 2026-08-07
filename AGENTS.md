@@ -47,6 +47,16 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Phase 3: API updates (`/api/fleet-status` cross-tenant query)
   - Phase 4: Frontend (GPS source badge, vendor badge, filters)
   - Estimasi: ~5-6 jam (3 hari kerja)
+- **[NEW] GPS Ping Strengthening** (HP Driver sebagai primary GPS source)
+  - Fix GPS interval: 10s/30s/60s adaptive → 1 menit fixed (reduce DB write amplification)
+  - Fix native Android GPS restart loop (useCallback + useRef pattern di portal & tracking pages)
+  - Hapus dual API call: Java direct only, bukan Java + Capacitor bridge
+  - Tambah `source` ke job_tracking INSERT (sebelumnya selalu NULL)
+  - Native Android Home screen: GPS status indicator + "Buka Driver Portal" button
+  - PWA Web Worker GPS: background ping via `/gps-worker.js` (survives tab visibility changes)
+  - GPS Quality Scoring: `calc_gps_quality()` + `calc_tenant_gps_quality()` functions
+  - Stale GPS Detection: `detect_stale_gps()` + `v_gps_status_overview` view
+  - Migrations: `20260807_gps_quality_scoring.sql`, `20260807_stale_gps_detection.sql`
 
 ### Blocked
 - (none)
@@ -119,4 +129,7 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - `app/(dashboard)/sbu/trucking/fleet-performance/page.tsx`: SBU Trucking Fleet Performance
 - `supabase/migrations/20260805_easygo_integration.sql`: GPS provider config + EasyGo columns
 - `supabase/migrations/20260805_fleet_gps_status.sql`: fleet_gps_status table
+- `supabase/migrations/20260807_gps_quality_scoring.sql`: GPS quality scoring functions
+- `supabase/migrations/20260807_stale_gps_detection.sql`: Stale GPS detection + overview view
+- `public/gps-worker.js`: PWA Web Worker for background GPS ping
 - `vercel.json`: Cron job for EasyGo GPS sync (every 5 minutes)

@@ -354,9 +354,13 @@ export async function PATCH(
           status_update: "GPS_PING",
           latitude: nLat,
           longitude: nLng,
-          notes: "Auto GPS ping dari driver (Adaptive Interval)",
+          source: source || "pwa",
+          notes: "Auto GPS ping dari driver",
         };
         if (recorded_at) pingPayload.recorded_at = recorded_at;
+        if (body.accuracy !== undefined) pingPayload.accuracy = body.accuracy;
+        if (body.speed !== undefined) pingPayload.speed = body.speed;
+        if (body.battery !== undefined) pingPayload.battery_level = body.battery;
         const { error: pingErr } = await supabase
           .from("job_tracking")
           .insert(pingPayload);

@@ -87,18 +87,43 @@ export default function SentralogisLanding() {
           <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
             <Truck size={32} className="text-blue-600" />
           </div>
-          <h1 className="text-xl font-black text-slate-900 mb-6 tracking-wide">SENTRALOGIS DRIVER</h1>
+          <h1 className="text-xl font-black text-slate-900 mb-2 tracking-wide">SENTRALOGIS DRIVER</h1>
+          <p className="text-xs text-slate-500 mb-6">Vendor Driver App</p>
           
-          <div className="w-full">
-            <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-              <p className="text-sm font-semibold text-slate-700 mb-3">
-                Belum ada Job Order yang perlu dikonfirmasi.
+          {/* GPS Status Card */}
+          <div className="w-full mb-4">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-600">GPS Status</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-bold text-green-600">AKTIF</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                GPS tracking akan aktif saat Anda membuka link Job Order dari WhatsApp.
               </p>
-              <p className="text-xs text-slate-500 leading-relaxed">
+            </div>
+          </div>
+
+          <div className="w-full">
+            <div className="p-5 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="text-sm font-semibold text-blue-800 mb-3">
+                Buka Link Job Order
+              </p>
+              <p className="text-xs text-blue-600 leading-relaxed">
                 Silakan kembali ke WhatsApp dan buka<br/>Link Job Order yang dikirim oleh PIC SBU.
               </p>
             </div>
           </div>
+
+          {/* Quick Access to Driver Portal */}
+          <a
+            href="/driver/portal"
+            className="mt-4 w-full py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-colors"
+          >
+            Buka Driver Portal
+          </a>
         </div>
       </div>
     );

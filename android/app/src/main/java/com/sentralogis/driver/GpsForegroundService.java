@@ -53,7 +53,7 @@ public class GpsForegroundService extends Service implements SensorEventListener
     public static final String EXTRA_JOB_ID = "EXTRA_JOB_ID";
     public static final String EXTRA_API_URL = "EXTRA_API_URL";
 
-    private static final long HEARTBEAT_INTERVAL_MS = 300_000;    // 5 menit
+    private static final long HEARTBEAT_INTERVAL_MS = 60_000;    // 1 menit
     private static final long MOTION_TIMEOUT_MS = 120_000;        // 2 menit
     private static final float STILL_SPEED_THRESHOLD = 5.0f;     // < 5 km/h = stationary
     private static final long STILL_PING_INTERVAL_MS = 60_000;   // 60s when stationary
@@ -346,14 +346,14 @@ public class GpsForegroundService extends Service implements SensorEventListener
         try {
             LocationRequest locationRequest;
             if (isScreenOff && !highAccuracyForced) {
-                Log.d("GpsService", "Using BALANCED_POWER (screen off, no motion) — 60s interval");
+                Log.d("GpsService", "Using BALANCED_POWER (screen off) — 60s interval");
                 locationRequest = new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60000)
-                        .setMinUpdateIntervalMillis(45000)
+                        .setMinUpdateIntervalMillis(60000)
                         .build();
             } else {
-                Log.d("GpsService", "Using HIGH_ACCURACY");
-                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 15000)
-                        .setMinUpdateIntervalMillis(10000)
+                Log.d("GpsService", "Using HIGH_ACCURACY — 60s interval");
+                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60000)
+                        .setMinUpdateIntervalMillis(60000)
                         .build();
             }
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());

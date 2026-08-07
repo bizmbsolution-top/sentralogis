@@ -77,14 +77,10 @@ export function isActiveTransitStatus(
   return !!startedAt;
 }
 
-// [Phase 3.1] Adaptive intervals: 10s active moving, 30s screen-off, 60s still/no-motion
-const GPS_PING_INTERVAL_ACTIVE_MS = 10_000;
-const GPS_PING_INTERVAL_IDLE_MS = 30_000;
-const GPS_PING_INTERVAL_STILL_MS = 60_000;
+// Fixed 1-minute interval (reduces DB write amplification)
+const GPS_PING_INTERVAL_MS = 60_000;
 const STILL_SPEED_THRESHOLD_KMH = 5; // < 5 km/h = considered stationary
-const STILL_DURATION_MS = 120_000; // 2 min without motion → switch to 60s
 const MAX_CONSECUTIVE_FAILURES = 10;
-const BACKOFF_FAILURE_THRESHOLD = 3;
 
 export interface GeofenceArrivalEvent {
   geofence_triggered: boolean;
@@ -99,8 +95,6 @@ export interface GpsPingState {
   battery: number | null;
   pingCount: number;
   consecutiveFailures: number;
-  isIdle: boolean;
-  isStill: boolean;
   offlineQueueLength: number;
 }
 
@@ -116,18 +110,13 @@ export function useDriverGpsPing(
   const wakeLockRef = useRef<any>(null);
   const isPingingRef = useRef<boolean>(false);
   const listenerRef = useRef<any>(null);
+  const workerRef = useRef<Worker | null>(null);
 
-  // [Phase 2.1] Retry & adaptive state refs
+  // [Phase 2.1] Retry state refs
   const consecutiveFailuresRef = useRef<number>(0);
-  const isIdleRef = useRef<boolean>(false);
   const isStoppedRef = useRef<boolean>(false);
   const pingCountRef = useRef<number>(0);
   const doneRef = useRef<boolean>(false);
-
-  // [Phase 3.1] Still-detection refs (speed-based throttling)
-  const lastSpeedRef = useRef<number>(0);
-  const lastMovingTimeRef = useRef<number>(Date.now());
-  const isStillRef = useRef<boolean>(false);
 
   const emitPingState = useCallback(
     (patch: Partial<GpsPingState>) => {
@@ -167,28 +156,7 @@ export function useDriverGpsPing(
     ) => {
       if (!token) return;
 
-      // [Phase 3.1] Track speed for still-detection
-      if (speed !== undefined && speed !== null) {
-        lastSpeedRef.current = speed;
-        if (speed >= STILL_SPEED_THRESHOLD_KMH) {
-          lastMovingTimeRef.current = Date.now();
-          if (isStillRef.current) {
-            isStillRef.current = false;
-            emitPingState({ isStill: false });
-          }
-        } else if (
-          !isStillRef.current &&
-          Date.now() - lastMovingTimeRef.current > STILL_DURATION_MS
-        ) {
-          isStillRef.current = true;
-          emitPingState({ isStill: true });
-          console.log(
-            `[GPS Ping] Driver stationary for ${STILL_DURATION_MS / 1000}s (speed: ${speed} km/h) → switching to 60s interval`,
-          );
-        }
-      }
-
-      // [Phase 2.2] If offline, queue GPS ping to IndexedDB instead of sending to API
+      // If offline, queue GPS ping to IndexedDB instead of sending to API
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         await enqueueGpsPing(token, lat, lng, source, battery, speed, accuracy);
         console.log(
@@ -426,17 +394,11 @@ export function useDriverGpsPing(
         jobId: token,
         apiUrl: window.location.origin,
       }).catch(console.error);
+      // Java service handles API calls directly — no JS-side duplicate
+      // Listener only dispatches UI events (map, dashboard)
       if (!listenerRef.current) {
         NativeGps.addListener("onLocationUpdate", (data: any) => {
           console.log("[GPS Native] Location received", data);
-          handleLocationPing(
-            data.latitude,
-            data.longitude,
-            "native_android",
-            data.battery,
-            data.speed,
-            data.accuracy,
-          );
           if (typeof window !== "undefined") {
             window.dispatchEvent(
               new CustomEvent("sentralogis:native_gps_update", {
@@ -449,92 +411,92 @@ export function useDriverGpsPing(
         });
       }
     } else {
-      // Browser Fallback
+      // PWA: Use Web Worker for background GPS (survives tab visibility changes)
       requestWakeLock();
-      pingBrowser();
 
-      // [Phase 3.1] 3-tier adaptive interval: 10s moving, 30s screen-off, 60s still
-      const getCurrentInterval = () => {
-        if (isStillRef.current) return GPS_PING_INTERVAL_STILL_MS;
-        if (isIdleRef.current) return GPS_PING_INTERVAL_IDLE_MS;
-        return GPS_PING_INTERVAL_ACTIVE_MS;
-      };
-
-      intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
-
-      // [Phase 2.1] Visibility change → adaptive idle/active
-      const handleVisibilityChange = () => {
-        const isHidden = typeof document !== "undefined" && document.hidden;
-
-        if (isHidden) {
-          // Screen off / background → idle mode (30s interval)
-          isIdleRef.current = true;
-          emitPingState({ isIdle: true });
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
-          }
-        } else {
-          // Screen on / foreground → active mode (10s interval, unless still)
-          isIdleRef.current = false;
-          emitPingState({ isIdle: false });
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
-          }
-          if (isActiveTransitStatus(status, startedAt)) {
-            requestWakeLock();
-            pingBrowser();
-          }
-        }
-      };
-
-      if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", handleVisibilityChange);
+      // Stop existing worker if any
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
       }
 
-      // [Phase 3.1] Re-evaluate interval every 30s to catch still→moving transitions
-      const intervalCheckId = setInterval(() => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = setInterval(pingBrowser, getCurrentInterval());
-        }
-      }, 30_000);
+      // Start Web Worker
+      if (typeof Worker !== "undefined") {
+        const worker = new Worker("/gps-worker.js");
+        workerRef.current = worker;
 
-      // [Phase 2.1] Backoff check on interval: if 3+ consecutive failures, backoff to 60s
-      const backoffCheckId = setInterval(() => {
-        if (
-          consecutiveFailuresRef.current >= BACKOFF_FAILURE_THRESHOLD &&
-          !isIdleRef.current
-        ) {
-          console.log(
-            `[GPS Ping] Backoff: ${consecutiveFailuresRef.current} failures, switching to 60s interval`,
-          );
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_STILL_MS);
+        worker.onmessage = (e) => {
+          const { type, payload } = e.data;
+          if (type === "PING_SUCCESS") {
+            consecutiveFailuresRef.current = 0;
+            pingCountRef.current += 1;
+            emitPingState({
+              status: "active",
+              consecutiveFailures: 0,
+              pingCount: pingCountRef.current,
+              accuracy: payload.accuracy ?? null,
+              speed: payload.speed ?? null,
+            });
+
+            // Handle geofence event
+            if (payload.geofence_triggered && onGeofenceArrival) {
+              onGeofenceArrival({
+                geofence_triggered: true,
+                arrived_stop: payload.arrived_stop,
+                distance_m: null,
+              });
+            }
+
+            // Dispatch UI event
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("sentralogis:native_gps_update", {
+                  detail: {
+                    latitude: payload.lat,
+                    longitude: payload.lng,
+                    accuracy: payload.accuracy,
+                    speed: payload.speed,
+                  },
+                }),
+              );
+            }
+          } else if (type === "PING_FAILED" || type === "GEOLOCATION_ERROR") {
+            consecutiveFailuresRef.current += 1;
+            emitPingState({
+              status: consecutiveFailuresRef.current >= 3 ? "error" : "active",
+              consecutiveFailures: consecutiveFailuresRef.current,
+            });
           }
-        }
-      }, GPS_PING_INTERVAL_ACTIVE_MS * 2);
+        };
+
+        worker.postMessage({
+          type: "START",
+          payload: { token, apiUrl: window.location.origin },
+        });
+
+        console.log("[GPS Ping] Web Worker started for PWA");
+      } else {
+        // Fallback: no Worker support, use interval
+        console.warn("[GPS Ping] Web Worker not supported, falling back to interval");
+        pingBrowser();
+        intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
+      }
 
       return () => {
+        if (workerRef.current) {
+          workerRef.current.postMessage({ type: "STOP" });
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-        clearInterval(intervalCheckId);
-        clearInterval(backoffCheckId);
         if (wakeLockRef.current) {
           try {
             wakeLockRef.current.release();
           } catch {}
           wakeLockRef.current = null;
-        }
-        if (typeof document !== "undefined") {
-          document.removeEventListener(
-            "visibilitychange",
-            handleVisibilityChange,
-          );
         }
       };
     }

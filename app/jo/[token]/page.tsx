@@ -485,7 +485,7 @@ export default function DriverTrackingPage({
     token,
     jobOrder?.status,
     !!jobOrder,
-    useCallback((evt) => onGeofenceRef.current(evt), []),
+    useCallback((evt: any) => onGeofenceRef.current(evt), []),
     jobOrder?.started_at,
   );
 

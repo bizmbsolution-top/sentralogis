@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Truck,
@@ -55,19 +55,22 @@ export default function DriverTrackingPage() {
   const [gpsLng, setGpsLng] = useState<number | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<'active' | 'inactive' | 'error' | 'loading'>('loading');
+  const [gpsStatus, setGpsStatus] = useState<'active' | 'inactive' | 'error' | 'loading' | 'recovering'>('loading');
 
   const status = jobOrder?.status;
+
+  const onGeofenceRef = useRef<(evt: any) => void>(() => {});
+  onGeofenceRef.current = (evt) => {
+    if (evt.geofence_triggered) {
+      setJobOrder((prev) => prev ? { ...prev, status: 'TIBA DI LOKASI MUAT' } : prev);
+    }
+  };
 
   useDriverGpsPing(
     token || null,
     status,
     !!jobOrder,
-    (evt) => {
-      if (evt.geofence_triggered) {
-        setJobOrder((prev) => prev ? { ...prev, status: 'TIBA DI LOKASI MUAT' } : prev);
-      }
-    },
+    useCallback((evt: any) => onGeofenceRef.current(evt), []),
     jobOrder?.status === 'ASSIGNED' || jobOrder?.status === 'ORDER DITERIMA' || jobOrder?.status === 'MENUNGGU BERANGKAT'
       ? new Date().toISOString()
       : null,
