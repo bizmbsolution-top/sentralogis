@@ -52,6 +52,7 @@ const MOD_MASTER_DATA_HQ: MenuItem = {
   submenu: [
     { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
     { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
+    { label: 'Wilayah Kerja', icon: '📍', href: '/hq/master/trucking-regions' },
     { label: 'Services & Charges', icon: '🏷️', href: '/hq/master/services' },
     { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types', requiresSbu: 'tr' },
     { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets', requiresSbu: 'tr' },
@@ -99,6 +100,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   // Platform Owner
   owner_sentralogis: [
     { label: 'Dashboard', icon: '🏠', href: '/owner' },
+    { label: 'Engineering Governance', icon: '🛡️', href: '/governance' },
     { label: 'Tenant Management', icon: '🏢', href: '/owner/tenants' },
     {
       label: 'Transaction', icon: '📝', href: '#',
@@ -124,6 +126,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   // Superadmin Tenant
   tenant_superadmin: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
+    { label: 'Engineering Governance', icon: '🛡️', href: '/governance' },
     { label: 'Dashboard', icon: '🏠', href: '/tenant' },
     { label: 'Staff Management', icon: '👥', href: '/tenant/staff' },
     { label: 'SBU Configuration', icon: '🏢', href: '/tenant/sbu' },
@@ -493,6 +496,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       submenu: [
         { label: 'Contacts', icon: '📇', href: '/tenant/master/contacts' },
         { label: 'Locations', icon: '📍', href: '/tenant/master/locations' },
+        { label: 'Wilayah Kerja', icon: '📍', href: '/tenant/master/trucking-regions' },
       ]
     },
     {
