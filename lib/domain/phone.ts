@@ -62,6 +62,28 @@ export function buildVendorInquiryMessage(params: {
   ].join('\n');
 }
 
+export function buildCustomerTrackingDetailMessage(params: {
+  customerName: string;
+  woNumber: string;
+  jobs: { joNumber: string; plateNumber: string; driverName: string; status: string; link: string }[];
+}): string {
+  const { customerName, woNumber, jobs } = params;
+  const lines = [
+    `📦 *TRACKING WO ${woNumber}*`,
+    ``,
+    `Halo ${customerName}, berikut link pelacakan pengiriman Anda:`,
+    ``,
+  ];
+  for (const jo of jobs) {
+    lines.push(`• *${jo.joNumber}* — ${jo.plateNumber} (${jo.driverName})`);
+    lines.push(`  Status: ${jo.status}`);
+    lines.push(`  Link: ${jo.link}`);
+    lines.push(``);
+  }
+  lines.push(`Terima kasih telah menggunakan Sentralogis.`);
+  return lines.join('\n');
+}
+
 export function buildGroundStaffNotificationMessage(params: {
   woNumber: string;
   tenantName: string;

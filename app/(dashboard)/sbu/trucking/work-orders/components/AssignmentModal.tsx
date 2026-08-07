@@ -63,7 +63,7 @@ import {
 } from "@/lib/domain/jo/assignment";
 import { buildDriverAssignmentMessage, buildWaLink } from "@/lib/domain/phone";
 import VendorSendBox from "@/components/sbu/VendorSendBox";
-import GroundStaffSendBox from "@/components/sbu/GroundStaffSendBox";
+import CustomerSendBox from "@/components/sbu/CustomerSendBox";
 
 interface AssignmentModalProps {
   item: any;
@@ -123,7 +123,7 @@ export default function AssignmentModal({
   const [replyPrice, setReplyPrice] = useState<string>("");
   const [replySaving, setReplySaving] = useState(false);
   const [vendorSendOpen, setVendorSendOpen] = useState(false);
-  const [groundStaffSendOpen, setGroundStaffSendOpen] = useState(false);
+  const [customerSendOpen, setCustomerSendOpen] = useState(false);
 
   const itemData = parseItemData(item?.item_data);
   const dealPrice = Number(itemData.deal_price) || 0;
@@ -254,7 +254,9 @@ export default function AssignmentModal({
 
           supabase
             .from("md_entities")
-            .select("id, name, vendor_type, is_vendor, is_customer, is_own")
+            .select(
+              "id, name, legal_name, vendor_type, is_vendor, is_customer, is_own",
+            )
             .eq("tenant_id", tenantId)
             .eq("is_active", true),
 
@@ -1095,12 +1097,12 @@ export default function AssignmentModal({
               Send to Vendor
             </button>
             <button
-              onClick={() => setGroundStaffSendOpen(true)}
-              title="Notify Ground Staff via WhatsApp"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 transition-all text-xs font-bold"
+              onClick={() => setCustomerSendOpen(true)}
+              title="Share Tracking ke Customer via WhatsApp"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-all text-xs font-bold"
             >
               <Send size={16} />
-              Send to Ground
+              Share to Customer
             </button>
             <button
               onClick={onClose}
@@ -2217,18 +2219,25 @@ export default function AssignmentModal({
         items={item ? [item] : []}
       />
 
-      <GroundStaffSendBox
-        open={groundStaffSendOpen}
-        onClose={() => setGroundStaffSendOpen(false)}
+      <CustomerSendBox
+        open={customerSendOpen}
+        onClose={() => setCustomerSendOpen(false)}
         woNumber={item?.work_orders?.wo_number || ""}
-        tenantName={profile?.tenants?.name || ""}
-        executionDate={item?.work_orders?.execution_date || ""}
-        executionTime={item?.work_orders?.execution_time || ""}
-        tenantId={profile?.tenant_id || ""}
+        customerName={item?.work_orders?.md_entities?.name || ""}
+        customerId={item?.work_orders?.customer_id || ""}
+        items={(existingJOs || []).map((j: any) => ({
+          id: j.id,
+          jo_number: j.jo_number,
+          tracking_token: j.tracking_token,
+          driver_link_token: j.driver_link_token,
+          status: j.status,
+          plate_number: j.fleet?.plate_number,
+          driver_name: j.driver?.name,
+          origin: (itemData as any)?.shipper_name || "",
+          destination: (itemData as any)?.recipient_name || "",
+        }))}
         origin={(itemData as any)?.shipper_name || ""}
         destination={(itemData as any)?.recipient_name || ""}
-        truckCount={itemData?.unit_count || existingJOs.length || 1}
-        jobOrderIds={(existingJOs || []).map((j: any) => j.id)}
       />
 
       {/* Document Preview Modal */}
