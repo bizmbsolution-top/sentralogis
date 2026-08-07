@@ -22,7 +22,12 @@ export interface AssignmentSlot {
   sbu_metadata?: any;
   assignment_documents?: any[];
   rejected?: boolean;
-  rejected_reason?: 'truck_unavailable' | 'vendor_cancelled' | 'driver_unavailable' | 'cost_too_high' | 'other';
+  rejected_reason?:
+    | "truck_unavailable"
+    | "vendor_cancelled"
+    | "driver_unavailable"
+    | "cost_too_high"
+    | "other";
   rejected_note?: string;
 }
 
@@ -101,7 +106,13 @@ export function isFilledAssignment(slot: AssignmentSlot): boolean {
 }
 
 export function isEmptySlot(slot: AssignmentSlot): boolean {
-  return !slot.id && !slot.transporter_id && !slot.fleet_id && !slot.driver_id && !slot.rejected;
+  return (
+    !slot.id &&
+    !slot.transporter_id &&
+    !slot.fleet_id &&
+    !slot.driver_id &&
+    !slot.rejected
+  );
 }
 
 export function isRejectedSlot(slot: AssignmentSlot): boolean {
@@ -196,6 +207,7 @@ export function mapTransportersForTenant(
   entities: {
     id: string;
     name: string;
+    legal_name?: string | null;
     is_vendor?: boolean | null;
     is_customer?: boolean | null;
     is_own?: boolean | null;
@@ -210,6 +222,7 @@ export function mapTransportersForTenant(
   return entities
     .filter((t) => t.is_vendor || !t.is_customer)
     .map((t) => {
+      const displayName = t.legal_name || t.name;
       const explicitOwn = typeof t.is_own === "boolean" ? t.is_own : undefined;
       const explicitVendorType = (t.vendor_type || "").toUpperCase();
       const explicitVendorTypeOwn =
@@ -217,10 +230,10 @@ export function mapTransportersForTenant(
       const explicitVendorTypeVendor = explicitVendorType === "VENDOR";
       const inferredOwnByFallback =
         !t.is_vendor ||
-        t.name.toUpperCase().includes(tenantNameUp) ||
-        t.name.toUpperCase().includes(tenantCodeUp) ||
-        t.name.toUpperCase().includes("INTERNAL") ||
-        t.name.toUpperCase().includes("(OWN)");
+        displayName.toUpperCase().includes(tenantNameUp) ||
+        displayName.toUpperCase().includes(tenantCodeUp) ||
+        displayName.toUpperCase().includes("INTERNAL") ||
+        displayName.toUpperCase().includes("(OWN)");
 
       const isActuallyOwn =
         explicitOwn ??
@@ -233,9 +246,9 @@ export function mapTransportersForTenant(
       return {
         id: t.id,
         name:
-          isActuallyOwn && !t.name.includes("(OWN)")
-            ? `(OWN) ${t.name}`
-            : t.name,
+          isActuallyOwn && !displayName.includes("(OWN)")
+            ? `(OWN) ${displayName}`
+            : displayName,
         is_vendor: !isActuallyOwn,
         is_own: isActuallyOwn,
       };
@@ -255,24 +268,30 @@ export function buildInitialAssignmentSlots(
   const maxJOCount = computeMaxJoCount(item);
   const isHandoverApproved = item.handover_approved === true;
 
-  const existingAssignments: AssignmentSlot[] = existingJos.map((existing: any) => ({
-    id: existing.id,
-    transporter_id: existing.transporter_id ?? null,
-    fleet_id: existing.fleet_id ?? null,
-    driver_id: existing.driver_id ?? null,
-    driver_phone: existing.driver_phone || "",
-    purchase_price: Number(existing.purchase_price) || 0,
-    base_price: Number(existing.base_price) || dealPrice,
-    driver_share_percentage: Number(existing.driver_share_percentage ?? 0),
-    advance_amount: Number(existing.advance_amount) || 0,
-    jo_number: existing.jo_number,
-    tracking_token: existing.tracking_token,
-    wa_token: existing.wa_token,
-    status: existing.status || "assigned",
-    container_number: existing.container_number || (existing.sbu_metadata ? existing.sbu_metadata.container_number : "") || "",
-    notes: existing.notes || "",
-    assignment_documents: existing.assignment_documents || [],
-  }));
+  const existingAssignments: AssignmentSlot[] = existingJos.map(
+    (existing: any) => ({
+      id: existing.id,
+      transporter_id: existing.transporter_id ?? null,
+      fleet_id: existing.fleet_id ?? null,
+      driver_id: existing.driver_id ?? null,
+      driver_phone: existing.driver_phone || "",
+      purchase_price: Number(existing.purchase_price) || 0,
+      base_price: Number(existing.base_price) || dealPrice,
+      driver_share_percentage: Number(existing.driver_share_percentage ?? 0),
+      advance_amount: Number(existing.advance_amount) || 0,
+      jo_number: existing.jo_number,
+      tracking_token: existing.tracking_token,
+      wa_token: existing.wa_token,
+      status: existing.status || "assigned",
+      container_number:
+        existing.container_number ||
+        (existing.sbu_metadata ? existing.sbu_metadata.container_number : "") ||
+        "",
+      notes: existing.notes || "",
+      cost_account_id: existing.cost_account_id ?? null,
+      assignment_documents: existing.assignment_documents || [],
+    }),
+  );
 
   const emptySlotsNeeded = isHandoverApproved
     ? 0
