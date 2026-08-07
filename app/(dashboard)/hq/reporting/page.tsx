@@ -132,6 +132,7 @@ export default function HQReportingPage() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [customerFilter, setCustomerFilter] = useState("");
+  const [customerChildren, setCustomerChildren] = useState<any[]>([]);
   // SBU-specific
   const [truckTypeFilter, setTruckTypeFilter] = useState("");
   const [transporterFilter, setTransporterFilter] = useState("all");
@@ -161,13 +162,15 @@ export default function HQReportingPage() {
   const fetchMasterData = async () => {
     if (!tenantId) return;
     try {
-      const [{ data: ct }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
-        supabase.from("md_entities").select("id, name, legal_name").eq("is_customer", true).eq("tenant_id", tenantId).order("name"),
+      const [{ data: ct }, { data: ctChildren }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
+        supabase.from("md_entities").select("id, name, legal_name").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).is("parent_id", null).order("name"),
+        supabase.from("md_entities").select("id, parent_id").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).not("parent_id", "is", null),
         supabase.from("wo_items").select("item_data").eq("sbu_type", "TRUCKING").eq("tenant_id", tenantId),
         supabase.from("md_warehouses").select("id, name").eq("tenant_id", tenantId).order("name"),
         supabase.from("md_entities").select("id, name, vendor_type").eq("is_vendor", true).eq("tenant_id", tenantId).eq("is_active", true).order("name"),
       ]);
       setCustomers(ct || []);
+      setCustomerChildren(ctChildren || []);
       setWarehouses(wh || []);
       setTransporters(tr || []);
       const types = (tt || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
@@ -199,8 +202,11 @@ export default function HQReportingPage() {
 
           // SBU tab filter
           if (sbuTab !== "all" && itemSbu !== sbuTab) return;
-          // Customer filter
-          if (customerFilter && wo.customer_id !== customerFilter) return;
+          // Customer filter — parent covers its children (bill-to is always parent)
+          if (customerFilter) {
+            const childIds = customerChildren.filter((c: any) => c.parent_id === customerFilter).map((c: any) => c.id);
+            if (wo.customer_id !== customerFilter && !childIds.includes(wo.customer_id)) return;
+          }
 
           const dealPrice = Number(item.total_revenue || item.item_data?.deal_price || 0);
           const originName = item.item_data?.shipper_name || item.item_data?.origin_name || "TBA";
