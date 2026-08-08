@@ -101,11 +101,12 @@ export interface GpsPingState {
 export function useDriverGpsPing(
   token: string | null | undefined,
   status: string | undefined,
-  enabled = true,
+  enabled: boolean,
   onGeofenceArrival?: (event: GeofenceArrivalEvent) => void,
   startedAt?: string | null,
+  isNativeApp: boolean | null = null,
+  onLocationUpdate?: (location: any) => void,
   onPingStateChange?: (state: Partial<GpsPingState>) => void,
-  isNativeApp?: boolean,
 ) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<any>(null);
@@ -132,10 +133,7 @@ export function useDriverGpsPing(
   // Send native_heartbeat once per token when native app opens
   useEffect(() => {
     if (typeof window !== "undefined" && token) {
-      const isCapacitorNative = (window as any).Capacitor?.isNativePlatform?.() ?? false;
-      const trulyNative = isNativeApp || isCapacitorNative;
-
-      if (trulyNative && !heartbeatSentRef.current) {
+      if (isNativeApp === true && !heartbeatSentRef.current) {
         heartbeatSentRef.current = true;
         fetch(`/api/jo/${token}`, {
           method: "PATCH",
@@ -377,8 +375,7 @@ export function useDriverGpsPing(
   }, [emitPingState]);
 
   useEffect(() => {
-    const isCapacitorNative = typeof window !== "undefined" ? (window as any).Capacitor?.isNativePlatform?.() ?? false : false;
-    const isNative = isNativeApp || isCapacitorNative;
+    const isNative = isNativeApp === true;
 
     if (!enabled || !token || !isActiveTransitStatus(status, startedAt)) {
       if (isNative) {
@@ -461,8 +458,8 @@ export function useDriverGpsPing(
             });
           }
         } catch (e) {
-          console.error("[GPS Native] Error starting tracking. Falling back to PWA:", e);
-          startPwaGps();
+          console.error("[GPS Native] Error starting tracking. Bridge might be uninitialized. Retrying in 3s...", e);
+          setTimeout(startNativeGps, 3000);
         }
       };
       startNativeGps();

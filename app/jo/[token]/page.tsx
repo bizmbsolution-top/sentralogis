@@ -113,7 +113,7 @@ export default function DriverTrackingPage({
     Date.now(),
   );
 
-  const [isNative, setIsNative] = useState(false);
+  const [isNative, setIsNative] = useState<boolean | null>(null);
   const [gpsStatus, setGpsStatus] = useState<
     "active" | "inactive" | "error" | "loading"
   >("loading");
@@ -192,7 +192,7 @@ export default function DriverTrackingPage({
   const gpsAccuracyRef = useRef(gpsAccuracy);
   gpsAccuracyRef.current = gpsAccuracy;
 
-  // [AI] Enhanced native detection with multiple fallback methods
+  // [AI] Enhanced native detection with async polling for Capacitor bridge
   useEffect(() => {
     let isNativeDetected = false;
 
@@ -214,24 +214,29 @@ export default function DriverTrackingPage({
       isNativeDetected = true;
     }
 
-    if (isNativeDetected) {
-      setIsNative(true);
-    }
-
-    // Method 1: Capacitor native platform check
-    import("@capacitor/core")
-      .then(({ Capacitor }) => {
-        const isCapNative = Capacitor.isNativePlatform();
-        console.log("[Native Detection] Capacitor:", isCapNative);
-        // Only override if Capacitor is explicitly true, or we haven't detected it via fallback
-        if (isCapNative || !isNativeDetected) {
-          setIsNative(isCapNative);
+    // Async polling for Capacitor Bridge (solves Next.js hydration race conditions)
+    let attempts = 0;
+    const maxAttempts = 30; // 3 seconds (30 * 100ms)
+    
+    const pollForBridge = setInterval(() => {
+      attempts++;
+      const isCapacitorInjected = !!(window as any).Capacitor?.isNativePlatform?.();
+      
+      if (isCapacitorInjected) {
+        clearInterval(pollForBridge);
+        console.log(`[Native Detection] Capacitor bridge caught after ${attempts * 100}ms!`);
+        setIsNative(true);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(pollForBridge);
+        if (isNativeDetected) {
+          console.log("[Native Detection] Capacitor bridge not found, but fallback detected Native. Assuming Native.");
+          setIsNative(true);
+        } else {
+          console.log("[Native Detection] Capacitor bridge not found after 3s. Falling back to PWA.");
+          setIsNative(false);
         }
-      })
-      .catch(() => {
-        console.log("[Native Detection] Capacitor not available");
-      });
-
+      }
+    }, 100);
 
     if (!token) return;
     fetchJobOrder();
@@ -308,6 +313,7 @@ export default function DriverTrackingPage({
         handleNativeGps,
       );
       clearInterval(healthInterval);
+      clearInterval(pollForBridge);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
