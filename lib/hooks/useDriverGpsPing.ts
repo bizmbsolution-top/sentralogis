@@ -409,10 +409,6 @@ export function useDriverGpsPing(
       requestWakeLock();
       console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
       
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
