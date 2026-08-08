@@ -111,7 +111,6 @@ export function useDriverGpsPing(
   const wakeLockRef = useRef<any>(null);
   const isPingingRef = useRef<boolean>(false);
   const listenerRef = useRef<any>(null);
-  const workerRef = useRef<Worker | null>(null);
 
   // [Phase 2.1] Retry state refs
   const consecutiveFailuresRef = useRef<number>(0);
@@ -133,7 +132,10 @@ export function useDriverGpsPing(
   // Send native_heartbeat once per token when native app opens
   useEffect(() => {
     if (typeof window !== "undefined" && token) {
-      if (isNativeApp && !heartbeatSentRef.current) {
+      const isCapacitorNative = (window as any).Capacitor?.isNativePlatform?.() ?? false;
+      const trulyNative = isNativeApp || isCapacitorNative;
+
+      if (trulyNative && !heartbeatSentRef.current) {
         heartbeatSentRef.current = true;
         fetch(`/api/jo/${token}`, {
           method: "PATCH",
@@ -375,7 +377,8 @@ export function useDriverGpsPing(
   }, [emitPingState]);
 
   useEffect(() => {
-    const isNative = isNativeApp ?? false;
+    const isCapacitorNative = typeof window !== "undefined" ? (window as any).Capacitor?.isNativePlatform?.() ?? false : false;
+    const isNative = isNativeApp || isCapacitorNative;
 
     if (!enabled || !token || !isActiveTransitStatus(status, startedAt)) {
       if (isNative) {
@@ -407,68 +410,19 @@ export function useDriverGpsPing(
 
     const startPwaGps = () => {
       requestWakeLock();
+      console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
+      
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
       }
-
-      if (typeof Worker !== "undefined") {
-        const worker = new Worker("/gps-worker.js");
-        workerRef.current = worker;
-
-        worker.onmessage = (e) => {
-          const { type, payload } = e.data;
-          if (type === "PING_SUCCESS") {
-            consecutiveFailuresRef.current = 0;
-            pingCountRef.current += 1;
-            emitPingState({
-              status: "active",
-              consecutiveFailures: 0,
-              pingCount: pingCountRef.current,
-              accuracy: payload.accuracy ?? null,
-              speed: payload.speed ?? null,
-            });
-
-            if (payload.geofence_triggered && onGeofenceArrival) {
-              onGeofenceArrival({
-                geofence_triggered: true,
-                arrived_stop: payload.arrived_stop,
-                distance_m: null,
-              });
-            }
-
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("sentralogis:native_gps_update", {
-                  detail: {
-                    latitude: payload.lat,
-                    longitude: payload.lng,
-                    accuracy: payload.accuracy,
-                    speed: payload.speed,
-                  },
-                }),
-              );
-            }
-          } else if (type === "PING_FAILED" || type === "GEOLOCATION_ERROR") {
-            consecutiveFailuresRef.current += 1;
-            emitPingState({
-              status: consecutiveFailuresRef.current >= 3 ? "error" : "active",
-              consecutiveFailures: consecutiveFailuresRef.current,
-            });
-          }
-        };
-
-        worker.postMessage({
-          type: "START",
-          payload: { token, apiUrl: window.location.origin },
-        });
-
-        console.log("[GPS Ping] Web Worker started for PWA/Fallback");
-      } else {
-        console.warn("[GPS Ping] Web Worker not supported, falling back to interval");
-        pingBrowser();
-        intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
+      
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
+      
+      pingBrowser();
+      intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
     };
 
     if (isNative) {
@@ -517,25 +471,16 @@ export function useDriverGpsPing(
     }
 
     return () => {
-        if (workerRef.current) {
-          workerRef.current.postMessage({ type: "STOP" });
-          workerRef.current.terminate();
-          workerRef.current = null;
-        }
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        if (wakeLockRef.current) {
-          try {
-            wakeLockRef.current.release();
-          } catch {}
-          wakeLockRef.current = null;
-        }
-      };
-    }
-
-    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (wakeLockRef.current) {
+        try {
+          wakeLockRef.current.release();
+        } catch {}
+        wakeLockRef.current = null;
+      }
       if (isNative) {
         NativeGps.stopTracking().catch(console.error);
         if (listenerRef.current) {
