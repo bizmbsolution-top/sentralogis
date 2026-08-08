@@ -121,10 +121,6 @@ export async function GET(
       );
     }
 
-    // Detect native app via User Agent
-    const userAgent = request.headers.get("user-agent") || "";
-    const isNativeApp = userAgent.includes("SentraLogis_AndroidApp");
-
     const queryService = new DriverPortalQuery(supabase);
     const jobOrderData = await queryService.getJobOrderData(token);
 
@@ -133,17 +129,6 @@ export async function GET(
         { error: "Job Order tidak ditemukan" },
         { status: 404 },
       );
-    }
-
-    // Update driver's native app status if detected
-    if (isNativeApp && jobOrderData.driver_id) {
-      await supabase
-        .from("md_drivers")
-        .update({
-          has_native_app: true,
-          last_app_open_at: new Date().toISOString(),
-        })
-        .eq("id", jobOrderData.driver_id);
     }
 
     // Lazy auto-complete: if this JO is waiting for completion and the driver
@@ -303,15 +288,34 @@ export async function PATCH(
         return NextResponse.json({ success: true });
 
       // ─────────────────────────────────────────────────────────────────
+      // NATIVE HEARTBEAT — deterministic native app identification
+      // ─────────────────────────────────────────────────────────────────
+      case "native_heartbeat":
+        if (jo.driver_id) {
+          await supabase
+            .from("md_drivers")
+            .update({
+              has_native_app: true,
+              last_app_open_at: new Date().toISOString(),
+            })
+            .eq("id", jo.driver_id);
+          return NextResponse.json({ success: true, message: "Native heartbeat recorded" });
+        }
+        return NextResponse.json({ error: "No driver attached" }, { status: 400 });
+
+      // ─────────────────────────────────────────────────────────────────
       // GPS PING — record into job_tracking (source of truth for peta utama)
       // + geofence arrival/departure/re-entry detection
       // ─────────────────────────────────────────────────────────────────
       case "gps_ping": {
-        if (!lat || !lng)
+        console.log(`[API] GPS_REQUEST_RECEIVED driver_id=${jo.driver_id} job_order_id=${jo.id} tenant_id=${jo.tenant_id} recorded_at=${recorded_at} has_lat=${!!lat} has_lng=${!!lng}`);
+        if (!lat || !lng) {
+          console.warn(`[API] GPS_REQUEST_REJECTED reason=Missing lat/lng`);
           return NextResponse.json(
             { error: "Missing lat/lng" },
             { status: 400 },
           );
+        }
 
         const nLat = Number(lat);
         const nLng = Number(lng);
@@ -379,8 +383,11 @@ export async function PATCH(
         const { error: pingErr } = await supabase
           .from("job_tracking")
           .insert(pingPayload);
-        if (pingErr)
+        if (pingErr) {
+          console.error(`[API] GPS_REQUEST_REJECTED reason=DB Insert Error (${pingErr.message})`);
           return NextResponse.json({ error: pingErr.message }, { status: 500 });
+        }
+        console.log(`[API] GPS_RECORD_INSERTED job_order_id=${jo.id} source=${pingPayload.source}`);
 
         // 2b. Upsert fleet_gps_status so Fleet Performance shows phone GPS
         if (jo.fleet_id && jo.tenant_id) {

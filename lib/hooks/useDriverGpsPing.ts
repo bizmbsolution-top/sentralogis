@@ -105,6 +105,7 @@ export function useDriverGpsPing(
   onGeofenceArrival?: (event: GeofenceArrivalEvent) => void,
   startedAt?: string | null,
   onPingStateChange?: (state: Partial<GpsPingState>) => void,
+  isNativeApp?: boolean,
 ) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<any>(null);
@@ -118,6 +119,8 @@ export function useDriverGpsPing(
   const pingCountRef = useRef<number>(0);
   const doneRef = useRef<boolean>(false);
 
+  const heartbeatSentRef = useRef<boolean>(false);
+
   const emitPingState = useCallback(
     (patch: Partial<GpsPingState>) => {
       if (onPingStateChange) {
@@ -126,6 +129,20 @@ export function useDriverGpsPing(
     },
     [onPingStateChange],
   );
+
+  // Send native_heartbeat once per token when native app opens
+  useEffect(() => {
+    if (typeof window !== "undefined" && token) {
+      if (isNativeApp && !heartbeatSentRef.current) {
+        heartbeatSentRef.current = true;
+        fetch(`/api/jo/${token}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+          body: JSON.stringify({ action: "native_heartbeat", source: "native_android" }),
+        }).catch(err => console.warn("[Native Heartbeat] Error:", err));
+      }
+    }
+  }, [token, isNativeApp]);
 
   const requestWakeLock = useCallback(async () => {
     try {
@@ -358,7 +375,7 @@ export function useDriverGpsPing(
   }, [emitPingState]);
 
   useEffect(() => {
-    const isNative = Capacitor.isNativePlatform();
+    const isNative = isNativeApp ?? false;
 
     if (!enabled || !token || !isActiveTransitStatus(status, startedAt)) {
       if (isNative) {
@@ -389,27 +406,45 @@ export function useDriverGpsPing(
     emitPingState({ status: "loading" });
 
     if (isNative) {
-      console.log("[GPS Native] Starting Foreground Service");
-      NativeGps.startTracking({
-        jobId: token,
-        apiUrl: window.location.origin,
-      }).catch(console.error);
-      // Java service handles API calls directly — no JS-side duplicate
-      // Listener only dispatches UI events (map, dashboard)
-      if (!listenerRef.current) {
-        NativeGps.addListener("onLocationUpdate", (data: any) => {
-          console.log("[GPS Native] Location received", data);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(
-              new CustomEvent("sentralogis:native_gps_update", {
-                detail: data,
-              }),
-            );
+      console.log("[GPS Native] isNativePlatform = true");
+      const startNativeGps = async () => {
+        try {
+          const { Geolocation } = await import("@capacitor/geolocation");
+          const perm = await Geolocation.checkPermissions();
+          console.log(`[GPS Native] Permission before request = ${perm.location}`);
+          
+          if (perm.location !== "granted") {
+            const req = await Geolocation.requestPermissions();
+            console.log(`[GPS Native] Permission request result = ${req.location}`);
+            if (req.location !== "granted") {
+              console.warn("[GPS Native] Location permission denied");
+              return;
+            }
           }
-        }).then((listener) => {
-          listenerRef.current = listener;
-        });
-      }
+          console.log("[GPS Native] Location permission granted");
+          console.log("[GPS Native] Starting Foreground Service");
+          await NativeGps.startTracking({
+            jobId: token,
+            apiUrl: window.location.origin,
+          });
+
+          if (!listenerRef.current) {
+            listenerRef.current = await NativeGps.addListener("onLocationUpdate", (data: any) => {
+              console.log(`[GPS Native] Location received = ${data.latitude}, ${data.longitude}`);
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("sentralogis:native_gps_update", {
+                    detail: data,
+                  }),
+                );
+              }
+            });
+          }
+        } catch (e) {
+          console.error("[GPS Native] Error starting tracking:", e);
+        }
+      };
+      startNativeGps();
     } else {
       // PWA: Use Web Worker for background GPS (survives tab visibility changes)
       requestWakeLock();
@@ -519,5 +554,6 @@ export function useDriverGpsPing(
     requestWakeLock,
     handleLocationPing,
     emitPingState,
+    isNativeApp,
   ]);
 }

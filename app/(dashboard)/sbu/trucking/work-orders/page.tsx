@@ -11,7 +11,8 @@ import {
   MapPin, Calendar, Clock, ChevronRight, User,
   ClipboardList, AlertCircle, Activity,
   Package, CheckCircle, ArrowRight, AlertTriangle,
-  Layers, ExternalLink, ShieldCheck, Box, CheckCircle2, Eye, MessageCircle
+  Layers, ExternalLink, ShieldCheck, Box, CheckCircle2, Eye, MessageCircle,
+  Timer, XCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -739,14 +740,14 @@ const filteredItems = useMemo(() => {
                             const diffMs = (30 * 60 * 1000) - (now - assignedTime);
                             
                             if (diffMs <= 0) {
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Auto-start dimulai...</Badge>;
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Auto-start dimulai...</Badge>;
                             } else {
                               const m = Math.floor(diffMs / 60000);
                               const secs = Math.floor((diffMs % 60000) / 1000);
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
+                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
                             }
                           } else {
-                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold">â±ï¸ Menunggu...</Badge>;
+                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Menunggu...</Badge>;
                           }
                         }
 
@@ -759,7 +760,7 @@ const filteredItems = useMemo(() => {
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{jo.jo_number || `JO-${idx+1}`}</div>
                                 <div className="text-xs text-slate-500">
-                                  {jo.transporter?.name || 'Assigned'} â€¢ {jo.driver?.name || 'No Driver'}
+                                  {jo.transporter?.name || 'Assigned'} {"•"} {jo.driver?.name || 'No Driver'}
                                 </div>
                               </div>
                             </div>
@@ -789,7 +790,7 @@ const filteredItems = useMemo(() => {
                                     setShowRejectModal(true);
                                   }}
                                 >
-                                  âŒ Reject
+                                  <XCircle size={14} className="inline mr-1" />  Reject
                                 </Button>
                               )}
                             </div>

@@ -1,0 +1,29 @@
+{
+  "codeMetrics": {
+    "totalFiles": 1588,
+    "totalLines": 304232,
+    "todoCount": 165,
+    "fixmeCount": 0,
+    "hackCount": 0,
+    "xxxCount": 15,
+    "deepNestingCount": 70212,
+    "longFunctionsCount": 223,
+    "largeFilesCount": 143,
+    "circularDependencies": 0,
+    "layerViolations": 0,
+    "typescriptErrors": [],
+    "anyUsage": 2811,
+    "nullAssertions": 602
+  },
+  "scores": {
+    "overallHealth": 43,
+    "architectureMaturity": 100,
+    "technicalDebt": 0,
+    "dependencyHealth": 95,
+    "typescriptHealth": 0,
+    "testHealth": 80,
+    "securityHealth": 100,
+    "isProductionReady": false
+  },
+  "timestamp": "2026-08-07T03:32:59.010Z"
+}

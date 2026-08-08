@@ -1,0 +1,33 @@
+{
+  "healthScore": 0,
+  "typescriptErrors": 2581,
+  "affectedFiles": 268,
+  "categories": {
+    "Inference": 1575,
+    "Type mismatches": 836,
+    "Missing global types": 83,
+    "Other (TS18048)": 4,
+    "Other (TS2305)": 11,
+    "Other (TS18004)": 1,
+    "Other (TS2551)": 1,
+    "Other (TS2488)": 3,
+    "Other (TS18047)": 2,
+    "Other (TS18046)": 3,
+    "React JSX": 1,
+    "Other (TS2820)": 1,
+    "Missing imports": 12,
+    "Other (TS2554)": 11,
+    "Other (TS2694)": 1,
+    "Other (TS2300)": 4,
+    "Other (TS7053)": 4,
+    "Other (TS2741)": 2,
+    "Other (TS2561)": 1,
+    "Jest": 25
+  },
+  "priority": {
+    "P1": 13,
+    "P2": 83,
+    "P3": 2411,
+    "P4": 74
+  }
+}

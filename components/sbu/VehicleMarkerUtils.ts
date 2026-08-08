@@ -1,6 +1,7 @@
 // VehicleMarkerUtils.ts
 // [AI] Mathematical Utilities for Bearing Angle Calculation & Top-Down Vehicle SVG Generation
 // Supports GoCar-like dynamic rotation & scaled shapes for Trailers, Wingbox, CDD Box, Vans, and Motorcycles.
+import { getPingTimestamp } from "@/lib/utils/dateUtils";
 
 export interface LatLngPoint {
   lat: number;
@@ -11,7 +12,12 @@ export interface LatLngPoint {
  * Calculates the initial bearing (forward azimuth) from point 1 to point 2 in degrees (0 to 360).
  * 0/360 = North, 90 = East, 180 = South, 270 = West.
  */
-export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function calculateBearing(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
   if (lat1 === lat2 && lng1 === lng2) return 0;
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -22,7 +28,9 @@ export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2:
   const deltaLambda = toRad(lng2 - lng1);
 
   const y = Math.sin(deltaLambda) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
   const theta = Math.atan2(y, x);
   const bearing = (toDeg(theta) + 360) % 360;
 
@@ -33,19 +41,28 @@ export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2:
  * Given a chronological or reverse-chronological array of tracking history points,
  * calculates the current travel bearing angle of the vehicle.
  */
-export function calculateBearingFromHistory(trackingList: any[], defaultLat?: number, defaultLng?: number): number {
+export function calculateBearingFromHistory(
+  trackingList: any[],
+  defaultLat?: number,
+  defaultLng?: number,
+): number {
   if (!trackingList || trackingList.length < 2) return 0;
 
   // Filter only points with valid coordinates
   const valid = trackingList.filter(
-    (t: any) => t.latitude && t.longitude && Number(t.latitude) !== 0 && !isNaN(Number(t.latitude))
+    (t: any) =>
+      t.latitude &&
+      t.longitude &&
+      Number(t.latitude) !== 0 &&
+      !isNaN(Number(t.latitude)),
   );
 
   if (valid.length < 2) return 0;
 
   // Ensure chronological order (oldest -> newest) to compute heading from (last - 1) to (last)
+  // Sort by recorded_at (device/phone time) when available, falling back to created_at (server time)
   const sorted = [...valid].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (a, b) => (getPingTimestamp(a) ?? 0) - (getPingTimestamp(b) ?? 0),
   );
 
   const pPrev = sorted[sorted.length - 2];
@@ -64,23 +81,29 @@ export function calculateBearingFromHistory(trackingList: any[], defaultLat?: nu
  * tailored specifically to the fleet type (Trailer vs Wingbox vs CDD vs Motor vs Van).
  */
 export function getVehicleTopDownMarkerIcon(
-  fleetTypeName: string = 'STANDARD',
+  fleetTypeName: string = "STANDARD",
   bearing: number = 0,
-  statusColor: string = '#2563eb' // Default blue
+  statusColor: string = "#2563eb", // Default blue
 ): { url: string; scaledSize: any; anchor: any } {
-  const name = (fleetTypeName || '').toLowerCase();
-  
+  const name = (fleetTypeName || "").toLowerCase();
+
   const canvasSize = 84;
   const cx = 42;
   const cy = 42;
-  let svgContent = '';
+  let svgContent = "";
 
   // Determine color theme by status/SBU if not explicitly passed
   const primaryColor = statusColor;
-  const cabinColor = '#1e293b'; // Dark slate cabin
-  const accentColor = '#38bdf8'; // Glowing cyan window/headlights
+  const cabinColor = "#1e293b"; // Dark slate cabin
+  const accentColor = "#38bdf8"; // Glowing cyan window/headlights
 
-  if (name.includes('trailer') || name.includes('container') || name.includes('40ft') || name.includes('20ft') || name.includes('gandeng')) {
+  if (
+    name.includes("trailer") ||
+    name.includes("container") ||
+    name.includes("40ft") ||
+    name.includes("20ft") ||
+    name.includes("gandeng")
+  ) {
     // 🚚 LONG TRAILER CONTAINER (Top-down tractor cabin + long ribbed container box)
     // Box dimensions: 26 width x 60 height centered at (42, 42) -> left=29, top=12
     svgContent = `
@@ -109,7 +132,12 @@ export function getVehicleTopDownMarkerIcon(
         <circle cx="51" cy="12" r="2" fill="#facc15" />
       </g>
     `;
-  } else if (name.includes('wingbox') || name.includes('tronton') || name.includes('wbox') || name.includes('fuso')) {
+  } else if (
+    name.includes("wingbox") ||
+    name.includes("tronton") ||
+    name.includes("wbox") ||
+    name.includes("fuso")
+  ) {
     // 🚛 HEAVY WINGBOX / TRONTON (Wide body with wing opening split lines)
     // Box dimensions: 28 width x 52 height centered at (42, 42) -> left=28, top=16
     svgContent = `
@@ -131,7 +159,12 @@ export function getVehicleTopDownMarkerIcon(
         <circle cx="51" cy="16.5" r="2" fill="#facc15" />
       </g>
     `;
-  } else if (name.includes('motor') || name.includes('kurir') || name.includes('express') || name.includes('bike')) {
+  } else if (
+    name.includes("motor") ||
+    name.includes("kurir") ||
+    name.includes("express") ||
+    name.includes("bike")
+  ) {
     // 🏍️ MOTORCYCLE EXPRESS (Compact rider top-down + delivery box)
     // Box dimensions: 20 width x 32 height centered at (42, 42) -> left=32, top=26
     svgContent = `
@@ -153,7 +186,13 @@ export function getVehicleTopDownMarkerIcon(
         <rect x="36" y="46" width="12" height="12" rx="2" fill="#9333ea" stroke="#ffffff" stroke-width="1.5" />
       </g>
     `;
-  } else if (name.includes('van') || name.includes('blind') || name.includes('pickup') || name.includes('granmax') || name.includes('l300')) {
+  } else if (
+    name.includes("van") ||
+    name.includes("blind") ||
+    name.includes("pickup") ||
+    name.includes("granmax") ||
+    name.includes("l300")
+  ) {
     // 🚐 BLIND VAN / PICKUP (Aerodynamic rounded top-down body)
     // Box dimensions: 24 width x 44 height centered at (42, 42) -> left=30, top=20
     svgContent = `
@@ -199,11 +238,13 @@ export function getVehicleTopDownMarkerIcon(
 
   return {
     url: dataUri,
-    scaledSize: typeof window !== 'undefined' && (window as any).google?.maps?.Size 
-      ? new (window as any).google.maps.Size(canvasSize, canvasSize)
-      : undefined,
-    anchor: typeof window !== 'undefined' && (window as any).google?.maps?.Point
-      ? new (window as any).google.maps.Point(cx, cy)
-      : undefined,
+    scaledSize:
+      typeof window !== "undefined" && (window as any).google?.maps?.Size
+        ? new (window as any).google.maps.Size(canvasSize, canvasSize)
+        : undefined,
+    anchor:
+      typeof window !== "undefined" && (window as any).google?.maps?.Point
+        ? new (window as any).google.maps.Point(cx, cy)
+        : undefined,
   };
 }

@@ -480,15 +480,15 @@ export default function DriverTrackingPage({
       fetchJobOrder(true);
     }
   };
-
   useDriverGpsPing(
     token,
     jobOrder?.status,
     !!jobOrder,
     useCallback((evt: any) => onGeofenceRef.current(evt), []),
     jobOrder?.started_at,
+    undefined,
+    isNative,
   );
-
   const fetchJobOrder = async (background = false) => {
     try {
       if (!background) setLoading(true);

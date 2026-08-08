@@ -1,0 +1,286 @@
+# Priority Backlog Report
+
+## Priority 1 - Build Blockers (Missing imports, React JSX, Configuration)
+
+- **[app/job/[token]/page.tsx:5]** (TS2786) React JSX: 'TokenExtractor' cannot be used as a JSX component. Its type '({ params }: { params: Promise<{ token: string; }>; }) => Promise<void>' is not a valid JSX element type. Type '({ params }: { params: Promise<{ token: string; }>; }) => Promise<void>' is not assignable to type '(props: any) => ReactNode | Promise<ReactNode>'. Type 'Promise<void>' is not assignable to type 'ReactNode | Promise<ReactNode>'. Type 'Promise<void>' is not assignable to type 'ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | ReactPortal | Promise<...> | Promise<...>'. Type 'Promise<void>' is not assignable to type 'Promise<AwaitedReactNode>'. Type 'void' is not assignable to type 'AwaitedReactNode'.
+- **[components/hq/AddForwardingItemModal.tsx:5]** (TS2307) Missing imports: Cannot find module '@/lib/domain/forwarding/repository' or its corresponding type declarations.
+- **[lib/domain/forwarding/pricing.ts:4]** (TS2307) Missing imports: Cannot find module '../../utils/supabase/client' or its corresponding type declarations.
+- **[src/app/(dashboard)/copilot/components/CopilotContextProvider.tsx:2]** (TS2307) Missing imports: Cannot find module '../../../platforms/copilot/context/OperationalContext' or its corresponding type declarations.
+- **[src/app/(dashboard)/copilot/components/CopilotContextProvider.tsx:3]** (TS2307) Missing imports: Cannot find module '../../../platforms/copilot/context/WorkspaceContext' or its corresponding type declarations.
+- **[src/lib/domain/forwarding/repository.ts:3]** (TS2307) Missing imports: Cannot find module '../../../../lib/domain/forwarding/repository' or its corresponding type declarations.
+- **[src/lib/domain/forwarding/repository.ts:4]** (TS2307) Missing imports: Cannot find module '../../../../lib/domain/forwarding/repository' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:1]** (TS2307) Missing imports: Cannot find module '../../context/OperationalContext' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:2]** (TS2307) Missing imports: Cannot find module '../../intelligence/entities/models' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:3]** (TS2307) Missing imports: Cannot find module '../../validation/ValidationModels' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:4]** (TS2307) Missing imports: Cannot find module '../../metrics/ExplainabilityData' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:5]** (TS2307) Missing imports: Cannot find module '../../engine/ContextEnricher' or its corresponding type declarations.
+- **[src/platforms/copilot/pipeline/PipelineModels.ts:6]** (TS2307) Missing imports: Cannot find module '../../engine/CopilotEngine' or its corresponding type declarations.
+
+## Priority 2 - Runtime Risks (Nullability, Missing globals)
+
+- **[app/(dashboard)/hq/job-orders/page.tsx:342]** (TS2304) Missing global types: Cannot find name 'X'.
+- **[app/(dashboard)/hq/job-orders/page.tsx:512]** (TS2304) Missing global types: Cannot find name 'X'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx:372]** (TS2304) Missing global types: Cannot find name 'CardTitle'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx:374]** (TS2304) Missing global types: Cannot find name 'CardTitle'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx:281]** (TS2304) Missing global types: Cannot find name 'Link'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx:283]** (TS2304) Missing global types: Cannot find name 'Link'.
+- **[app/(dashboard)/sbu/forwarding/wo/create/page.tsx:267]** (TS2304) Missing global types: Cannot find name 'Plus'.
+- **[app/(dashboard)/sbu/forwarding/wo/create/page.tsx:325]** (TS2304) Missing global types: Cannot find name 'Plus'.
+- **[app/(dashboard)/sbu/trucking/work-orders/[id]/page.tsx:641]** (TS2304) Missing global types: Cannot find name 'X'.
+- **[app/(dashboard)/sbu/warehouse/outbound/page.tsx:96]** (TS2304) Missing global types: Cannot find name 'useSearchParams'.
+- **[app/api/admin/sync-status/route.ts:162]** (TS2304) Missing global types: Cannot find name 'onRoadFleets'.
+- **[app/driver/portal/components/SetupWizard.tsx:113]** (TS2304) Missing global types: Cannot find name 'Loader2'.
+- **[app/driver/portal/components/SetupWizard.tsx:130]** (TS2304) Missing global types: Cannot find name 'Loader2'.
+- **[app/driver/portal/components/SetupWizard.tsx:186]** (TS2304) Missing global types: Cannot find name 'Loader2'.
+- **[app/driver/portal/page.tsx:434]** (TS2304) Missing global types: Cannot find name 'fetchJobDetails'.
+- **[app/driver/portal/page.tsx:3424]** (TS2304) Missing global types: Cannot find name 'ImageIcon'.
+- **[app/portal/sales/chat/page.tsx:179]** (TS2304) Missing global types: Cannot find name 'MessageSquare'.
+- **[app/track/fwd/[token]/page.tsx:224]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/fwd/[token]/page.tsx:260]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/fwd/[token]/page.tsx:264]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/fwd/[token]/page.tsx:283]** (TS2304) Missing global types: Cannot find name 'ArrowRight'.
+- **[app/track/fwd/[token]/page.tsx:316]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/fwd/[token]/page.tsx:322]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/fwd/[token]/page.tsx:355]** (TS2304) Missing global types: Cannot find name 'CardContent'.
+- **[app/track/warehouse/[token]/page.tsx:145]** (TS2304) Missing global types: Cannot find name 'MapPin'.
+- **[app/track/warehouse/[token]/page.tsx:155]** (TS2304) Missing global types: Cannot find name 'MapPin'.
+- **[components/Tenant/EditStaffModal.tsx:126]** (TS2304) Missing global types: Cannot find name 'supabaseAdmin'.
+- **[lib/domain/forwarding/pricing.ts:57]** (TS2304) Missing global types: Cannot find name 'executionMode'.
+- **[lib/domain/forwarding/types.ts:53]** (TS2304) Missing global types: Cannot find name 'Leg'.
+- **[lib/domain/forwarding/types.ts:54]** (TS2304) Missing global types: Cannot find name 'Container'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:11]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:12]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:13]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:14]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:15]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:30]** (TS2304) Missing global types: Cannot find name 'beforeEach'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:31]** (TS2304) Missing global types: Cannot find name 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:45]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:53]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:54]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:58]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:69]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:70]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:71]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:75]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:80]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:81]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:85]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:93]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:94]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:98]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:103]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:104]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:108]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:113]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:114]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:118]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:123]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:124]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:128]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:136]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:137]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:141]** (TS2503) Missing global types: Cannot find namespace 'jest'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:154]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:6]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:11]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:17]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:18]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:24]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:25]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:31]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/driver/Driver.test.ts:32]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:7]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:8]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:13]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:6]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:11]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:17]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:18]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:24]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:25]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:31]** (TS2304) Missing global types: Cannot find name 'expect'.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:32]** (TS2304) Missing global types: Cannot find name 'expect'.
+
+## Priority 3 - Type Safety (Type mismatches, Generic constraints, Inference)
+
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:62]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:63]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:64]** (TS2339) Inference: Property 'sku_code' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:65]** (TS2339) Inference: Property 'name' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:66]** (TS2339) Inference: Property 'uom' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:87]** (TS2339) Inference: Property 'product_sku_id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:89]** (TS2339) Inference: Property 'quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:90]** (TS2339) Inference: Property 'reserved_quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:91]** (TS2339) Inference: Property 'available_quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:97]** (TS2339) Inference: Property 'wh_locations' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:149]** (TS2339) Inference: Property 'wh_inbound_receipts' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:151]** (TS2339) Inference: Property 'created_at' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:152]** (TS2339) Inference: Property 'created_at' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:155]** (TS2339) Inference: Property 'actual_good_qty' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:155]** (TS2339) Inference: Property 'expected_qty' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:161]** (TS2339) Inference: Property 'wh_outbound_shipments' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:163]** (TS2339) Inference: Property 'created_at' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:164]** (TS2339) Inference: Property 'created_at' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:167]** (TS2339) Inference: Property 'picked_qty' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/inventory/page.tsx:167]** (TS2339) Inference: Property 'requested_qty' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:62]** (TS2339) Inference: Property 'name' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:62]** (TS2339) Inference: Property 'legal_name' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:63]** (TS2339) Inference: Property 'entity_code' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:88]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:88]** (TS2339) Inference: Property 'sku_code' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:88]** (TS2339) Inference: Property 'name' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:88]** (TS2339) Inference: Property 'uom' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:92]** (TS2339) Inference: Property 'quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:93]** (TS2339) Inference: Property 'reserved_quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:94]** (TS2339) Inference: Property 'available_quantity' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:100]** (TS2339) Inference: Property 'product_sku_id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:100]** (TS2339) Inference: Property 'product_sku_id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:101]** (TS2339) Inference: Property 'product_sku_id' does not exist on type 'never'.
+- **[app/(customer)/customer/warehouse/page.tsx:102]** (TS2339) Inference: Property 'product_sku_id' does not exist on type 'never'.
+- **[app/(customer)/layout.tsx:51]** (TS2339) Inference: Property 'name' does not exist on type 'never'.
+- **[app/(customer)/layout.tsx:51]** (TS2339) Inference: Property 'legal_name' does not exist on type 'never'.
+- **[app/(customer)/layout.tsx:52]** (TS2339) Inference: Property 'entity_code' does not exist on type 'never'.
+- **[app/(dashboard)/admin/bi/page.tsx:112]** (TS2339) Inference: Property 'forEach' does not exist on type 'never'.
+- **[app/(dashboard)/admin/bi/page.tsx:149]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/bi/page.tsx:150]** (TS2339) Inference: Property 'organization_id' does not exist on type 'never'.
+- **[app/(dashboard)/admin/clients/page.tsx:94]** (TS2322) Type mismatches: Type '{ name: string; address: string; email: string; pic_name: string; pic_phone: string; is_active: true; mission_credits: number; }' is not assignable to type 'never'.
+- **[app/(dashboard)/admin/clients/page.tsx:116]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/admin/clients/page.tsx:163]** (TS2345) Type mismatches: Argument of type '{ mission_credits: number; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/admin/entities/page.tsx:60]** (TS2339) Inference: Property 'role' does not exist on type 'never'.
+- **[app/(dashboard)/admin/entities/page.tsx:85]** (TS2345) Type mismatches: Argument of type 'any' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:67]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:68]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:71]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:73]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:74]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:75]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:76]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:77]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:78]** (TS2339) Inference: Property 'organizations' does not exist on type 'never'.
+- **[app/(dashboard)/admin/settings/page.tsx:133]** (TS2345) Type mismatches: Argument of type '{ name: string; address: string; email: string; pic_name: string; pic_phone: string; logo_url: string; settings: any; updated_at: string; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:138]** (TS2339) Inference: Property 'role' does not exist on type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:139]** (TS2339) Inference: Property 'organization_id' does not exist on type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:149]** (TS2339) Inference: Property 'role' does not exist on type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:150]** (TS2339) Inference: Property 'organization_id' does not exist on type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:179]** (TS2345) Type mismatches: Argument of type '{ full_name: any; role: any; organization_id: any; sbu_access: any; updated_at: string; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:241]** (TS2339) Inference: Property 'assigned_warehouse_id' does not exist on type 'never'.
+- **[app/(dashboard)/admin/users/page.tsx:242]** (TS2339) Inference: Property 'assigned_warehouse_id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/calendar/page.tsx:36]** (TS2345) Type mismatches: Argument of type 'string | undefined' is not assignable to parameter of type '{}'. Type 'undefined' is not assignable to type '{}'.
+- **[app/(dashboard)/commercial/calendar/page.tsx:63]** (TS2345) Type mismatches: Argument of type '{ status: string; check_in_location: string; check_in_time: string; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/commercial/calendar/page.tsx:123]** (TS2345) Type mismatches: Argument of type '{ photo_url?: string | undefined; description: string; status: string; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:97]** (TS2345) Type mismatches: Argument of type '{ name: any; phone: any; email: any; sales_rep_id: any; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:210]** (TS2322) Type mismatches: Type '{ tenant_id: string; entity_id: any; title: string; stage: string; expected_revenue: number; sbu_target: string; fee_type: string; fee_value: number; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:317]** (TS2322) Type mismatches: Type '{ tenant_id: any; entity_id: any; activity_type: string; activity_date: string; description: string; performed_by: any; status: string; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:412]** (TS2345) Type mismatches: Argument of type '{ crm_status: string; sales_rep_id: string | undefined; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:592]** (TS2339) Inference: Property 'map' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:592]** (TS7006) Type mismatches: Parameter 'd' implicitly has an 'any' type.
+- **[app/(dashboard)/commercial/leads/page.tsx:620]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:630]** (TS2339) Inference: Property 'map' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:630]** (TS7006) Type mismatches: Parameter 'd' implicitly has an 'any' type.
+- **[app/(dashboard)/commercial/leads/page.tsx:631]** (TS2339) Inference: Property 'entity_id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:632]** (TS2339) Inference: Property 'channel_id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:633]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:640]** (TS2339) Inference: Property 'activity_date' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:694]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:702]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:721]** (TS2322) Type mismatches: Type '{ channel_id: string; sender_id: string | undefined; message: string; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:728]** (TS2322) Type mismatches: Type '{ tenant_id: string; entity_id: string; activity_type: string; activity_date: string; description: string; performed_by: string; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:776]** (TS2322) Type mismatches: Type '{ tenant_id: string; entity_id: string; created_by: string; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:786]** (TS2339) Inference: Property 'token' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/leads/page.tsx:827]** (TS2345) Type mismatches: Argument of type '{ crm_status: LeadStatus; }' is not assignable to parameter of type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:101]** (TS2322) Type mismatches: Type '{ tenant_id: string | undefined; deal_id: any; quote_number: string; status: string; created_by: string | undefined; }' is not assignable to type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:112]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:332]** (TS2339) Inference: Property 'id' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:333]** (TS2339) Inference: Property 'title' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:334]** (TS2339) Inference: Property 'stage' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:335]** (TS2339) Inference: Property 'expected_revenue' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:336]** (TS2339) Inference: Property 'sbu_target' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:337]** (TS2339) Inference: Property 'md_entities' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:337]** (TS2339) Inference: Property 'md_entities' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:337]** (TS2339) Inference: Property 'md_entities' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:338]** (TS2339) Inference: Property 'fee_type' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/pipeline/page.tsx:339]** (TS2339) Inference: Property 'fee_value' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/quotations/[id]/page.tsx:145]** (TS2339) Inference: Property 'notes' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/quotations/[id]/page.tsx:146]** (TS2339) Inference: Property 'validity_days' does not exist on type 'never'.
+- **[app/(dashboard)/commercial/quotations/[id]/page.tsx:178]** (TS2339) Inference: Property 'sbu_type' does not exist on type 'never'.
+
+*(Showing top 100 out of 2411 errors...)*
+
+## Priority 4 - Cleanup (Unused variables, Jest, Formatting)
+
+- **[app/(dashboard)/hq/warehouse/inventory/page.tsx:94]** (TS18048) Other (TS18048): 'i.area_name' is possibly 'undefined'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'BoxAssignment'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'BoxItem'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/box/[containerId]/page.tsx:215]** (TS18004) Other (TS18004): No value exists in scope for the shorthand property 'tenant_id'. Either declare one or provide an initializer.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'ContainerAssignment'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+- **[app/(dashboard)/sbu/forwarding/consol/[id]/stuffing/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'ContainerAssignment'.
+- **[app/(dashboard)/sbu/forwarding/consol/page.tsx:13]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'Consolidation'.
+- **[app/(dashboard)/sbu/forwarding/master/price/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'PriceMaster'.
+- **[app/(dashboard)/sbu/forwarding/master/price/page.tsx:14]** (TS2305) Other (TS2305): Module '"@/lib/domain/forwarding/types"' has no exported member 'DeliveryType'.
+- **[app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx:150]** (TS18048) Other (TS18048): 'item.assignments' is possibly 'undefined'.
+- **[app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx:187]** (TS18048) Other (TS18048): 'item.assignments' is possibly 'undefined'.
+- **[app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx:188]** (TS18048) Other (TS18048): 'item.assignments' is possibly 'undefined'.
+- **[app/(dashboard)/sbu/trucking/components/WorkOrderCard.tsx:349]** (TS2551) Other (TS2551): Property 'work_order_id' does not exist on type 'WorkOrderItem'. Did you mean 'work_orders'?
+- **[app/(dashboard)/sbu/trucking/reporting/time-analysis/page.tsx:144]** (TS2488) Other (TS2488): Type 'never' must have a '[Symbol.iterator]()' method that returns an iterator.
+- **[app/(dashboard)/sbu/trucking/work-orders/page.tsx:155]** (TS18047) Other (TS18047): 'profile' is possibly 'null'.
+- **[app/(dashboard)/sbu/trucking/work-orders/page.tsx:164]** (TS18047) Other (TS18047): 'profile' is possibly 'null'.
+- **[app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx:633]** (TS18046) Other (TS18046): 'items' is of type 'unknown'.
+- **[app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx:651]** (TS18046) Other (TS18046): 'items' is of type 'unknown'.
+- **[app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx:694]** (TS2488) Other (TS2488): Type 'unknown' must have a '[Symbol.iterator]()' method that returns an iterator.
+- **[app/(dashboard)/sbu/warehouse/inventory-report/inventory/page.tsx:707]** (TS18046) Other (TS18046): 'items' is of type 'unknown'.
+- **[app/manifest.ts:17]** (TS2820) Other (TS2820): Type '"any maskable"' is not assignable to type '"any" | "maskable" | "monochrome" | undefined'. Did you mean '"maskable"'?
+- **[components/hq/AddForwardingItemModal.tsx:67]** (TS2554) Other (TS2554): Expected 3 arguments, but got 4.
+- **[lib/monitoring/trucking-monitor.ts:108]** (TS2488) Other (TS2488): Type 'never' must have a '[Symbol.iterator]()' method that returns an iterator.
+- **[lib/push/sender.ts:24]** (TS2694) Other (TS2694): Namespace '"web-push"' has no exported member 'PushSubscription'.
+- **[run_copilot_engine_tests.ts:35]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_copilot_engine_tests.ts:39]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_copilot_engine_tests.ts:44]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_copilot_engine_tests.ts:55]** (TS2554) Other (TS2554): Expected 3 arguments, but got 4.
+- **[run_copilot_engine_tests.ts:66]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_domain_tests.ts:2]** (TS2300) Other (TS2300): Duplicate identifier 'Vehicle'.
+- **[run_domain_tests.ts:2]** (TS2300) Other (TS2300): Duplicate identifier 'VehicleStatus'.
+- **[run_domain_tests.ts:5]** (TS2300) Other (TS2300): Duplicate identifier 'Vehicle'.
+- **[run_domain_tests.ts:5]** (TS2300) Other (TS2300): Duplicate identifier 'VehicleStatus'.
+- **[run_entity_intelligence_tests.ts:35]** (TS7053) Other (TS7053): Element implicitly has an 'any' type because expression of type '"Driver"' can't be used to index type 'EntityResolutionResult'. Property 'Driver' does not exist on type 'EntityResolutionResult'.
+- **[run_entity_intelligence_tests.ts:44]** (TS7053) Other (TS7053): Element implicitly has an 'any' type because expression of type '"Driver"' can't be used to index type 'EntityResolutionResult'. Property 'Driver' does not exist on type 'EntityResolutionResult'.
+- **[run_entity_intelligence_tests.ts:52]** (TS7053) Other (TS7053): Element implicitly has an 'any' type because expression of type '"JobOrder"' can't be used to index type 'EntityResolutionResult'. Property 'JobOrder' does not exist on type 'EntityResolutionResult'.
+- **[run_entity_intelligence_tests.ts:57]** (TS7053) Other (TS7053): Element implicitly has an 'any' type because expression of type '"Driver"' can't be used to index type 'EntityResolutionResult'. Property 'Driver' does not exist on type 'EntityResolutionResult'.
+- **[run_explainability_runtime_tests.ts:53]** (TS2741) Other (TS2741): Property 'confidenceScore' is missing in type '{ valid: true; succeededValidations: string[]; blockingErrors: never[]; warnings: never[]; explainability: { whatWasChecked: string[]; }; }' but required in type 'StructuralValidationResult'.
+- **[run_intent_matching_tests.ts:51]** (TS2554) Other (TS2554): Expected 1 arguments, but got 2.
+- **[run_intent_matching_tests.ts:56]** (TS2554) Other (TS2554): Expected 1 arguments, but got 2.
+- **[run_operational_context_tests.ts:54]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_operational_insight_tests.ts:46]** (TS2554) Other (TS2554): Expected 2 arguments, but got 3.
+- **[run_planner_tests.ts:26]** (TS2561) Other (TS2561): Object literal may only specify known properties, but 'tenant' does not exist in type 'ResolvedBusinessContext'. Did you mean to write 'tenantId'?
+- **[run_runtime_encapsulation_tests.ts:58]** (TS2741) Other (TS2741): Property 'evidence' is missing in type '{ matchMethod: "EXACT"; source: "USER_INPUT"; }' but required in type 'EntityExplanation'.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:18]** (TS2582) Jest: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:32]** (TS2554) Other (TS2554): Expected 0 arguments, but got 1.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:44]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:57]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:74]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:84]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:97]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:107]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:117]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:127]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/application/copilot/__tests__/BusinessContextEngine.test.ts:140]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:3]** (TS2582) Jest: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:4]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:9]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:14]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:21]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/driver/Driver.test.ts:28]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:4]** (TS2582) Jest: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:5]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/job-order/JobOrder.test.ts:11]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:3]** (TS2582) Jest: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:4]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:9]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:14]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:21]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/domains/trucking/vehicle/Vehicle.test.ts:28]** (TS2582) Jest: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+- **[src/platforms/copilot/intelligence/adapters/GeminiIntentAdapter.ts:3]** (TS2305) Other (TS2305): Module '"@google/generative-ai"' has no exported member 'Type'.
+- **[src/platforms/copilot/memory/MemoryStore.ts:1]** (TS2305) Other (TS2305): Module '"./OperationalMemory"' has no exported member 'INITIAL_MEMORY'.
+

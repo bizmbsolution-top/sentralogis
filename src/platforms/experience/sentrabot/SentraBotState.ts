@@ -1,0 +1,35 @@
+export enum AnimationState {
+  IDLE = 'IDLE',
+  LISTENING = 'LISTENING',
+  UNDERSTANDING = 'UNDERSTANDING',
+  SEARCHING = 'SEARCHING',
+  VALIDATING = 'VALIDATING',
+  PLANNING = 'PLANNING',
+  WAITING_CONFIRMATION = 'WAITING_CONFIRMATION',
+  EXECUTING = 'EXECUTING',
+  SUCCESS = 'SUCCESS',
+  WARNING = 'WARNING',
+  ERROR = 'ERROR',
+  OFFLINE = 'OFFLINE'
+}
+
+export enum Emotion {
+  NEUTRAL = 'NEUTRAL',
+  THOUGHTFUL = 'THOUGHTFUL',
+  CONFIDENT = 'CONFIDENT',
+  CONCERNED = 'CONCERNED',
+  SATISFIED = 'SATISFIED',
+  APOLOGETIC = 'APOLOGETIC'
+}
+
+export enum PresenceMode {
+  STATIC = 'STATIC',
+  BREATHING = 'BREATHING',
+  FLOATING = 'FLOATING',
+  PULSING = 'PULSING'
+}
+
+export interface SentraBotConfig {
+  reducedMotion: boolean;
+  voiceEnabled: boolean;
+}

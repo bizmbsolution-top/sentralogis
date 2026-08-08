@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/jo-autocomplete",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/easygo/sync-gps",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

@@ -1,3 +1,11 @@
 {
-  "java.configuration.updateBuildConfiguration": "automatic"
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.wrapper.enabled": true,
+  "java.import.gradle.distribution": "GRADLE_WRAPPER",
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/.next/**",
+    "**/build/**"
+  ]
 }

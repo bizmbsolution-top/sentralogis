@@ -1,11 +1,32 @@
-'use client';
+"use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { GoogleMap, Marker, InfoWindow, Polyline, DirectionsRenderer } from '@react-google-maps/api';
-import { useGoogleMaps } from '@/lib/google-maps-context';
-import { Loader2, Truck, User, MapPin, Phone, MessageSquare } from 'lucide-react';
-import { format } from 'date-fns';
-import { calculateBearingFromHistory, getVehicleTopDownMarkerIcon } from './VehicleMarkerUtils';
+import React, { useMemo, useState, useEffect } from "react";
+import {
+  GoogleMap,
+  Marker,
+  InfoWindow,
+  Polyline,
+  DirectionsRenderer,
+} from "@react-google-maps/api";
+import { useGoogleMaps } from "@/lib/google-maps-context";
+import {
+  Loader2,
+  Truck,
+  User,
+  MapPin,
+  Phone,
+  MessageSquare,
+} from "lucide-react";
+import { format } from "date-fns";
+import {
+  calculateBearingFromHistory,
+  getVehicleTopDownMarkerIcon,
+} from "./VehicleMarkerUtils";
+import {
+  getPingTimestamp,
+  getPingTimeStr,
+  parseUTC,
+} from "@/lib/utils/dateUtils";
 
 interface MultiFleetRadarMapProps {
   jobOrders: any[];
@@ -14,48 +35,73 @@ interface MultiFleetRadarMapProps {
 }
 
 const formatWA = (phone?: string) => {
-  if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('0')) cleaned = '62' + cleaned.slice(1);
+  if (!phone) return "";
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("0")) cleaned = "62" + cleaned.slice(1);
   return cleaned;
 };
 
 const TRUCK_COLORS = [
-  '#3b82f6', // blue-500
-  '#10b981', // emerald-500
-  '#f59e0b', // amber-500
-  '#8b5cf6', // violet-500
-  '#ec4899', // pink-500
-  '#06b6d4', // cyan-500
-  '#f97316', // orange-500
-  '#14b8a6', // teal-500
-  '#6366f1', // indigo-500
-  '#eab308', // yellow-500
+  "#3b82f6", // blue-500
+  "#10b981", // emerald-500
+  "#f59e0b", // amber-500
+  "#8b5cf6", // violet-500
+  "#ec4899", // pink-500
+  "#06b6d4", // cyan-500
+  "#f97316", // orange-500
+  "#14b8a6", // teal-500
+  "#6366f1", // indigo-500
+  "#eab308", // yellow-500
 ];
 
-export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selectedJoId }: MultiFleetRadarMapProps) {
+export default function MultiFleetRadarMap({
+  jobOrders = [],
+  onSelectJo,
+  selectedJoId,
+}: MultiFleetRadarMapProps) {
   const { isLoaded } = useGoogleMaps();
   const [activeMarker, setActiveMarker] = useState<any | null>(null);
-  const [directionsMap, setDirectionsMap] = useState<{ [joId: string]: google.maps.DirectionsResult }>({});
+  const [directionsMap, setDirectionsMap] = useState<{
+    [joId: string]: google.maps.DirectionsResult;
+  }>({});
 
   // Extract valid latest coordinates for all job orders
   const fleetMarkers = useMemo(() => {
     return jobOrders
       .map((jo, idx) => {
         // Find latest coordinates: try tracking_history[0] or first arrived/in-progress stop or pickup stop
+        // Sort by recorded_at (device/phone time) when available, falling back to created_at (server time)
         const tracking = jo.tracking_history || [];
         const validTracking = [...tracking]
-          .filter((t: any) => t.latitude && t.longitude && Number(t.latitude) !== 0)
-          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        let lat = validTracking.length > 0 ? Number(validTracking[0].latitude) : null;
-        let lng = validTracking.length > 0 ? Number(validTracking[0].longitude) : null;
-        const lastTimeStr = validTracking.length > 0 ? format(new Date(validTracking[0].created_at), 'HH:mm') : null;
+          .filter(
+            (t: any) => t.latitude && t.longitude && Number(t.latitude) !== 0,
+          )
+          .sort(
+            (a: any, b: any) =>
+              (getPingTimestamp(b) ?? 0) - (getPingTimestamp(a) ?? 0),
+          );
+        let lat =
+          validTracking.length > 0 ? Number(validTracking[0].latitude) : null;
+        let lng =
+          validTracking.length > 0 ? Number(validTracking[0].longitude) : null;
+        const lastPingTime =
+          validTracking.length > 0
+            ? parseUTC(getPingTimeStr(validTracking[0]))
+            : null;
+        const lastTimeStr = lastPingTime ? format(lastPingTime, "HH:mm") : null;
 
         // Fallback to route stops if no tracking point
         if (lat === null || lng === null) {
           const routes = jo.routes || [];
-          const arrivedRoute = routes.find((r: any) => r.latitude && r.longitude && (r.status === 'arrived' || r.status === 'completed'));
-          const pickupRoute = routes.find((r: any) => r.latitude && r.longitude);
+          const arrivedRoute = routes.find(
+            (r: any) =>
+              r.latitude &&
+              r.longitude &&
+              (r.status === "arrived" || r.status === "completed"),
+          );
+          const pickupRoute = routes.find(
+            (r: any) => r.latitude && r.longitude,
+          );
           const fallbackRoute = arrivedRoute || pickupRoute;
           if (fallbackRoute) {
             lat = Number(fallbackRoute.latitude);
@@ -63,46 +109,81 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
           }
         }
 
-        if (lat === null || lng === null || isNaN(lat) || isNaN(lng)) return null;
+        if (lat === null || lng === null || isNaN(lat) || isNaN(lng))
+          return null;
 
-        const status = jo.status?.toUpperCase() || '';
-        const isDone = ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'INVOICED', 'PAID', 'VERIFIED'].includes(status);
-        const isActive = ['IN_PROGRESS', 'DALAM PERJALANAN', 'ON ROAD', 'STARTED', 'LOADING', 'UNLOADING'].includes(status) || status.startsWith('MENUJU') || status.startsWith('TIBA DI');
+        const status = jo.status?.toUpperCase() || "";
+        const isDone = [
+          "COMPLETED",
+          "PEKERJAAN SELESAI",
+          "DONE",
+          "INVOICED",
+          "PAID",
+          "VERIFIED",
+        ].includes(status);
+        const isActive =
+          [
+            "IN_PROGRESS",
+            "DALAM PERJALANAN",
+            "ON ROAD",
+            "STARTED",
+            "LOADING",
+            "UNLOADING",
+          ].includes(status) ||
+          status.startsWith("MENUJU") ||
+          status.startsWith("TIBA DI");
 
         const color = TRUCK_COLORS[idx % TRUCK_COLORS.length];
 
         // Build breadcrumb trail path for this truck
         let path = validTracking
-          .map((t: any) => ({ lat: Number(t.latitude), lng: Number(t.longitude) }))
+          .map((t: any) => ({
+            lat: Number(t.latitude),
+            lng: Number(t.longitude),
+          }))
           .reverse();
 
         if (path.length < 2 && jo.routes) {
           const routePoints = jo.routes
-            .filter((r: any) => r.latitude && r.longitude && Number(r.latitude) !== 0)
+            .filter(
+              (r: any) => r.latitude && r.longitude && Number(r.latitude) !== 0,
+            )
             .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0))
-            .map((r: any) => ({ lat: Number(r.latitude), lng: Number(r.longitude) }));
+            .map((r: any) => ({
+              lat: Number(r.latitude),
+              lng: Number(r.longitude),
+            }));
           if (routePoints.length >= 2) {
             path = routePoints;
           }
         }
 
         const bearing = calculateBearingFromHistory(validTracking);
-        const fleetTypeName = jo.fleet_type_name || jo.fleet_type || jo.fleet?.fleet_type?.type_name || jo.fleet_type_id || 'truck';
-        const topDownMarker = getVehicleTopDownMarkerIcon(fleetTypeName, bearing, color);
+        const fleetTypeName =
+          jo.fleet_type_name ||
+          jo.fleet_type ||
+          jo.fleet?.fleet_type?.type_name ||
+          jo.fleet_type_id ||
+          "truck";
+        const topDownMarker = getVehicleTopDownMarkerIcon(
+          fleetTypeName,
+          bearing,
+          color,
+        );
 
         return {
           jo,
           unitIndex: idx + 1,
           lat,
           lng,
-          lastTimeStr: lastTimeStr || 'Baru Saja',
+          lastTimeStr: lastTimeStr || "Baru Saja",
           color,
           isDone,
           isActive,
           plateNumber: jo.fleet?.plate_number || `Unit #${idx + 1}`,
-          driverName: jo.driver?.name || 'Belum Ditugaskan',
+          driverName: jo.driver?.name || "Belum Ditugaskan",
           driverPhone: jo.driver?.phone || null,
-          statusLabel: isDone ? 'SELESAI' : isActive ? 'BERTUGAS' : 'MENUNGGU',
+          statusLabel: isDone ? "SELESAI" : isActive ? "BERTUGAS" : "MENUNGGU",
           path,
           bearing,
           topDownMarker,
@@ -113,30 +194,41 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
 
   // Compute road-snapped directions for all fleet trucks
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.google || fleetMarkers.length === 0) return;
+    if (
+      typeof window === "undefined" ||
+      !window.google ||
+      fleetMarkers.length === 0
+    )
+      return;
     const directionsService = new window.google.maps.DirectionsService();
 
     fleetMarkers.forEach((m: any) => {
       if (m && m.path && m.path.length >= 2 && !directionsMap[m.jo.id]) {
         const origin = m.path[0];
         const destination = m.path[m.path.length - 1];
-        const waypoints = m.path.slice(1, -1).slice(0, 23).map((pt: any) => ({
-          location: new window.google.maps.LatLng(pt.lat, pt.lng),
-          stopover: true
-        }));
+        const waypoints = m.path
+          .slice(1, -1)
+          .slice(0, 23)
+          .map((pt: any) => ({
+            location: new window.google.maps.LatLng(pt.lat, pt.lng),
+            stopover: true,
+          }));
 
         directionsService.route(
           {
             origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            destination: new window.google.maps.LatLng(
+              destination.lat,
+              destination.lng,
+            ),
             waypoints,
             travelMode: window.google.maps.TravelMode.DRIVING,
           },
           (result, status) => {
             if (status === window.google.maps.DirectionsStatus.OK && result) {
-              setDirectionsMap(prev => ({ ...prev, [m.jo.id]: result }));
+              setDirectionsMap((prev) => ({ ...prev, [m.jo.id]: result }));
             }
-          }
+          },
         );
       }
     });
@@ -144,8 +236,12 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
 
   const mapCenter = useMemo(() => {
     if (fleetMarkers.length === 0) return { lat: -6.2088, lng: 106.8456 }; // Jakarta default
-    const avgLat = fleetMarkers.reduce((sum, m) => sum + (m?.lat || 0), 0) / fleetMarkers.length;
-    const avgLng = fleetMarkers.reduce((sum, m) => sum + (m?.lng || 0), 0) / fleetMarkers.length;
+    const avgLat =
+      fleetMarkers.reduce((sum, m) => sum + (m?.lat || 0), 0) /
+      fleetMarkers.length;
+    const avgLng =
+      fleetMarkers.reduce((sum, m) => sum + (m?.lng || 0), 0) /
+      fleetMarkers.length;
     return { lat: avgLat, lng: avgLng };
   }, [fleetMarkers]);
 
@@ -153,7 +249,9 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
     return (
       <div className="w-full h-full min-h-[350px] bg-[#0e1628] rounded-3xl flex flex-col items-center justify-center text-slate-400 gap-3 border border-slate-800">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p className="text-xs font-bold uppercase tracking-wider">Memuat Live Radar Satelit 10 Armada...</p>
+        <p className="text-xs font-bold uppercase tracking-wider">
+          Memuat Live Radar Satelit 10 Armada...
+        </p>
       </div>
     );
   }
@@ -161,7 +259,11 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
   return (
     <div className="w-full h-full relative rounded-3xl overflow-hidden border border-slate-800 bg-[#0e1628] shadow-2xl">
       <GoogleMap
-        mapContainerStyle={{ width: '100%', height: '100%', minHeight: '380px' }}
+        mapContainerStyle={{
+          width: "100%",
+          height: "100%",
+          minHeight: "380px",
+        }}
         center={mapCenter}
         zoom={fleetMarkers.length === 1 ? 14 : 10}
         options={{
@@ -170,16 +272,30 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
           mapTypeControl: false,
           streetViewControl: false,
           styles: [
-            { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-            { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-            { elementType: 'labels.text.stroke', stylers: [{ color: '#1a364a' }] },
-            { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-            { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+            { elementType: "geometry", stylers: [{ color: "#1d2c4d" }] },
+            {
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#8ec3b9" }],
+            },
+            {
+              elementType: "labels.text.stroke",
+              stylers: [{ color: "#1a364a" }],
+            },
+            {
+              featureType: "road",
+              elementType: "geometry",
+              stylers: [{ color: "#304a7d" }],
+            },
+            {
+              featureType: "water",
+              elementType: "geometry",
+              stylers: [{ color: "#0e1626" }],
+            },
           ],
         }}
       >
         {/* Render road-snapped directions / trails for active/completed trucks */}
-        {fleetMarkers.map((m: any) => (
+        {fleetMarkers.map((m: any) =>
           directionsMap[m.jo.id] ? (
             <DirectionsRenderer
               key={`dir-${m.jo.id}`}
@@ -191,7 +307,7 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
                   strokeColor: m.color,
                   strokeOpacity: selectedJoId === m.jo.id ? 1.0 : 0.65,
                   strokeWeight: selectedJoId === m.jo.id ? 5 : 3,
-                }
+                },
               }}
             />
           ) : (
@@ -206,21 +322,22 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
                 }}
               />
             )
-          )
-        ))}
+          ),
+        )}
 
         {/* Render markers for all trucks */}
         {fleetMarkers.map((m: any) => {
-          const isSelected = selectedJoId === m.jo.id || activeMarker?.jo.id === m.jo.id;
+          const isSelected =
+            selectedJoId === m.jo.id || activeMarker?.jo.id === m.jo.id;
           return (
             <Marker
               key={m.jo.id}
               position={{ lat: m.lat, lng: m.lng }}
               label={{
                 text: `#${m.unitIndex}`,
-                color: '#ffffff',
-                fontWeight: 'bold',
-                fontSize: '11px',
+                color: "#ffffff",
+                fontWeight: "bold",
+                fontSize: "11px",
               }}
               icon={m.topDownMarker}
               onClick={() => {
@@ -235,15 +352,20 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
         {activeMarker && (
           <InfoWindow
             position={{ lat: activeMarker.lat, lng: activeMarker.lng }}
-            options={{ pixelOffset: typeof window !== 'undefined' && window.google ? new window.google.maps.Size(0, -44) : undefined }}
+            options={{
+              pixelOffset:
+                typeof window !== "undefined" && window.google
+                  ? new window.google.maps.Size(0, -44)
+                  : undefined,
+            }}
             onCloseClick={() => setActiveMarker(null)}
           >
             <div className="p-3 max-w-xs bg-slate-900 text-white rounded-2xl shadow-xl border border-slate-800">
               <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 mb-2">
                 <div className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full shrink-0 shadow-sm" 
-                    style={{ backgroundColor: activeMarker.color }} 
+                  <div
+                    className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                    style={{ backgroundColor: activeMarker.color }}
                   />
                   <span className="text-xs font-black uppercase tracking-wider text-white">
                     {activeMarker.plateNumber}
@@ -257,11 +379,18 @@ export default function MultiFleetRadarMap({ jobOrders = [], onSelectJo, selecte
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center gap-2 text-slate-300">
                   <User size={13} className="text-blue-400 shrink-0" />
-                  <span className="font-bold truncate">{activeMarker.driverName}</span>
+                  <span className="font-bold truncate">
+                    {activeMarker.driverName}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400 text-[11px]">
                   <MapPin size={13} className="text-emerald-400 shrink-0" />
-                  <span>Update: <strong className="text-white">{activeMarker.lastTimeStr}</strong></span>
+                  <span>
+                    Update:{" "}
+                    <strong className="text-white">
+                      {activeMarker.lastTimeStr}
+                    </strong>
+                  </span>
                 </div>
               </div>
 

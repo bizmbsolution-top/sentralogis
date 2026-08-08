@@ -9,17 +9,16 @@ import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
+
 import android.location.Location;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
 import android.net.ConnectivityManager;
@@ -45,7 +44,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class GpsForegroundService extends Service implements SensorEventListener {
+public class GpsForegroundService extends Service  {
     private static final String CHANNEL_ID = "GpsForegroundServiceChannel";
     public static final String ACTION_START = "ACTION_START";
     public static final String ACTION_STOP = "ACTION_STOP";
@@ -65,21 +64,23 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     private OfflineGpsDbHelper dbHelper;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private ExecutorService offlineSyncExecutor = Executors.newSingleThreadExecutor();
+    
+    private static final String PREFS_NAME = "GpsPrefs";
+    private static final String PREF_JOB_ID = "jobId";
+    private static final String PREF_API_URL = "apiUrl";
+    private static final String PREF_TRACKING_ACTIVE = "trackingActive";
+    private PowerManager.WakeLock wakeLock;
 
     // Screen state & motion
-    private boolean isScreenOff = false;
-    private boolean highAccuracyForced = false;
-    private long lastMotionTime = 0;
-
+    
     // [Phase 3.1] Still-detection: throttle pings when stationary
     private long lastPingTime = 0;
     private double lastPingLat = 0;
     private double lastPingLng = 0;
 
     // Sensors
-    private SensorManager sensorManager;
-    private Sensor accelerometer;
-
+    
     // Static listener for Capacitor bridging
     public static LocationUpdateListener listener;
 
@@ -87,39 +88,12 @@ public class GpsForegroundService extends Service implements SensorEventListener
         void onLocationUpdate(JSONObject locationData);
     }
 
-    // BroadcastReceiver untuk screen on/off
-    private final BroadcastReceiver screenStateReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (Intent.ACTION_SCREEN_OFF.equals(action)) {
-                Log.d("GpsService", "Screen OFF -> balanced power");
-                isScreenOff = true;
-                restartLocationUpdates();
-            } else if (Intent.ACTION_SCREEN_ON.equals(action)) {
-                Log.d("GpsService", "Screen ON -> high accuracy");
-                isScreenOff = false;
-                highAccuracyForced = false;
-                restartLocationUpdates();
-            }
-        }
-    };
-
+    
     @Override
     public void onCreate() {
         super.onCreate();
         dbHelper = new OfflineGpsDbHelper(this);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
-        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        if (sensorManager != null) {
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        }
-
-        IntentFilter screenFilter = new IntentFilter();
-        screenFilter.addAction(Intent.ACTION_SCREEN_ON);
-        screenFilter.addAction(Intent.ACTION_SCREEN_OFF);
-        registerReceiver(screenStateReceiver, screenFilter);
 
         locationCallback = new LocationCallback() {
             @Override
@@ -135,10 +109,10 @@ public class GpsForegroundService extends Service implements SensorEventListener
     @Override
     public void onDestroy() {
         super.onDestroy();
-        try { unregisterReceiver(screenStateReceiver); } catch (Exception ignored) {}
-        stopAccelerometer();
-        cancelHeartbeat();
+        
+                cancelHeartbeat();
         executorService.shutdown();
+        offlineSyncExecutor.shutdown();
     }
 
     // ===== BROADCAST LOCATION =====
@@ -165,13 +139,13 @@ public class GpsForegroundService extends Service implements SensorEventListener
             float speedKmh = location.getSpeed() * 3.6f; // m/s → km/h
             long now = System.currentTimeMillis();
             if (speedKmh < STILL_SPEED_THRESHOLD && lastPingTime > 0 && (now - lastPingTime) < STILL_PING_INTERVAL_MS) {
-                Log.d("GpsService", "Stationary (" + String.format("%.1f", speedKmh) + " km/h), skipping API ping (" + ((now - lastPingTime) / 1000) + "s since last)");
+                Log.d("SentraLogisGPS", "Stationary (" + String.format("%.1f", speedKmh) + " km/h), skipping API ping (" + ((now - lastPingTime) / 1000) + "s since last)");
                 return;
             }
 
             sendPingToApi(location, batLevel);
         } catch (Exception e) {
-            Log.e("GpsService", "Error broadcasting location", e);
+            Log.e("SentraLogisGPS", "Error broadcasting location", e);
         }
     }
 
@@ -188,55 +162,86 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     // ===== PING API =====
 
-    private void sendPingToApi(Location location, int battery) {
+        private void sendPingToApi(Location location, int battery) {
         executorService.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("action", "gps_ping");
                 payload.put("lat", location.getLatitude());
                 payload.put("lng", location.getLongitude());
-                payload.put("recorded_at", Instant.now().toString());
+                // Use actual GPS acquisition time
+                payload.put("recorded_at", Instant.ofEpochMilli(location.getTime()).toString());
                 payload.put("source", "native_android");
                 payload.put("battery", battery);
                 payload.put("speed", location.getSpeed());
                 payload.put("accuracy", location.getAccuracy());
                 payload.put("internet_connected", isNetworkConnected());
-                payload.put("background_running", !isScreenOff);
-                payload.put("screen_off", isScreenOff);
+                payload.put("background_running", true);
+                
+                Log.d("SentraLogisGPS", "LOCATION_RECEIVED: " + location.getLatitude() + "," + location.getLongitude());
 
                 boolean success = performHttpRequest(payload.toString());
 
                 if (!success) {
+                    Log.d("SentraLogisGPS", "GPS_HTTP_FAILURE, queuing offline");
                     dbHelper.insertLocation(currentJobId, location.getLatitude(), location.getLongitude(),
-                            location.getAccuracy(), location.getSpeed(), battery);
+                            location.getAccuracy(), location.getSpeed(), battery, location.getTime());
                 } else {
-                    // [Phase 3.1] Track last successful ping
+                    Log.d("SentraLogisGPS", "GPS_HTTP_SUCCESS");
                     lastPingTime = System.currentTimeMillis();
                     lastPingLat = location.getLatitude();
                     lastPingLng = location.getLongitude();
 
-                    List<OfflineGpsDbHelper.OfflineLocation> offlineList = dbHelper.getAllLocations();
-                    for (OfflineGpsDbHelper.OfflineLocation loc : offlineList) {
-                        JSONObject offPayload = new JSONObject();
-                        offPayload.put("action", "gps_ping");
-                        offPayload.put("lat", loc.lat);
-                        offPayload.put("lng", loc.lng);
-                        offPayload.put("recorded_at", Instant.ofEpochMilli(loc.timestamp).toString());
-                        offPayload.put("source", "native_android_offline");
-                        offPayload.put("battery", loc.battery);
-                        offPayload.put("speed", loc.speed);
-                        offPayload.put("accuracy", loc.accuracy);
-
-                        boolean offSuccess = performHttpRequest(offPayload.toString());
-                        if (offSuccess) {
-                            dbHelper.deleteLocation(loc.id);
-                        } else {
-                            break;
-                        }
-                    }
+                    // Trigger offline sync in separate executor
+                    syncOfflineRecords();
                 }
             } catch (Exception e) {
-                Log.e("GpsService", "Error in sendPingToApi", e);
+                Log.e("SentraLogisGPS", "Error in sendPingToApi", e);
+            }
+        });
+    }
+
+    private void syncOfflineRecords() {
+        offlineSyncExecutor.execute(() -> {
+            try {
+                List<OfflineGpsDbHelper.OfflineLocation> offlineList = dbHelper.getAllLocations();
+                if (offlineList.isEmpty()) return;
+                
+                Log.d("SentraLogisGPS", "OFFLINE_SYNC_STARTED: " + offlineList.size() + " records");
+                
+                // Batch limit
+                int batchLimit = 20;
+                int synced = 0;
+                
+                for (OfflineGpsDbHelper.OfflineLocation loc : offlineList) {
+                    if (synced >= batchLimit) break;
+                    
+                    JSONObject offPayload = new JSONObject();
+                    offPayload.put("action", "gps_ping");
+                    offPayload.put("lat", loc.lat);
+                    offPayload.put("lng", loc.lng);
+                    offPayload.put("recorded_at", Instant.ofEpochMilli(loc.timestamp).toString());
+                    offPayload.put("source", "native_android_offline");
+                    offPayload.put("battery", loc.battery);
+                    offPayload.put("speed", loc.speed);
+                    offPayload.put("accuracy", loc.accuracy);
+                    offPayload.put("internet_connected", true);
+                    offPayload.put("background_running", true);
+
+                    boolean offSuccess = performHttpRequest(offPayload.toString());
+                    if (offSuccess) {
+                        dbHelper.deleteLocation(loc.id);
+                        synced++;
+                    } else {
+                        Log.d("SentraLogisGPS", "OFFLINE_SYNC_FAILURE");
+                        break; // Stop sync on first failure to respect ordering and network state
+                    }
+                }
+                if (synced > 0) {
+                    Log.d("SentraLogisGPS", "OFFLINE_SYNC_SUCCESS: " + synced + " records synced");
+                }
+            } catch (Exception e) {
+                Log.e("SentraLogisGPS", "Error in syncOfflineRecords", e);
             }
         });
     }
@@ -266,35 +271,58 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     // ===== SERVICE LIFECYCLE =====
 
-    @Override
+        @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        
         if (intent != null) {
             String action = intent.getAction();
-
+            
             if (ACTION_START.equals(action)) {
                 currentJobId = intent.getStringExtra(EXTRA_JOB_ID);
                 if (currentJobId == null) currentJobId = "Active Job";
                 currentApiUrl = intent.getStringExtra(EXTRA_API_URL);
                 if (currentApiUrl == null) currentApiUrl = "https://www.sentralogis.com";
 
+                // Persist state
+                prefs.edit()
+                    .putString(PREF_JOB_ID, currentJobId)
+                    .putString(PREF_API_URL, currentApiUrl)
+                    .putBoolean(PREF_TRACKING_ACTIVE, true)
+                    .apply();
+
                 createNotificationChannel();
                 startForegroundNotification();
                 startLocationUpdates();
-                startAccelerometer();
                 scheduleHeartbeat();
-                Log.d("GpsService", "Started: jobId=" + currentJobId);
+                Log.d("SentraLogisGPS", "SERVICE_STARTED: jobId=" + currentJobId);
 
             } else if (ACTION_STOP.equals(action)) {
-                Log.d("GpsService", "Stopping service");
-                stopAccelerometer();
+                Log.d("SentraLogisGPS", "SERVICE_STOPPED");
+                prefs.edit().putBoolean(PREF_TRACKING_ACTIVE, false).apply();
                 cancelHeartbeat();
                 stopLocationUpdates();
                 stopForeground(true);
                 stopSelf();
 
             } else if (ACTION_HEARTBEAT.equals(action)) {
-                checkMotionTimeout();
                 scheduleHeartbeat();
+            }
+        } else {
+            // Null intent -> Process recreation recovery
+            boolean trackingActive = prefs.getBoolean(PREF_TRACKING_ACTIVE, false);
+            if (trackingActive) {
+                currentJobId = prefs.getString(PREF_JOB_ID, "Active Job");
+                currentApiUrl = prefs.getString(PREF_API_URL, "https://www.sentralogis.com");
+                Log.d("SentraLogisGPS", "SERVICE_RESTARTED (Null Intent), STATE_RECOVERED: jobId=" + currentJobId);
+                
+                createNotificationChannel();
+                startForegroundNotification();
+                startLocationUpdates();
+                scheduleHeartbeat();
+            } else {
+                Log.d("SentraLogisGPS", "GPS_SERVICE_NO_STATE (Null Intent but tracking inactive), stopping.");
+                stopSelf();
             }
         }
         return START_STICKY;
@@ -342,23 +370,15 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     // ===== LOCATION UPDATES =====
 
-    private void startLocationUpdates() {
+        private void startLocationUpdates() {
         try {
-            LocationRequest locationRequest;
-            if (isScreenOff && !highAccuracyForced) {
-                Log.d("GpsService", "Using BALANCED_POWER (screen off) — 60s interval");
-                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 60000)
-                        .setMinUpdateIntervalMillis(60000)
-                        .build();
-            } else {
-                Log.d("GpsService", "Using HIGH_ACCURACY — 60s interval");
-                locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60000)
-                        .setMinUpdateIntervalMillis(60000)
-                        .build();
-            }
+            Log.d("SentraLogisGPS", "Starting location updates (HIGH_ACCURACY)");
+            LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60000)
+                    .setMinUpdateIntervalMillis(60000)
+                    .build();
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         } catch (SecurityException e) {
-            Log.e("GpsService", "Missing location permissions", e);
+            Log.e("SentraLogisGPS", "Missing location permissions", e);
         }
     }
 
@@ -375,51 +395,11 @@ public class GpsForegroundService extends Service implements SensorEventListener
 
     // ===== ACCELEROMETER (Motion Detection) =====
 
-    private void startAccelerometer() {
-        if (accelerometer != null && sensorManager != null) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        }
-    }
+    
 
-    private void stopAccelerometer() {
-        if (sensorManager != null) {
-            sensorManager.unregisterListener(this);
-        }
-    }
+    
 
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            float x = event.values[0];
-            float y = event.values[1];
-            float z = event.values[2];
-            double magnitude = Math.sqrt(x * x + y * y + z * z);
-            // Gravity is ~9.8 m/s^2; if magnitude deviates significantly, driver is moving
-            if (magnitude > 11.0 || magnitude < 8.0) {
-                lastMotionTime = SystemClock.elapsedRealtime();
-                if (!highAccuracyForced && isScreenOff) {
-                    Log.d("GpsService", "Motion detected while screen off -> force HIGH_ACCURACY");
-                    highAccuracyForced = true;
-                    restartLocationUpdates();
-                }
-            }
-        }
-    }
-
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
-    private void checkMotionTimeout() {
-        if (highAccuracyForced && isScreenOff) {
-            long elapsed = SystemClock.elapsedRealtime() - lastMotionTime;
-            if (elapsed > MOTION_TIMEOUT_MS) {
-                Log.d("GpsService", "No motion for 2 min -> back to BALANCED");
-                highAccuracyForced = false;
-                restartLocationUpdates();
-            }
-        }
-    }
-
+    
     // ===== ALARM MANAGER HEARTBEAT =====
 
     private void scheduleHeartbeat() {

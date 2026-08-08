@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.sentralogis.driver",
       "sha256_cert_fingerprints": [
-        "3A:18:1D:10:E0:1F:3F:44:42:FB:BD:04:32:71:AA:F0:F7:48:1D:E5:1B:52:59:BB:BD:FD:BD:AA:D6:63:27:4D"
+        "3A:18:1D:10:E0:1F:3F:44:42:FB:BD:04:32:71:AA:F0:F7:48:1D:E5:1B:52:59:BB:BD:FD:BD:AA:D6:63:27:4D",
+        "EF:5E:BD:E3:5E:3C:CD:7A:F2:1A:0C:4E:8F:9E:C5:76:87:66:36:0C:07:9D:1B:E3:99:02:33:EF:06:56:90:2D"
       ]
     }
   }

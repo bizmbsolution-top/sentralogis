@@ -48,7 +48,7 @@ public class OfflineGpsDbHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    public void insertLocation(String jobId, double lat, double lng, double accuracy, double speed, int battery) {
+    public void insertLocation(String jobId, double lat, double lng, double accuracy, double speed, int battery, long timestamp) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COL_JOB_ID, jobId);
@@ -57,7 +57,7 @@ public class OfflineGpsDbHelper extends SQLiteOpenHelper {
         values.put(COL_ACCURACY, accuracy);
         values.put(COL_SPEED, speed);
         values.put(COL_BATTERY, battery);
-        values.put(COL_TIMESTAMP, System.currentTimeMillis());
+        values.put(COL_TIMESTAMP, timestamp);
 
         db.insert(TABLE_NAME, null, values);
         db.close();
