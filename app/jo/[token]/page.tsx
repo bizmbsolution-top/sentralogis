@@ -194,39 +194,44 @@ export default function DriverTrackingPage({
 
   // [AI] Enhanced native detection with multiple fallback methods
   useEffect(() => {
+    let isNativeDetected = false;
+
+    // Check custom User-Agent appended by capacitor.config.ts
+    if (navigator.userAgent.includes("SentraLogis_AndroidApp")) {
+      isNativeDetected = true;
+    }
+
+    // Detect if opened via custom scheme (sentralogis://)
+    const isCustomScheme = window.location.protocol === "sentralogis:";
+    // Detect Android WebView
+    const isWebView = /(Android.*WebView|wv)/i.test(navigator.userAgent);
+    // Detect standalone PWA
+    const isStandaloneMode =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone;
+
+    if (isCustomScheme || isWebView || isStandaloneMode) {
+      isNativeDetected = true;
+    }
+
+    if (isNativeDetected) {
+      setIsNative(true);
+    }
+
     // Method 1: Capacitor native platform check
     import("@capacitor/core")
       .then(({ Capacitor }) => {
         const isCapNative = Capacitor.isNativePlatform();
-        setIsNative(isCapNative);
         console.log("[Native Detection] Capacitor:", isCapNative);
+        // Only override if Capacitor is explicitly true, or we haven't detected it via fallback
+        if (isCapNative || !isNativeDetected) {
+          setIsNative(isCapNative);
+        }
       })
       .catch(() => {
         console.log("[Native Detection] Capacitor not available");
-        setIsNative(false);
       });
 
-    // Method 2: Check for Android WebView / custom scheme
-    const checkNativeFallback = () => {
-      // Detect if opened via custom scheme (sentralogis://)
-      const isCustomScheme = window.location.protocol === "sentralogis:";
-      // Detect Android WebView
-      const isWebView = /(Android.*WebView|wv)/i.test(navigator.userAgent);
-      // Detect standalone PWA
-      const isStandaloneMode =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        (window.navigator as any).standalone;
-
-      if (isCustomScheme || isWebView || isStandaloneMode) {
-        console.log("[Native Detection] Fallback detected:", {
-          isCustomScheme,
-          isWebView,
-          isStandaloneMode,
-        });
-        setIsNative(true);
-      }
-    };
-    checkNativeFallback();
 
     if (!token) return;
     fetchJobOrder();

@@ -405,6 +405,72 @@ export function useDriverGpsPing(
     doneRef.current = false;
     emitPingState({ status: "loading" });
 
+    const startPwaGps = () => {
+      requestWakeLock();
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+
+      if (typeof Worker !== "undefined") {
+        const worker = new Worker("/gps-worker.js");
+        workerRef.current = worker;
+
+        worker.onmessage = (e) => {
+          const { type, payload } = e.data;
+          if (type === "PING_SUCCESS") {
+            consecutiveFailuresRef.current = 0;
+            pingCountRef.current += 1;
+            emitPingState({
+              status: "active",
+              consecutiveFailures: 0,
+              pingCount: pingCountRef.current,
+              accuracy: payload.accuracy ?? null,
+              speed: payload.speed ?? null,
+            });
+
+            if (payload.geofence_triggered && onGeofenceArrival) {
+              onGeofenceArrival({
+                geofence_triggered: true,
+                arrived_stop: payload.arrived_stop,
+                distance_m: null,
+              });
+            }
+
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("sentralogis:native_gps_update", {
+                  detail: {
+                    latitude: payload.lat,
+                    longitude: payload.lng,
+                    accuracy: payload.accuracy,
+                    speed: payload.speed,
+                  },
+                }),
+              );
+            }
+          } else if (type === "PING_FAILED" || type === "GEOLOCATION_ERROR") {
+            consecutiveFailuresRef.current += 1;
+            emitPingState({
+              status: consecutiveFailuresRef.current >= 3 ? "error" : "active",
+              consecutiveFailures: consecutiveFailuresRef.current,
+            });
+          }
+        };
+
+        worker.postMessage({
+          type: "START",
+          payload: { token, apiUrl: window.location.origin },
+        });
+
+        console.log("[GPS Ping] Web Worker started for PWA/Fallback");
+      } else {
+        console.warn("[GPS Ping] Web Worker not supported, falling back to interval");
+        pingBrowser();
+        intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
+      }
+    };
+
     if (isNative) {
       console.log("[GPS Native] isNativePlatform = true");
       const startNativeGps = async () => {
@@ -441,83 +507,16 @@ export function useDriverGpsPing(
             });
           }
         } catch (e) {
-          console.error("[GPS Native] Error starting tracking:", e);
+          console.error("[GPS Native] Error starting tracking. Falling back to PWA:", e);
+          startPwaGps();
         }
       };
       startNativeGps();
     } else {
-      // PWA: Use Web Worker for background GPS (survives tab visibility changes)
-      requestWakeLock();
+      startPwaGps();
+    }
 
-      // Stop existing worker if any
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-
-      // Start Web Worker
-      if (typeof Worker !== "undefined") {
-        const worker = new Worker("/gps-worker.js");
-        workerRef.current = worker;
-
-        worker.onmessage = (e) => {
-          const { type, payload } = e.data;
-          if (type === "PING_SUCCESS") {
-            consecutiveFailuresRef.current = 0;
-            pingCountRef.current += 1;
-            emitPingState({
-              status: "active",
-              consecutiveFailures: 0,
-              pingCount: pingCountRef.current,
-              accuracy: payload.accuracy ?? null,
-              speed: payload.speed ?? null,
-            });
-
-            // Handle geofence event
-            if (payload.geofence_triggered && onGeofenceArrival) {
-              onGeofenceArrival({
-                geofence_triggered: true,
-                arrived_stop: payload.arrived_stop,
-                distance_m: null,
-              });
-            }
-
-            // Dispatch UI event
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("sentralogis:native_gps_update", {
-                  detail: {
-                    latitude: payload.lat,
-                    longitude: payload.lng,
-                    accuracy: payload.accuracy,
-                    speed: payload.speed,
-                  },
-                }),
-              );
-            }
-          } else if (type === "PING_FAILED" || type === "GEOLOCATION_ERROR") {
-            consecutiveFailuresRef.current += 1;
-            emitPingState({
-              status: consecutiveFailuresRef.current >= 3 ? "error" : "active",
-              consecutiveFailures: consecutiveFailuresRef.current,
-            });
-          }
-        };
-
-        worker.postMessage({
-          type: "START",
-          payload: { token, apiUrl: window.location.origin },
-        });
-
-        console.log("[GPS Ping] Web Worker started for PWA");
-      } else {
-        // Fallback: no Worker support, use interval
-        console.warn("[GPS Ping] Web Worker not supported, falling back to interval");
-        pingBrowser();
-        intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
-      }
-
-      return () => {
+    return () => {
         if (workerRef.current) {
           workerRef.current.postMessage({ type: "STOP" });
           workerRef.current.terminate();
