@@ -2,6 +2,11 @@ package com.sentralogis.driver;
 
 import android.content.Context;
 import android.content.Intent;
+import android.location.LocationManager;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import java.util.Locale;
+import java.util.HashMap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
@@ -92,5 +97,83 @@ public class GpsPlugin extends Plugin {
             return pm != null && pm.isIgnoringBatteryOptimizations(packageName);
         }
         return true;
+    }
+
+    @PluginMethod
+    public void isGpsEnabled(PluginCall call) {
+        Context context = getContext();
+        LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+        boolean enabled = false;
+        if (locationManager != null) {
+            enabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        }
+        JSObject ret = new JSObject();
+        ret.put("enabled", enabled);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openLocationSettings(PluginCall call) {
+        Context context = getContext();
+        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        context.startActivity(intent);
+        call.resolve();
+    }
+
+    private TextToSpeech tts;
+
+    @PluginMethod
+    public void speakText(PluginCall call) {
+        String text = call.getString("text", "");
+        String lang = call.getString("lang", "id-ID");
+        
+        call.resolve();
+
+        Context context = getContext();
+        if (context == null || text == null || text.isEmpty()) return;
+
+        try {
+            tts = new TextToSpeech(context, new TextToSpeech.OnInitListener() {
+                @Override
+                public void onInit(int status) {
+                    if (status == TextToSpeech.SUCCESS) {
+                        tts.setLanguage(new Locale("id", "ID"));
+                        
+                        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                            @Override
+                            public void onStart(String utteranceId) {}
+
+                            @Override
+                            public void onDone(String utteranceId) {
+                                if (tts != null) {
+                                    tts.shutdown();
+                                    tts = null;
+                                }
+                            }
+
+                            @Override
+                            public void onError(String utteranceId) {
+                                if (tts != null) {
+                                    tts.shutdown();
+                                    tts = null;
+                                }
+                            }
+                        });
+                        
+                        String utteranceId = "utteranceId";
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
+                        } else {
+                            HashMap<String, String> params = new HashMap<>();
+                            params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+                            tts.speak(text, TextToSpeech.QUEUE_FLUSH, params);
+                        }
+                    }
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

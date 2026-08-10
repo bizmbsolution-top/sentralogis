@@ -20,6 +20,8 @@ export const viewport: Viewport = {
   themeColor: '#3b82f6',
 };
 
+import { DriverAuthProvider } from "@/lib/hooks/useDriverAuth";
+
 export default function JoLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return <DriverAuthProvider>{children}</DriverAuthProvider>;
 }

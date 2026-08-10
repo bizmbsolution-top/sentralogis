@@ -43,6 +43,7 @@ import {
   Send,
   FolderGit2,
   FileText,
+  ImageIcon,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useGoogleMaps } from "@/lib/google-maps-context";

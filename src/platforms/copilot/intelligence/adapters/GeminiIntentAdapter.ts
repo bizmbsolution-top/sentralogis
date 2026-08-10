@@ -1,6 +1,6 @@
 import { IntentKnowledgeRegistry } from '../IntentKnowledgeRegistry';
 import { GeminiIntentResponse } from './GeminiModels';
-import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai';
+import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai';
 
 export class GeminiIntentAdapter {
   
@@ -18,15 +18,15 @@ ${intentDescriptions}
 `;
 
     const schema: Schema = {
-      type: Type.OBJECT,
+      type: SchemaType.OBJECT,
       properties: {
-        intent: { type: Type.STRING, description: "The intent ID, or 'UNKNOWN'" },
-        confidence: { type: Type.NUMBER, description: "0.0 to 1.0" },
-        entities: { type: Type.OBJECT, description: "Extracted entities" },
-        ambiguities: { type: Type.ARRAY, items: { type: Type.STRING } },
-        reasoning: { type: Type.STRING },
-        language: { type: Type.STRING },
-        suggestedClarification: { type: Type.STRING }
+        intent: { type: SchemaType.STRING, description: "The intent ID, or 'UNKNOWN'" },
+        confidence: { type: SchemaType.NUMBER, description: "0.0 to 1.0" },
+        entities: { type: SchemaType.OBJECT, description: "Extracted entities" },
+        ambiguities: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        reasoning: { type: SchemaType.STRING },
+        language: { type: SchemaType.STRING },
+        suggestedClarification: { type: SchemaType.STRING }
       },
       required: ["intent", "confidence", "entities", "ambiguities", "reasoning", "language"]
     };

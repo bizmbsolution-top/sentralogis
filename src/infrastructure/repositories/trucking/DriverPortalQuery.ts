@@ -101,7 +101,7 @@ export class DriverPortalQuery {
     let fleetInfo = null;
 
     if (jobOrder.driver_id) {
-      const { data } = await this.supabase.from("md_drivers").select("id, name, phone, driver_type").eq("id", jobOrder.driver_id).maybeSingle();
+      const { data } = await this.supabase.from("md_drivers").select("id, name, phone").eq("id", jobOrder.driver_id).maybeSingle();
       if (data) driverInfo = data;
     }
 

@@ -8,7 +8,7 @@ export async function createClient() {
   const cookieStore = await cookies()
 
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
 
   if (!url || !key) {
     console.warn("Supabase server keys are missing in the current environment.");

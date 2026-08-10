@@ -54,77 +54,36 @@ export default function SentralogisLanding() {
               const hashIndex = path.indexOf('#');
               if (hashIndex !== -1) path = path.substring(0, hashIndex);
               if (!path.startsWith('/')) path = '/' + path;
-              if (window.location.pathname !== path) {
-                window.location.href = path;
-                return; // Don't render anything, redirecting
+              const tokenParts = path.split('/jo/');
+              if (tokenParts.length > 1) {
+                const pendingToken = tokenParts[1].split('?')[0];
+                if (pendingToken) {
+                  try {
+                    localStorage.setItem("pending_jo_token", pendingToken);
+                  } catch (e) {}
+                }
               }
+              window.location.href = '/driver/portal';
+              return; // Don't render anything, redirecting
             }
           }
         } catch (e) {
           console.log('[Homepage] Deep link check skipped:', e);
         }
-        setIsNative(true);
+        // If no deep link path was found, ALWAYS redirect Native App to /driver/portal
+        window.location.href = '/driver/portal';
+        return;
       }
       setCheckingDeepLink(false);
     }
     init();
   }, []);
 
-  // Loading while checking for deep link
+  // Loading while checking for deep link or redirecting
   if (checkingDeepLink) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
-  // ENTRY POINT A: Idle screen for Vendor Driver when opened directly from App Icon
-  if (mounted && isNative) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-100 flex flex-col items-center">
-          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
-            <Truck size={32} className="text-blue-600" />
-          </div>
-          <h1 className="text-xl font-black text-slate-900 mb-2 tracking-wide">SENTRALOGIS DRIVER</h1>
-          <p className="text-xs text-slate-500 mb-6">Vendor Driver App</p>
-          
-          {/* GPS Status Card */}
-          <div className="w-full mb-4">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-600">GPS Status</span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-bold text-green-600">AKTIF</span>
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                GPS tracking akan aktif saat Anda membuka link Job Order dari WhatsApp.
-              </p>
-            </div>
-          </div>
-
-          <div className="w-full">
-            <div className="p-5 bg-blue-50 rounded-xl border border-blue-200">
-              <p className="text-sm font-semibold text-blue-800 mb-3">
-                Buka Link Job Order
-              </p>
-              <p className="text-xs text-blue-600 leading-relaxed">
-                Silakan kembali ke WhatsApp dan buka<br/>Link Job Order yang dikirim oleh PIC SBU.
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Access to Driver Portal */}
-          <a
-            href="/driver/portal"
-            className="mt-4 w-full py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-colors"
-          >
-            Buka Driver Portal
-          </a>
-        </div>
       </div>
     );
   }

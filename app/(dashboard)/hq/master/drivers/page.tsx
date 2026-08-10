@@ -206,12 +206,34 @@ if (!formData.sim_expiry) {
           targetEntityId = newEntity.id;
       }
 
+      const rawWa = formData.whatsapp || formData.phone || "";
+      let normalizedWa = rawWa.replace(/\D/g, "");
+      if (normalizedWa.startsWith("0")) {
+        normalizedWa = "62" + normalizedWa.substring(1);
+      }
+
+      // [V2] Phase 1.2: Check for existing active duplicates
+      if (formData.is_active && normalizedWa) {
+        const { data: existingDupe, error: dupeError } = await supabase
+          .from('md_drivers')
+          .select('id, name')
+          .eq('whatsapp', normalizedWa)
+          .eq('is_active', true)
+          .neq('id', selectedDriver?.id || '00000000-0000-0000-0000-000000000000')
+          .limit(1);
+          
+        if (existingDupe && existingDupe.length > 0) {
+          toast.error(`Nomor HP sudah digunakan oleh driver aktif lain: ${existingDupe[0].name}. Silakan gunakan nomor berbeda.`);
+          return;
+        }
+      }
+
       const payload = {
         tenant_id: tenantId,
         entity_id: targetEntityId,
         name: formData.name,
         phone: formData.phone,
-        whatsapp: formData.whatsapp || formData.phone,
+        whatsapp: normalizedWa,
         address: formData.address,
         sim_number: formData.sim_number,
         sim_class: formData.sim_class,
@@ -777,7 +799,7 @@ if (!formData.sim_expiry) {
                 {/* PIN for Driver Portal - Required for new driver */}
                 <div className="col-span-full">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    PIN Driver Portal (4 digit) <span className="text-red-500">*</span>
+                    PIN Driver (4 digit) <span className="text-red-500">*</span>
                   </label>
                   <input type="text" placeholder="1234" maxLength={4} required={!selectedDriver} value={formData.pin || ''} onChange={(e) => setFormData({...formData, pin: e.target.value.replace(/\D/g, '').slice(0, 4)})} className="w-full px-4 py-3 border-2 border-slate-100 rounded-2xl text-sm font-black focus:border-emerald-500 transition-all outline-none" />
                 </div>

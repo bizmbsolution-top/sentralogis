@@ -191,6 +191,22 @@ export async function PATCH(
       return NextResponse.json({ error: "JO not found" }, { status: 404 });
 
     // ─────────────────────────────────────────────────────────────────────
+    // [PHASE 2] STRICT SERVER-SIDE DRIVER SESSION AUTHORIZATION
+    // ─────────────────────────────────────────────────────────────────────
+    const driverIdHeader = request.headers.get("x-driver-id");
+    const isBackgroundAction = action === "gps_ping" || action === "native_heartbeat";
+    
+    // Photo uploads don't have an action field in the legacy contract, so they are not background actions.
+    if (!isBackgroundAction) {
+       if (!driverIdHeader) {
+           return NextResponse.json({ error: "Sesi driver tidak valid (Missing X-Driver-ID)" }, { status: 401 });
+       }
+       if (jo.driver_id !== driverIdHeader) {
+           return NextResponse.json({ error: "Akses ditolak: Anda tidak berhak memodifikasi JO ini" }, { status: 403 });
+       }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // PHOTO UPLOAD — multiple photos per location (no action required)
     // Frontend sends { route_id, pod_photo_base64, pod_photo_name, lat, lng }
     // ─────────────────────────────────────────────────────────────────────
@@ -1104,3 +1120,7 @@ export async function PATCH(
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+// [Phase 4D.17] Allow POST requests (acting as PATCH) for Android Native GPS fallback
+// because Android's built-in HttpURLConnection does not support PATCH.
+export const POST = PATCH;

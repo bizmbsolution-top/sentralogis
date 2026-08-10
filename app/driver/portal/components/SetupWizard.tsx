@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { Geolocation } from '@capacitor/geolocation';
-import { ShieldAlert, CheckCircle2, AlertTriangle, AlertCircle, RefreshCw, Navigation, Settings, WifiOff, Smartphone, ShieldCheck, Battery } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, AlertCircle, RefreshCw, Navigation, Settings, WifiOff, Smartphone, ShieldCheck, Battery, Loader2 } from 'lucide-react';
 
 interface SetupWizardProps {
   onComplete: () => void;

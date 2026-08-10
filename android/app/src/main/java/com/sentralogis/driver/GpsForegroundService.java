@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.io.InputStream;
 
 public class GpsForegroundService extends Service  {
     private static final String CHANNEL_ID = "GpsForegroundServiceChannel";
@@ -249,12 +250,20 @@ public class GpsForegroundService extends Service  {
     private boolean performHttpRequest(String jsonPayload) {
         try {
             URL url = new URL(currentApiUrl + "/api/jo/" + currentJobId);
+            Log.d("SentraLogisGPS", "[GPS Native HTTP] URL=" + url.toString());
+            Log.d("SentraLogisGPS", "[GPS Native HTTP] METHOD=PATCH (via POST + X-HTTP-Method-Override)");
+            
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("PATCH");
+            // Android's HttpURLConnection does not support PATCH natively (throws ProtocolException).
+            // We use POST with X-HTTP-Method-Override to achieve the same result safely.
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setDoOutput(true);
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
+
+            Log.d("SentraLogisGPS", "[GPS Native HTTP] REQUEST_SENT");
 
             try (OutputStream os = conn.getOutputStream()) {
                 byte[] input = jsonPayload.getBytes("utf-8");
@@ -262,9 +271,22 @@ public class GpsForegroundService extends Service  {
             }
 
             int code = conn.getResponseCode();
+            Log.d("SentraLogisGPS", "[GPS Native HTTP] HTTP_STATUS=" + code);
+            
+            // Read response body for debugging if possible
+            try {
+                InputStream is = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
+                if (is != null) {
+                    java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
+                    String response = s.hasNext() ? s.next() : "";
+                    Log.d("SentraLogisGPS", "[GPS Native HTTP] RESPONSE=" + response);
+                }
+            } catch (Exception ignored) {}
+
             conn.disconnect();
             return code >= 200 && code < 300;
         } catch (Exception e) {
+            Log.e("SentraLogisGPS", "[GPS Native HTTP] FAILURE=" + e.getMessage(), e);
             return false;
         }
     }
