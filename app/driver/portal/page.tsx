@@ -59,10 +59,15 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 
 const NativeGps = registerPlugin<any>("NativeGps");
 
+import { useRouter } from "next/navigation";
+import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
+
 export default function DriverPortal() {
+  const router = useRouter();
+  const { session, isLoading: isSessionLoading } = useDriverAuth();
+  
   const { isLoaded } = useGoogleMaps();
   const [step, setStep] = useState<
-    | "auth"
     | "dashboard"
     | "profile"
     | "inspection"
@@ -70,14 +75,11 @@ export default function DriverPortal() {
     | "performance"
     | "history"
     | "vendor_active"
-  >("auth");
+  >("dashboard");
   const [selectedJob, setSelectedJob] = useState<any>(null);
-  const [whatsapp, setWhatsapp] = useState("");
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<
     string | null
   >(null);
-  const [pin, setPin] = useState(["", "", "", ""]);
-  const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [driver, setDriver] = useState<any>(null);
   const [tenantInfo, setTenantInfo] = useState<{
@@ -198,6 +200,24 @@ export default function DriverPortal() {
 
   // Theme Sync on Mount, SW Registration, & PWA Install Prompts
   // [AI] Setting up localStorage theme sync, service worker register and capturing beforeinstallprompt event
+
+  useEffect(() => {
+    if (!isSessionLoading) {
+      if (!session) {
+        router.replace("/driver/login");
+      } else {
+        try {
+          const pendingToken = localStorage.getItem("pending_jo_token");
+          if (pendingToken) {
+            localStorage.removeItem("pending_jo_token");
+            router.replace(`/driver/order/${pendingToken}`);
+          }
+        } catch (e) {
+          console.warn("[Portal] Error checking pending JO token:", e);
+        }
+      }
+    }
+  }, [session, isSessionLoading, router]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("sentralogis-driver-theme");
@@ -1622,21 +1642,7 @@ export default function DriverPortal() {
     }
   };
 
-  const handlePinChange = (index: number, value: string) => {
-    if (value.length > 1) value = value.slice(-1);
-    if (!/^\d*$/.test(value)) return;
-    const newPin = [...pin];
-    newPin[index] = value;
-    setPin(newPin);
-    if (value && index < 3)
-      document.getElementById(`pin-${index + 1}`)?.focus();
-  };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !pin[index] && index > 0) {
-      document.getElementById(`pin-${index - 1}`)?.focus();
-    }
-  };
 
   const fetchTenantInfo = async (tenantId: string) => {
     const { data, error } = await supabase
@@ -1647,144 +1653,7 @@ export default function DriverPortal() {
     if (data && !error) setTenantInfo(data);
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const pinString = pin.join("");
-    if (whatsapp.length < 10 || pinString.length < 4) {
-      toast.error("Masukkan nomor WA dan PIN yang valid");
-      return;
-    }
-    setLoading(true);
-    try {
-      let normalizedWA = whatsapp.trim();
-      if (normalizedWA.startsWith("0"))
-        normalizedWA = "62" + normalizedWA.slice(1);
 
-      const { data: driverData, error } = await supabase
-        .from("md_drivers")
-        .select("*")
-        .eq("whatsapp", normalizedWA)
-        .eq("pin", pinString)
-        .single();
-
-      if (error || !driverData) {
-        const { data: driverOriginal } = await supabase
-          .from("md_drivers")
-          .select("*")
-          .eq("whatsapp", whatsapp.trim())
-          .eq("pin", pinString)
-          .single();
-
-        if (!driverOriginal) {
-          toast.error("Nomor WA atau PIN salah");
-          setLoading(false);
-          return;
-        }
-
-        if (driverOriginal.is_working) {
-          const { data: allRecentJobs } = await supabase
-            .from("job_orders")
-            .select("id, status")
-            .eq("driver_id", driverOriginal.id)
-            .limit(10);
-
-          const completedStatuses = [
-            "COMPLETED",
-            "PEKERJAAN SELESAI",
-            "SELESAI",
-            "DONE",
-            "INVOICED",
-            "PAID",
-            "AWAITING_AUDIT",
-            "READY_FOR_BILLING",
-            "VERIFIED",
-          ];
-          const activeJobs = (allRecentJobs || []).filter((jo) => {
-            const s = (jo.status || "").toUpperCase();
-            return !completedStatuses.includes(s);
-          });
-
-          if (activeJobs.length === 0) {
-            await supabase
-              .from("md_drivers")
-              .update({
-                is_working: false,
-                status: "available",
-              })
-              .eq("id", driverOriginal.id)
-              .neq("status", "unavailable");
-            driverOriginal.is_working = false;
-            if (driverOriginal.status !== "unavailable") {
-              driverOriginal.status = "available";
-            }
-          }
-        }
-
-        setDriver(driverOriginal);
-        if (driverOriginal.tenant_id) fetchTenantInfo(driverOriginal.tenant_id);
-        localStorage.setItem(
-          "sentralogis_driver_session",
-          JSON.stringify(driverOriginal),
-        );
-        setStep("dashboard");
-        toast.success(`Selamat datang, ${driverOriginal.name}!`);
-        setLoading(false);
-        return;
-      }
-
-      if (driverData.is_working) {
-        const { data: allRecentJobs } = await supabase
-          .from("job_orders")
-          .select("id, status")
-          .eq("driver_id", driverData.id)
-          .limit(10);
-
-        const completedStatuses = [
-          "COMPLETED",
-          "PEKERJAAN SELESAI",
-          "SELESAI",
-          "DONE",
-          "INVOICED",
-          "PAID",
-          "READY_FOR_BILLING",
-          "VERIFIED",
-        ];
-        const activeJobs = (allRecentJobs || []).filter((jo) => {
-          const s = (jo.status || "").toUpperCase();
-          return !completedStatuses.includes(s);
-        });
-
-        if (activeJobs.length === 0) {
-          await supabase
-            .from("md_drivers")
-            .update({
-              is_working: false,
-              status: "available",
-            })
-            .eq("id", driverData.id)
-            .neq("status", "unavailable");
-          driverData.is_working = false;
-          if (driverData.status !== "unavailable") {
-            driverData.status = "available";
-          }
-        }
-      }
-
-      setDriver(driverData);
-      if (driverData.tenant_id) fetchTenantInfo(driverData.tenant_id);
-      localStorage.setItem(
-        "sentralogis_driver_session",
-        JSON.stringify(driverData),
-      );
-      setStep("dashboard");
-      toast.success(`Selamat datang, ${driverData.name}!`);
-    } catch (err: any) {
-      console.error("Login error:", err);
-      toast.error("Terjadi kesalahan: " + (err.message || "Unknown error"));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getJobActionButtonConfig = (status: string) => {
     const s = (status || "").toUpperCase().trim();
@@ -1859,6 +1728,72 @@ export default function DriverPortal() {
 
   const isDark = themeMode === "dark";
 
+  // [AI] Calculate route map data & request driving directions for the selected job
+  const selectedJobRoutes = (
+    selectedJob?.routes ||
+    selectedJob?.job_routes ||
+    []
+  )
+    .slice()
+    .sort((a: any, b: any) => a.sequence - b.sequence);
+  const totalStops = selectedJobRoutes.length;
+  const completedStops = selectedJobRoutes.filter((r: any) => {
+    const s = (r.status || "").toLowerCase();
+    return s === "completed" || s === "arrived" || !!r.actual_arrival;
+  }).length;
+
+  const mapMarkers = (selectedJobRoutes || [])
+    .map((stop: any) => {
+      const lat = stop.latitude ? Number(stop.latitude) : null;
+      const lng = stop.longitude ? Number(stop.longitude) : null;
+      if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng, sequence: stop.sequence, label: stop.location_name };
+      }
+      return null;
+    })
+    .filter(Boolean) as {
+    lat: number;
+    lng: number;
+    sequence: number;
+    label: string;
+  }[];
+
+  const polylinePath = mapMarkers.map((m) => ({ lat: m.lat, lng: m.lng }));
+  const mapCenter =
+    mapMarkers.length > 0
+      ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
+      : { lat: -6.2, lng: 106.816666 };
+
+  useEffect(() => {
+    if (!isLoaded || mapMarkers.length < 2 || typeof google === "undefined")
+      return;
+
+    const directionsService = new google.maps.DirectionsService();
+    const origin = { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng };
+    const destination = {
+      lat: mapMarkers[mapMarkers.length - 1].lat,
+      lng: mapMarkers[mapMarkers.length - 1].lng,
+    };
+    const waypoints = mapMarkers.slice(1, -1).map((s) => ({
+      location: { lat: s.lat, lng: s.lng },
+      stopover: true,
+    }));
+
+    directionsService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResponse(result);
+        }
+      },
+    );
+  }, [isLoaded, JSON.stringify(polylinePath)]);
+
   if (!mounted) {
     return (
       <div
@@ -1904,327 +1839,7 @@ export default function DriverPortal() {
     );
   }
 
-  // [AI] The rest is for internal drivers
-  if (step === "auth") {
-    return (
-      <>
-        <div
-          className={`min-h-screen ${isDark ? "bg-slate-950 text-slate-100" : "bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 text-white"} flex flex-col items-center justify-center p-6 font-sans relative transition-colors duration-300`}
-        >
-          <Toaster position="top-center" />
 
-          {/* Back to Portal Hub Button */}
-          <div className="absolute top-6 left-6 z-50 pt-safe-area-top">
-            <a
-              href="/"
-              className={`flex items-center gap-2 transition-colors px-4 py-2.5 rounded-full backdrop-blur-md border shadow-lg active:scale-95 ${isDark ? "bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800" : "bg-white/20 hover:bg-white/30 text-white border-white/30"}`}
-            >
-              <ChevronLeft className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold uppercase tracking-wider">
-                Kembali ke Portal Hub
-              </span>
-            </a>
-          </div>
-
-          <div className="absolute top-6 right-6 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleInstallPWA}
-              className="p-3 rounded-2xl bg-amber-500 hover:bg-amber-600 transition-all text-white shadow-lg shadow-amber-500/20 flex items-center justify-center animate-bounce border border-amber-400"
-              title="Unduh Aplikasi SentraLogis"
-            >
-              <Download size={20} />
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="p-3 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 hover:bg-white/20 transition-all text-white flex items-center justify-center"
-            >
-              {isDark ? (
-                <Sun size={20} className="text-amber-400" />
-              ) : (
-                <Moon size={20} />
-              )}
-            </button>
-          </div>
-
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-1/4 -right-20 w-80 h-80 bg-white/20 rounded-full blur-[100px]" />
-            <div className="absolute bottom-1/4 -left-20 w-80 h-80 bg-amber-400/20 rounded-full blur-[100px]" />
-          </div>
-
-          <div className="w-full max-w-md relative z-10">
-            <div className="text-center mb-8 space-y-2">
-              <div className="mb-4 flex justify-center">
-                <img
-                  src="/logo2sentralogis.png"
-                  alt="Sentralogis"
-                  className="h-16 w-auto drop-shadow-[0_0_12px_rgba(245,158,11,0.5)]"
-                />
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                Welcome to Trucking Portal
-              </h1>
-              <p
-                className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}
-              >
-                Enter your registered WhatsApp & PIN to start mission console
-              </p>
-            </div>
-
-            <form
-              onSubmit={handleLogin}
-              className={`${isDark ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-200"} backdrop-blur-2xl p-8 rounded-3xl border shadow-2xl space-y-6`}
-            >
-              <div className="space-y-3">
-                <label
-                  className={`text-base font-bold uppercase tracking-wide ${isDark ? "opacity-80 text-white" : "text-slate-700"}`}
-                >
-                  Nomor WhatsApp
-                </label>
-                <div className="relative">
-                  <Phone
-                    className={`absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 ${isDark ? "opacity-50" : "text-slate-400"}`}
-                  />
-                  <input
-                    type="tel"
-                    placeholder="0812 3456 7890"
-                    value={whatsapp}
-                    onChange={(e) => setWhatsapp(e.target.value)}
-                    className={`w-full ${isDark ? "bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:ring-indigo-500" : "bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-blue-500"} border rounded-2xl py-5 pl-14 pr-4 text-xl font-bold outline-none transition-all`}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label
-                    className={`text-sm font-bold uppercase tracking-wide ${isDark ? "opacity-80 text-white" : "text-slate-700"}`}
-                  >
-                    PIN 4 Digit
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPin(!showPin)}
-                    className={`flex items-center gap-2 text-sm ${isDark ? "opacity-60 hover:opacity-100" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
-                    {showPin ? "Sembunyikan" : "Tampilkan"}
-                  </button>
-                </div>
-                <div className="flex justify-between gap-4">
-                  {[0, 1, 2, 3].map((idx) => (
-                    <input
-                      key={idx}
-                      id={`pin-${idx}`}
-                      type={showPin ? "text" : "password"}
-                      inputMode="numeric"
-                      value={pin[idx]}
-                      onChange={(e) => handlePinChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(idx, e)}
-                      className={`w-full aspect-square ${isDark ? "bg-slate-950 border-slate-800 text-white focus:ring-indigo-500" : "bg-slate-50 border-slate-200 text-slate-900 focus:ring-blue-500"} border rounded-2xl text-center text-2xl font-black outline-none transition-all`}
-                      maxLength={1}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full ${isDark ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-white text-indigo-600 hover:bg-white/90"} disabled:opacity-50 py-4 rounded-2xl font-bold text-lg mt-8 shadow-lg shadow-black/10 flex items-center justify-center gap-3 transition-all`}
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <>
-                    <ArrowRight size={20} /> Masuk Portal
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {showIOSInstallGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/60 backdrop-blur-sm">
-            <div
-              className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border transition-colors duration-300 ${isDark ? "bg-slate-900 border-slate-800 text-white" : "bg-white text-slate-800 border-slate-100"}`}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-black uppercase tracking-wider flex items-center gap-2">
-                  <Download
-                    className="text-amber-500 animate-bounce"
-                    size={20}
-                  />
-                  Pasang Aplikasi Portal
-                </h3>
-                <button
-                  onClick={() => setShowIOSInstallGuide(false)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center ${isDark ? "bg-slate-850 hover:bg-slate-800" : "bg-slate-100 hover:bg-slate-200"}`}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {deferredPrompt && (
-                <div
-                  className={`mb-6 p-5 rounded-2xl text-center border transition-all ${
-                    isDark
-                      ? "bg-slate-950/60 border-slate-800 text-slate-200 shadow-inner"
-                      : "bg-amber-50/50 border-amber-200/50 text-slate-700"
-                  }`}
-                >
-                  <p className="text-xs font-bold opacity-90 mb-3">
-                    HP Anda mendukung pemasangan otomatis:
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleNativeInstall}
-                    className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black py-4 px-4 rounded-2xl text-sm flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg shadow-amber-500/20 border border-amber-400"
-                  >
-                    <Download size={18} className="animate-bounce" />
-                    PASANG OTOMATIS SEKARANG
-                  </button>
-                </div>
-              )}
-
-              <div className="flex border-b border-slate-200/50 dark:border-slate-800/80 mb-5 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setInstallTab("android")}
-                  className={`flex-1 pb-3 text-xs font-black uppercase tracking-wider transition-all text-center border-b-2 ${
-                    installTab === "android"
-                      ? "text-amber-500 border-amber-500"
-                      : "text-slate-400 border-transparent hover:text-slate-500 dark:hover:text-slate-300"
-                  }`}
-                >
-                  HP Android (Chrome)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInstallTab("ios")}
-                  className={`flex-1 pb-3 text-xs font-black uppercase tracking-wider transition-all text-center border-b-2 ${
-                    installTab === "ios"
-                      ? "text-amber-500 border-amber-500"
-                      : "text-slate-400 border-transparent hover:text-slate-500 dark:hover:text-slate-300"
-                  }`}
-                >
-                  HP iPhone (Safari)
-                </button>
-              </div>
-
-              {installTab === "android" ? (
-                <div className="space-y-4 text-sm leading-relaxed">
-                  <p className="font-semibold opacity-80 text-xs">
-                    Supir pengguna HP Android dapat memasang portal di layar
-                    utama dengan mudah:
-                  </p>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      1
-                    </span>
-                    <p>
-                      Buka portal ini di browser <strong>Google Chrome</strong>{" "}
-                      HP Anda.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      2
-                    </span>
-                    <p>
-                      Ketuk tombol <strong>titik tiga (⋮)</strong> di pojok
-                      kanan atas Chrome.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      3
-                    </span>
-                    <p>
-                      Cari dan ketuk pilihan <strong>"Instal Aplikasi"</strong>{" "}
-                      atau <strong>"Tambahkan ke Layar Utama"</strong>.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      4
-                    </span>
-                    <p>
-                      Ketuk **Instal** atau **Tambah** di layar. Aplikasi
-                      langsung terpasang di HP Android Anda!
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 text-sm leading-relaxed">
-                  <p className="font-semibold opacity-80 text-xs">
-                    Supir pengguna iPhone/iOS dapat memasang portal di layar
-                    utama dengan mudah:
-                  </p>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      1
-                    </span>
-                    <p>
-                      Buka portal ini menggunakan browser{" "}
-                      <strong>Safari</strong> bawaan iPhone.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      2
-                    </span>
-                    <p>
-                      Ketuk tombol <strong>Share/Bagikan</strong> (ikon kotak
-                      dengan panah ke atas) di bagian tengah bawah Safari.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      3
-                    </span>
-                    <p>
-                      Gulir ke bawah dan ketuk pilihan{" "}
-                      <strong>"Tambahkan ke Layar Utama"</strong> (*Add to Home
-                      Screen*).
-                    </p>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-black shrink-0">
-                      4
-                    </span>
-                    <p>
-                      Ketuk **Tambah** di pojok kanan atas. Aplikasi langsung
-                      terpasang di layar utama iPhone Anda!
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowIOSInstallGuide(false)}
-                className="w-full bg-amber-500 text-white font-black py-3 rounded-2xl text-sm mt-6 hover:bg-amber-600 active:scale-98 transition-all shadow-lg shadow-amber-500/20"
-              >
-                Mengerti & Siap Pasang
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
 
   // Profile View
   if (step === "profile") {
@@ -2579,72 +2194,6 @@ export default function DriverPortal() {
     );
   }
 
-  // [AI] Calculate progress & Milestones for Selected Job (aligned with vendor page)
-  const selectedJobRoutes = (
-    selectedJob?.routes ||
-    selectedJob?.job_routes ||
-    []
-  )
-    .slice()
-    .sort((a: any, b: any) => a.sequence - b.sequence);
-  const totalStops = selectedJobRoutes.length;
-  const completedStops = selectedJobRoutes.filter((r: any) => {
-    const s = (r.status || "").toLowerCase();
-    return s === "completed" || s === "arrived" || !!r.actual_arrival;
-  }).length;
-
-  const mapMarkers = (selectedJobRoutes || [])
-    .map((stop: any) => {
-      const lat = stop.latitude ? Number(stop.latitude) : null;
-      const lng = stop.longitude ? Number(stop.longitude) : null;
-      if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
-        return { lat, lng, sequence: stop.sequence, label: stop.location_name };
-      }
-      return null;
-    })
-    .filter(Boolean) as {
-    lat: number;
-    lng: number;
-    sequence: number;
-    label: string;
-  }[];
-
-  const polylinePath = mapMarkers.map((m) => ({ lat: m.lat, lng: m.lng }));
-  const mapCenter =
-    mapMarkers.length > 0
-      ? { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng }
-      : { lat: -6.2, lng: 106.816666 };
-
-  useEffect(() => {
-    if (!isLoaded || mapMarkers.length < 2 || typeof google === "undefined")
-      return;
-
-    const directionsService = new google.maps.DirectionsService();
-    const origin = { lat: mapMarkers[0].lat, lng: mapMarkers[0].lng };
-    const destination = {
-      lat: mapMarkers[mapMarkers.length - 1].lat,
-      lng: mapMarkers[mapMarkers.length - 1].lng,
-    };
-    const waypoints = mapMarkers.slice(1, -1).map((s) => ({
-      location: { lat: s.lat, lng: s.lng },
-      stopover: true,
-    }));
-
-    directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          setDirectionsResponse(result);
-        }
-      },
-    );
-  }, [isLoaded, JSON.stringify(polylinePath)]);
-
   const milestones = selectedJob
     ? [
         {
@@ -2709,13 +2258,23 @@ export default function DriverPortal() {
     if (current !== -1) {
       base = (current / total) * 100 + (1 / total) * 50; // halfway to current
     }
-    return Math.min(base, 100);
+return Math.min(base, 100);
   })();
 
   // Dashboard & Worksheets
   if (!isSetupComplete) {
     return <SetupWizard onComplete={() => setIsSetupComplete(true)} />;
   }
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) return null;
 
   return (
     <div
