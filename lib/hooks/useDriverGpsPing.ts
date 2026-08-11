@@ -121,13 +121,18 @@ export function useDriverGpsPing(
 
   const heartbeatSentRef = useRef<boolean>(false);
 
+  const onPingStateChangeRef = useRef(onPingStateChange);
+  useEffect(() => {
+    onPingStateChangeRef.current = onPingStateChange;
+  }, [onPingStateChange]);
+
   const emitPingState = useCallback(
     (patch: Partial<GpsPingState>) => {
-      if (onPingStateChange) {
-        onPingStateChange(patch);
+      if (onPingStateChangeRef.current) {
+        onPingStateChangeRef.current(patch);
       }
     },
-    [onPingStateChange],
+    [],
   );
 
   // Send native_heartbeat once per token when native app opens
