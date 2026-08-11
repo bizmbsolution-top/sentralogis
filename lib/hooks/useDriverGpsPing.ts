@@ -423,13 +423,26 @@ export function useDriverGpsPing(
       intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
     };
 
+    console.log(`[GPS-DEBUG] hook mounted`);
+    console.log(`[GPS-DEBUG] token = ${token}`);
+    console.log(`[GPS-DEBUG] jobStatus = ${status}`);
+    console.log(`[GPS-DEBUG] enabled = ${enabled}`);
+    console.log(`[GPS-DEBUG] startedAt = ${startedAt}`);
+    console.log(`[GPS-DEBUG] isNativeApp = ${isNativeApp}`);
+    console.log(`[GPS-DEBUG] native platform = ${typeof window !== "undefined" && (window as any).Capacitor ? (window as any).Capacitor.isNativePlatform() : 'unknown'}`);
+    console.log(`[GPS-DEBUG] user agent = ${typeof navigator !== "undefined" ? navigator.userAgent : 'unknown'}`);
+    console.log(`[GPS-DEBUG] session/driver available = ${!!token}`);
+
     if (isNative) {
       console.log("[NATIVE-GPS] native detected: true");
       console.log(`[NATIVE-GPS] tracking requested: ${token}`);
       const startNativeGps = async () => {
         try {
+          console.log(`[GPS-DEBUG] startNativeGps called`);
           const { Geolocation } = await import("@capacitor/geolocation");
+          console.log(`[GPS-DEBUG] permission check started`);
           const perm = await Geolocation.checkPermissions();
+          console.log(`[GPS-DEBUG] permission result = ${perm.location}`);
           console.log(`[NATIVE-GPS] permission check = ${perm.location}`);
           
           if (perm.location !== "granted") {
@@ -444,19 +457,23 @@ export function useDriverGpsPing(
           }
           console.log("[NATIVE-GPS] permission: GRANTED");
           console.log("[NATIVE-GPS] tracking started: Foreground Service");
+          console.log(`[GPS-DEBUG] NativeGps.startTracking called`);
           await NativeGps.startTracking({
             jobId: token,
             apiUrl: window.location.origin,
           });
+          console.log(`[GPS-DEBUG] NativeGps.startTracking result = success`);
 
           if (!listenerRef.current) {
             listenerRef.current = await NativeGps.addListener("onLocationUpdate", (data: any) => {
+              console.log(`[GPS-DEBUG] onLocationUpdate received`);
               console.log(`[NATIVE-GPS] latitude: ${data.latitude}`);
               console.log(`[NATIVE-GPS] longitude: ${data.longitude}`);
               console.log(`[NATIVE-GPS] accuracy: ${data.accuracy}`);
               console.log(`[NATIVE-GPS] recorded_at: ${new Date().toISOString()}`);
               
               pingCountRef.current += 1;
+              console.log(`[GPS-DEBUG] emitPingState called`);
               emitPingState({
                 status: "active",
                 accuracy: data.accuracy ?? null,
@@ -474,6 +491,7 @@ export function useDriverGpsPing(
                 );
               }
             });
+            console.log(`[GPS-DEBUG] listener registered`);
           }
         } catch (e) {
           console.error("[NATIVE-GPS] Error starting tracking. Bridge might be uninitialized. Retrying in 3s...", e);
