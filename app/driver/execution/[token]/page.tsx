@@ -116,6 +116,124 @@ export default function JoExecutionPage({
   const { token } = use(params);
   const router = useRouter();
   const { isLoaded } = useGoogleMaps();
+"use client";
+
+import { useEffect, useState, use, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Truck,
+  MapPin,
+  Navigation as NavIcon,
+  Phone,
+  CheckCircle2,
+  Clock,
+  ChevronRight,
+  AlertCircle,
+  Loader2,
+  Play,
+  Check,
+  X,
+  Camera,
+  Calendar,
+  Activity,
+  Expand,
+  Lock,
+  Box,
+  FileText,
+  Download,
+  Eye,
+  MessageSquare,
+  Satellite,
+  Wifi,
+  Send,
+  Coins,
+  ArrowLeft,
+  AlertOctagon,
+  Info,
+} from "lucide-react";
+import { toast, Toaster } from "react-hot-toast";
+import { useGoogleMaps } from "@/lib/google-maps-context";
+import {
+  GoogleMap,
+  MarkerF,
+  PolylineF,
+  DirectionsRenderer,
+} from "@react-google-maps/api";
+import { useDriverGpsPing, isActiveTransitStatus } from "@/lib/hooks/useDriverGpsPing";
+import { formatDateUTC } from "@/lib/utils/dateUtils";
+import DriverReadinessGate from "../../../jo/[token]/components/DriverReadinessGate";
+import { useTTS } from "@/lib/hooks/useTTS";
+import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
+import InfoPerangkat from "../../components/InfoPerangkat";
+
+interface RouteStop {
+  id: string;
+  sequence: number;
+  stop_type: "PICKUP" | "DROPOFF";
+  location_name: string;
+  address: string;
+  contact_name: string;
+  contact_phone: string;
+  status: "pending" | "arrived" | "completed";
+  actual_arrival: string;
+  actual_departure: string;
+  pod_photo_url?: string;
+  route_photos?: Array<{
+    id: string;
+    file_url: string;
+    document_name?: string;
+    created_at?: string;
+  }>;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface JobOrder {
+  id: string;
+  jo_number: string;
+  status: string;
+  container_number?: string;
+  sbu_metadata?: {
+    seal_number?: string;
+    [key: string]: any;
+  };
+  customer?: {
+    name: string;
+    address: string;
+  };
+  tenant_name?: string;
+  wo_details?: {
+    wo_number: string;
+    execution_date: string;
+    execution_time?: string;
+  };
+  driver?: {
+    id: string;
+    name: string;
+    phone: string;
+    driver_type?: string;
+  };
+  fleet?: { id: string; plate_number: string; type_name: string };
+  driver_response?: string;
+  accepted_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  assigned_at?: string;
+  advance_amount?: number;
+  advance_status?: string;
+  assignment_documents?: any[];
+  routes: RouteStop[];
+  tracking_logs?: any[];
+}
+
+export default function JoExecutionPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = use(params);
+  const router = useRouter();
+  const { isLoaded } = useGoogleMaps();
   const { session, isLoading: sessionLoading } = useDriverAuth();
 
   const [isNative, setIsNative] = useState<boolean>(true);
@@ -125,7 +243,8 @@ export default function JoExecutionPage({
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsBattery, setGpsBattery] = useState<number | null>(null);
   const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
-  const [gpsPingCount, setGpsPingCount] = useState(0);
+  const [gpsPingCount, setGpsPingCount] = useState<number>(0);
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
 
   const [readinessComplete, setReadinessComplete] = useState(false);
   const { speak: ttsSpeak } = useTTS();
@@ -300,6 +419,7 @@ export default function JoExecutionPage({
       if (state.battery !== undefined) setGpsBattery(state.battery);
       if (state.speed !== undefined) setGpsSpeed(state.speed);
       if (state.pingCount !== undefined) setGpsPingCount(state.pingCount);
+      if (state.errorMessage !== undefined) setGpsErrorMessage(state.errorMessage);
     }
   );
 
@@ -903,7 +1023,7 @@ export default function JoExecutionPage({
                             }))
                           }
                           placeholder="Tulis remarks / catatan lokasi..."
-                          className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
                         />
                         <button
                           onClick={() => handleRemarkSubmit(stop.id)}
@@ -1056,6 +1176,7 @@ export default function JoExecutionPage({
         gpsAccuracy={gpsAccuracy}
         gpsSpeed={gpsSpeed}
         gpsPingCount={gpsPingCount}
+        gpsErrorMessage={gpsErrorMessage || undefined}
         tenantName={jobOrder.tenant_name}
         isNative={isNative}
       />

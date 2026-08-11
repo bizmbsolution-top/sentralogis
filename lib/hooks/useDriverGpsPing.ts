@@ -77,6 +77,7 @@ export interface GpsPingState {
   battery: number | null;
   pingCount: number;
   consecutiveFailures: number;
+  errorMessage?: string;
   offlineQueueLength: number;
 }
 
@@ -365,9 +366,13 @@ export function useDriverGpsPing(
   useEffect(() => {
     const isNative = isNativeApp === true;
 
-    if (!enabled || !token || !isActiveTransitStatus(status, startedAt)) {
+    if (!enabled) {
       if (isNative) {
-        // NativeGpsManager unregistration is handled in the cleanup function below
+        if ((intervalRef as any).nativeUnsubscribe) {
+          (intervalRef as any).nativeUnsubscribe();
+          (intervalRef as any).nativeUnsubscribe = null;
+        }
+        NativeGpsManager.unregisterConsumer(consumerId);
       } else {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -379,6 +384,24 @@ export function useDriverGpsPing(
           } catch {}
           wakeLockRef.current = null;
         }
+      }
+      emitPingState({ status: "inactive" });
+      return;
+    }
+
+    // For PWA fallback, we still enforce JO token and transit status
+    const shouldTrackPwa = !!token && isActiveTransitStatus(status, startedAt);
+
+    if (!isNative && !shouldTrackPwa) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (wakeLockRef.current) {
+        try {
+          wakeLockRef.current.release();
+        } catch {}
+        wakeLockRef.current = null;
       }
       emitPingState({ status: "inactive" });
       return;
@@ -424,6 +447,7 @@ export function useDriverGpsPing(
           battery: state.battery,
           pingCount: state.pingCount,
           consecutiveFailures: state.consecutiveFailures,
+          errorMessage: state.errorMessage,
         });
       });
 

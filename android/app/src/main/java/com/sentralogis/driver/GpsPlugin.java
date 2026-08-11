@@ -43,21 +43,33 @@ public class GpsPlugin extends Plugin {
 
     @PluginMethod
     public void startTracking(PluginCall call) {
-        String jobId = call.getString("jobId", "Active Job");
-        String apiUrl = call.getString("apiUrl", "https://www.sentralogis.com");
-        Context context = getContext();
-        Intent intent = new Intent(context, GpsForegroundService.class);
-        intent.setAction(GpsForegroundService.ACTION_START);
-        intent.putExtra(GpsForegroundService.EXTRA_JOB_ID, jobId);
-        intent.putExtra(GpsForegroundService.EXTRA_API_URL, apiUrl);
+        try {
+            android.util.Log.d("GpsPlugin", "[GPS-JAVA-TRACE] NativeGps.startTracking invoked");
+            android.util.Log.d("GpsPlugin", "[GPS-JAVA-TRACE] plugin startTracking entered");
+            String jobId = call.getString("jobId", "Active Job");
+            String apiUrl = call.getString("apiUrl", "https://www.sentralogis.com");
+            Context context = getContext();
+            
+            android.util.Log.d("GpsPlugin", "[GPS-JAVA-TRACE] permission check - fine:" + androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION));
+            android.util.Log.d("GpsPlugin", "[GPS-JAVA-TRACE] service start requested");
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+            Intent intent = new Intent(context, GpsForegroundService.class);
+            intent.setAction(GpsForegroundService.ACTION_START);
+            intent.putExtra(GpsForegroundService.EXTRA_JOB_ID, jobId);
+            intent.putExtra(GpsForegroundService.EXTRA_API_URL, apiUrl);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+            android.util.Log.d("GpsPlugin", "[GPS-JAVA-TRACE] service started");
+
+            call.resolve();
+        } catch (Exception e) {
+            android.util.Log.e("GpsPlugin", "[GPS-JAVA-TRACE] exception = " + e.getMessage(), e);
+            call.reject("ERROR - Java Plugin Failed: " + e.getMessage(), e);
         }
-
-        call.resolve();
     }
 
     @PluginMethod

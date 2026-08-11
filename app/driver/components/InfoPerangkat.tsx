@@ -40,6 +40,7 @@ interface InfoPerangkatProps {
   gpsAccuracy?: number | null;
   gpsSpeed?: number | null;
   gpsPingCount?: number;
+  gpsErrorMessage?: string;
   tenantName?: string;
   isNative?: boolean | null;
 }
@@ -287,7 +288,7 @@ export default function InfoPerangkat({
     gpsLabel = "Memeriksa...";
   } else if (gpsStatus === "error") {
     gpsTone = "err";
-    gpsLabel = "ERROR - Java Plugin Failed";
+    gpsLabel = gpsErrorMessage ? `ERROR: ${gpsErrorMessage}` : "ERROR - Java Plugin Failed";
   } else if (gpsStatus === "recovering") {
     gpsTone = "warn";
     gpsLabel = "Memulihkan GPS...";

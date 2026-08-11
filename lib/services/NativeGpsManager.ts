@@ -23,6 +23,7 @@ export type NativeGpsState = {
   nativeServiceActive: boolean;
   consecutiveFailures: number;
   pingCount: number;
+  errorMessage?: string;
 };
 
 type StateSubscriber = (state: NativeGpsState) => void;
@@ -123,7 +124,7 @@ class NativeGpsManagerClass {
         const req = await Geolocation.requestPermissions();
         if (req.location !== "granted") {
           console.warn("[GPS-MANAGER] Location permission denied");
-          this.setState({ permission: "denied", status: "error" });
+          this.setState({ permission: "denied", status: "error", errorMessage: "Native Location Permission Denied" });
           // Retry later if permission denied
           setTimeout(() => {
             if (this.consumers.size > 0) this.startTracking();
@@ -166,9 +167,9 @@ class NativeGpsManagerClass {
           }
         });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("[GPS-MANAGER] Error starting tracking. Retrying in 3s...", e);
-      this.setState({ status: "error" });
+      this.setState({ status: "error", errorMessage: e?.message || String(e) });
       setTimeout(() => {
         if (this.consumers.size > 0) this.startTracking();
       }, 3000);

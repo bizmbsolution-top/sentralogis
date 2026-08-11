@@ -93,6 +93,7 @@ public class GpsForegroundService extends Service  {
     @Override
     public void onCreate() {
         super.onCreate();
+        android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] Service onCreate");
         dbHelper = new OfflineGpsDbHelper(this);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
@@ -100,6 +101,7 @@ public class GpsForegroundService extends Service  {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 if (locationResult == null) return;
+                android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] location callback received");
                 for (Location location : locationResult.getLocations()) {
                     broadcastLocation(location);
                 }
@@ -300,6 +302,7 @@ public class GpsForegroundService extends Service  {
 
         @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] Service onStartCommand");
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
         if (intent != null) {
@@ -375,7 +378,12 @@ public class GpsForegroundService extends Service  {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
         } else {
-            startForeground(1, notification);
+            try {
+            startForeground(101, notification);
+            android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] startForeground SUCCESS");
+        } catch (Exception e) {
+            android.util.Log.e("SentraLogisGPS", "[GPS-JAVA-TRACE] startForeground FAILED: " + e.getMessage(), e);
+        }
         }
     }
 
@@ -398,14 +406,18 @@ public class GpsForegroundService extends Service  {
     // ===== LOCATION UPDATES =====
 
         private void startLocationUpdates() {
+        android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] location request created");
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000)
+                .setMinUpdateIntervalMillis(10_000)
+                .setMaxUpdateDelayMillis(60_000)
+                .build();
         try {
-            Log.d("SentraLogisGPS", "Starting location updates (HIGH_ACCURACY)");
-            LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60000)
-                    .setMinUpdateIntervalMillis(60000)
-                    .build();
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+            android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] requestLocationUpdates SUCCESS");
         } catch (SecurityException e) {
-            Log.e("SentraLogisGPS", "Missing location permissions", e);
+            android.util.Log.e("SentraLogisGPS", "[GPS-JAVA-TRACE] requestLocationUpdates FAILED: SecurityException", e);
+        } catch (Exception e) {
+            android.util.Log.e("SentraLogisGPS", "[GPS-JAVA-TRACE] requestLocationUpdates FAILED: " + e.getMessage(), e);
         }
     }
 
