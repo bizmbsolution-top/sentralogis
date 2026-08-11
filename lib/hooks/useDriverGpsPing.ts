@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useId } from "react";
 import {
   enqueueGpsPing,
   syncGpsPingsFirst,
@@ -90,6 +90,9 @@ export function useDriverGpsPing(
   onLocationUpdate?: (location: any) => void,
   onPingStateChange?: (state: Partial<GpsPingState>) => void,
 ) {
+  const hookInstanceId = useId();
+  const consumerId = `jo_hook_${hookInstanceId}_${token || "unknown"}`;
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<any>(null);
   const isPingingRef = useRef<boolean>(false);
@@ -425,7 +428,7 @@ export function useDriverGpsPing(
       });
 
       // Register consumer
-      NativeGpsManager.registerConsumer(`jo_${token}`, token);
+      NativeGpsManager.registerConsumer(consumerId, token || "unknown");
 
       // Return a custom cleanup for native inside this branch 
       // (The main return handles PWA and unregister)
@@ -451,7 +454,7 @@ export function useDriverGpsPing(
           (intervalRef as any).nativeUnsubscribe();
           (intervalRef as any).nativeUnsubscribe = null;
         }
-        NativeGpsManager.unregisterConsumer(`jo_${token}`);
+        NativeGpsManager.unregisterConsumer(consumerId);
       }
     };
   }, [
