@@ -164,6 +164,11 @@ public class GpsForegroundService extends Service  {
     // ===== PING API =====
 
         private void sendPingToApi(Location location, int battery) {
+        if (currentJobId == null || currentJobId.equals("unknown")) {
+            Log.d("SentraLogisGPS", "LOCATION_RECEIVED but skipping API ping because jobId is unknown");
+            return;
+        }
+
         executorService.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
