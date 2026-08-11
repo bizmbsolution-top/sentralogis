@@ -560,9 +560,21 @@ const filteredItems = useMemo(() => {
                       </h3>
                       
                       <div className="flex flex-wrap items-center gap-6 mt-3">
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <Calendar size={14} className="text-slate-400" />
-                          <span className="text-sm font-medium">{new Date(item.work_orders?.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        {/* [ATTENTION] Execution date & time */}
+                        <div className="flex items-center gap-2 bg-indigo-600 text-white rounded-lg px-3 py-1.5 shadow-sm">
+                          <Calendar size={14} className="shrink-0" />
+                          <span className="text-sm font-black tracking-wide">
+                            {item.work_orders?.execution_date
+                              ? new Date(item.work_orders.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : 'TBA'}
+                          </span>
+                          {item.work_orders?.execution_time && (
+                            <>
+                              <span className="text-indigo-300">·</span>
+                              <Clock size={14} className="shrink-0" />
+                              <span className="text-sm font-black tabular-nums">{item.work_orders.execution_time}</span>
+                            </>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-slate-600">
                           <Truck size={14} className="text-slate-400" />

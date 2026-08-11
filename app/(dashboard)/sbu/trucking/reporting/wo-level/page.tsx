@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { resolveUnitDealPrice } from "@/lib/reporting/financials";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -224,11 +225,8 @@ export default function WOLevelReportingPage() {
         const jos: any[] = [];
 
         truckingItems.forEach((item: any) => {
-          const itemAR = Number(
-            item.total_revenue || item.item_data?.deal_price || 0,
-          );
-          const totalJOsInItem = item.job_orders?.length || 1;
-          const arShare = itemAR / totalJOsInItem;
+          const itemAR = resolveUnitDealPrice(item);
+          const arShare = itemAR;
 
           (item.job_orders || []).forEach((jo: any) => {
             const cashTotal = Number(jo.advance_amount || 0);

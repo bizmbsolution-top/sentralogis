@@ -11,6 +11,15 @@ import {
   Truck, Warehouse, LayoutGrid, Ship, Layers,
   PackageCheck, XCircle
 } from "lucide-react";
+import {
+  COL_OPERATION, COL_FINANCIAL, NUMERIC_COLS, SBU_PILL_COLORS,
+  type ColDef,
+} from "@/lib/reporting/columns";
+import {
+  COMPLETED_STATUSES,
+} from "@/lib/reporting/status";
+import { flattenWorkOrderReport } from "@/lib/reporting/transform";
+import { fmtCurrency } from "@/lib/reporting/financials";
 
 // ─── SBU Config ────────────────────────────────────────────────────
 const SBU_TABS = [
@@ -23,99 +32,69 @@ const SBU_TABS = [
 
 type SbuId = typeof SBU_TABS[number]["id"];
 
-// ─── Adaptive Column Definitions ───────────────────────────────────
-type ColDef = { id: string; label: string; numeric?: boolean };
-
-const COL_OPERATION: Record<string, ColDef[]> = {
-  all: [
-    { id: "wo_number",    label: "WO Number" },
-    { id: "jo_number",    label: "JO Number" },
-    { id: "sbu_type",     label: "SBU" },
-    { id: "company_name", label: "Pelanggan" },
-    { id: "jo_status",    label: "Status" },
-    { id: "detail",       label: "Detail" },
-    { id: "ar_total",     label: "Revenue",      numeric: true },
-    { id: "gross_margin", label: "Gross Margin",  numeric: true },
-  ],
-  TRUCKING: [
-    { id: "wo_number",    label: "WO Number" },
-    { id: "jo_number",    label: "JO Number" },
-    { id: "company_name", label: "Pelanggan" },
-    { id: "jo_status",    label: "Status" },
-    { id: "route",        label: "Route" },
-    { id: "truck_type",   label: "Truck Type" },
-    { id: "fleet_info",   label: "Fleet/Plate" },
-    { id: "vendor_name",  label: "Vendor" },
-    { id: "ar_total",     label: "Revenue (AR)", numeric: true },
-    { id: "cash_advance", label: "Uang Jalan",   numeric: true },
-    { id: "ap_total",     label: "Vendor Cost",   numeric: true },
-    { id: "total_cost",   label: "Total Cost",    numeric: true },
-    { id: "gross_margin", label: "Gross Margin",  numeric: true },
-  ],
-  WAREHOUSE: [
-    { id: "wo_number",    label: "WO Number" },
-    { id: "jo_number",    label: "JO Number" },
-    { id: "company_name", label: "Pelanggan" },
-    { id: "jo_status",    label: "Status" },
-    { id: "warehouse_name", label: "Gudang" },
-    { id: "op_type",      label: "Tipe Operasi" },
-    { id: "products",     label: "Products" },
-    { id: "ar_total",     label: "Revenue (AR)", numeric: true },
-    { id: "gross_margin", label: "Gross Margin", numeric: true },
-  ],
-  CLEARANCE: [
-    { id: "wo_number",    label: "WO Number" },
-    { id: "jo_number",    label: "JO Number" },
-    { id: "company_name", label: "Pelanggan" },
-    { id: "jo_status",    label: "Status" },
-    { id: "clearance_mode", label: "Mode" },
-    { id: "service_type", label: "Service Type" },
-    { id: "doc_ref",      label: "Doc Reference" },
-    { id: "ar_total",     label: "Revenue (AR)", numeric: true },
-    { id: "gross_margin", label: "Gross Margin", numeric: true },
-  ],
-  FORWARDING: [
-    { id: "wo_number",    label: "WO Number" },
-    { id: "jo_number",    label: "JO Number" },
-    { id: "company_name", label: "Pelanggan" },
-    { id: "jo_status",    label: "Status" },
-    { id: "route",        label: "Route" },
-    { id: "shipping_line", label: "Shipping Line" },
-    { id: "ar_total",     label: "Revenue (AR)", numeric: true },
-    { id: "gross_margin", label: "Gross Margin", numeric: true },
-  ],
-};
-
-const COL_FINANCIAL: ColDef[] = [
-  { id: "wo_number",      label: "WO Number" },
-  { id: "sbu_type",       label: "SBU" },
-  { id: "company_name",   label: "Pelanggan (AR)" },
-  { id: "ar_total",       label: "Invoice Amount",  numeric: true },
-  { id: "ar_outstanding", label: "AR Outstanding",   numeric: true },
-  { id: "vendor_name",    label: "Vendor (AP)" },
-  { id: "ap_total",       label: "Vendor Price",     numeric: true },
-  { id: "cash_advance",   label: "Cash Advance",     numeric: true },
-  { id: "ap_outstanding", label: "AP Balance",        numeric: true },
-  { id: "gross_margin",   label: "Gross Margin",     numeric: true },
-];
-
-// ─── Helpers ───────────────────────────────────────────────────────
-const COMPLETED_STATUSES = ["done", "delivered", "finished", "completed", "pekerjaan selesai", "selesai", "received", "paid"];
-const NUMERIC_COLS = ["ar_total", "ar_outstanding", "ap_total", "ap_outstanding", "cash_advance", "total_cost", "gross_margin"];
-
-const fmtCurrency = (v: number) => `Rp ${v.toLocaleString("id-ID")}`;
-
-const SBU_PILL_COLORS: Record<string, string> = {
-  TRUCKING:   "bg-blue-100 text-blue-700 border-blue-200",
-  WAREHOUSE:  "bg-amber-100 text-amber-700 border-amber-200",
-  CLEARANCE:  "bg-emerald-100 text-emerald-700 border-emerald-200",
-  FORWARDING: "bg-indigo-100 text-indigo-700 border-indigo-200",
-};
-
 // ─── Component ─────────────────────────────────────────────────────
 export default function HQReportingPage() {
   const { profile } = useAuth();
-  const tenantId = profile?.tenant_id;
+
+  // ─── Access control ────────────────────────────────────────────────
+  // Roles that may view HQ reporting (all scoped to a single tenant).
+  const HQ_REPORTING_ROLES = [
+    "hq_cs",
+    "hq_ops",
+    "hq_finance",
+    "hq_director_ops",
+    "hq_director_fin",
+    "hq_director_cs",
+    "hq_commercial_director",
+    "hq_director_comm",
+    "hq_director_bizdev",
+    "hq_director_hrd",
+  ];
+  const GLOBAL_ROLES = ["owner_sentralogis", "tenant_superadmin", "tenant_admin"];
+
+  const isHqRole = !!profile && HQ_REPORTING_ROLES.includes(profile.role);
+  const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
+  const [resolvedTenantId, setResolvedTenantId] = useState<string | null>(
+    profile?.tenant_id || null,
+  );
+  const [tenantList, setTenantList] = useState<any[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+
+  // Global roles without a tenant in profile → resolve first tenant.
+  useEffect(() => {
+    if (!profile) return;
+    if (profile.tenant_id) {
+      setResolvedTenantId(profile.tenant_id);
+      return;
+    }
+    if (isGlobalRole) {
+      const fetchTenant = async () => {
+        const { data } = await supabase.from("tenants").select("id").limit(1);
+        if (data && data.length > 0) setResolvedTenantId((data[0] as { id: string }).id);
+      };
+      fetchTenant();
+    }
+  }, [profile, isGlobalRole]);
+
+  // Global roles pick which tenant to report on.
+  useEffect(() => {
+    if (!isGlobalRole) return;
+    const fetchTenantList = async () => {
+      const { data } = await supabase
+        .from("tenants")
+        .select("id, tenant_code, name")
+        .order("tenant_code");
+      if (data && data.length > 0) {
+        setTenantList(data);
+        setSelectedTenantId((prev) => prev || resolvedTenantId || (data[0] as { id: string }).id);
+      }
+    };
+    fetchTenantList();
+  }, [isGlobalRole, resolvedTenantId]);
+
+  // Effective tenant: HQ roles locked to their tenant; global roles use the selector.
+  const tenantId = isGlobalRole ? selectedTenantId || resolvedTenantId : resolvedTenantId;
+  const canAccess = !!tenantId && (isHqRole || isGlobalRole);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -152,15 +131,9 @@ export default function HQReportingPage() {
 
   const statusOptions = ["done", "rejected"];
 
-  const getMappedStatuses = (filters: string[]) => {
-    let expanded = [...filters];
-    if (filters.includes("done")) expanded = [...expanded, ...COMPLETED_STATUSES];
-    return Array.from(new Set(expanded.map(s => s.toLowerCase())));
-  };
-
   // ─── Fetch Master Data ────────────────────────────────────────────
   const fetchMasterData = async () => {
-    if (!tenantId) return;
+    if (!tenantId || !canAccess) return;
     try {
       const [{ data: allCt }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
         supabase.from("md_entities").select("id, name, legal_name, parent_id").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).order("name"),
@@ -182,6 +155,11 @@ export default function HQReportingPage() {
   // ─── Fetch Report Data ────────────────────────────────────────────
   const fetchReportData = useCallback(async () => {
     if (!tenantId) return;
+    if (!canAccess) {
+      toast.error("Akses ditolak: hanya role HQ / global yang dapat melihat report");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data: woData, error } = await supabase
@@ -194,145 +172,17 @@ export default function HQReportingPage() {
 
       if (error) throw error;
 
-      const flattened: any[] = [];
-      const activeStatusFilters = getMappedStatuses(statusFilter);
-
-      woData?.forEach((wo: any) => {
-        wo.wo_items?.forEach((item: any) => {
-          const itemSbu = item.sbu_type?.toUpperCase() || "TRUCKING";
-
-          // SBU tab filter
-          if (sbuTab !== "all" && itemSbu !== sbuTab) return;
-          // Customer filter — parent covers its children (bill-to is always parent)
-          if (customerFilter) {
-            const childIds = customerChildren.filter((c: any) => c.parent_id === customerFilter).map((c: any) => c.id);
-            if (wo.customer_id !== customerFilter && !childIds.includes(wo.customer_id)) return;
-          }
-
-          const dealPrice = Number(item.total_revenue || item.item_data?.deal_price || 0);
-          const originName = item.item_data?.shipper_name || item.item_data?.origin_name || "TBA";
-          const destinationName = item.item_data?.recipient_name || item.item_data?.destination_name || "TBA";
-          const routeStr = `${originName} → ${destinationName}`;
-          const itemTruckType = item.item_data?.vehicle_type_name || "-";
-
-          // SBU-specific filter checks
-          if (itemSbu === "TRUCKING") {
-            if (truckTypeFilter && itemTruckType !== truckTypeFilter) return;
-          }
-          if (itemSbu === "CLEARANCE" && clearanceModeFilter !== "all") {
-            const itmType = (item.service_type || item.item_data?.clearance_mode || "").toLowerCase();
-            if (!itmType.includes(clearanceModeFilter)) return;
-          }
-          if (itemSbu === "WAREHOUSE") {
-            if (warehouseFilter && item.item_data?.warehouse_id !== warehouseFilter) return;
-            if (opTypeFilter !== "all") {
-              const opType = (item.item_data?.operation_type || item.item_data?.direction || "").toLowerCase();
-              if (!opType.includes(opTypeFilter)) return;
-            }
-          }
-
-          // Warehouse-specific fields
-          const warehouseName = item.item_data?.warehouse_name || "-";
-          const opType = item.item_data?.operation_type || item.item_data?.direction || "-";
-          const manifests = item.wo_item_manifests || [];
-          const productsStr = manifests.length > 0
-            ? manifests.map((m: any) => `${m.quantity}x ${m.md_product_skus?.name || m.md_product_skus?.sku_code || "?"}`).join(", ")
-            : "-";
-
-          // Clearance-specific fields
-          const clearanceMode = item.service_type || item.item_data?.clearance_mode || "-";
-          const serviceType = item.item_data?.service_type || "-";
-          const docRef = item.item_data?.doc_reference || item.item_data?.aju_number || "-";
-
-          // Forwarding-specific fields
-          const shippingLine = item.item_data?.shipping_line || item.item_data?.carrier_name || "-";
-
-          const jos = item.job_orders || [];
-          const rawItemStatus = item.status?.toLowerCase();
-          const rawWoStatus = wo.status?.toLowerCase();
-          const isRejected = rawItemStatus === "rejected" || rawWoStatus === "rejected";
-
-          // No JOs → possibly rejected or unassigned
-          if (jos.length === 0) {
-            if (activeStatusFilters.length > 0 && !activeStatusFilters.includes("rejected") && !isRejected) return;
-            if (isRejected || activeStatusFilters.length === 0) {
-              flattened.push({
-                id: `item-${item.id}`,
-                wo_number: wo.wo_number,
-                jo_number: "REJECTED_WO",
-                company_name: wo.customers?.legal_name || wo.customers?.name || "-",
-                jo_status: "REJECTED",
-                sbu_type: itemSbu,
-                route: routeStr,
-                detail: itemSbu === "TRUCKING" ? routeStr : itemSbu === "WAREHOUSE" ? `${opType} @ ${warehouseName}` : clearanceMode,
-                fleet_info: "N/A",
-                vendor_name: "N/A",
-                truck_type: itemTruckType,
-                ar_total: dealPrice,
-                ar_outstanding: 0,
-                ap_total: 0,
-                ap_outstanding: 0,
-                cash_advance: 0,
-                total_cost: 0,
-                gross_margin: dealPrice,
-                warehouse_name: warehouseName,
-                op_type: opType,
-                products: productsStr,
-                clearance_mode: clearanceMode,
-                service_type: serviceType,
-                doc_ref: docRef,
-                shipping_line: shippingLine,
-              });
-            }
-            return;
-          }
-
-          // Process each JO
-          jos.forEach((jo: any) => {
-            const joStatus = jo.status?.toLowerCase();
-            if (activeStatusFilters.length > 0 && !activeStatusFilters.includes(joStatus)) return;
-
-            const isInternal = !jo.fleets?.companies || jo.fleets?.companies?.name?.toLowerCase().includes("sentralogis");
-            if (itemSbu === "TRUCKING" && transporterFilter !== "all") {
-              if (transporterFilter === "internal" && !isInternal) return;
-              if (transporterFilter === "vendor" && isInternal) return;
-              if (vendorFilter !== "all" && jo.fleets?.companies?.id !== vendorFilter) return;
-            }
-
-            const cashTotal = Number(jo.advance_amount || 0);
-            const apTotal = Number(jo.purchase_price || jo.vendor_price || 0);
-            const totalCost = itemSbu === "TRUCKING" ? (isInternal ? cashTotal : apTotal) : apTotal;
-            const grossMargin = dealPrice - totalCost;
-
-            flattened.push({
-              id: jo.id,
-              wo_number: wo.wo_number,
-              jo_number: jo.jo_number,
-              company_name: wo.customers?.legal_name || wo.customers?.name || "-",
-              jo_status: jo.status?.toUpperCase(),
-              sbu_type: itemSbu,
-              route: routeStr,
-              detail: itemSbu === "TRUCKING" ? routeStr : itemSbu === "WAREHOUSE" ? `${opType} @ ${warehouseName}` : itemSbu === "CLEARANCE" ? `${clearanceMode} / ${serviceType}` : routeStr,
-              fleet_info: jo.fleets?.plate_number || "Internal",
-              vendor_name: jo.fleets?.companies?.name || "N/A",
-              truck_type: itemTruckType,
-              ar_total: dealPrice,
-              ar_outstanding: wo.billing_status === "paid" ? 0 : dealPrice,
-              ap_total: apTotal,
-              ap_outstanding: apTotal - cashTotal,
-              cash_advance: cashTotal,
-              total_cost: totalCost,
-              gross_margin: grossMargin,
-              warehouse_name: warehouseName,
-              op_type: opType,
-              products: productsStr,
-              clearance_mode: clearanceMode,
-              service_type: serviceType,
-              doc_ref: docRef,
-              shipping_line: shippingLine,
-            });
-          });
-        });
+      const flattened = flattenWorkOrderReport(woData || [], {
+        sbuFilter: sbuTab,
+        statusFilter,
+        customerFilter,
+        customerChildren,
+        truckTypeFilter,
+        transporterFilter,
+        vendorFilter,
+        clearanceModeFilter,
+        warehouseFilter,
+        opTypeFilter,
       });
       setData(flattened);
     } catch (err: unknown) {
@@ -341,7 +191,7 @@ export default function HQReportingPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, startDate, endDate, sbuTab, statusFilter, customerFilter, truckTypeFilter, transporterFilter, vendorFilter, clearanceModeFilter, warehouseFilter, opTypeFilter]);
+  }, [tenantId, canAccess, startDate, endDate, sbuTab, statusFilter, customerFilter, truckTypeFilter, transporterFilter, vendorFilter, clearanceModeFilter, warehouseFilter, opTypeFilter]);
 
   // ─── Active Columns ───────────────────────────────────────────────
   const activeCols: ColDef[] = reportMode === "financial"
@@ -445,6 +295,24 @@ export default function HQReportingPage() {
   });
 
   // ─── Render ───────────────────────────────────────────────────────
+  if (!canAccess) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto pb-24 flex items-center justify-center">
+        <Toaster position="top-right" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 shadow-sm text-center max-w-md">
+          <div className="mx-auto w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center mb-4">
+            <BarChart3 className="w-7 h-7 text-rose-500" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Akses Ditolak</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Halaman Reporting HQ hanya dapat diakses oleh role HQ / global yang terikat ke tenant.
+            Silakan login dengan akun yang berhak.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto pb-24">
       <Toaster position="top-right" />
@@ -461,6 +329,17 @@ export default function HQReportingPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {isGlobalRole && tenantList.length > 0 && (
+            <select
+              value={tenantId || ""}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-blue-500 transition-all shadow-sm"
+            >
+              {tenantList.map((t) => (
+                <option key={t.id} value={t.id}>{t.tenant_code} — {t.name}</option>
+              ))}
+            </select>
+          )}
           {/* Mode Toggle */}
           <div className="flex p-0.5 bg-slate-100 rounded-xl border border-slate-200 mr-auto md:mr-0">
             <button onClick={() => setReportMode("operation")} className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${reportMode === "operation" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}>Operations</button>

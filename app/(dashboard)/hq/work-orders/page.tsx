@@ -860,7 +860,8 @@ export default function HQWorkOrdersPage() {
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Execution</span>
                       <div className="flex items-center gap-1.5 text-black font-bold text-sm">
                         <Calendar size={14} className="text-blue-600" />
-                        {new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {wo.execution_date ? new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBA'}
+                        {wo.execution_time && <span className="text-black font-bold tabular-nums">· {wo.execution_time}</span>}
                       </div>
                     </div>
                     <div className="w-[1px] h-8 bg-slate-200"></div>

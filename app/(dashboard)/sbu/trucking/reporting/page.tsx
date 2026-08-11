@@ -21,6 +21,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { flattenWorkOrderReport } from "@/lib/reporting/transform";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -98,25 +99,6 @@ export default function SBUTruckingReportingPage() {
   }, [allData, page, pageSize]);
 
   const operationalStatuses = ["done", "rejected", "on_journey", "pending"];
-
-  const getMappedStatuses = (filters: string[]) => {
-    let expanded: string[] = [];
-    filters.forEach((f) => {
-      const lower = f.toLowerCase();
-      if (lower === "done" || lower === "selesai" || lower === "completed") {
-        expanded.push("completed", "done", "finished", "delivered", "selesai");
-      } else if (lower === "rejected" || lower === "dibatalkan" || lower === "cancelled") {
-        expanded.push("rejected", "cancelled", "dibatalkan");
-      } else if (lower === "on_journey" || lower === "dalam perjalanan" || lower === "in_progress") {
-        expanded.push("in_progress", "on_journey", "picking_up", "delivering", "dalam perjalanan");
-      } else if (lower === "pending" || lower === "menunggu berangkat" || lower === "assigned" || lower === "idle" || lower === "new") {
-        expanded.push("pending", "assigned", "accepted", "new", "idle", "draft", "menunggu berangkat");
-      } else {
-        expanded.push(lower);
-      }
-    });
-    return expanded.map((s) => s.toLowerCase());
-  };
 
   // [AI] Fetch master data from md_entities (customers) strictly scoped by tenant
   const fetchMasterData = async () => {
@@ -206,135 +188,27 @@ export default function SBUTruckingReportingPage() {
       const { data: woData, error } = await query;
 
       if (error) throw error;
-      const flattened: any[] = [];
-      const activeStatusFilters = getMappedStatuses(statusFilter);
-
-      const formatJoStatus = (status: string | null | undefined) => {
-        if (!status) return "-";
-        const upper = status.toUpperCase();
-        if (upper === "PENDING" || upper === "ASSIGNED" || upper === "ACCEPTED") return "MENUNGGU BERANGKAT";
-        if (upper === "IN_PROGRESS" || upper === "ON_JOURNEY") return "DALAM PERJALANAN";
-        if (upper === "COMPLETED" || upper === "DONE" || upper === "FINISHED") return "SELESAI";
-        if (upper === "REJECTED" || upper === "CANCELLED") return "DIBATALKAN";
-        return upper.replace(/_/g, " ");
-      };
-
-      const uniqueTruckTypes = new Set<string>();
-
-      woData?.forEach((wo: any) => {
-        wo.wo_items?.forEach((item: any) => {
-          if (item.sbu_type?.toLowerCase() !== "trucking") return;
-          const typeName = item.item_data?.vehicle_type_name;
-          if (typeName) uniqueTruckTypes.add(typeName);
-        });
+      const flattened = flattenWorkOrderReport(woData || [], {
+        sbuFilter: "TRUCKING",
+        statusFilter,
+        customerFilter,
+        truckTypeFilter,
+        transporterFilter,
+        indonesianStatus: true,
       });
-      setTruckTypes(Array.from(uniqueTruckTypes).sort());
+      setTruckTypes(
+        Array.from(
+          new Set(
+            (woData || [])
+              .flatMap((wo: any) => wo.wo_items || [])
+              .filter((i: any) => i.sbu_type?.toLowerCase() === "trucking")
+              .map((i: any) => i.item_data?.vehicle_type_name)
+              .filter(Boolean),
+          ),
+        ).sort(),
+      );
 
-      woData?.forEach((wo: any) => {
-        wo.wo_items?.forEach((item: any) => {
-          // Lock to SBU Trucking only
-          if (item.sbu_type?.toLowerCase() !== "trucking") return;
-
-          if (customerFilter && wo.customer_id !== customerFilter) return;
-
-          const itemTruckType = item.item_data?.vehicle_type_name || "-";
-          if (truckTypeFilter && itemTruckType !== truckTypeFilter) return;
-
-          const originName =
-            item.item_data?.shipper_name ||
-            item.item_data?.origin_name ||
-            "TBA";
-          const destinationName =
-            item.item_data?.recipient_name ||
-            item.item_data?.destination_name ||
-            "TBA";
-          const routeStr = `${originName} → ${destinationName}`;
-
-          const jos = item.job_orders || [];
-          const rawItemStatus = item.status?.toLowerCase();
-          const rawWoStatus = wo.status?.toLowerCase();
-          const isRejected =
-            rawItemStatus === "rejected" || rawWoStatus === "rejected";
-
-          const dealPrice = Number(
-            item.total_revenue || item.item_data?.deal_price || 0,
-          );
-          const totalJOsInItem = jos.length || 1;
-          const arShare = dealPrice / totalJOsInItem;
-
-          if (jos.length === 0) {
-            const hasRejectedFilter =
-              activeStatusFilters.length === 0 ||
-              activeStatusFilters.includes("rejected") ||
-              activeStatusFilters.includes("cancelled") ||
-              activeStatusFilters.includes("dibatalkan");
-            if (isRejected && hasRejectedFilter) {
-              flattened.push({
-                id: `item-${item.id}`,
-                wo_number: wo.wo_number,
-                jo_number: "REJECTED_WO",
-                company_name:
-                  wo.customers?.legal_name || wo.customers?.name || "-",
-                jo_status: "DIBATALKAN",
-                route: routeStr,
-                fleet_info: "N/A (Rejected)",
-                vendor_name: "N/A",
-                ar_total: arShare,
-                ap_total: 0,
-                cash_advance: 0,
-                total_cost: 0,
-                gross_margin: arShare,
-                truck_type: itemTruckType,
-              });
-            }
-            return;
-          }
-
-          jos.forEach((jo: any) => {
-            const joStatus = jo.status?.toLowerCase();
-            if (
-              activeStatusFilters.length > 0 &&
-              !activeStatusFilters.includes(joStatus)
-            )
-              return;
-
-            const isInternal =
-              !jo.fleets?.companies ||
-              jo.fleets?.companies?.name?.toLowerCase().includes("sentralogis");
-            if (transporterFilter !== "all") {
-              if (transporterFilter === "internal" && !isInternal) return;
-              if (transporterFilter === "vendor" && isInternal) return;
-            }
-
-            const cashTotal = Number(jo.advance_amount || 0);
-            const apTotal = Number(jo.purchase_price || jo.vendor_price || 0);
-            const totalCost = isInternal ? cashTotal : apTotal;
-            const grossMargin = arShare - totalCost;
-
-            flattened.push({
-              id: jo.id,
-              wo_number: wo.wo_number,
-              jo_number: jo.jo_number,
-              company_name:
-                wo.customers?.legal_name || wo.customers?.name || "-",
-              jo_status: formatJoStatus(jo.status),
-              route: routeStr,
-              fleet_info: jo.fleets?.plate_number || "Internal",
-              vendor_name: jo.fleets?.companies?.name || "N/A",
-              ar_total: arShare,
-              ap_total: apTotal,
-              cash_advance: cashTotal,
-              total_cost: totalCost,
-              gross_margin: grossMargin,
-              truck_type: itemTruckType,
-            });
-          });
-        });
-      });
-
-      // [AI] Apply pagination after flattening
-      const totalRecords = flattened.length;
-      setTotalRecords(totalRecords);
+      setTotalRecords(flattened.length);
       setAllData(flattened);
     } catch (err: unknown) {
       console.error("[AI] Sync error: ", err);
