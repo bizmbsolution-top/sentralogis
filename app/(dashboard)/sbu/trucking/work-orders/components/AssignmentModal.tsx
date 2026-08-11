@@ -1034,16 +1034,17 @@ export default function AssignmentModal({
     return filteredDrivers.map((d) => {
       const isBusy = d.status === "on_road" && assign.driver_id !== d.id;
       const readiness = driverReadiness[d.id];
-      const notReady = readiness && !readiness.ready && !isBusy;
+      const notReady = readiness && !readiness.ready;
+      const statusText = d.status?.toUpperCase() || "AVAILABLE";
       return {
         value: d.id,
         label: d.name,
         description: isBusy
           ? "BUSY / ON ROAD"
           : notReady
-            ? readiness.reason.toUpperCase()
-            : d.status?.toUpperCase() || "AVAILABLE",
-        disabled: isBusy || notReady,
+            ? `${statusText} · ${readiness.reason.toUpperCase()}`
+            : statusText,
+        disabled: isBusy,
       };
     });
   };

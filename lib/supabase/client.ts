@@ -1,7 +1,8 @@
+import { createBrowserClient } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 
-let clientInstance: ReturnType<typeof createSupabaseClient<Database>> | null = null;
+let clientInstance: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
 export function createClient() {
   if (typeof window === 'undefined') return createSupabaseClient<Database>(
@@ -18,32 +19,17 @@ export function createClient() {
     console.warn("Supabase keys are missing in the browser environment.");
   }
 
-  clientInstance = createSupabaseClient<Database>(url, key, {
+  // [FIX] Use @supabase/ssr createBrowserClient (cookie-based) so server
+  // actions / route handlers using lib/supabase/server.ts (createServerClient,
+  // cookie-based) can see the authenticated session (auth.uid()).
+  // Previously the session lived only in localStorage ('sentralogis-auth'),
+  // so server-side auth.uid() was always NULL → RLS INSERTs failed with 42501.
+  clientInstance = createBrowserClient<Database>(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storageKey: 'sentralogis-auth',
       flowType: 'hash',
-      storage: {
-        getItem: (key) => {
-          try {
-            return localStorage.getItem(key)
-          } catch {
-            return null
-          }
-        },
-        setItem: (key, value) => {
-          try {
-            localStorage.setItem(key, value)
-          } catch {}
-        },
-        removeItem: (key) => {
-          try {
-            localStorage.removeItem(key)
-          } catch {}
-        }
-      }
     },
     global: {
       headers: {
@@ -51,7 +37,7 @@ export function createClient() {
       }
     }
   });
-  
+
   return clientInstance;
 }
 
