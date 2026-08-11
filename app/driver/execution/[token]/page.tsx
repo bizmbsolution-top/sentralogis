@@ -581,7 +581,7 @@ export default function JoExecutionPage({
 
   return (
     <div className="min-h-[100dvh] bg-slate-50 text-slate-900 pb-32">
-      <Toaster position="top-center" />
+      <Toaster position="top-center" containerStyle={{ top: 70 }} />
 
       {/* Top Bar */}
       <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-40 flex items-center justify-between">

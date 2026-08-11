@@ -74,10 +74,17 @@ class NativeGpsManagerClass {
     if (!isNativeApp) return;
     if (!NativeGps) return;
     
-    this.consumers.add(consumerId);
-    const isFirst = this.consumers.size === 1;
+    const alreadyRegistered = this.consumers.has(consumerId);
     const jobIdChanged = this.activeJobId !== jobId && jobId !== "unknown" && jobId != null;
     
+    if (alreadyRegistered && !jobIdChanged) {
+      // Nothing changed for this consumer, just notify
+      this.notifySubscribers();
+      return;
+    }
+
+    const isFirst = !alreadyRegistered && this.consumers.size === 0;
+    this.consumers.add(consumerId);
     this.activeJobId = jobId;
     
     if (isFirst || jobIdChanged) {

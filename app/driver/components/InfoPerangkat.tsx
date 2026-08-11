@@ -285,9 +285,12 @@ export default function InfoPerangkat({
   } else if (gpsStatus === "loading" || gpsStatus === undefined) {
     gpsTone = "neutral";
     gpsLabel = "Memeriksa...";
-  } else if (gpsStatus === "error" || gpsStatus === "recovering") {
+  } else if (gpsStatus === "error") {
     gpsTone = "err";
-    gpsLabel = "Tidak aktif";
+    gpsLabel = "ERROR - Java Plugin Failed";
+  } else if (gpsStatus === "recovering") {
+    gpsTone = "warn";
+    gpsLabel = "Memulihkan GPS...";
   } else {
     gpsTone = "warn";
     gpsLabel = "Belum mendapatkan lokasi";

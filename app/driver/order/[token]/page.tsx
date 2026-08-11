@@ -257,7 +257,7 @@ export default function JoConfirmationPage({
 
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white p-6 flex flex-col justify-between relative overflow-hidden">
-      <Toaster position="top-center" />
+      <Toaster position="top-center" containerStyle={{ top: 70 }} />
 
       {/* Header */}
       <div>
