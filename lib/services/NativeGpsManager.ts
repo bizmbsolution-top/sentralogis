@@ -75,16 +75,16 @@ class NativeGpsManagerClass {
     if (!NativeGps) return;
     
     this.consumers.add(consumerId);
+    const isFirst = this.consumers.size === 1;
+    const jobIdChanged = this.activeJobId !== jobId && jobId !== "unknown" && jobId != null;
+    
     this.activeJobId = jobId;
     
-    console.log(`[GPS-MANAGER] register consumer: ${consumerId}`);
-    console.log(`[GPS-MANAGER] consumer count: ${this.consumers.size}`);
-    
-    if (this.consumers.size === 1) {
-      this.setState({ status: "loading" });
+    if (isFirst || jobIdChanged) {
+      if (isFirst) this.setState({ status: "loading" });
       await this.startTracking();
     } else {
-      // Already running, just broadcast current state
+      // Already running with same jobId, just broadcast current state
       console.log(`[GPS-MANAGER] service active: true, attaching new consumer ${consumerId}`);
       this.notifySubscribers();
     }
