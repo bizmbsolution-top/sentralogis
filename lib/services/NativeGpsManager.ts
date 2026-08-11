@@ -58,7 +58,7 @@ class NativeGpsManagerClass {
 
   public subscribe(callback: StateSubscriber): () => void {
     this.subscribers.add(callback);
-    callback(this.state);
+    callback(this.state); // Instantly emit current state to new subscriber
     return () => {
       this.subscribers.delete(callback);
     };
@@ -69,7 +69,9 @@ class NativeGpsManagerClass {
   }
 
   public async registerConsumer(consumerId: string, jobId: string) {
-    if (typeof window === "undefined" || !Capacitor.isNativePlatform()) return;
+    if (typeof window === "undefined") return;
+    const isNativeApp = Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp');
+    if (!isNativeApp) return;
     if (!NativeGps) return;
     
     this.consumers.add(consumerId);
@@ -89,7 +91,9 @@ class NativeGpsManagerClass {
   }
 
   public async unregisterConsumer(consumerId: string) {
-    if (typeof window === "undefined" || !Capacitor.isNativePlatform()) return;
+    if (typeof window === "undefined") return;
+    const isNativeApp = Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp');
+    if (!isNativeApp) return;
     
     const existed = this.consumers.delete(consumerId);
     if (!existed) return;
