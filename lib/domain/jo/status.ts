@@ -111,6 +111,31 @@ export function isJoActive(status: string | null | undefined): boolean {
   return categorizeJoStatus(status) === 'active';
 }
 
+/**
+ * Statuses that are considered terminal (done/rejected/draft) — used to narrow
+ * SQL queries before filtering in JS with `isJoTrackableStatus`.
+ */
+export const JO_TERMINAL_STATUSES = [
+  ...JO_DONE_STATUSES,
+  ...JO_REJECTED_STATUSES,
+  'DRAFT',
+] as const;
+
+/**
+ * Case-insensitive check for statuses where a fleet's GPS should keep flowing
+ * into `job_tracking` (JO-level radar / customer track / GPS report).
+ * Covers 'assigned', 'in_progress', and every active variant (MENUJU …,
+ * TIBA DI …, DALAM PERJALANAN, ORDER DITERIMA, etc.).
+ */
+export function isJoTrackableStatus(status: string | null | undefined): boolean {
+  const s = normalizeStatus(status);
+  if (!s || s === 'DRAFT') return false;
+  if ((JO_DONE_STATUSES as readonly string[]).includes(s)) return false;
+  if ((JO_REJECTED_STATUSES as readonly string[]).includes(s)) return false;
+  if (s === 'ASSIGNED' || s === 'IN_PROGRESS' || s === 'DISPATCHED') return true;
+  return categorizeJoStatus(status) === 'active';
+}
+
 /** JOs that still occupy fleet/driver on this WO item (not terminal states). */
 export function isJoBlockingAsset(status: string | null | undefined): boolean {
   const s = normalizeStatus(status);

@@ -2,6 +2,7 @@
 // Returns fleet status combined with GPS live data (supports cross-tenant vendor fleets)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isJoTrackableStatus, JO_TERMINAL_STATUSES } from '@/lib/domain/jo/status';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,16 +56,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 4. Get active JOs per fleet
-    const { data: activeJOs } = await supabase
+    // 4. Get active JOs per fleet (case-insensitive trackable set)
+    const { data: allNonTerminalJOs } = await supabase
       .from('job_orders')
       .select('id, fleet_id, jo_number, status')
       .eq('tenant_id', tenantId)
-      .in('status', ['ASSIGNED', 'DALAM PERJALANAN', 'DISPATCHED']);
+      .not('status', 'in', [...(JO_TERMINAL_STATUSES as readonly string[])]);
 
     const joMap = new Map<string, any[]>();
-    for (const jo of activeJOs || []) {
+    for (const jo of allNonTerminalJOs || []) {
       if (!jo.fleet_id) continue;
+      if (!isJoTrackableStatus(jo.status)) continue;
       const list = joMap.get(jo.fleet_id) || [];
       list.push(jo);
       joMap.set(jo.fleet_id, list);

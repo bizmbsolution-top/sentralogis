@@ -406,7 +406,11 @@ export async function PATCH(
         console.log(`[API] GPS_RECORD_INSERTED job_order_id=${jo.id} source=${pingPayload.source}`);
 
         // 2b. Upsert fleet_gps_status so Fleet Performance shows phone GPS
-        if (jo.fleet_id && jo.tenant_id) {
+        // [FIX] Skip for EasyGo-synced fleets — the hardware feed (provider='easygo',
+        // engine_on/fuel_level/odometer) is authoritative. Phone still writes
+        // job_tracking + tracking_points for JO-level tracking.
+        const isEasyGoFleet = !!(jo.fleet?.easygo_vehicle_id);
+        if (jo.fleet_id && jo.tenant_id && !isEasyGoFleet) {
           const nSpeed = Number(speed) || 0;
           const gpsSource = source || "pwa";
           try {

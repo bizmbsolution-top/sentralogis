@@ -106,8 +106,8 @@ export class DriverPortalQuery {
     }
 
     if (jobOrder.fleet_id) {
-      const { data } = await this.supabase.from("md_fleets").select("id, plate_number, md_fleet_types!fleet_type_id(type_name)").eq("id", jobOrder.fleet_id).maybeSingle();
-      if (data) fleetInfo = { plate_number: data.plate_number, type_name: (data as any).md_fleet_types?.type_name || "Truck" };
+      const { data } = await this.supabase.from("md_fleets").select("id, plate_number, easygo_vehicle_id, md_fleet_types!fleet_type_id(type_name)").eq("id", jobOrder.fleet_id).maybeSingle();
+      if (data) fleetInfo = { plate_number: data.plate_number, type_name: (data as any).md_fleet_types?.type_name || "Truck", easygo_vehicle_id: data.easygo_vehicle_id || null };
     }
 
     let tenantName = "SENTRALOGIS";

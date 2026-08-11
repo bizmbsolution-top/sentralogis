@@ -3,6 +3,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { EasyGoClient, EasyGoVehicle, EasyGoLastPosition } from '@/src/infrastructure/external/EasyGoClient';
+import { isJoTrackableStatus } from '@/lib/domain/jo/status';
 
 export interface SyncVehiclesResult {
   created: number;
@@ -412,14 +413,19 @@ export class EasyGoSyncService {
             }
           }
 
-          // Insert GPS point to job_tracking (if there's an active JO)
-          const { data: activeJO } = await this.supabase
+          // Insert GPS point to job_tracking (if there's a live JO for this fleet)
+          // [FIX] Case-insensitive active check via isJoTrackableStatus — previously
+          // only ['assigned','in_progress','DISPATCHED'] matched, so EasyGo stopped
+          // writing job_tracking once the JO moved to uppercase statuses like
+          // MENUJU …/TIBA DI …/DALAM PERJALANAN → JO radar/customer track froze.
+          const { data: recentJOs } = await this.supabase
             .from('job_orders')
-            .select('id')
+            .select('id, status')
             .eq('fleet_id', fleet.id)
-            .in('status', ['assigned', 'in_progress', 'DISPATCHED'])
-            .limit(1)
-            .single();
+            .order('updated_at', { ascending: false })
+            .limit(10);
+
+          const activeJO = (recentJOs || []).find((j) => isJoTrackableStatus(j.status));
 
           if (activeJO) {
             const { error: jtError } = await this.supabase.from('job_tracking').insert({
