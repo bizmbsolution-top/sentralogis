@@ -83,7 +83,6 @@ export function getAdvancedJobCategory(jo: {
   driver_phone?: string;
 }): 'rejected' | 'completed' | 'active' | 'assigned' | 'awaiting' {
   const s = (jo.status || '').toUpperCase();
-  const dr = (jo.driver_response || '').toLowerCase();
 
   // Rejected must come first so they aren't masked by assigned logic
   if ((JO_REJECTED_STATUSES as readonly string[]).includes(s)) return 'rejected';
@@ -92,7 +91,12 @@ export function getAdvancedJobCategory(jo: {
   // [FIX] Active status ONLY counts if the JO has an actual asset assigned (driver or fleet or transporter)
   // Prevents orphaned JOs (null driver/fleet) from appearing as "On Journey"
   const hasAsset = jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone;
-  if (hasAsset && ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || dr === 'accepted' || s.startsWith('TIBA DI') || s.startsWith('MENUJU'))) return 'active';
+  // [FIX] driver_response is written at JO creation by saveAssignments (draft AND
+  // confirm), so 'accepted' alone must NOT imply an active/on-journey job — a
+  // pending/assigned JO with driver_response='accepted' is still waiting to start.
+  // "On Journey" is determined by the actual transit status only (JO_ACTIVE_STATUSES
+  // / TIBA DI … / MENUJU …), matching the status-based logic on the SBU work-orders page.
+  if (hasAsset && ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || s.startsWith('TIBA DI') || s.startsWith('MENUJU'))) return 'active';
   
   if ((jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone || s === 'ASSIGNED') && !(JO_DONE_STATUSES as readonly string[]).includes(s) && !(JO_ACTIVE_STATUSES as readonly string[]).includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
   
