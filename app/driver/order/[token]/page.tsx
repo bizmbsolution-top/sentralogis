@@ -14,9 +14,11 @@ import {
   XCircle,
   ArrowLeft,
   ShieldCheck,
+  Info,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
+import InfoPerangkat from "../../components/InfoPerangkat";
 
 interface RouteStop {
   id: string;
@@ -55,6 +57,7 @@ interface JobOrder {
     type_name?: string;
   };
   tenant_id?: string;
+  tenant_name?: string;
   routes: RouteStop[];
 }
 
@@ -72,6 +75,7 @@ export default function JoConfirmationPage({
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<"accept" | "reject" | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // 1. Session & Auth Check
   useEffect(() => {
@@ -257,12 +261,21 @@ export default function JoConfirmationPage({
 
       {/* Header */}
       <div>
-        <button
-          onClick={() => router.push("/driver/portal")}
-          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white mb-6 uppercase tracking-wider transition-colors"
-        >
-          <ArrowLeft size={16} /> Driver Portal
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push("/driver/portal")}
+            className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+          >
+            <ArrowLeft size={16} /> Driver Portal
+          </button>
+          <button
+            onClick={() => setInfoOpen(true)}
+            className="w-8 h-8 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-all"
+            title="Info Perangkat"
+          >
+            <Info size={14} />
+          </button>
+        </div>
 
         <div className="bg-slate-900/90 backdrop-blur-xl rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-6">
           <div className="flex justify-between items-start">
@@ -420,6 +433,12 @@ export default function JoConfirmationPage({
             )}
           </button>
         </div>
+
+        <InfoPerangkat
+          open={infoOpen}
+          onClose={() => setInfoOpen(false)}
+          tenantName={jobOrder.tenant_name}
+        />
       </div>
     </div>
   );

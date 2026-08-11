@@ -119,6 +119,13 @@ export default function DriverPortal() {
   const [activeShift, setActiveShift] = useState<any>(null);
   const [fetchingFleets, setFetchingFleets] = useState(false);
 
+  // GPS States
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
+  const [gpsBattery, setGpsBattery] = useState<number | null>(null);
+  const [gpsPingCount, setGpsPingCount] = useState(0);
+
   // Daily Inspection States
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
   const [inspectionData, setInspectionData] = useState({
@@ -453,14 +460,24 @@ export default function DriverPortal() {
       fetchJobOrders();
     }
   };
+  const isNativeApp = typeof window !== 'undefined' ? (Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp')) : false;
 
   useDriverGpsPing(
     gpsPingToken,
     gpsPingJob?.status,
     step !== "auth" && !!driver?.id,
     useCallback((evt: any) => onGeofenceRef.current(evt), []),
+    gpsPingJob?.started_at || null,
+    isNativeApp,
+    undefined,
+    (state) => {
+      if (state.status && state.status !== "recovering") setGpsStatus(state.status);
+      if (state.accuracy !== undefined) setGpsAccuracy(state.accuracy);
+      if (state.battery !== undefined) setGpsBattery(state.battery);
+      if (state.speed !== undefined) setGpsSpeed(state.speed);
+      if (state.pingCount !== undefined) setGpsPingCount(state.pingCount);
+    }
   );
-
   const fetchTotalKM = async () => {
     if (!driver?.id) return;
     const { data: allJobs } = await supabase

@@ -419,23 +419,26 @@ export function useDriverGpsPing(
     };
 
     if (isNative) {
-      console.log("[GPS Native] isNativePlatform = true");
+      console.log("[NATIVE-GPS] native detected: true");
+      console.log(`[NATIVE-GPS] tracking requested: ${token}`);
       const startNativeGps = async () => {
         try {
           const { Geolocation } = await import("@capacitor/geolocation");
           const perm = await Geolocation.checkPermissions();
-          console.log(`[GPS Native] Permission before request = ${perm.location}`);
+          console.log(`[NATIVE-GPS] permission check = ${perm.location}`);
           
           if (perm.location !== "granted") {
             const req = await Geolocation.requestPermissions();
-            console.log(`[GPS Native] Permission request result = ${req.location}`);
+            console.log(`[NATIVE-GPS] permission request result = ${req.location}`);
             if (req.location !== "granted") {
-              console.warn("[GPS Native] Location permission denied");
+              console.warn("[NATIVE-GPS] Location permission denied. Retrying native request in 10s.");
+              emitPingState({ status: "error" });
+              setTimeout(startNativeGps, 10000);
               return;
             }
           }
-          console.log("[GPS Native] Location permission granted");
-          console.log("[GPS Native] Starting Foreground Service");
+          console.log("[NATIVE-GPS] permission: GRANTED");
+          console.log("[NATIVE-GPS] tracking started: Foreground Service");
           await NativeGps.startTracking({
             jobId: token,
             apiUrl: window.location.origin,
@@ -443,7 +446,21 @@ export function useDriverGpsPing(
 
           if (!listenerRef.current) {
             listenerRef.current = await NativeGps.addListener("onLocationUpdate", (data: any) => {
-              console.log(`[GPS Native] Location received = ${data.latitude}, ${data.longitude}`);
+              console.log(`[NATIVE-GPS] latitude: ${data.latitude}`);
+              console.log(`[NATIVE-GPS] longitude: ${data.longitude}`);
+              console.log(`[NATIVE-GPS] accuracy: ${data.accuracy}`);
+              console.log(`[NATIVE-GPS] recorded_at: ${new Date().toISOString()}`);
+              
+              pingCountRef.current += 1;
+              emitPingState({
+                status: "active",
+                accuracy: data.accuracy ?? null,
+                speed: data.speed ?? null,
+                battery: data.battery ?? null,
+                pingCount: pingCountRef.current,
+                consecutiveFailures: 0
+              });
+
               if (typeof window !== "undefined") {
                 window.dispatchEvent(
                   new CustomEvent("sentralogis:native_gps_update", {
@@ -454,7 +471,7 @@ export function useDriverGpsPing(
             });
           }
         } catch (e) {
-          console.error("[GPS Native] Error starting tracking. Bridge might be uninitialized. Retrying in 3s...", e);
+          console.error("[NATIVE-GPS] Error starting tracking. Bridge might be uninitialized. Retrying in 3s...", e);
           setTimeout(startNativeGps, 3000);
         }
       };

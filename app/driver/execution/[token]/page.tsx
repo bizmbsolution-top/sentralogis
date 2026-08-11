@@ -31,6 +31,7 @@ import {
   Coins,
   ArrowLeft,
   AlertOctagon,
+  Info,
 } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
 import { useGoogleMaps } from "@/lib/google-maps-context";
@@ -41,10 +42,11 @@ import {
   DirectionsRenderer,
 } from "@react-google-maps/api";
 import { useDriverGpsPing, isActiveTransitStatus } from "@/lib/hooks/useDriverGpsPing";
-import { parseUTC } from "@/lib/utils/dateUtils";
+import { formatDateUTC } from "@/lib/utils/dateUtils";
 import DriverReadinessGate from "../../../jo/[token]/components/DriverReadinessGate";
 import { useTTS } from "@/lib/hooks/useTTS";
 import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
+import InfoPerangkat from "../../components/InfoPerangkat";
 
 interface RouteStop {
   id: string;
@@ -103,6 +105,7 @@ interface JobOrder {
   advance_status?: string;
   assignment_documents?: any[];
   routes: RouteStop[];
+  tracking_logs?: any[];
 }
 
 export default function JoExecutionPage({
@@ -144,6 +147,16 @@ export default function JoExecutionPage({
   } | null>(null);
 
   const [isBlocked, setIsBlocked] = useState(false);
+
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  const [remarkText, setRemarkText] = useState<Record<string, string>>({});
+  const [sosOpen, setSosOpen] = useState(false);
+  const [sosCategory, setSosCategory] = useState("general");
+  const [sosDescription, setSosDescription] = useState("");
+  const [sosLoading, setSosLoading] = useState(false);
+  const [directionsResponse, setDirectionsResponse] = useState<any>(null);
+  
 
   // 1. Session Auth Check
   useEffect(() => {
@@ -193,15 +206,93 @@ export default function JoExecutionPage({
     fetchJobOrder();
   }, [fetchJobOrder]);
 
+  // Live driver position watcher for map
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    let cancelled = false;
+    const onPos = (pos: GeolocationPosition) => {
+      if (cancelled) return;
+      setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    };
+    const onErr = () => {};
+    navigator.geolocation.getCurrentPosition(onPos, onErr, {
+      enableHighAccuracy: true,
+      maximumAge: 10000,
+      timeout: 15000,
+    });
+    const watchId = navigator.geolocation.watchPosition(onPos, onErr, {
+      enableHighAccuracy: true,
+      maximumAge: 10000,
+      timeout: 20000,
+    });
+    return () => {
+      cancelled = true;
+      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
+
+  const routeStopsWithCoords = (jobOrder?.routes || []).filter(
+    (s) => s.latitude && s.longitude,
+  );
+  const firstStopPos =
+    routeStopsWithCoords.length > 0
+      ? {
+          lat: Number(routeStopsWithCoords[0].latitude),
+          lng: Number(routeStopsWithCoords[0].longitude),
+        }
+      : { lat: -6.2, lng: 106.8 };
+  const mapCenter = driverPosition || firstStopPos;
+  const polylinePath = routeStopsWithCoords.map((s) => ({
+    lat: Number(s.latitude),
+    lng: Number(s.longitude),
+  }));
+
+  // Fetch real driving route (follows roads) between stops
+  useEffect(() => {
+    if (
+      !isLoaded ||
+      routeStopsWithCoords.length < 2 ||
+      typeof google === "undefined"
+    )
+      return;
+    const dirService = new google.maps.DirectionsService();
+    const origin = driverPosition || {
+      lat: Number(routeStopsWithCoords[0].latitude),
+      lng: Number(routeStopsWithCoords[0].longitude),
+    };
+    const last = routeStopsWithCoords[routeStopsWithCoords.length - 1];
+    const destination = { lat: Number(last.latitude), lng: Number(last.longitude) };
+    const waypoints = routeStopsWithCoords.slice(1, -1).map((s) => ({
+      location: { lat: Number(s.latitude), lng: Number(s.longitude) },
+      stopover: true,
+    }));
+    dirService.route(
+      {
+        origin,
+        destination,
+        waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResponse(result);
+        }
+      },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, JSON.stringify(polylinePath)]);
+
   // Active GPS tracking hook
   const activeGpsToken = jobOrder?.id || token;
+  const isNativeApp = typeof window !== 'undefined' ? (Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp')) : false;
+
   useDriverGpsPing(
     activeGpsToken,
     jobOrder?.status,
-    readinessComplete && !!jobOrder,
+    !!jobOrder && (readinessComplete || (jobOrder.status || "").toUpperCase() !== "ASSIGNED"),
     undefined,
     jobOrder?.started_at,
-    null,
+    isNativeApp,
     undefined,
     (state) => {
       if (state.status && state.status !== "recovering") setGpsStatus(state.status);
@@ -273,6 +364,161 @@ export default function JoExecutionPage({
     }
   };
 
+  const handlePhotoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    routeId: string,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    setPhotoLoading(routeId);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetch(`/api/jo/${token}`, {
+        method: "PATCH",
+        headers: {
+          "X-Driver-ID": session.driver_id,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route_id: routeId,
+          pod_photo_base64: base64,
+          pod_photo_name: file.name,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Gagal simpan foto");
+      }
+
+      toast.success("Foto lokasi berhasil diunggah");
+      await fetchJobOrder();
+    } catch (err: any) {
+      toast.error("Error foto: " + err.message);
+    } finally {
+      setPhotoLoading(null);
+      e.target.value = "";
+    }
+  };
+
+  const openNavigation = (stop: RouteStop) => {
+    if (!stop.latitude || !stop.longitude) {
+      toast.error("Lokasi tujuan tidak memiliki koordinat");
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${stop.latitude},${stop.longitude}&travelmode=driving`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleRemarkSubmit = async (routeId: string) => {
+    if (!session) return;
+    const note = (remarkText[routeId] || "").trim();
+    if (!note) return;
+    setUpdating("remark_" + routeId);
+    try {
+      let lat: number | null = null;
+      let lng: number | null = null;
+      if (navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            () => resolve(null),
+            { timeout: 5000 },
+          );
+        });
+        if (pos) {
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        }
+      }
+
+      const response = await fetch(`/api/jo/${token}`, {
+        method: "PATCH",
+        headers: {
+          "X-Driver-ID": session.driver_id,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "add_timeline_event",
+          route_id: routeId,
+          route_notes: note,
+          lat,
+          lng,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Gagal menyimpan remarks");
+      }
+
+      toast.success("Remarks berhasil dikirim");
+      setRemarkText((prev) => ({ ...prev, [routeId]: "" }));
+      await fetchJobOrder();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyimpan remarks");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleSOSSubmit = async () => {
+    if (!session) return;
+    setSosLoading(true);
+    try {
+      let lat: number | null = null;
+      let lng: number | null = null;
+      if (navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            () => resolve(null),
+            { timeout: 5000 },
+          );
+        });
+        if (pos) {
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        }
+      }
+
+      const response = await fetch(`/api/jo/${token}`, {
+        method: "PATCH",
+        headers: {
+          "X-Driver-ID": session.driver_id,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "panic_button",
+          panic_type: sosCategory,
+          reason: sosDescription || "Kondisi Darurat di Jalan",
+          lat,
+          lng,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Gagal mengirim SOS");
+      }
+
+      toast.success("🚨 SOS DITERIMA HEAD OPS HQ!", { duration: 6000 });
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+      setSosOpen(false);
+      setSosDescription("");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengirim SOS");
+    } finally {
+      setSosLoading(false);
+    }
+  };
+
   if (sessionLoading || loading) {
     return (
       <div className="min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center p-6 text-white">
@@ -334,55 +580,151 @@ export default function JoExecutionPage({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-950 text-white pb-32">
+    <div className="min-h-[100dvh] bg-slate-50 text-slate-900 pb-32">
       <Toaster position="top-center" />
 
       {/* Top Bar */}
-      <div className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-40 flex items-center justify-between">
+      <div className="bg-white border-b border-slate-200 p-4 sticky top-0 z-40 flex items-center justify-between">
         <button
           onClick={() => router.push("/driver/portal")}
-          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 uppercase tracking-wider transition-colors"
         >
           <ArrowLeft size={16} /> Portal
         </button>
-        <div className="text-center">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-            {jobOrder.jo_number}
-          </p>
-          <p className="text-xs font-bold text-white uppercase">
-            {jobOrder.fleet?.plate_number || "PELAKSANAN ORDER"}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-bold uppercase">
-          <Satellite size={12} className="animate-pulse" /> LIVE GPS
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setInfoOpen(true)}
+            className="w-8 h-8 bg-slate-100 border border-slate-300 text-slate-600 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-all"
+            title="Info Perangkat"
+          >
+            <Info size={14} />
+          </button>
         </div>
       </div>
 
-      {/* Telemetry Status Bar */}
-      <div className="bg-slate-900/50 p-3 border-b border-slate-800/80 grid grid-cols-3 gap-2 text-center">
-        <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">GPS Pings</p>
-          <p className="text-xs font-black text-emerald-400">{gpsPingCount} Pings</p>
-        </div>
-        <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Akurasi</p>
-          <p className="text-xs font-black text-blue-400">
-            {gpsAccuracy !== null ? `±${Math.round(gpsAccuracy)}m` : "Optimal"}
+      {/* Header Card: JO ID + Fleet + Live GPS */}
+      <div className="p-4 max-w-lg mx-auto">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm text-center">
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">
+            {jobOrder.jo_number}
           </p>
+          <p className="text-sm font-bold text-slate-900 uppercase mb-2">
+            {jobOrder.fleet?.plate_number || "PELAKSANAN ORDER"}
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-700 text-[10px] font-bold uppercase">
+            <Satellite size={10} className="animate-pulse" /> LIVE GPS
+          </div>
         </div>
-        <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Status</p>
-          <p className="text-xs font-black text-purple-400">BERJALAN</p>
+      </div>
+
+      {/* Live Driver Map */}
+      <div className="p-4 pb-0 max-w-lg mx-auto">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+              <Satellite size={16} className="text-blue-500" /> Peta Lokasi Driver
+            </h3>
+            <span
+              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                driverPosition
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "bg-slate-100 text-slate-500 border border-slate-200"
+              }`}
+            >
+               {driverPosition ? "LIVE" : "MENCARI SINYAL..."}
+            </span>
+          </div>
+          <div className="h-64 rounded-2xl overflow-hidden border border-slate-200 relative bg-slate-50">
+            {isLoaded ? (
+              <GoogleMap
+                mapContainerStyle={{ width: "100%", height: "100%" }}
+                center={mapCenter}
+                zoom={driverPosition ? 14 : 11}
+                options={{
+                  disableDefaultUI: false,
+                  zoomControl: true,
+                  mapTypeControl: false,
+                  streetViewControl: false,
+                  fullscreenControl: true,
+                }}
+              >
+                {directionsResponse ? (
+                  <DirectionsRenderer
+                    directions={directionsResponse}
+                    options={{
+                      suppressMarkers: true,
+                      polylineOptions: {
+                        strokeColor: "#6366f1",
+                        strokeOpacity: 0.9,
+                        strokeWeight: 5,
+                      },
+                    }}
+                  />
+                ) : (
+                  polylinePath.length > 1 && (
+                    <PolylineF
+                      path={polylinePath}
+                      options={{
+                        strokeColor: "#6366f1",
+                        strokeOpacity: 0.85,
+                        strokeWeight: 4,
+                      }}
+                    />
+                  )
+                )}
+                {routeStopsWithCoords.map((stop, i) => (
+                  <MarkerF
+                    key={stop.id}
+                    position={{
+                      lat: Number(stop.latitude),
+                      lng: Number(stop.longitude),
+                    }}
+                    label={{
+                      text: String(i + 1),
+                      color: "#ffffff",
+                      fontWeight: "bold",
+                      fontSize: "11px",
+                    }}
+                  />
+                ))}
+                {driverPosition && (
+                  <MarkerF
+                    position={driverPosition}
+                    icon={
+                      typeof window !== "undefined" && window.google
+                        ? {
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            scale: 10,
+                            fillColor: "#3b82f6",
+                            fillOpacity: 1,
+                            strokeColor: "#ffffff",
+                            strokeWeight: 3,
+                          }
+                        : undefined
+                    }
+                    title="Lokasi Anda"
+                  />
+                )}
+              </GoogleMap>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                <p className="text-[10px] font-bold text-slate-500 uppercase ml-2">
+                  Memuat Peta...
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Execution Tracking UI */}
       <div className="p-4 space-y-6 max-w-lg mx-auto">
         {/* Container & Seal Form (if applicable) */}
-        <div className="bg-slate-900 rounded-3xl p-5 border border-slate-800 space-y-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 space-y-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <Box size={18} className="text-indigo-400" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-300">
+            <Box size={18} className="text-indigo-600" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
               Data Kontainer & Seal
             </h3>
           </div>
@@ -396,7 +738,7 @@ export default function JoExecutionPage({
                 value={containerNo}
                 onChange={(e) => setContainerNo(e.target.value.toUpperCase())}
                 placeholder="SEAU1234567"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div>
@@ -408,7 +750,7 @@ export default function JoExecutionPage({
                 value={sealNo}
                 onChange={(e) => setSealNo(e.target.value.toUpperCase())}
                 placeholder="SL890123"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
@@ -422,12 +764,12 @@ export default function JoExecutionPage({
         </div>
 
         {/* Route Stops Progress */}
-        <div className="bg-slate-900 rounded-3xl p-5 border border-slate-800 space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
-            <MapPin size={18} className="text-emerald-400" /> Progress Rute & Perjalanan
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 space-y-4 shadow-sm">
+          <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+            <MapPin size={18} className="text-emerald-500" /> Progress Rute & Perjalanan
           </h3>
 
-          <div className="space-y-4 relative before:absolute before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-800">
+          <div className="space-y-4 relative before:absolute before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
             {jobOrder.routes?.map((stop, idx) => {
               const isDone = stop.status === "completed";
               const isArrived = stop.status === "arrived";
@@ -439,33 +781,140 @@ export default function JoExecutionPage({
                       isDone
                         ? "bg-emerald-500 border-emerald-400"
                         : isArrived
-                        ? "bg-amber-500 border-amber-400"
-                        : "bg-slate-900 border-slate-700"
+                          ? "bg-amber-500 border-amber-400"
+                          : "bg-slate-300 border-slate-400"
                     }`}
                   />
 
-                  <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+                  <div className="bg-white/80 p-4 rounded-2xl border border-slate-200/80 space-y-2 shadow-sm">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
                           STOP {idx + 1} — {stop.stop_type}
                         </span>
-                        <h4 className="font-bold text-sm text-white">{stop.location_name}</h4>
+                        <h4 className="font-bold text-sm text-slate-900">{stop.location_name}</h4>
                       </div>
                       <span
                         className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
                           isDone
-                            ? "bg-emerald-500/20 text-emerald-400"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : isArrived
-                            ? "bg-amber-500/20 text-amber-400"
-                            : "bg-slate-800 text-slate-400"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : "bg-slate-100 text-slate-600 border border-slate-200"
                         }`}
                       >
                         {stop.status.toUpperCase()}
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-400">{stop.address}</p>
+                    <p className="text-xs text-slate-500">{stop.address}</p>
+
+                    {stop.contact_name && (
+                      <p className="text-xs text-slate-500">
+                        {stop.contact_name}
+                        {stop.contact_phone ? ` • ${stop.contact_phone}` : ""}
+                      </p>
+                    )}
+
+                    {/* Petunjuk (Directions) + Foto */}
+                    <div className="pt-1 flex gap-2">
+                      <button
+                        onClick={() => openNavigation(stop)}
+                        disabled={!stop.latitude || !stop.longitude}
+                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-slate-200"
+                      >
+                        <NavIcon size={13} /> Petunjuk
+                      </button>
+                      <label className="flex-1 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-indigo-200">
+                        <Camera size={13} />
+                        {photoLoading === stop.id ? "Upload..." : "Foto"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          disabled={photoLoading === stop.id}
+                          onChange={(e) => handlePhotoUpload(e, stop.id)}
+                        />
+                      </label>
+                    </div>
+
+                    {/* Photo thumbnails */}
+                    {((stop.route_photos && stop.route_photos.length > 0) ||
+                      stop.pod_photo_url) && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {stop.route_photos?.map((p) => (
+                          <img
+                            key={p.id}
+                            src={p.file_url}
+                            alt={p.document_name || "Foto lokasi"}
+                            className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer"
+                            onClick={() => setSelectedPhotoPreview(p.file_url)}
+                          />
+                        ))}
+                        {stop.pod_photo_url &&
+                          !stop.route_photos?.some((p) => p.file_url === stop.pod_photo_url) && (
+                            <img
+                              src={stop.pod_photo_url}
+                              alt="Foto lokasi terbaru"
+                              className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer"
+                              onClick={() => setSelectedPhotoPreview(stop.pod_photo_url!)}
+                            />
+                          )}
+                      </div>
+                    )}
+
+                    {/* Existing remarks */}
+                    {(jobOrder.tracking_logs || []).some(
+                      (log: any) => log.job_route_id === stop.id && log.notes,
+                    ) && (
+                      <div className="pt-1 space-y-1.5">
+                        {(jobOrder.tracking_logs || [])
+                          .filter((log: any) => log.job_route_id === stop.id && log.notes)
+                          .map((log: any) => (
+                            <div
+                              key={log.id}
+                              className="flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200"
+                            >
+                              <MessageSquare size={12} className="text-slate-500 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-[10px] text-slate-700 leading-snug">{log.notes}</p>
+                                {log.created_at && (
+                                  <p className="text-[9px] text-slate-500 mt-0.5">
+                                    {formatDateUTC(log.created_at)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Remarks input */}
+                    <div className="pt-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={remarkText[stop.id] || ""}
+                          onChange={(e) =>
+                            setRemarkText((prev) => ({
+                              ...prev,
+                              [stop.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Tulis remarks / catatan lokasi..."
+                          className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+                        />
+                        <button
+                          onClick={() => handleRemarkSubmit(stop.id)}
+                          disabled={updating === "remark_" + stop.id}
+                          className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl transition-all disabled:opacity-50 flex items-center justify-center"
+                          title="Kirim remarks"
+                        >
+                          <Send size={14} />
+                        </button>
+                      </div>
+                    </div>
 
                     {/* Action Buttons for Route Stop */}
                     {!isDone && (
@@ -497,6 +946,119 @@ export default function JoExecutionPage({
           </div>
         </div>
       </div>
+
+      {/* SOS Floating Button */}
+      <button
+        onClick={() => setSosOpen(true)}
+        className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/40 flex items-center justify-center active:scale-95 transition-all border-2 border-rose-400"
+        title="SOS Darurat"
+      >
+        <AlertOctagon size={24} />
+      </button>
+
+      {/* SOS Confirmation Modal */}
+      {sosOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-rose-200 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600">
+                <AlertOctagon size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  SOS Darurat
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  Kirim sinyal darurat ke Head Ops HQ
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                Kategori Darurat
+              </label>
+              <select
+                value={sosCategory}
+                onChange={(e) => setSosCategory(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-rose-500"
+              >
+                <option value="general">🚨 SINYAL DARURAT SOS</option>
+                <option value="swap_fleet">🚛 Minta Ganti Armada</option>
+                <option value="swap_driver">👤 Minta Ganti Supir</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                Keterangan
+              </label>
+              <textarea
+                value={sosDescription}
+                onChange={(e) => setSosDescription(e.target.value)}
+                rows={3}
+                placeholder="Jelaskan kondisi darurat Anda..."
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setSosOpen(false)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-slate-200"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSOSSubmit}
+                disabled={sosLoading}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sosLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <AlertOctagon size={14} />
+                )}
+                Kirim SOS
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Preview Modal */}
+      {selectedPhotoPreview && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setSelectedPhotoPreview(null)}
+        >
+          <div className="relative max-w-lg w-full">
+            <img
+              src={selectedPhotoPreview}
+              alt="Preview foto lokasi"
+              className="w-full rounded-2xl border border-slate-200"
+            />
+            <button
+              onClick={() => setSelectedPhotoPreview(null)}
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white text-slate-700 flex items-center justify-center border border-slate-300 shadow"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info Perangkat */}
+      <InfoPerangkat
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        gpsStatus={gpsStatus}
+        gpsAccuracy={gpsAccuracy}
+        gpsSpeed={gpsSpeed}
+        gpsPingCount={gpsPingCount}
+        tenantName={jobOrder.tenant_name}
+        isNative={isNative}
+      />
     </div>
   );
 }
