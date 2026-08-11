@@ -364,7 +364,8 @@ export function useDriverGpsPing(
   }, [emitPingState]);
 
   useEffect(() => {
-    const isNative = isNativeApp === true;
+    // FORCE PWA FALLBACK: Bypass Java plugin due to persistent bridge failures
+    const isNative = false; // isNativeApp === true;
 
     if (!enabled) {
       if (isNative) {
