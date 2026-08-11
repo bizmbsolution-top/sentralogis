@@ -67,7 +67,7 @@ export default function DeepLinkHandler() {
         // Prevent infinite loop: only redirect if we are not already on this path
         if (window.location.pathname !== path) {
           console.log('[DeepLinkHandler] Redirecting to:', path);
-          window.location.href = path;
+          router.push(path); // USE SPA ROUTING TO PRESERVE CAPACITOR BRIDGE
         }
       }
     } catch (err) {
