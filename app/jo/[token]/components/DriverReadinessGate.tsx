@@ -129,13 +129,12 @@ export default function DriverReadinessGate({
     const checkGps = async () => {
       try {
         if (isNative) {
-          // Native: use GpsPlugin.isGpsEnabled()
-          const { registerPlugin } = await import("@capacitor/core");
-          const NativeGps = registerPlugin<any>("NativeGps");
-          const result = await NativeGps.isGpsEnabled();
+          // Native: use NativeGpsManager.isGpsEnabled()
+          const { NativeGpsManager } = await import("@/lib/services/NativeGpsManager");
+          const enabled = await NativeGpsManager.isGpsEnabled();
           if (!cancelled) {
-            console.log(`[DRIVER_READY] GPS=${result.enabled ? "ON" : "OFF"}`);
-            setGpsEnabled(result.enabled);
+            console.log(`[DRIVER_READY] GPS=${enabled ? "ON" : "OFF"}`);
+            setGpsEnabled(enabled);
             setGpsChecking(false);
           }
         } else {
@@ -223,27 +222,12 @@ export default function DriverReadinessGate({
       // Native: Listen for GPS updates from native service
       const setupNativeListener = async () => {
         try {
-          const { registerPlugin } = await import("@capacitor/core");
-          const NativeGps = registerPlugin<any>("NativeGps");
-
-          // Request permissions first
-          const { Geolocation } = await import("@capacitor/geolocation");
-          const perm = await Geolocation.checkPermissions();
-          if (perm.location !== "granted") {
-            const req = await Geolocation.requestPermissions();
-            if (req.location !== "granted") {
-              console.warn("[ReadinessGate] Location permission denied");
-              return;
-            }
-          }
+          const { NativeGpsManager } = await import("@/lib/services/NativeGpsManager");
 
           // Start native GPS tracking for readiness
-          await NativeGps.startTracking({
-            jobId: token,
-            apiUrl: window.location.origin,
-          });
+          await NativeGpsManager.registerConsumer("readiness_gate", token);
 
-          // Listen for native GPS events
+          // Listen for native GPS events dispatched globally by the manager
           const handleNativeGps = (e: CustomEvent) => {
             if (!e.detail) return;
             const sample: GpsSample = {
@@ -251,7 +235,7 @@ export default function DriverReadinessGate({
               longitude: e.detail.longitude,
               accuracy: e.detail.accuracy ?? 0,
               speed: e.detail.speed ?? 0,
-              recorded_at: new Date().toISOString(),
+              recorded_at: e.detail.recorded_at ?? new Date().toISOString(),
               valid: false,
             };
             sample.valid = isValidSample(sample);
@@ -317,6 +301,11 @@ export default function DriverReadinessGate({
           nativeGpsListenerRef.current as EventListener,
         );
         nativeGpsListenerRef.current = null;
+      }
+      if (isNative) {
+        import("@/lib/services/NativeGpsManager").then(({ NativeGpsManager }) => {
+          NativeGpsManager.unregisterConsumer("readiness_gate");
+        });
       }
     };
   }, [isOnline, gpsEnabled, gpsChecking, isNative, token, collectBrowserSample, samples]);

@@ -17,6 +17,7 @@ import {
 import { useDriverGpsPing } from '@/lib/hooks/useDriverGpsPing';
 import { parseUTC } from '@/lib/utils/dateUtils';
 import { Card } from '@/components/ui/Card';
+import { Capacitor } from '@capacitor/core';
 
 interface RouteStop {
   id: string;
@@ -66,6 +67,8 @@ export default function DriverTrackingPage() {
     }
   };
 
+  const isNativeApp = typeof window !== 'undefined' ? (Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp')) : false;
+
   useDriverGpsPing(
     token || null,
     status,
@@ -74,6 +77,8 @@ export default function DriverTrackingPage() {
     jobOrder?.status === 'ASSIGNED' || jobOrder?.status === 'ORDER DITERIMA' || jobOrder?.status === 'MENUNGGU BERANGKAT'
       ? new Date().toISOString()
       : null,
+    isNativeApp,
+    undefined,
     (state) => {
       if (state.status !== undefined) setGpsStatus(state.status);
       if (state.accuracy !== undefined) setGpsAccuracy(state.accuracy);

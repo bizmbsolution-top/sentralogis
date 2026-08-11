@@ -4,26 +4,8 @@ import {
   syncGpsPingsFirst,
   getGpsPingQueueLength,
 } from "@/lib/offline/offlineSyncEngine";
-import { Capacitor, registerPlugin } from "@capacitor/core";
-
-// Define the plugin interface
-interface NativeGpsPlugin {
-  startTracking(options: { jobId: string; apiUrl: string }): Promise<void>;
-  stopTracking(): Promise<void>;
-  openBatterySettings(): Promise<void>;
-  getDeviceInfo(): Promise<{
-    manufacturer: string;
-    brand: string;
-    model: string;
-    batteryOptimizationIgnored: boolean;
-  }>;
-  addListener(
-    eventName: "onLocationUpdate",
-    listenerFunc: (data: any) => void,
-  ): Promise<any>;
-}
-
-const NativeGps = registerPlugin<NativeGpsPlugin>("NativeGps");
+import { Capacitor } from "@capacitor/core";
+import { NativeGpsManager, NativeGpsState } from "@/lib/services/NativeGpsManager";
 
 const ACTIVE_STATUSES = [
   "IN_PROGRESS",
@@ -111,7 +93,6 @@ export function useDriverGpsPing(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeLockRef = useRef<any>(null);
   const isPingingRef = useRef<boolean>(false);
-  const listenerRef = useRef<any>(null);
 
   // [Phase 2.1] Retry state refs
   const consecutiveFailuresRef = useRef<number>(0);
@@ -231,7 +212,6 @@ export function useDriverGpsPing(
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
-            try { NativeGps.stopTracking(); } catch {}
             emitPingState({ status: "inactive" });
             if (typeof window !== "undefined") {
               window.dispatchEvent(
@@ -384,11 +364,7 @@ export function useDriverGpsPing(
 
     if (!enabled || !token || !isActiveTransitStatus(status, startedAt)) {
       if (isNative) {
-        NativeGps.stopTracking().catch(console.error);
-        if (listenerRef.current) {
-          listenerRef.current.remove();
-          listenerRef.current = null;
-        }
+        // NativeGpsManager unregistration is handled in the cleanup function below
       } else {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -436,69 +412,25 @@ export function useDriverGpsPing(
     if (isNative) {
       console.log("[NATIVE-GPS] native detected: true");
       console.log(`[NATIVE-GPS] tracking requested: ${token}`);
-      const startNativeGps = async () => {
-        try {
-          console.log(`[GPS-DEBUG] startNativeGps called`);
-          const { Geolocation } = await import("@capacitor/geolocation");
-          console.log(`[GPS-DEBUG] permission check started`);
-          const perm = await Geolocation.checkPermissions();
-          console.log(`[GPS-DEBUG] permission result = ${perm.location}`);
-          console.log(`[NATIVE-GPS] permission check = ${perm.location}`);
-          
-          if (perm.location !== "granted") {
-            const req = await Geolocation.requestPermissions();
-            console.log(`[NATIVE-GPS] permission request result = ${req.location}`);
-            if (req.location !== "granted") {
-              console.warn("[NATIVE-GPS] Location permission denied. Retrying native request in 10s.");
-              emitPingState({ status: "error" });
-              setTimeout(startNativeGps, 10000);
-              return;
-            }
-          }
-          console.log("[NATIVE-GPS] permission: GRANTED");
-          console.log("[NATIVE-GPS] tracking started: Foreground Service");
-          console.log(`[GPS-DEBUG] NativeGps.startTracking called`);
-          await NativeGps.startTracking({
-            jobId: token,
-            apiUrl: window.location.origin,
-          });
-          console.log(`[GPS-DEBUG] NativeGps.startTracking result = success`);
+      
+      const unsubscribe = NativeGpsManager.subscribe((state: NativeGpsState) => {
+        emitPingState({
+          status: state.status,
+          accuracy: state.accuracy,
+          speed: state.speed,
+          battery: state.battery,
+          pingCount: state.pingCount,
+          consecutiveFailures: state.consecutiveFailures,
+        });
+      });
 
-          if (!listenerRef.current) {
-            listenerRef.current = await NativeGps.addListener("onLocationUpdate", (data: any) => {
-              console.log(`[GPS-DEBUG] onLocationUpdate received`);
-              console.log(`[NATIVE-GPS] latitude: ${data.latitude}`);
-              console.log(`[NATIVE-GPS] longitude: ${data.longitude}`);
-              console.log(`[NATIVE-GPS] accuracy: ${data.accuracy}`);
-              console.log(`[NATIVE-GPS] recorded_at: ${new Date().toISOString()}`);
-              
-              pingCountRef.current += 1;
-              console.log(`[GPS-DEBUG] emitPingState called`);
-              emitPingState({
-                status: "active",
-                accuracy: data.accuracy ?? null,
-                speed: data.speed ?? null,
-                battery: data.battery ?? null,
-                pingCount: pingCountRef.current,
-                consecutiveFailures: 0
-              });
+      // Register consumer
+      NativeGpsManager.registerConsumer(`jo_${token}`, token);
 
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("sentralogis:native_gps_update", {
-                    detail: data,
-                  }),
-                );
-              }
-            });
-            console.log(`[GPS-DEBUG] listener registered`);
-          }
-        } catch (e) {
-          console.error("[NATIVE-GPS] Error starting tracking. Bridge might be uninitialized. Retrying in 3s...", e);
-          setTimeout(startNativeGps, 3000);
-        }
-      };
-      startNativeGps();
+      // Return a custom cleanup for native inside this branch 
+      // (The main return handles PWA and unregister)
+      (intervalRef as any).nativeUnsubscribe = unsubscribe;
+
     } else {
       startPwaGps();
     }
@@ -515,11 +447,11 @@ export function useDriverGpsPing(
         wakeLockRef.current = null;
       }
       if (isNative) {
-        NativeGps.stopTracking().catch(console.error);
-        if (listenerRef.current) {
-          listenerRef.current.remove();
-          listenerRef.current = null;
+        if ((intervalRef as any).nativeUnsubscribe) {
+          (intervalRef as any).nativeUnsubscribe();
+          (intervalRef as any).nativeUnsubscribe = null;
         }
+        NativeGpsManager.unregisterConsumer(`jo_${token}`);
       }
     };
   }, [

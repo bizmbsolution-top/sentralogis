@@ -1224,32 +1224,7 @@ export default function DriverPortal() {
       }
 
       // [AI] Capacitor Native Background GPS tracking integration
-      if (apiStatus === "accepted" || apiStatus === "in_progress") {
-        if (Capacitor.isNativePlatform()) {
-          try {
-            await NativeGps.startTracking({
-              jobId,
-              apiUrl: window.location.origin,
-            });
-          } catch (e) {
-            console.error("Failed to start NativeGps", e);
-          }
-        }
-      }
-
-      if (
-        apiStatus === "completed" ||
-        apiStatus === "rejected" ||
-        apiStatus === "cancelled"
-      ) {
-        if (Capacitor.isNativePlatform()) {
-          try {
-            await NativeGps.stopTracking();
-          } catch (e) {
-            console.error("Failed to stop NativeGps", e);
-          }
-        }
-      }
+      // Now handled automatically by useDriverGpsPing hook and NativeGpsManager
 
       // [AI] Fleet & driver updates now handled by API (admin client)
       if (apiStatus === "completed") {
@@ -3271,11 +3246,7 @@ return Math.min(base, 100);
                                 toast.error("Gagal menolak tugas");
                               } else {
                                 toast.success("Tugas ditolak");
-                                if (Capacitor.isNativePlatform()) {
-                                  try {
-                                    await NativeGps.stopTracking();
-                                  } catch (e) {}
-                                }
+                                // GPS tracking stop is handled automatically by useDriverGpsPing hook when job status becomes REJECTED
                                 setSelectedJob(null);
                                 setStep("dashboard");
                               }
