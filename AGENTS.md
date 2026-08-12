@@ -6,6 +6,21 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 
 ## Progress
 ### Done
+- **[NEW] Unified Driver Portal (internal + vendor) + Phase 2 Cross-Tenant**
+  - Portal: gating absen & inspeksi dihapus → 2 tombol opsional "Fasilitas Harian" (Absen Masuk + Cek Kendaraan)
+  - Portal: order list selalu tampil, empty-state "Menunggu penugasan baru dari kantor."
+  - Portal: tab Inspeksi dihapus dari semua bottom nav; step `vendor_active` + read `sentralogis_driver_type` dihapus
+  - Portal: fetchFleets filter `!is_vendor` dihapus
+  - Session fix: login API + useDriverAuth bawa `tenant_id`/`entity_id`; portal normalisasi `driver_id → id`
+  - AssignmentModal + assignmentSave: readiness gate dihapus (readiness.ts disederhanakan → hanya cek driverStatus)
+  - **Phase 2 Cross-Tenant** (PRD: `docs/prd-cross-tenant-driver-fleet.md`, Opsi B Per-Tenant Copy):
+    - Migration `20260812_cross_tenant_driver_links.sql` (SUDAH Dijalankan 13-Agu-2026; backfill pakai DISTINCT ON karena raw whatsapp berformat beda): `driver_profiles` + `driver_tenant_links` + `normalize_phone()` + backfill
+    - `/api/driver/login` resolve via profile/links (fallback scan md_drivers), kode error `FORBIDDEN_JO_TENANT`
+    - `/api/driver/link-profile`: POST buat/aktifkan profil kanonik, GET cari profil by phone
+    - Display code suffix `_{tenant_code}`: `lib/domain/tenant/displayCode.ts` + `/api/fleet-status` `display_plate`/`vendor_tenant_code`
+    - Fleet Performance (HQ + SBU Trucking): vendor badge + plate suffix
+    - Badge tenant di dropdown AssignmentModal/EditAssignmentModal + master driver/fleet (Vendor · {TENANT_CODE})
+    - Master driver: tombol Link2 "Tautkan Profil" lintas-tenant
 - JO Fulfillment breakdown di HQ ops dashboard (hitung actual JOs dari DB)
 - Vendor filter spesifik (pilih nama vendor) di HQ reporting page
 - Upload foto SIM/KTP/STNK di halaman master driver (`hq/master/drivers`)
@@ -41,6 +56,11 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Deploy ke Vercel Pro (cron support)
 
 ### In Progress
+- **[NEW] Cross-Tenant Driver/Fleet/Transporter** (PRD: `docs/prd-cross-tenant-driver-fleet.md`)
+  - Phase A (done): migration driver_profiles/driver_tenant_links + login resolve via profile/links
+  - Phase B (done): displayCode helper + fleet-status display_plate/vendor_tenant_code + vendor badge + badge tenant di dropdown & master pages
+  - Phase C (done): `/api/driver/link-profile` + UI tombol link di master driver
+  - Phase D (done): migration dijalankan di Supabase + deploy Vercel (`sentralogis.com`)
 - **[NEW] Dual GPS Source + Cross-Tenant Vendor Integration** (PRD: `docs/prd-dual-gps-vendor-integration.md`)
   - Phase 1: GPS phone → `fleet_gps_status` (update `/api/jo/[token]`)
   - Phase 2: Cross-tenant schema (`vendor_tenant_id` on entities/JOs/fleets)

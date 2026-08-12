@@ -11,6 +11,7 @@ import {
   DollarSign, MessageCircle, CheckCircle
 } from 'lucide-react';
 import { buildWaLink } from '@/lib/domain/phone';
+import { displayCode } from '@/lib/domain/tenant/displayCode';
 import {
   type AssignmentSlot,
   type TransporterOption,
@@ -37,6 +38,7 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [fleets, setFleets] = useState<any[]>([]);
+  const [tenantCodeMap, setTenantCodeMap] = useState<Record<string, string>>({});
 
   const [selectedTransporterId, setSelectedTransporterId] = useState<string>(jo.transporter_id || jo.vendor_id || '');
   const [selectedDriverId, setSelectedDriverId] = useState<string>(jo.driver_id || '');
@@ -66,22 +68,22 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
             .eq('tenant_id', tenantId)
             .eq('is_active', true),
           supabase.from('md_drivers')
-            .select('id, name, phone, is_active, entity_id, md_entities(is_vendor)')
+            .select('id, name, phone, is_active, entity_id, md_entities(is_vendor, vendor_tenant_id)')
             .eq('tenant_id', tenantId)
             .eq('is_active', true),
           supabase.from('md_fleets')
-            .select('id, plate_number, fleet_type_id, status, entity_id, is_active, md_fleet_types(type_name)')
+            .select('id, plate_number, fleet_type_id, status, entity_id, is_active, vendor_tenant_id, md_fleet_types(type_name)')
             .eq('tenant_id', tenantId)
             .eq('is_active', true)
             .in('status', ['available', 'maintenance', 'on_duty']),
           assignedFleetIds.length > 0
             ? supabase.from('md_fleets')
-                .select('id, plate_number, fleet_type_id, status, entity_id, md_fleet_types(type_name)')
+                .select('id, plate_number, fleet_type_id, status, entity_id, vendor_tenant_id, md_fleet_types(type_name)')
                 .in('id', assignedFleetIds)
             : Promise.resolve({ data: [], error: null }),
           assignedDriverIds.length > 0
             ? supabase.from('md_drivers')
-                .select('id, name, phone, is_active, entity_id, md_entities(is_vendor)')
+                .select('id, name, phone, is_active, entity_id, md_entities(is_vendor, vendor_tenant_id)')
                 .in('id', assignedDriverIds)
             : Promise.resolve({ data: [], error: null }),
         ]);
@@ -112,6 +114,25 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
 
         setFleets(availableFleets);
         setDrivers(availableDrivers);
+
+        // Build tenant code map for cross-tenant vendor badges
+        const vendorTenantIds = new Set<string>();
+        for (const f of availableFleets) {
+          if (f.vendor_tenant_id) vendorTenantIds.add(f.vendor_tenant_id);
+        }
+        for (const d of availableDrivers) {
+          if (d.md_entities?.vendor_tenant_id)
+            vendorTenantIds.add(d.md_entities.vendor_tenant_id);
+        }
+        if (vendorTenantIds.size > 0) {
+          const { data: tenantRows } = await supabase
+            .from('tenants')
+            .select('id, tenant_code')
+            .in('id', [...vendorTenantIds]);
+          const map: Record<string, string> = {};
+          for (const t of tenantRows || []) map[t.id] = t.tenant_code || '';
+          setTenantCodeMap(map);
+        }
 
         const tenantName = (profile?.tenants?.name || '').toUpperCase();
         const tenantCode = (profile?.tenant_code || '').toUpperCase();
@@ -274,7 +295,15 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
                   placeholder="Pilih Driver"
                   options={[
                     { value: '', label: 'Pilih Driver' },
-                    ...drivers.map(d => ({ value: d.id, label: d.name, description: d.phone || '-' }))
+                    ...drivers.map(d => {
+                      const name = displayCode(
+                        d.name,
+                        d.md_entities?.vendor_tenant_id,
+                        profile?.tenant_id,
+                        tenantCodeMap,
+                      );
+                      return { value: d.id, label: name, description: d.phone || '-' };
+                    })
                   ]}
                   className="h-11"
                 />
@@ -292,7 +321,15 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
                   placeholder="Pilih Unit"
                   options={[
                     { value: '', label: 'Pilih Unit' },
-                    ...fleets.map(f => ({ value: f.id, label: f.plate_number, description: f.md_fleet_types?.type_name || 'N/A' }))
+                    ...fleets.map(f => {
+                      const plate = displayCode(
+                        f.plate_number,
+                        f.vendor_tenant_id,
+                        profile?.tenant_id,
+                        tenantCodeMap,
+                      );
+                      return { value: f.id, label: plate, description: f.md_fleet_types?.type_name || 'N/A' };
+                    })
                   ]}
                   className="h-11"
                 />

@@ -56,6 +56,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 3b. Tenant code map for display-code suffix (vendor badge)
+    const tenantIdsToResolve = [...new Set([
+      tenantId,
+      ...(fleets || []).map((f) => f.vendor_tenant_id).filter(Boolean),
+    ])];
+    const { data: tenantRows } = await supabase
+      .from('tenants')
+      .select('id, tenant_code')
+      .in('id', tenantIdsToResolve);
+    const tenantCodeMap = new Map<string, string>();
+    for (const t of tenantRows || []) {
+      tenantCodeMap.set(t.id, t.tenant_code);
+    }
+
     // 4. Get active JOs per fleet (case-insensitive trackable set)
     const { data: allNonTerminalJOs } = await supabase
       .from('job_orders')
@@ -124,6 +138,13 @@ export async function GET(req: NextRequest) {
         last_address: lastAddress,
         gps_source: gpsSource,
         is_vendor_fleet: isVendorFleet,
+        vendor_tenant_id: fleet.vendor_tenant_id || null,
+        vendor_tenant_code: isVendorFleet
+          ? (tenantCodeMap.get(fleet.vendor_tenant_id) || null)
+          : null,
+        display_plate: isVendorFleet
+          ? `${fleet.plate_number}_${tenantCodeMap.get(fleet.vendor_tenant_id) || ''}`
+          : fleet.plate_number,
         active_jo_count: activeJOs.length,
         active_jos: activeJOs.map(j => ({ id: j.id, jo_number: j.jo_number, status: j.status })),
       };

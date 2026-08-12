@@ -46,7 +46,6 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { saveAssignmentsAction } from "@/lib/actions/assignmentActions";
-import { computeDriverReadiness } from "@/lib/domain/driver/readiness";
 import {
   type AssignmentSlot,
   type TransporterOption,
@@ -62,6 +61,7 @@ import {
   isEmptySlot,
 } from "@/lib/domain/jo/assignment";
 import { buildDriverAssignmentMessage, buildWaLink } from "@/lib/domain/phone";
+import { displayCode } from "@/lib/domain/tenant/displayCode";
 import VendorSendBox from "@/components/sbu/VendorSendBox";
 import CustomerSendBox from "@/components/sbu/CustomerSendBox";
 
@@ -99,19 +99,8 @@ export default function AssignmentModal({
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [transporterFleets, setTransporterFleets] = useState<any[]>([]);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
-  const [driverReadiness, setDriverReadiness] = useState<
-    Record<
-      string,
-      {
-        ready: boolean;
-        reason: string;
-        hasAttendance: boolean;
-        hasInspection: boolean;
-        inspectionStatus: string;
-      }
-    >
-  >({});
   const [driverAllowances, setDriverAllowances] = useState<any[]>([]);
+  const [tenantCodeMap, setTenantCodeMap] = useState<Record<string, string>>({});
 
   const [assignments, setAssignments] = useState<AssignmentSlot[]>([]);
   const [existingJOs, setExistingJOs] = useState<any[]>([]);
@@ -220,6 +209,7 @@ export default function AssignmentModal({
               model,
               status,
               fleet_type_id,
+              vendor_tenant_id,
               md_fleet_types (type_name)
             `,
               )
@@ -239,7 +229,7 @@ export default function AssignmentModal({
           (async () => {
             let query = supabase
               .from("md_drivers")
-              .select("*, md_entities(is_vendor)")
+              .select("*, md_entities(is_vendor, vendor_tenant_id)")
               .eq("is_active", true)
               .eq("tenant_id", tenantId)
               .in("status", ["available", "on_duty"]);
@@ -275,7 +265,7 @@ export default function AssignmentModal({
                 .from("md_fleets")
                 .select(
                   `
-                id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id,
+                id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id, vendor_tenant_id,
                 md_fleet_types (type_name)
               `,
                 )
@@ -287,7 +277,7 @@ export default function AssignmentModal({
           assignedDriverIds.length > 0
             ? supabase
                 .from("md_drivers")
-                .select("*, md_entities(is_vendor)")
+                .select("*, md_entities(is_vendor, vendor_tenant_id)")
                 .in("id", assignedDriverIds)
             : Promise.resolve({ data: [], error: null }),
         ]);
@@ -387,6 +377,25 @@ export default function AssignmentModal({
         setFleets(availableFleets);
         setDrivers(availableDrivers);
 
+        // Build tenant code map for cross-tenant vendor badges
+        const vendorTenantIds = new Set<string>();
+        for (const f of availableFleets) {
+          if (f.vendor_tenant_id) vendorTenantIds.add(f.vendor_tenant_id);
+        }
+        for (const d of availableDrivers) {
+          if (d.md_entities?.vendor_tenant_id)
+            vendorTenantIds.add(d.md_entities.vendor_tenant_id);
+        }
+        if (vendorTenantIds.size > 0) {
+          const { data: tenantRows } = await supabase
+            .from("tenants")
+            .select("id, tenant_code")
+            .in("id", [...vendorTenantIds]);
+          const map: Record<string, string> = {};
+          for (const t of tenantRows || []) map[t.id] = t.tenant_code || "";
+          setTenantCodeMap(map);
+        }
+
         const tenantName = (profile?.tenants?.name || "").toUpperCase();
         const tenantCode = (profile?.tenant_code || "").toUpperCase();
         const trans = mapTransportersForTenant(
@@ -394,60 +403,6 @@ export default function AssignmentModal({
           tenantName,
           tenantCode,
         );
-
-        // [AI] Check readiness for internal drivers (attendance + inspection today)
-        const today = new Date().toISOString().split("T")[0];
-        const readinessMap: Record<
-          string,
-          {
-            ready: boolean;
-            reason: string;
-            hasAttendance: boolean;
-            hasInspection: boolean;
-            inspectionStatus: string;
-          }
-        > = {};
-
-        for (const d of availableDrivers) {
-          const transporter = trans.find((t) => t.id === d.entity_id);
-          const isInternal = transporter?.is_own || !transporter?.is_vendor;
-
-          if (isInternal && d.id) {
-            const [attRes, inspRes] = await Promise.all([
-              supabase
-                .from("driver_attendance")
-                .select("id")
-                .eq("driver_id", d.id)
-                .eq("status", "CHECK_IN")
-                .gte("check_in", `${today}T00:00:00`)
-                .limit(1),
-              supabase
-                .from("fleet_inspections")
-                .select("status")
-                .eq("driver_id", d.id)
-                .gte("created_at", `${today}T00:00:00`)
-                .order("created_at", { ascending: false })
-                .limit(1),
-            ]);
-
-            readinessMap[d.id] = computeDriverReadiness({
-              driverStatus: d.status,
-              hasAttendance: !!(attRes.data && attRes.data.length > 0),
-              hasInspection: !!(inspRes.data && inspRes.data.length > 0),
-              inspectionStatus: inspRes.data?.[0]?.status || "N/A",
-              isVendor: false,
-            });
-          } else {
-            readinessMap[d.id] = computeDriverReadiness({
-              isVendor: true,
-              hasAttendance: true,
-              hasInspection: true,
-              inspectionStatus: "N/A",
-            });
-          }
-        }
-
-        setDriverReadiness(readinessMap);
 
         console.log("[AssignmentModal] Assets Fetched:", {
           fleetsCount: availableFleets.length,
@@ -1009,9 +964,16 @@ export default function AssignmentModal({
     }
     return filteredFleets.map((f) => {
       const isBusy = f.status === "on_road" && assign.fleet_id !== f.id;
+      const ownerTenant = f.vendor_tenant_id;
+      const plate = displayCode(
+        f.plate_number,
+        ownerTenant,
+        profile?.tenant_id,
+        tenantCodeMap,
+      );
       return {
         value: f.id,
-        label: `${f.md_fleet_types?.type_name || "Fleet"} - ${f.plate_number}`,
+        label: `${f.md_fleet_types?.type_name || "Fleet"} - ${plate}`,
         description: isBusy
           ? "BUSY / ON ROAD"
           : f.status?.toUpperCase() || "AVAILABLE",
@@ -1033,17 +995,18 @@ export default function AssignmentModal({
     });
     return filteredDrivers.map((d) => {
       const isBusy = d.status === "on_road" && assign.driver_id !== d.id;
-      const readiness = driverReadiness[d.id];
-      const notReady = readiness && !readiness.ready;
       const statusText = d.status?.toUpperCase() || "AVAILABLE";
+      const ownerTenant = d.md_entities?.vendor_tenant_id;
+      const name = displayCode(
+        d.name,
+        ownerTenant,
+        profile?.tenant_id,
+        tenantCodeMap,
+      );
       return {
         value: d.id,
-        label: d.name,
-        description: isBusy
-          ? "BUSY / ON ROAD"
-          : notReady
-            ? `${statusText} · ${readiness.reason.toUpperCase()}`
-            : statusText,
+        label: name,
+        description: isBusy ? "BUSY / ON ROAD" : statusText,
         disabled: isBusy,
       };
     });

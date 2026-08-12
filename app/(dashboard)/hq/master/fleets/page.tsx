@@ -28,7 +28,8 @@ interface Fleet {
   tenant_id: string;
   entity_id: string;
   fleet_type_id: string;
-  md_entities: { name: string };
+  vendor_tenant_id?: string;
+  md_entities: { name: string; is_vendor?: boolean; vendor_tenant_id?: string };
   md_fleet_types: { type_name: string; icon_url?: string };
 }
 
@@ -62,6 +63,7 @@ export default function HQFleetsPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedFleet, setSelectedFleet] = useState<Fleet | null>(null);
+  const [tenantCodeMap, setTenantCodeMap] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState({
     entity_id: '',
@@ -91,11 +93,26 @@ export default function HQFleetsPage() {
     try {
       const { data: fleetData, error: fleetError } = await supabase
         .from('md_fleets')
-        .select('*, md_entities(name, is_vendor), md_fleet_types(type_name, icon_url)')
+        .select('*, md_entities(name, is_vendor, vendor_tenant_id), md_fleet_types(type_name, icon_url)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
       if (fleetError) throw fleetError;
+
+      // Resolve tenant codes for cross-tenant vendor badges
+      const vendorTenantIds = new Set<string>();
+      for (const f of fleetData || []) {
+        if (f.vendor_tenant_id) vendorTenantIds.add(f.vendor_tenant_id);
+      }
+      if (vendorTenantIds.size > 0) {
+        const { data: tenantRows } = await supabase
+          .from('tenants')
+          .select('id, tenant_code')
+          .in('id', [...vendorTenantIds]);
+        const map: Record<string, string> = {};
+        for (const t of tenantRows || []) map[t.id] = t.tenant_code || '';
+        setTenantCodeMap(map);
+      }
 
       const { data: vendorData } = await supabase
         .from('md_entities')
@@ -552,7 +569,14 @@ export default function HQFleetsPage() {
                                  </div>
                               </td>
                               <td className="px-4 py-3">
-                                 <div className="text-sm text-slate-700">{f.md_entities?.name || 'Private HQ'}</div>
+                                 <div className="flex items-center gap-2">
+                                   <div className="text-sm text-slate-700">{f.md_entities?.name || 'Private HQ'}</div>
+                                   {(f.vendor_tenant_id && f.vendor_tenant_id !== tenantId) && (
+                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600 border border-purple-200">
+                                       Vendor · {tenantCodeMap[f.vendor_tenant_id] || ''}
+                                     </span>
+                                   )}
+                                 </div>
                               </td>
                               <td className="px-4 py-3">
                                  {getStatusBadge(f)}

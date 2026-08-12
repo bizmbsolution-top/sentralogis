@@ -8,6 +8,8 @@ export interface DriverSession {
   driver_type: "OWN" | "VENDOR" | string;
   whatsapp: string;
   name: string;
+  tenant_id?: string;
+  entity_id?: string | null;
 }
 
 interface DriverAuthContextType {
@@ -64,6 +66,8 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
         driver_type: driver.driver_type || (driver.entity_id ? "VENDOR" : "OWN"),
         whatsapp: driver.whatsapp || "",
         name: driver.name,
+        tenant_id: driver.tenant_id,
+        entity_id: driver.entity_id,
       };
 
       // Preserve fallback localStorage save for backward compatibility

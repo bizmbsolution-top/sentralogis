@@ -14,11 +14,6 @@ import {
   validateVendorPurchasePrice,
   computeMaxJoCount,
 } from '@/lib/domain/jo/assignment';
-import {
-  fetchDriverReadinessForToday,
-  validateInternalDriverReadiness,
-  computeDriverReadiness,
-} from '@/lib/domain/driver/readiness';
 
 export type SaveAssignmentMode = 'draft' | 'confirm' | 'handover';
 
@@ -209,7 +204,6 @@ export async function saveAssignments(
   const itemData = parseItemData(woItem.item_data);
   const woNumber = woNumberFromItem(woItem);
   const isHandoverFlow = mode === 'handover';
-  const today = new Date().toISOString().split('T')[0];
 
   try {
     if (mode === 'draft') {
@@ -318,32 +312,6 @@ export async function saveAssignments(
       );
       if (vendorErr) {
         return { success: false, savedCount: 0, woItemStatus: woItem.status, error: vendorErr, isHandoverFlow };
-      }
-
-      if (!isVendor && assign.driver_id) {
-        const checks = await fetchDriverReadinessForToday(
-          supabase,
-          assign.driver_id,
-          today
-        );
-        const readiness = computeDriverReadiness({
-          driverStatus: undefined,
-          ...checks,
-          isVendor: false,
-        });
-        const readinessErr = validateInternalDriverReadiness(
-          readiness,
-          driver?.name || 'Driver'
-        );
-        if (readinessErr) {
-          return {
-            success: false,
-            savedCount: 0,
-            woItemStatus: woItem.status,
-            error: readinessErr,
-            isHandoverFlow,
-          };
-        }
       }
 
       const joNumber = buildJoNumber(woNumber, originalIndex);

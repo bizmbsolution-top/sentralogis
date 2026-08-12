@@ -24,6 +24,9 @@ interface Fleet {
   speed: number;
   last_seen: string | null;
   last_address: string | null;
+  is_vendor_fleet?: boolean;
+  vendor_tenant_code?: string | null;
+  display_plate?: string;
   active_jo_count: number;
   active_jos: Array<{ id: string; jo_number: string; status: string }>;
 }
@@ -417,7 +420,7 @@ export default function FleetPerformancePage() {
                           <LiveIcon size={18} className={liveCfg.color} />
                         </div>
                         <div>
-                          <p className="text-sm font-black text-slate-900">{fleet.plate_number}</p>
+                          <p className="text-sm font-black text-slate-900">{fleet.display_plate || fleet.plate_number}</p>
                           <p className="text-[10px] text-slate-400">{fleet.fleet_code}</p>
                         </div>
                       </div>
@@ -456,6 +459,15 @@ export default function FleetPerformancePage() {
                           {dbCfg.label}
                         </span>
                       </div>
+
+                      {/* Vendor Badge */}
+                      {fleet.is_vendor_fleet && (
+                        <div className="md:w-24">
+                          <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-purple-100 text-purple-700">
+                            Vendor{fleet.vendor_tenant_code ? ` · ${fleet.vendor_tenant_code}` : ""}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Active JO */}
                       <div className="md:w-24">

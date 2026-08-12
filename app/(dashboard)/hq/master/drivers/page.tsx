@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast';
 import { 
   Plus, Search, Edit2, Trash2, X, Loader2, User as DriverIcon, Filter, 
   Calendar, CreditCard, Phone, MessageSquare, Camera, Upload, UserCircle,
-  RefreshCw, AlertTriangle, MapPin, Star, Briefcase
+  RefreshCw, AlertTriangle, MapPin, Star, Briefcase, Link2, Users
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -37,7 +37,7 @@ interface Driver {
   total_jobs_completed: number;
   total_reviews: number;
   avg_review_score: number;
-  md_entities: { name: string };
+  md_entities: { name: string; is_vendor?: boolean; vendor_tenant_id?: string };
 }
 
 export default function HQDriversPage() {
@@ -57,6 +57,14 @@ export default function HQDriversPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [tenantCodeMap, setTenantCodeMap] = useState<Record<string, string>>({});
+
+  // Cross-tenant Link Profile state
+  const [linkDriver, setLinkDriver] = useState<Driver | null>(null);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkResult, setLinkResult] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     entity_id: '',
@@ -101,11 +109,27 @@ export default function HQDriversPage() {
     try {
       const { data: driverData, error: driverError } = await supabase
         .from('md_drivers')
-        .select('*, md_entities(name, is_vendor)')
+        .select('*, md_entities(name, is_vendor, vendor_tenant_id)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
       if (driverError) throw driverError;
+
+      // Resolve tenant codes for cross-tenant vendor badges
+      const vendorTenantIds = new Set<string>();
+      for (const d of driverData || []) {
+        if (d.md_entities?.vendor_tenant_id)
+          vendorTenantIds.add(d.md_entities.vendor_tenant_id);
+      }
+      if (vendorTenantIds.size > 0) {
+        const { data: tenantRows } = await supabase
+          .from('tenants')
+          .select('id, tenant_code')
+          .in('id', [...vendorTenantIds]);
+        const map: Record<string, string> = {};
+        for (const t of tenantRows || []) map[t.id] = t.tenant_code || '';
+        setTenantCodeMap(map);
+      }
 
       const { data: vendorData } = await supabase
         .from('md_entities')
@@ -344,6 +368,32 @@ if (!formData.sim_expiry) {
       toast.error(errMsg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleLinkProfile = async () => {
+    if (!linkDriver) return;
+    setLinking(true);
+    setLinkResult(null);
+    setLinkError(null);
+    try {
+      const res = await fetch('/api/driver/link-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driver_id: linkDriver.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menautkan profil');
+      setLinkResult(
+        `Profil kanonik dibuat/diaktifkan untuk ${linkDriver.name}. ` +
+        `Login lintas-tenant aktif untuk nomor ${linkDriver.whatsapp || linkDriver.phone || '-'}.`,
+      );
+      toast.success('Profil driver berhasil ditautkan');
+      fetchData();
+    } catch (error: any) {
+      setLinkError(error.message || 'Gagal menautkan profil');
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -657,7 +707,14 @@ if (!formData.sim_expiry) {
                                  </div>
                               </td>
                               <td className="px-4 py-3">
-                                 <div className="text-sm text-slate-700">{d.md_entities?.name || 'Private HQ'}</div>
+                                 <div className="flex items-center gap-2">
+                                   <div className="text-sm text-slate-700">{d.md_entities?.name || 'Private HQ'}</div>
+                                   {d.md_entities?.vendor_tenant_id && d.md_entities.vendor_tenant_id !== tenantId && (
+                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600 border border-purple-200">
+                                       Vendor · {tenantCodeMap[d.md_entities.vendor_tenant_id] || ''}
+                                     </span>
+                                   )}
+                                 </div>
                               </td>
                                <td className="px-4 py-3">
                                   {getStatusBadge(d)}
@@ -685,6 +742,13 @@ if (!formData.sim_expiry) {
                                </td>
                                <td className="px-4 py-3 text-right">
                                  <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                       onClick={() => { setLinkDriver(d); setLinkResult(null); setLinkError(null); setIsLinkModalOpen(true); }}
+                                       title="Link profil lintas-tenant"
+                                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                    >
+                                       <Link2 size={14} />
+                                    </button>
                                     <button 
                                        onClick={() => handleOpenModal(d)}
                                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
@@ -841,6 +905,75 @@ if (!formData.sim_expiry) {
               <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Cancel</button>
               <button onClick={handleDelete} disabled={submitting} className="px-6 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-all font-medium text-sm">
                 {submitting ? 'Deleting...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Cross-Tenant Link Profile Modal */}
+      {isLinkModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-md p-6 shadow-2xl border-none">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Link2 size={18} className="text-indigo-600" /> Tautkan Profil
+              </h3>
+              <button
+                onClick={() => setIsLinkModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 leading-relaxed mb-6">
+              Membuat/mengaktifkan <strong className="text-slate-900">profil kanonik</strong> untuk
+              <span className="font-semibold text-slate-900"> {linkDriver?.name}</span> berdasarkan
+              nomor WhatsApp. Setelah ditautkan, driver ini dapat login lintas-tenant
+              dengan nomor yang sama dari perusahaan lain.
+            </p>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 mb-6 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Nama</span>
+                <span className="font-semibold text-slate-900">{linkDriver?.name}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">WhatsApp</span>
+                <span className="font-semibold text-slate-900">{linkDriver?.whatsapp || linkDriver?.phone || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Kode</span>
+                <span className="font-mono font-semibold text-slate-900">{linkDriver?.driver_code}</span>
+              </div>
+            </div>
+
+            {linkResult && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-start gap-2">
+                <Link2 size={16} className="mt-0.5 shrink-0" /> {linkResult}
+              </div>
+            )}
+            {linkError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
+                {linkError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsLinkModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+              >
+                Tutup
+              </button>
+              <button
+                onClick={handleLinkProfile}
+                disabled={linking}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium text-sm flex items-center gap-2"
+              >
+                {linking ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                {linking ? 'Menautkan...' : 'Tautkan Profil'}
               </button>
             </div>
           </Card>

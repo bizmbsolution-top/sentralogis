@@ -75,7 +75,6 @@ export default function DriverPortal() {
     | "jobDetail"
     | "performance"
     | "history"
-    | "vendor_active"
   >("dashboard");
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<
@@ -238,9 +237,6 @@ export default function DriverPortal() {
       setThemeMode(prefersDark ? "dark" : "light");
     }
 
-    const driverType = localStorage.getItem("sentralogis_driver_type");
-    // Removed Vendor block based on user request to allow Vendors to access Driver Portal
-
     // Register Service Worker for PWA Add-to-Home-Screen support
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
@@ -326,8 +322,9 @@ export default function DriverPortal() {
     if (savedSession) {
       try {
         const d = JSON.parse(savedSession);
-        if (d && d.id) {
-          setDriver(d);
+        const id = d?.id || d?.driver_id;
+        if (id) {
+          setDriver({ ...d, id });
           if (d.tenant_id) fetchTenantInfo(d.tenant_id);
           setStep("dashboard");
         }
@@ -997,10 +994,7 @@ export default function DriverPortal() {
       toast.error("Gagal mengambil data armada");
       setFleets([]);
     } else {
-      const internalFleets = (data || []).filter(
-        (f: any) => !f.md_entities?.is_vendor,
-      );
-      setFleets(internalFleets);
+      setFleets(data || []);
     }
     setFetchingFleets(false);
   };
@@ -1797,43 +1791,6 @@ export default function DriverPortal() {
     );
   }
 
-  // [AI] Simple View for Vendor Drivers
-  if (step === "vendor_active") {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-6 relative overflow-hidden font-sans">
-        <div className="absolute top-1/4 -right-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px]" />
-        <div className="absolute bottom-1/4 -left-20 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px]" />
-
-        <div className="relative z-10 text-center max-w-sm w-full backdrop-blur-xl bg-slate-900/50 p-10 rounded-[2rem] border border-slate-800 shadow-2xl">
-          <div className="mb-8 flex justify-center">
-            <div className="w-28 h-28 rounded-full bg-emerald-500/10 flex items-center justify-center border-4 border-emerald-500 relative">
-              <div className="absolute inset-0 rounded-full border-4 border-emerald-500 animate-ping opacity-30"></div>
-              <MapPin className="w-14 h-14 text-emerald-400" />
-            </div>
-          </div>
-          <h2 className="text-3xl font-black mb-3 tracking-tight">PWA Aktif</h2>
-          <p className="text-slate-400 text-sm font-medium mb-10 leading-relaxed">
-            GPS tracking berjalan di latar belakang saat Anda memiliki pekerjaan
-            aktif.
-          </p>
-
-          <button
-            onClick={() => {
-              try {
-                window.close();
-              } catch (e) {}
-            }}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 py-5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg"
-          >
-            <X size={20} /> Tutup Aplikasi
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-
-
   // Profile View
   if (step === "profile") {
     return (
@@ -2038,13 +1995,6 @@ export default function DriverPortal() {
             <ClipboardList size={24} />
             <span className="text-xs font-bold">Histori</span>
           </button>
-          <button
-            onClick={() => setStep("inspection")}
-            className="flex flex-col items-center gap-1 p-2"
-          >
-            <FileCheck size={24} />
-            <span className="text-xs font-bold">Inspeksi</span>
-          </button>
           <button className="flex flex-col items-center gap-1 p-2 text-indigo-500">
             <User size={24} />
             <span className="text-xs font-bold">Profil</span>
@@ -2170,10 +2120,6 @@ export default function DriverPortal() {
           >
             <ClipboardList size={24} />
             <span className="text-xs font-bold">Histori</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-orange-500">
-            <FileCheck size={24} />
-            <span className="text-xs font-bold">Inspeksi</span>
           </button>
           <button
             onClick={() => setStep("profile")}
@@ -2376,22 +2322,21 @@ return Math.min(base, 100);
 
       {/* Main Container - Dashboard Body */}
       <main className="p-5 space-y-6 -mt-6 relative z-20">
-        {/* Step-by-Step Alur Kerja Driver (3-Step Guide Dashboard) */}
-        {/* [AI] Interactive visual workflow cards that display progress cleanly */}
+        {/* Fasilitas Opsional: Absen & Inspeksi (tidak mengunci tugas) */}
         <div
           className={`rounded-3xl p-5 shadow-xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} space-y-4`}
         >
           <div className="flex items-center justify-between border-b pb-3 border-slate-150">
             <h3 className="text-base font-black uppercase tracking-wider">
-              3 Langkah Alur Kerja Supir
+              Fasilitas Harian
             </h3>
             <span className="text-[10px] font-black tracking-widest bg-indigo-500/10 text-indigo-500 px-2.5 py-0.5 rounded-full">
-              WAJIB SETIAP HARI
+              OPSIONAL
             </span>
           </div>
 
           <div className="space-y-3">
-            {/* Step 1: Absen Masuk */}
+            {/* Tombol Absen Masuk */}
             <div
               className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
                 activeShift
@@ -2407,14 +2352,14 @@ return Math.min(base, 100);
                       : "bg-indigo-600 text-white"
                   }`}
                 >
-                  1
+                  <Clock size={18} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black">Langkah 1: Absen Masuk</h4>
+                  <h4 className="text-sm font-black">Absen Masuk</h4>
                   <p className="text-xs opacity-70">
                     {activeShift
                       ? `Sudah Absen - Truk ${activeShift.fleet?.plate_number}`
-                      : "Absen masuk untuk memilih truk Anda hari ini."}
+                      : "Absen masuk untuk mencatat kehadiran Anda hari ini."}
                   </p>
                 </div>
               </div>
@@ -2429,7 +2374,7 @@ return Math.min(base, 100);
               ) : (
                 <div className="flex gap-2 items-center">
                   <span className="text-xs font-black text-emerald-500 flex items-center gap-1">
-                    ✓ Selesai
+                    ✓ Absen
                   </span>
                   <button
                     onClick={handleCheckOut}
@@ -2442,51 +2387,35 @@ return Math.min(base, 100);
               )}
             </div>
 
-            {/* Step 2: Cek Truk (Inspeksi) */}
+            {/* Tombol Cek Kendaraan */}
             <div
               className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                !activeShift
-                  ? "opacity-40 bg-slate-100 border-slate-200"
-                  : lastInspection
-                    ? "bg-emerald-500/5 border-emerald-500/20"
-                    : "bg-orange-500/5 border-orange-500/20"
+                lastInspection
+                  ? "bg-emerald-500/5 border-emerald-500/20"
+                  : "bg-orange-500/5 border-orange-500/20"
               }`}
             >
               <div className="flex items-center gap-3.5">
                 <div
                   className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                    !activeShift
-                      ? "bg-slate-300 text-slate-500"
-                      : lastInspection
-                        ? "bg-emerald-500 text-white"
-                        : "bg-orange-500 text-white"
+                    lastInspection
+                      ? "bg-emerald-500 text-white"
+                      : "bg-orange-500 text-white"
                   }`}
                 >
-                  2
+                  <FileCheck size={18} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black">
-                    Langkah 2: Cek Kondisi Truk
-                  </h4>
+                  <h4 className="text-sm font-black">Cek Kendaraan</h4>
                   <p className="text-xs opacity-70">
-                    {!activeShift
-                      ? "Harus absen masuk terlebih dahulu."
-                      : lastInspection
-                        ? `Selesai - Status: ${lastInspection.status}`
-                        : "Inspeksi ban, rem, lampu demi keamanan jalan."}
+                    {lastInspection
+                      ? `Selesai - Status: ${lastInspection.status}`
+                      : "Inspeksi ban, rem, lampu demi keamanan jalan."}
                   </p>
                 </div>
               </div>
 
-              {activeShift && !lastInspection && (
-                <button
-                  onClick={() => setIsInspectionModalOpen(true)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
-                >
-                  Periksa
-                </button>
-              )}
-              {activeShift && lastInspection && (
+              {lastInspection ? (
                 <div className="text-right shrink-0">
                   <span
                     className={`block text-xs font-black ${lastInspection.status === "LAYAK JALAN" ? "text-emerald-500" : "text-red-500"}`}
@@ -2499,78 +2428,17 @@ return Math.min(base, 100);
                     Score: {lastInspection.total_score}
                   </span>
                 </div>
-              )}
-              {!activeShift && (
-                <span className="text-xs opacity-50 font-bold">
-                  🔒 Terkunci
-                </span>
-              )}
-            </div>
-
-            {/* Step 3: Tugas Aktif */}
-            <div
-              className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                !activeShift || !lastInspection
-                  ? "opacity-40 bg-slate-100 border-slate-200"
-                  : "bg-blue-500/5 border-blue-500/20"
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                    !activeShift || !lastInspection
-                      ? "bg-slate-300 text-slate-500"
-                      : "bg-blue-600 text-white"
-                  }`}
-                >
-                  3
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">
-                    Langkah 3: Ambil Tugas Utama
-                  </h4>
-                  <p className="text-xs opacity-70">
-                    {!activeShift || !lastInspection
-                      ? "Lengkapi langkah 1 & 2 di atas."
-                      : jobOrders.length > 0
-                        ? `Ada ${jobOrders.length} tugas yang perlu dikerjakan!`
-                        : "Menunggu tugas baru dari kantor."}
-                  </p>
-                </div>
-              </div>
-
-              {activeShift && lastInspection ? (
-                <span className="text-xs font-black text-indigo-500 flex items-center gap-1">
-                  Siap Kerja 🚛
-                </span>
               ) : (
-                <span className="text-xs opacity-50 font-bold">
-                  🔒 Terkunci
-                </span>
+                <button
+                  onClick={() => setIsInspectionModalOpen(true)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
+                >
+                  Periksa
+                </button>
               )}
             </div>
           </div>
         </div>
-
-        {/* Inspeksi Summary Callout if Grounded */}
-        {activeShift &&
-          lastInspection &&
-          lastInspection.status === "GROUNDED" && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-3xl p-5 text-center space-y-2">
-              <div className="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-red-500/20 animate-bounce">
-                <AlertTriangle size={24} />
-              </div>
-              <h4 className="text-base font-black text-red-500">
-                ARMADA DINYATAKAN RUSAK / GROUNDED
-              </h4>
-              <p className="text-xs opacity-80 max-w-sm mx-auto">
-                Skor kelayakan truk Anda sangat rendah (
-                {lastInspection.total_score}/100). Tim pemeliharaan (Operations)
-                telah diberi tahu. Mohon tunggu perbaikan atau hubungi kantor
-                untuk ganti truk.
-              </p>
-            </div>
-          )}
 
         {/* Visual premium separation of jobs */}
         {(() => {
@@ -2675,8 +2543,7 @@ return Math.min(base, 100);
                     </div>
                     <p className="text-base font-black">Belum Ada Tugas Baru</p>
                     <p className="text-xs opacity-60 mt-1">
-                      Menunggu penugasan baru dari kantor. Pastikan Anda sudah
-                      absen dan inspeksi.
+                      Menunggu penugasan baru dari kantor.
                     </p>
                   </div>
                 ) : (
@@ -2771,13 +2638,6 @@ return Math.min(base, 100);
         >
           <Activity size={24} />
           <span className="text-xs font-bold">Keuangan</span>
-        </button>
-        <button
-          onClick={() => setStep("inspection")}
-          className="flex flex-col items-center gap-1 p-2"
-        >
-          <FileCheck size={24} />
-          <span className="text-xs font-bold">Inspeksi</span>
         </button>
         <button
           onClick={() => setStep("profile")}

@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { mapTransportersForTenant } from "@/lib/domain/jo/assignment";
+import { displayCode } from "@/lib/domain/tenant/displayCode";
 import { toast } from "react-hot-toast";
 
 interface AssignmentModalProps {
@@ -51,6 +52,7 @@ export default function AssignmentModal({
   const [vendors, setVendors] = useState<any[]>([]);
   const [fleets, setFleets] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [tenantCodeMap, setTenantCodeMap] = useState<Record<string, string>>({});
 
   const [selectedTransporterId, setSelectedTransporterId] = useState("");
   const [selectedTransporterType, setSelectedTransporterType] = useState<
@@ -181,6 +183,7 @@ export default function AssignmentModal({
         id, 
         plate_number, 
         brand,
+        vendor_tenant_id,
         md_fleet_types (type_name)
       `,
         )
@@ -213,7 +216,7 @@ export default function AssignmentModal({
       // Fetch Drivers
       let driverQuery = supabase
         .from("md_drivers")
-        .select("id, name, phone")
+        .select("id, name, phone, md_entities(vendor_tenant_id)")
         .eq("tenant_id", profile?.tenant_id)
         .eq("is_active", true);
 
@@ -238,6 +241,24 @@ export default function AssignmentModal({
           hint: dError.hint,
         });
       setDrivers(driverData || []);
+
+      const vendorTenantIds = new Set<string>();
+      for (const f of fleetData || []) {
+        if (f.vendor_tenant_id) vendorTenantIds.add(f.vendor_tenant_id);
+      }
+      for (const d of driverData || []) {
+        if (d.md_entities?.vendor_tenant_id)
+          vendorTenantIds.add(d.md_entities.vendor_tenant_id);
+      }
+      if (vendorTenantIds.size > 0) {
+        const { data: tenantRows } = await supabase
+          .from("tenants")
+          .select("id, tenant_code")
+          .in("id", [...vendorTenantIds]);
+        const map: Record<string, string> = {};
+        for (const t of tenantRows || []) map[t.id] = t.tenant_code || "";
+        setTenantCodeMap(map);
+      }
     } catch (err: any) {
       console.error("Assignment Fetch Error:", err);
       toast.error("Gagal mengambil data armada/driver");
@@ -472,7 +493,12 @@ export default function AssignmentModal({
                   </option>
                   {fleets.map((f) => (
                     <option key={f.id} value={f.id} className="not-italic">
-                      {f.plate_number}{" "}
+                      {displayCode(
+                        f.plate_number,
+                        f.vendor_tenant_id,
+                        profile?.tenant_id,
+                        tenantCodeMap,
+                      )}{" "}
                       {f.md_fleet_types?.type_name
                         ? `- ${f.md_fleet_types.type_name}`
                         : ""}
@@ -496,7 +522,12 @@ export default function AssignmentModal({
                   </option>
                   {drivers.map((d) => (
                     <option key={d.id} value={d.id} className="not-italic">
-                      {d.name}
+                      {displayCode(
+                        d.name,
+                        d.md_entities?.vendor_tenant_id,
+                        profile?.tenant_id,
+                        tenantCodeMap,
+                      )}
                     </option>
                   ))}
                 </select>
