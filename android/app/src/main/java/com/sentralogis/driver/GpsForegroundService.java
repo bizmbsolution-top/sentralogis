@@ -191,6 +191,7 @@ public class GpsForegroundService extends Service  {
                 List<OfflineGpsDbHelper.OfflineLocation> pendingList = dbHelper.getPendingLocations(50);
                 if (pendingList.isEmpty()) return;
                 
+                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] queue_count: " + dbHelper.getTotalLocationsCount() + ", batch_size: " + pendingList.size());
                 Log.d("SentraLogisGPS", "[SYNC_ENGINE] Batch started. " + pendingList.size() + " PENDING records.");
                 
                 List<String> pingIds = new java.util.ArrayList<>();
@@ -207,7 +208,10 @@ public class GpsForegroundService extends Service  {
                     offPayload.put("speed", loc.speed);
                     offPayload.put("accuracy", loc.accuracy);
                     pingsArray.put(offPayload);
+                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] canonical_ping_id: " + loc.clientPingId + ", job_order_id: " + currentJobId + ", recorded_at: " + offPayload.optString("recorded_at"));
                 }
+                
+                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] pending_ping_ids: " + TextUtils.join(", ", pingIds));
 
                 dbHelper.updateStatus(pingIds, "SYNCING");
 
@@ -218,8 +222,10 @@ public class GpsForegroundService extends Service  {
                 batchPayload.put("internet_connected", isNetworkConnected());
                 batchPayload.put("background_running", true);
 
+                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] request_start: PATCH /api/jo/" + currentJobId + ", method: PATCH, batch_count: " + pingsArray.length());
                 String response = performHttpRequestWithResponse(batchPayload.toString());
                 if (response != null) {
+                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] response_ok: true, response_body_summary: " + response.substring(0, Math.min(response.length(), 200)));
                     JSONObject respJson = new JSONObject(response);
                     if (respJson.optBoolean("success", false)) {
                         // [FORENSIC FIX] Strictly follow ACK Trust Model
@@ -239,17 +245,32 @@ public class GpsForegroundService extends Service  {
 
                         if (!ackedIds.isEmpty()) {
                             dbHelper.updateStatus(ackedIds, "SYNCED");
+                            
+                            // FORENSIC LOG: Filter queue verification
+                            List<OfflineGpsDbHelper.OfflineLocation> remaining = dbHelper.getPendingLocations(50);
+                            StringBuilder remainingIds = new StringBuilder();
+                            for(int i=0; i<remaining.size(); i++) {
+                                remainingIds.append(remaining.get(i).clientPingId);
+                                if(i<remaining.size()-1) remainingIds.append(",");
+                            }
+                            Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] FILTER_QUEUE queue_storage_source=sqlite mark_synced=" + ackedIds.size() + " remain_pending=" + remaining.size() + " remaining_ids=[" + remainingIds.toString() + "]");
+                            
                             Log.d("SentraLogisGPS", "[SYNC_ENGINE] Partial/Full ACK Received. Marked " + ackedIds.size() + " as SYNCED.");
+                        } else {
+                            Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] FILTER_QUEUE queue_storage_source=sqlite mark_synced=0 remain_pending=all");
                         }
                         
+                        Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] accepted_count: " + (ackObj != null && ackObj.optJSONArray("accepted") != null ? ackObj.optJSONArray("accepted").length() : 0) + ", duplicate_count: " + (ackObj != null && ackObj.optJSONArray("duplicates") != null ? ackObj.optJSONArray("duplicates").length() : 0) + ", failed_count: " + (ackObj != null && ackObj.optJSONArray("failed") != null ? ackObj.optJSONArray("failed").length() : 0));
                         // Revert any syncing records that were NOT explicitly ACKED back to PENDING
                         dbHelper.resetSyncingToPending();
                     } else {
+                        Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] mark_synced: 0, remain_pending: all");
                         Log.d("SentraLogisGPS", "[SYNC_ENGINE] Server Error (success=false). Reverting to PENDING.");
                         dbHelper.resetSyncingToPending();
                     }
                 } else {
-                    Log.d("SentraLogisGPS", "[SYNC_ENGINE] Network timeout. Reverting to PENDING.");
+                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] response_ok: false, mark_synced: 0, remain_pending: all");
+                    Log.d("SentraLogisGPS", "[SYNC_ENGINE] Network timeout or empty response. Reverting to PENDING.");
                     dbHelper.resetSyncingToPending();
                 }
             } catch (Exception e) {

@@ -73,6 +73,8 @@ public class OfflineGpsDbHelper extends SQLiteOpenHelper {
 
         db.insert(TABLE_NAME, null, values);
         db.close();
+
+        android.util.Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] ENQUEUE queue_storage_source=sqlite client_ping_id=" + clientPingId);
     }
 
     public List<OfflineLocation> getPendingLocations(int limit) {
@@ -98,6 +100,16 @@ public class OfflineGpsDbHelper extends SQLiteOpenHelper {
         }
         cursor.close();
         db.close();
+
+        if (!locations.isEmpty()) {
+            StringBuilder ids = new StringBuilder();
+            for (int i = 0; i < locations.size(); i++) {
+                ids.append(locations.get(i).clientPingId);
+                if (i < locations.size() - 1) ids.append(",");
+            }
+            android.util.Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] READ_PENDING queue_storage_source=sqlite pending_count=" + locations.size() + " ids=" + ids.toString());
+        }
+
         return locations;
     }
 

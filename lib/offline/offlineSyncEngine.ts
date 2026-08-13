@@ -272,7 +272,7 @@ export async function enqueueGpsPing(
   speed?: number,
   accuracy?: number,
 ): Promise<GpsPing> {
-  const clientPingId = `uuid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const clientPingId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `uuid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const ping: GpsPing = {
     id: clientPingId,
     client_ping_id: clientPingId,
@@ -293,14 +293,22 @@ export async function enqueueGpsPing(
     return [...current, ping];
   });
 
-  console.info(`[OfflineSyncEngine] Enqueued GPS ping: ${ping.id} for JO ${jobOrderId}`);
+  const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown caller';
+  console.info(`[GPS_SYNC_FORENSIC] ENQUEUE queue_storage_source=indexeddb client_ping_id=${clientPingId} source=${source || 'unknown'} caller="${caller}"`);
   return ping;
 }
 
 export async function getPendingGpsPings(): Promise<GpsPing[]> {
   try {
     const queue: GpsPing[] | undefined = await get(GPS_PING_QUEUE_KEY);
-    return (queue || []).filter(p => p.status === 'PENDING' || p.status === 'FAILED' || p.status === 'SYNCING');
+    const pending = (queue || []).filter(p => p.status === 'PENDING' || p.status === 'FAILED' || p.status === 'SYNCING');
+    
+    // FORENSIC LOG: ID dumping to match on refresh
+    if (pending.length > 0) {
+      const ids = pending.map(p => p.client_ping_id || p.id).join(',');
+      console.info(`[GPS_SYNC_FORENSIC] READ_PENDING queue_storage_source=indexeddb pending_count=${pending.length} ids=${ids}`);
+    }
+    return pending;
   } catch (err) {
     console.error('[OfflineSyncEngine] Error retrieving GPS pings:', err);
     return [];
@@ -367,16 +375,20 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
 
         const payload = {
           action: 'gps_ping_batch',
-          pings: pings.map(p => ({
-            client_ping_id: p.client_ping_id,
-            latitude: p.lat,
+          pings: pings.map(p => {
+            const canonicalPingId = p.client_ping_id || p.id;
+            console.info(`[GPS_SYNC_FORENSIC] payload canonical_ping_id: ${canonicalPingId}, job_order_id: ${joId}, recorded_at: ${p.timestamp}`);
+            return {
+              client_ping_id: canonicalPingId,
+              latitude: p.lat,
             longitude: p.lng,
             recorded_at: p.timestamp,
             source: p.source || 'pwa_batch',
             battery: p.battery,
             speed: p.speed,
             accuracy: p.accuracy
-          })),
+            };
+          }),
           internet_connected: true,
           background_running: true
         };
@@ -391,17 +403,32 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
           body: JSON.stringify(payload),
         });
 
+        console.info(`[GPS_SYNC_FORENSIC] request_start: PATCH /api/jo/${joId}, batch_count: ${pings.length}`);
+
+
         if (!response.ok) {
           const errText = await response.text();
           throw new Error(`API ${response.status}: ${errText}`);
         }
 
         const resData = await response.json();
+        console.info(`[GPS_SYNC_FORENSIC] http_status: ${response.status}, response_ok: ${response.ok}`);
+        
         if (resData.success) {
            const acceptedIds = [...(resData.ack?.accepted || []), ...(resData.ack?.duplicates || [])];
+           console.info(`[GPS_SYNC_FORENSIC] accepted_count: ${resData.ack?.accepted?.length || 0}, duplicate_count: ${resData.ack?.duplicates?.length || 0}, failed_count: ${resData.ack?.failed?.length || 0}`);
+           
            await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
              if (!queue) return [];
-             return queue.filter(p => !acceptedIds.includes(p.client_ping_id));
+             const remaining = queue.filter(p => {
+               const canonicalPingId = p.client_ping_id || p.id;
+               return !acceptedIds.includes(canonicalPingId);
+             });
+             
+             // FORENSIC: Log what we kept in the persistent queue
+             const remainingIds = remaining.map(p => p.client_ping_id || p.id).join(',');
+             console.info(`[GPS_SYNC_FORENSIC] FILTER_QUEUE queue_storage_source=indexeddb mark_synced=${acceptedIds.length} remain_pending=${remaining.length} remaining_ids=[${remainingIds}]`);
+             return remaining;
            });
            syncedGps += acceptedIds.length;
            
