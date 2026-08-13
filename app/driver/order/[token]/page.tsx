@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   ShieldCheck,
   Info,
+  LogOut,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
@@ -272,13 +273,25 @@ export default function JoConfirmationPage({
           >
             <ArrowLeft size={16} /> Driver Portal
           </button>
-          <button
-            onClick={() => setInfoOpen(true)}
-            className="w-8 h-8 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-all"
-            title="Info Perangkat"
-          >
-            <Info size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setInfoOpen(true)}
+              className="w-8 h-8 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-all"
+              title="Info Perangkat"
+            >
+              <Info size={14} />
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem("sentralogis_driver_session");
+                router.push("/driver/portal");
+              }}
+              className="w-8 h-8 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-500/20 transition-all"
+              title="Keluar"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="bg-slate-900/90 backdrop-blur-xl rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-6">

@@ -32,6 +32,7 @@ import {
   ArrowLeft,
   AlertOctagon,
   Info,
+  LogOut,
 } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
 import { useGoogleMaps } from "@/lib/google-maps-context";
@@ -656,6 +657,16 @@ export default function JoExecutionPage({
             title="Info Perangkat"
           >
             <Info size={14} />
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem("sentralogis_driver_session");
+              router.push("/driver/portal");
+            }}
+            className="w-8 h-8 bg-rose-50 border border-rose-200 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-100 transition-all ml-1"
+            title="Keluar"
+          >
+            <LogOut size={14} />
           </button>
         </div>
       </div>
