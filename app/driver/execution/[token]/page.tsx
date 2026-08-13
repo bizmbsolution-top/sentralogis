@@ -44,7 +44,7 @@ import {
 } from "@react-google-maps/api";
 import { useDriverGpsPing, isActiveTransitStatus } from "@/lib/hooks/useDriverGpsPing";
 import { formatDateUTC } from "@/lib/utils/dateUtils";
-import DriverReadinessGate from "../../../jo/[token]/components/DriverReadinessGate";
+import AlertInfoModal from "./components/AlertInfoModal";
 import { useTTS } from "@/lib/hooks/useTTS";
 import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
 import InfoPerangkat from "../../components/InfoPerangkat";
@@ -619,24 +619,7 @@ export default function JoExecutionPage({
   }
 
   // Stage 5 Readiness Gate (Appears ONLY AFTER acceptance when readiness is not complete)
-  const isAssignedOrAccepted = ["ASSIGNED", "ACCEPTED", "CONFIRMED_BY_DRIVER", "ORDER DITERIMA"].includes(
-    (jobOrder.status || "").toUpperCase()
-  );
-
-  console.log("[READINESS_FORENSIC] JOB_ORDER_LOADED");
-  console.log("[READINESS_FORENSIC] JOB_STATUS:", (jobOrder.status || "").toUpperCase());
-  console.log("[READINESS_FORENSIC] READINESS_COMPLETE:", readinessComplete);
-  console.log("[READINESS_FORENSIC] GATE_CONDITION (!readinessComplete && isAssignedOrAccepted):", !readinessComplete && isAssignedOrAccepted);
-
-  if (!readinessComplete && isAssignedOrAccepted) {
-    return (
-      <DriverReadinessGate
-        token={token}
-        isNative={isNative}
-        onReady={handleReadinessComplete}
-      />
-    );
-  }
+  // DELETED: We now skip the readiness gate entirely for all job orders as requested
 
   return (
     <div className="min-h-[100dvh] bg-slate-50 text-slate-900 pb-32">
