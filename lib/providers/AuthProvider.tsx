@@ -295,7 +295,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profileCache.current = p;
     } else {
       if (event !== 'TOKEN_REFRESHED' && event !== 'INITIAL_SESSION') {
-        toast.error('Gagal memuat profil. Silakan refresh halaman.');
+        const isDriverPath = typeof window !== 'undefined' && (window.location.pathname.startsWith('/driver') || window.location.pathname.startsWith('/jo'));
+        if (!isDriverPath) {
+          toast.error('Gagal memuat profil. Silakan refresh halaman.');
+        }
       }
       console.warn('[Auth] Profile is null on event:', event);
       isFetchingProfile.current = false;

@@ -283,10 +283,10 @@ export function useDriverGpsPing(
       return;
     }
 
-    // For PWA fallback, we still enforce JO token and transit status
-    const shouldTrackPwa = !!token && isActiveTransitStatus(status, startedAt);
+    // We enforce JO token and transit status for BOTH Native and PWA
+    const shouldTrack = !!token && isActiveTransitStatus(status, startedAt);
 
-    if (!isNative && !shouldTrackPwa) {
+    if (!shouldTrack) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

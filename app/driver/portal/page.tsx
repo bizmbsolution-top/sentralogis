@@ -2390,16 +2390,6 @@ return Math.min(base, 100);
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Download/Install PWA Button */}
-            {/* [AI] PWA Install button is always visible in the header for driver convenience */}
-            <button
-              onClick={handleInstallPWA}
-              className="w-9 h-9 bg-amber-500 border border-amber-400 text-white rounded-xl flex items-center justify-center hover:bg-amber-600 transition-all shrink-0 animate-bounce shadow-lg shadow-amber-500/20"
-              title="Unduh Aplikasi SentraLogis"
-            >
-              <Download size={16} />
-            </button>
-
             {/* Info Perangkat Toggle */}
             <button
               onClick={() => setIsInfoPerangkatOpen(true)}
@@ -2428,7 +2418,8 @@ return Math.min(base, 100);
                 setDriver(null);
                 setStep("auth");
               }}
-              className="w-9 h-9 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0"
+              className="w-9 h-9 bg-red-500 border border-red-400 text-white rounded-xl flex items-center justify-center hover:bg-red-600 transition-all shrink-0 shadow-lg shadow-red-500/20"
+              title="Keluar"
             >
               <LogOut size={16} />
             </button>

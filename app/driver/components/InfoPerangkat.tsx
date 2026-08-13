@@ -305,6 +305,9 @@ export default function InfoPerangkat({
   } else if (gpsStatus === "recovering") {
     gpsTone = "warn";
     gpsLabel = "Memulihkan GPS...";
+  } else if (gpsStatus === "inactive") {
+    gpsTone = "neutral";
+    gpsLabel = "Tidak Aktif (Tidak ada tugas)";
   } else {
     gpsTone = "warn";
     gpsLabel = "Belum mendapatkan lokasi";
