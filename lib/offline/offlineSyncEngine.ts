@@ -403,7 +403,18 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
           return queue.map(p => pingIds.includes(p.id) ? { ...p, status: 'SYNCING' } : p);
         });
 
-        const driverId = localStorage.getItem('sentralogis_driver_id') || '';
+        let driverId = '';
+        const sessionData = localStorage.getItem('sentralogis_driver_session');
+        if (sessionData) {
+          try {
+            const session = JSON.parse(sessionData);
+            driverId = session.driver_id || '';
+          } catch(e) {
+            console.error('[OfflineSyncEngine] Failed to parse driver session:', e);
+          }
+        }
+
+        console.info(`[GPS_SYNC_FORENSIC] SYNC_REQUEST_AUTH job_order_id=${joId} token_present=${!!joId} driver_id_present=${!!driverId} driver_id_source=sentralogis_driver_session x_driver_id_present=${!!driverId}`);
 
         const payload = {
           action: 'gps_ping_batch',
