@@ -275,7 +275,7 @@ export default function DriverReadinessGate({
           const handleNativeGps = (e: CustomEvent) => {
             if (!e.detail) return;
             
-            console.info(`[GPS_SYNC_FORENSIC] NATIVE_HYDRATION event=sentralogis:native_gps_update lat=${e.detail.latitude} lng=${e.detail.longitude} recorded_at=${e.detail.recordedAt || e.detail.recorded_at}`);
+            console.info(`[GPS_SYNC_FORENSIC] NATIVE_EVENT_RECEIVED event_name=sentralogis:native_gps_update latitude=${e.detail.latitude} longitude=${e.detail.longitude} recorded_at=${e.detail.recordedAt || e.detail.recorded_at} source=native_sqlite`);
             
             const sample: GpsSample = {
               latitude: e.detail.latitude,
