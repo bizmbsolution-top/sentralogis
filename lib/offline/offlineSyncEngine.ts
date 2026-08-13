@@ -57,11 +57,12 @@ export interface MutationAction {
 
 export interface GpsPing {
   id: string;
+  client_ping_id: string;
   job_order_id: string;
   lat: number;
   lng: number;
   timestamp: string;
-  status: 'PENDING' | 'SYNCED' | 'FAILED';
+  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
   retry_count: number;
   source?: string;
   battery?: number;
@@ -271,8 +272,10 @@ export async function enqueueGpsPing(
   speed?: number,
   accuracy?: number,
 ): Promise<GpsPing> {
+  const clientPingId = `uuid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const ping: GpsPing = {
-    id: `gps_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    id: clientPingId,
+    client_ping_id: clientPingId,
     job_order_id: jobOrderId,
     lat,
     lng,
@@ -297,7 +300,7 @@ export async function enqueueGpsPing(
 export async function getPendingGpsPings(): Promise<GpsPing[]> {
   try {
     const queue: GpsPing[] | undefined = await get(GPS_PING_QUEUE_KEY);
-    return (queue || []).filter(p => p.status === 'PENDING' || p.status === 'FAILED');
+    return (queue || []).filter(p => p.status === 'PENDING' || p.status === 'FAILED' || p.status === 'SYNCING');
   } catch (err) {
     console.error('[OfflineSyncEngine] Error retrieving GPS pings:', err);
     return [];
@@ -343,37 +346,90 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
   let syncedGps = 0;
   let failedCount = 0;
 
-  for (const ping of gpsPings) {
-    try {
-      const response = await fetch(`/api/jo/${ping.job_order_id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({
-          action: 'gps_ping',
-          lat: ping.lat,
-          lng: ping.lng,
-          recorded_at: ping.timestamp,
-          source: ping.source || 'pwa',
-          battery: ping.battery,
-          speed: ping.speed,
-          accuracy: ping.accuracy,
-        }),
-      });
+  if (gpsPings.length > 0) {
+    const batch = gpsPings.slice(0, 50);
+    const grouped: Record<string, GpsPing[]> = {};
+    for (const p of batch) {
+      if (!grouped[p.job_order_id]) grouped[p.job_order_id] = [];
+      grouped[p.job_order_id].push(p);
+    }
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API ${response.status}: ${errText}`);
+    for (const [joId, pings] of Object.entries(grouped)) {
+      try {
+        const pingIds = pings.map(p => p.id);
+        await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+          if (!queue) return [];
+          return queue.map(p => pingIds.includes(p.id) ? { ...p, status: 'SYNCING' } : p);
+        });
+
+        // Need driverId for strict auth
+        const driverId = localStorage.getItem('sentralogis_driver_id') || '';
+
+        const payload = {
+          action: 'gps_ping_batch',
+          pings: pings.map(p => ({
+            client_ping_id: p.client_ping_id,
+            latitude: p.lat,
+            longitude: p.lng,
+            recorded_at: p.timestamp,
+            source: p.source || 'pwa_batch',
+            battery: p.battery,
+            speed: p.speed,
+            accuracy: p.accuracy
+          })),
+          internet_connected: true,
+          background_running: true
+        };
+
+        const response = await fetch(`/api/jo/${joId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+            'x-driver-id': driverId
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`API ${response.status}: ${errText}`);
+        }
+
+        const resData = await response.json();
+        if (resData.success) {
+           const acceptedIds = [...(resData.ack?.accepted || []), ...(resData.ack?.duplicates || [])];
+           await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+             if (!queue) return [];
+             return queue.filter(p => !acceptedIds.includes(p.client_ping_id));
+           });
+           syncedGps += acceptedIds.length;
+           
+           if (resData.geofence_triggered && typeof window !== 'undefined') {
+             window.dispatchEvent(
+               new CustomEvent("sentralogis:geofence_arrival", {
+                 detail: resData,
+               })
+             );
+           }
+           if (resData.jo_status && typeof window !== 'undefined') {
+             window.dispatchEvent(
+               new CustomEvent("sentralogis:jo_completed", {
+                 detail: { status: resData.jo_status },
+               })
+             );
+           }
+        } else {
+           throw new Error(resData.error || 'Batch failed');
+        }
+      } catch (err: any) {
+        console.error(`[OfflineSyncEngine] GPS ping batch failed for JO ${joId}:`, err);
+        failedCount += pings.length;
+        await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
+          if (!queue) return [];
+          return queue.map(p => pings.some(ping => ping.id === p.id) ? { ...p, status: 'PENDING' } : p);
+        });
       }
-
-      await removeGpsPingFromQueue(ping.id);
-      syncedGps++;
-    } catch (err: any) {
-      console.error(`[OfflineSyncEngine] GPS ping sync failed:`, err);
-      failedCount++;
-      await updateGpsPingStatus(ping.id, 'FAILED');
     }
   }
 

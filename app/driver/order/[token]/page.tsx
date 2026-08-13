@@ -88,6 +88,10 @@ export default function JoConfirmationPage({
   useEffect(() => {
     if (!session || !token) return;
 
+    console.log("[ROUTE_FORENSIC] DRIVER_ORDER");
+    console.log("[ROUTE_FORENSIC] current pathname = /driver/order/" + token);
+    console.log("[ROUTE_FORENSIC] token =", token);
+
     let isMounted = true;
     async function fetchJO() {
       try {

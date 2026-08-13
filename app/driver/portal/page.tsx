@@ -44,8 +44,10 @@ import {
   FolderGit2,
   FileText,
   ImageIcon,
+  Smartphone,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import InfoPerangkat from "@/app/driver/components/InfoPerangkat";
 import { useGoogleMaps } from "@/lib/google-maps-context";
 import {
   GoogleMap,
@@ -97,6 +99,7 @@ export default function DriverPortal() {
 
   // SOS States
   const [isSOSModalOpen, setIsSOSModalOpen] = useState(false);
+  const [isInfoPerangkatOpen, setIsInfoPerangkatOpen] = useState(false);
   const [sosCategory, setSosCategory] = useState<string>("");
   const [sosDescription, setSosDescription] = useState<string>("");
   const [sosLoading, setSosLoading] = useState(false);
@@ -211,13 +214,20 @@ export default function DriverPortal() {
   useEffect(() => {
     if (!isSessionLoading) {
       if (!session) {
+        console.log("[READINESS_FORENSIC] PORTAL: NO SESSION, redirect to login");
         router.replace("/driver/login");
       } else {
         try {
           const pendingToken = localStorage.getItem("pending_jo_token");
+          console.log("[ROUTE_FORENSIC] DRIVER_PORTAL current pathname = /driver/portal");
+          console.log("[ROUTE_FORENSIC] DRIVER_PORTAL pending_jo_token =", pendingToken);
+          console.log("[ROUTE_FORENSIC] DRIVER_PORTAL target route = /driver/execution/" + pendingToken);
+          
           if (pendingToken) {
+            // NOTE: Do not remove token immediately, let the target route consume it if needed
+            // But actually it's safe to remove it here because we pass it via URL
             localStorage.removeItem("pending_jo_token");
-            router.replace(`/driver/order/${pendingToken}`);
+            router.replace(`/driver/execution/${pendingToken}`);
           }
         } catch (e) {
           console.warn("[Portal] Error checking pending JO token:", e);
@@ -330,9 +340,15 @@ export default function DriverPortal() {
         }
       } catch (e) {}
     }
+    const pendingToken = localStorage.getItem("pending_jo_token");
+    console.log("[JO_FLOW] pending token =", pendingToken);
     const setupStatus = localStorage.getItem("sentraship_setup_complete");
-    if (setupStatus !== "true") {
+    // [AI] Fix #1: If pending JO token is present, we are routing to execution.
+    // Skip SetupWizard completely to prevent concurrent GPS permission requests and component thrashing.
+    if (!pendingToken && setupStatus !== "true") {
       setIsSetupComplete(false);
+    } else if (pendingToken) {
+      console.log("[JO_FLOW] portal skipped setup");
     }
     setMounted(true);
   }, []);
@@ -1797,8 +1813,6 @@ export default function DriverPortal() {
       <div
         className={`min-h-screen pb-28 transition-colors duration-300 ${isDark ? "bg-slate-950 text-slate-100" : "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"}`}
       >
-        <Toaster position="top-center" />
-
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
             <button
@@ -1973,6 +1987,140 @@ export default function DriverPortal() {
               )}
             </div>
           </div>
+
+          {/* Fasilitas Opsional: Absen & Inspeksi dipindah ke Profil */}
+          <div
+            className={`mt-6 rounded-3xl p-5 shadow-xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} space-y-4`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 border-slate-150">
+              <h3 className="text-base font-black uppercase tracking-wider">
+                Fasilitas Harian
+              </h3>
+              <span className="text-[10px] font-black tracking-widest bg-indigo-500/10 text-indigo-500 px-2.5 py-0.5 rounded-full">
+                OPSIONAL
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Tombol Absen Masuk */}
+              <div
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                  activeShift
+                    ? "bg-emerald-500/5 border-emerald-500/20"
+                    : "bg-indigo-500/5 border-indigo-500/20"
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
+                      activeShift
+                        ? "bg-emerald-500 text-white"
+                        : "bg-indigo-600 text-white"
+                    }`}
+                  >
+                    <Clock size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black">Absen Masuk</h4>
+                    <p className="text-xs opacity-70">
+                      {activeShift
+                        ? `Sudah Absen - Truk ${activeShift.fleet?.plate_number}`
+                        : "Absen masuk untuk mencatat kehadiran Anda hari ini."}
+                    </p>
+                  </div>
+                </div>
+
+                {!activeShift ? (
+                  <button
+                    onClick={() => setIsAttendanceModalOpen(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
+                  >
+                    Absen
+                  </button>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs font-black text-emerald-500 flex items-center gap-1">
+                      ✓ Absen
+                    </span>
+                    <button
+                      onClick={handleCheckOut}
+                      disabled={loading}
+                      className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all disabled:opacity-50"
+                    >
+                      Check Out
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Tombol Cek Kendaraan */}
+              <div
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                  lastInspection
+                    ? "bg-emerald-500/5 border-emerald-500/20"
+                    : "bg-orange-500/5 border-orange-500/20"
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
+                      lastInspection
+                        ? "bg-emerald-500 text-white"
+                        : "bg-orange-500 text-white"
+                    }`}
+                  >
+                    <FileCheck size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black">Cek Kendaraan</h4>
+                    <p className="text-xs opacity-70">
+                      {lastInspection
+                        ? `Selesai - Status: ${lastInspection.status}`
+                        : "Inspeksi ban, rem, lampu demi keamanan jalan."}
+                    </p>
+                  </div>
+                </div>
+
+                {lastInspection ? (
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`block text-xs font-black ${lastInspection.status === "LAYAK JALAN" ? "text-emerald-500" : "text-red-500"}`}
+                    >
+                      {lastInspection.status === "LAYAK JALAN"
+                        ? "✓ Layak"
+                        : "✕ Rusak"}
+                    </span>
+                    <span className="text-[10px] opacity-60">
+                      Score: {lastInspection.total_score}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsInspectionModalOpen(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
+                  >
+                    Periksa
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("sentralogis_driver_session");
+              setDriver(null);
+              setStep("auth");
+            }}
+            className={`mt-6 w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-rose-500/20 ${
+              isDark 
+                ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20" 
+                : "bg-white border border-rose-100 text-rose-600 hover:bg-rose-50"
+            }`}
+          >
+            <LogOut size={18} />
+            KELUAR DARI AKUN (LOGOUT)
+          </button>
         </div>
 
         <nav
@@ -2010,8 +2158,6 @@ export default function DriverPortal() {
       <div
         className={`min-h-screen pb-28 transition-colors duration-300 ${isDark ? "bg-slate-950 text-slate-100" : "bg-gradient-to-br from-orange-500 via-red-500 to-pink-500"}`}
       >
-        <Toaster position="top-center" />
-
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <button
@@ -2219,8 +2365,6 @@ return Math.min(base, 100);
     <div
       className={`min-h-screen pb-28 font-sans transition-colors duration-300 ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"}`}
     >
-      <Toaster position="top-center" />
-
       {/* Visual Premium Header */}
       <header
         className={`relative p-4 pb-14 rounded-b-[2.5rem] shadow-2xl overflow-hidden transition-all duration-300 ${isDark ? "bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white border-b border-indigo-900/20" : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white"}`}
@@ -2254,6 +2398,15 @@ return Math.min(base, 100);
               title="Unduh Aplikasi SentraLogis"
             >
               <Download size={16} />
+            </button>
+
+            {/* Info Perangkat Toggle */}
+            <button
+              onClick={() => setIsInfoPerangkatOpen(true)}
+              className="w-9 h-9 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center hover:bg-white/20 transition-all shrink-0"
+              title="Info Perangkat & GPS"
+            >
+              <Smartphone size={16} />
             </button>
 
             {/* Mode Switcher */}
@@ -2322,124 +2475,6 @@ return Math.min(base, 100);
 
       {/* Main Container - Dashboard Body */}
       <main className="p-5 space-y-6 -mt-6 relative z-20">
-        {/* Fasilitas Opsional: Absen & Inspeksi (tidak mengunci tugas) */}
-        <div
-          className={`rounded-3xl p-5 shadow-xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} space-y-4`}
-        >
-          <div className="flex items-center justify-between border-b pb-3 border-slate-150">
-            <h3 className="text-base font-black uppercase tracking-wider">
-              Fasilitas Harian
-            </h3>
-            <span className="text-[10px] font-black tracking-widest bg-indigo-500/10 text-indigo-500 px-2.5 py-0.5 rounded-full">
-              OPSIONAL
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {/* Tombol Absen Masuk */}
-            <div
-              className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                activeShift
-                  ? "bg-emerald-500/5 border-emerald-500/20"
-                  : "bg-indigo-500/5 border-indigo-500/20"
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                    activeShift
-                      ? "bg-emerald-500 text-white"
-                      : "bg-indigo-600 text-white"
-                  }`}
-                >
-                  <Clock size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Absen Masuk</h4>
-                  <p className="text-xs opacity-70">
-                    {activeShift
-                      ? `Sudah Absen - Truk ${activeShift.fleet?.plate_number}`
-                      : "Absen masuk untuk mencatat kehadiran Anda hari ini."}
-                  </p>
-                </div>
-              </div>
-
-              {!activeShift ? (
-                <button
-                  onClick={() => setIsAttendanceModalOpen(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
-                >
-                  Absen
-                </button>
-              ) : (
-                <div className="flex gap-2 items-center">
-                  <span className="text-xs font-black text-emerald-500 flex items-center gap-1">
-                    ✓ Absen
-                  </span>
-                  <button
-                    onClick={handleCheckOut}
-                    disabled={loading}
-                    className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    Check Out
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Tombol Cek Kendaraan */}
-            <div
-              className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                lastInspection
-                  ? "bg-emerald-500/5 border-emerald-500/20"
-                  : "bg-orange-500/5 border-orange-500/20"
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
-                    lastInspection
-                      ? "bg-emerald-500 text-white"
-                      : "bg-orange-500 text-white"
-                  }`}
-                >
-                  <FileCheck size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Cek Kendaraan</h4>
-                  <p className="text-xs opacity-70">
-                    {lastInspection
-                      ? `Selesai - Status: ${lastInspection.status}`
-                      : "Inspeksi ban, rem, lampu demi keamanan jalan."}
-                  </p>
-                </div>
-              </div>
-
-              {lastInspection ? (
-                <div className="text-right shrink-0">
-                  <span
-                    className={`block text-xs font-black ${lastInspection.status === "LAYAK JALAN" ? "text-emerald-500" : "text-red-500"}`}
-                  >
-                    {lastInspection.status === "LAYAK JALAN"
-                      ? "✓ Layak"
-                      : "✕ Rusak"}
-                  </span>
-                  <span className="text-[10px] opacity-60">
-                    Score: {lastInspection.total_score}
-                  </span>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsInspectionModalOpen(true)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all"
-                >
-                  Periksa
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Visual premium separation of jobs */}
         {(() => {
           const activeJob = jobOrders.find(
@@ -4725,6 +4760,16 @@ return Math.min(base, 100);
             </div>
           </div>
         </div>
+      )}
+
+      {/* Komponen Info Perangkat Modal */}
+      {isInfoPerangkatOpen && (
+        <InfoPerangkat
+          open={isInfoPerangkatOpen}
+          onClose={() => setIsInfoPerangkatOpen(false)}
+          tenantName={tenantInfo?.name || "SENTRALOGIS"}
+          isNative={isNativeApp}
+        />
       )}
     </div>
   );

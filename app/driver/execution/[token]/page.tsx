@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, use, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -47,6 +47,42 @@ import DriverReadinessGate from "../../../jo/[token]/components/DriverReadinessG
 import { useTTS } from "@/lib/hooks/useTTS";
 import { useDriverAuth } from "@/lib/hooks/useDriverAuth";
 import InfoPerangkat from "../../components/InfoPerangkat";
+import React from "react";
+
+// Error Boundary for Google Maps to prevent page crashes if API Key is restricted
+class MapErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  componentDidMount() {
+    // Google Maps API calls this global function on authentication failure (e.g. invalid API key, restricted domain)
+    (window as any).gm_authFailure = () => {
+      this.setState({ hasError: true });
+    };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.warn("Map rendering error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 p-4 text-center rounded-2xl">
+          <div className="flex flex-col items-center gap-2">
+            <MapPin size={24} className="opacity-50" />
+            <span className="text-xs font-bold">Peta tidak tersedia (API Key Error)</span>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface RouteStop {
   id: string;
@@ -117,6 +153,17 @@ export default function JoExecutionPage({
   const router = useRouter();
   const { isLoaded } = useGoogleMaps();
   const { session, isLoading: sessionLoading } = useDriverAuth();
+
+  useEffect(() => {
+    console.log("[ROUTE_FORENSIC] DRIVER_EXECUTION");
+    console.log("[ROUTE_FORENSIC] current pathname = /driver/execution/" + token);
+    
+    console.log("[READINESS_FORENSIC] EXECUTION PAGE MOUNT");
+    console.log("[READINESS_FORENSIC] TOKEN IN EXECUTION:", token);
+    const storedToken = localStorage.getItem("pending_jo_token");
+    console.log("[READINESS_FORENSIC] pending_jo_token AT EXECUTION:", storedToken);
+    console.log("[READINESS_FORENSIC] IS_NATIVE_EXECUTION:", Capacitor.isNativePlatform());
+  }, [token]);
 
   const [isNative, setIsNative] = useState<boolean>(true);
   const [gpsStatus, setGpsStatus] = useState<
@@ -571,7 +618,16 @@ export default function JoExecutionPage({
   }
 
   // Stage 5 Readiness Gate (Appears ONLY AFTER acceptance when readiness is not complete)
-  if (!readinessComplete && (jobOrder.status || "").toUpperCase() === "ASSIGNED") {
+  const isAssignedOrAccepted = ["ASSIGNED", "ACCEPTED", "CONFIRMED_BY_DRIVER", "ORDER DITERIMA"].includes(
+    (jobOrder.status || "").toUpperCase()
+  );
+
+  console.log("[READINESS_FORENSIC] JOB_ORDER_LOADED");
+  console.log("[READINESS_FORENSIC] JOB_STATUS:", (jobOrder.status || "").toUpperCase());
+  console.log("[READINESS_FORENSIC] READINESS_COMPLETE:", readinessComplete);
+  console.log("[READINESS_FORENSIC] GATE_CONDITION (!readinessComplete && isAssignedOrAccepted):", !readinessComplete && isAssignedOrAccepted);
+
+  if (!readinessComplete && isAssignedOrAccepted) {
     return (
       <DriverReadinessGate
         token={token}
@@ -638,7 +694,8 @@ export default function JoExecutionPage({
           </div>
           <div className="h-64 rounded-2xl overflow-hidden border border-slate-200 relative bg-slate-50">
             {isLoaded ? (
-              <GoogleMap
+              <MapErrorBoundary>
+                <GoogleMap
                 mapContainerStyle={{ width: "100%", height: "100%" }}
                 center={mapCenter}
                 zoom={driverPosition ? 14 : 11}
@@ -708,6 +765,7 @@ export default function JoExecutionPage({
                   />
                 )}
               </GoogleMap>
+              </MapErrorBoundary>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />

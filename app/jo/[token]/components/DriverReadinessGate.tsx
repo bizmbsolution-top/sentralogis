@@ -73,13 +73,13 @@ export default function DriverReadinessGate({
   isNative,
   onReady,
 }: DriverReadinessGateProps) {
-  // Network state
+  // ─── STATE ──────────────────────────────────────────────────
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
-
   // GPS state
   const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [gpsChecking, setGpsChecking] = useState(true);
 
   // GPS samples
@@ -101,6 +101,7 @@ export default function DriverReadinessGate({
   );
   const sampleIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nativeGpsListenerRef = useRef<any>(null);
+  const permissionRequestInFlight = useRef(false);
 
   // ─── NETWORK MONITORING ─────────────────────────────────────
   useEffect(() => {
@@ -116,7 +117,10 @@ export default function DriverReadinessGate({
     window.addEventListener("offline", onOffline);
     // Initial log
     console.log(`[DRIVER_READY] NETWORK=${navigator.onLine ? "ON" : "OFF"}`);
+    
+    console.log("[JO_FLOW] readiness mount\n[GPS_READINESS_LIFECYCLE]\nMOUNT");
     return () => {
+      console.log("[JO_FLOW] ...\n[GPS_FLOW] readiness UNMOUNT\n[GPS_READINESS_LIFECYCLE]\nUNMOUNT");
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
@@ -124,16 +128,50 @@ export default function DriverReadinessGate({
 
   // ─── GPS STATUS CHECK ───────────────────────────────────────
   useEffect(() => {
+    console.log("[GPS_READINESS_LIFECYCLE]\nPERMISSION_EFFECT_START");
     let cancelled = false;
 
     const checkGps = async () => {
       try {
         if (isNative) {
-          // Native: use NativeGpsManager.isGpsEnabled()
+          // Native: check permissions separately from LocationService
           const { NativeGpsManager } = await import("@/lib/services/NativeGpsManager");
+          const { Geolocation } = await import("@capacitor/geolocation");
+          
+          let hasPerm = false;
+          try {
+            const perm = await Geolocation.checkPermissions();
+            console.log(`[GPS_PERMISSION_FORENSIC]\ninitial checkPermissions = ${JSON.stringify(perm)}\nisNative = true`);
+            hasPerm = perm.location === "granted" || perm.coarseLocation === "granted";
+            if (!hasPerm && (perm.location === "prompt" || perm.coarseLocation === "prompt" || perm.location === "prompt-with-rationale")) {
+               if (!permissionRequestInFlight.current) {
+                 permissionRequestInFlight.current = true;
+                 console.log("[GPS_PERMISSION_FORENSIC]\n=== BEFORE requestPermissions ===");
+                 try {
+                   const req = await Geolocation.requestPermissions();
+                   console.log(`[GPS_PERMISSION_FORENSIC]\n=== AFTER requestPermissions ===\nresult = ${JSON.stringify(req)}`);
+                   hasPerm = req.location === "granted" || req.coarseLocation === "granted";
+                 } catch (reqErr) {
+                   console.log(`[GPS_PERMISSION_FORENSIC]\n=== requestPermissions EXCEPTION ===\nerror = ${reqErr}`);
+                 } finally {
+                   permissionRequestInFlight.current = false;
+                 }
+               } else {
+                 console.log("[GPS_PERMISSION_FORENSIC]\nSkipping auto-requestPermissions, already in-flight");
+               }
+            }
+          } catch (e) {
+            console.warn("[GPS_PERMISSION_FORENSIC] Geolocation permission check failed", e);
+          }
+
+          console.log("[GPS_PERMISSION_FORENSIC]\n=== BEFORE isGpsEnabled ===");
           const enabled = await NativeGpsManager.isGpsEnabled();
+          console.log(`[GPS_PERMISSION_FORENSIC]\n=== AFTER isGpsEnabled ===\nenabled = ${enabled}`);
+
           if (!cancelled) {
-            console.log(`[DRIVER_READY] GPS=${enabled ? "ON" : "OFF"}`);
+            console.log(`[GPS_PERMISSION_FORENSIC]\nfinal permission = ${hasPerm}\ngpsEnabled = ${enabled}`);
+            console.log(`[GPS_PERMISSION_FORENSIC]\nSetting permissionGranted = ${hasPerm}, gpsEnabled = ${enabled}`);
+            setPermissionGranted(hasPerm);
             setGpsEnabled(enabled);
             setGpsChecking(false);
           }
@@ -143,15 +181,19 @@ export default function DriverReadinessGate({
             const perm = await navigator.permissions.query({
               name: "geolocation" as PermissionName,
             });
+            console.log("[GPS_PERMISSION_FORENSIC] Browser permissions.query =>", perm.state);
             if (!cancelled) {
-              const enabled = perm.state !== "denied";
-              console.log(`[DRIVER_READY] GPS=${enabled ? "ON" : "OFF"}`);
-              setGpsEnabled(enabled);
+              const hasPerm = perm.state !== "denied";
+              console.log(`[DRIVER_READY] [GPS_PERMISSION_FORENSIC] PERMISSION=${hasPerm ? "GRANTED" : "DENIED"} GPS=${hasPerm ? "ON" : "OFF"}`);
+              setPermissionGranted(hasPerm);
+              setGpsEnabled(hasPerm); // Browser can't easily check if location service is on until we sample
               setGpsChecking(false);
             }
-          } catch {
+          } catch (e) {
+            console.log("[GPS_PERMISSION_FORENSIC] Browser permissions.query failed", e);
             // Permissions API not supported, try getCurrentPosition
             if (!cancelled) {
+              setPermissionGranted(true);
               setGpsEnabled(true); // Assume enabled, will fail during sampling if not
               setGpsChecking(false);
             }
@@ -160,6 +202,7 @@ export default function DriverReadinessGate({
       } catch (e) {
         console.warn("[ReadinessGate] GPS check error:", e);
         if (!cancelled) {
+          setPermissionGranted(false);
           setGpsEnabled(false);
           setGpsChecking(false);
         }
@@ -171,6 +214,7 @@ export default function DriverReadinessGate({
     gpsCheckIntervalRef.current = setInterval(checkGps, 2000);
 
     return () => {
+      console.log("[GPS_READINESS_LIFECYCLE]\nPERMISSION_EFFECT_END");
       cancelled = true;
       if (gpsCheckIntervalRef.current) {
         clearInterval(gpsCheckIntervalRef.current);
@@ -211,9 +255,9 @@ export default function DriverReadinessGate({
     });
   }, []);
 
-  // Start collecting samples when GPS and Network are both ON
+  // Start collecting samples when GPS and Network are both ON and permission granted
   useEffect(() => {
-    if (!isOnline || !gpsEnabled || gpsChecking) return;
+    if (!isOnline || permissionGranted === false || gpsEnabled === false || gpsChecking) return;
     if (samples.filter((s) => s.valid).length >= REQUIRED_SAMPLES) return;
 
     setCollectingSamples(true);
@@ -406,18 +450,107 @@ export default function DriverReadinessGate({
     };
   }, [isOnline, gpsEnabled, validSamples.length, sendStatus, onReady, token]);
 
+  // ─── FORENSIC LOGGING ──────────────────────────────────────
+  useEffect(() => {
+    // Check if we have valid samples
+    const validCount = samples.filter(s => s.valid).length;
+    const hasValid = validCount > 0;
+    
+    // Determine the UI message exactly as requested
+    let displayMessage = "";
+    if (gpsChecking) displayMessage = "MEMERIKSA...";
+    else if (permissionGranted === false) displayMessage = "IZIN LOKASI BELUM DIBERIKAN";
+    else if (gpsEnabled === false) displayMessage = "GPS / LOKASI PERANGKAT MATI";
+    else if (validCount < REQUIRED_SAMPLES) displayMessage = hasValid ? "Mengumpulkan data GPS..." : "Menunggu lokasi GPS...";
+    else displayMessage = "GPS READY";
+
+    console.log(`[GPS_READINESS]
+permission = ${permissionGranted}
+gpsEnabled = ${gpsEnabled}
+validSamples = ${validCount}
+readyComplete = ${readyComplete}
+final displayed message = ${displayMessage}
+    `);
+  }, [permissionGranted, gpsEnabled, gpsChecking, isNative, samples, sendStatus, readyComplete]);
+
   // ─── OPEN GPS SETTINGS ─────────────────────────────────────
+  const [gpsSettingsError, setGpsSettingsError] = useState<string | null>(null);
+
   const handleOpenGpsSettings = async () => {
+    console.log(`[GPS_PERMISSION_FORENSIC]
+=== BUTTON CLICKED ===
+isNative = ${isNative}
+permissionGranted = ${permissionGranted}
+gpsEnabled = ${gpsEnabled}
+gpsChecking = ${gpsChecking}
+current URL = ${typeof window !== "undefined" ? window.location.href : "unknown"}
+    `);
+    
+    setGpsSettingsError(null);
     try {
       if (isNative) {
-        const { registerPlugin } = await import("@capacitor/core");
-        const NativeGps = registerPlugin<any>("NativeGps");
-        await NativeGps.openLocationSettings();
+        if (permissionGranted === false) {
+           if (permissionRequestInFlight.current) {
+             console.log("[GPS_PERMISSION_FORENSIC]\nSkipping button requestPermissions, already in-flight");
+             return;
+           }
+           permissionRequestInFlight.current = true;
+           console.log("[GPS_PERMISSION_FORENSIC]\n=== BEFORE requestPermissions ===");
+           const { Geolocation } = await import("@capacitor/geolocation");
+           try {
+             const req = await Geolocation.requestPermissions();
+             console.log(`[GPS_PERMISSION_FORENSIC]\n=== AFTER requestPermissions ===\nresult = ${JSON.stringify(req)}`);
+             const hasPerm = req.location === "granted" || req.coarseLocation === "granted";
+             
+             console.log(`[GPS_PERMISSION_FORENSIC]\nhasPerm = ${hasPerm}\nrequestResult = ${JSON.stringify(req)}\nSetting permissionGranted = ${hasPerm}`);
+             setPermissionGranted(hasPerm);
+             if (!hasPerm) {
+               setGpsSettingsError("Izin lokasi ditolak secara permanen. Silakan buka Settings > Apps > SentraLogis dan izinkan Lokasi.");
+             }
+           } catch (reqErr) {
+             console.log(`[GPS_PERMISSION_FORENSIC]\n=== requestPermissions EXCEPTION ===\nerror = ${reqErr}`);
+           } finally {
+             permissionRequestInFlight.current = false;
+           }
+         } else {
+           const { NativeGpsManager } = await import("@/lib/services/NativeGpsManager");
+           await NativeGpsManager.openLocationSettings();
+         }
       } else {
-        alert("Silakan aktifkan GPS di pengaturan perangkat Anda.");
+        if (!navigator.geolocation) {
+          setGpsSettingsError("Browser ini tidak mendukung Geolocation.");
+          return;
+        }
+        try {
+          await navigator.permissions.query({ name: "geolocation" as PermissionName });
+          await navigator.geolocation.getCurrentPosition(
+            () => setGpsEnabled(true),
+            (err) => {
+              if (err.code === 1) {
+                setGpsSettingsError("Izin lokasi ditolak. Silakan aktifkan GPS & izin lokasi di pengaturan browser.");
+              } else {
+                setGpsSettingsError("Gagal mengakses GPS. Pastikan GPS aktif dan izin lokasi diberikan.");
+              }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+          );
+        } catch {
+          await navigator.geolocation.getCurrentPosition(
+            () => setGpsEnabled(true),
+            (err) => {
+              if (err.code === 1) {
+                setGpsSettingsError("Izin lokasi ditolak. Silakan aktifkan GPS & izin lokasi di pengaturan browser.");
+              } else {
+                setGpsSettingsError("Gagal mengakses GPS. Pastikan GPS aktif dan izin lokasi diberikan.");
+              }
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+          );
+        }
       }
     } catch (e) {
       console.warn("[ReadinessGate] Could not open GPS settings:", e);
+      setGpsSettingsError("Gagal membuka pengaturan GPS. Silakan aktifkan GPS secara manual di perangkat Anda.");
     }
   };
 
@@ -490,18 +623,22 @@ export default function DriverReadinessGate({
                   className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                     gpsChecking
                       ? "bg-amber-500/20"
-                      : gpsEnabled
-                        ? "bg-emerald-500/20"
-                        : "bg-red-500/20"
+                      : permissionGranted === false
+                        ? "bg-red-500/20"
+                        : gpsEnabled === false
+                          ? "bg-amber-500/20"
+                          : "bg-emerald-500/20"
                   }`}
                 >
                   <Satellite
                     className={`w-5 h-5 ${
                       gpsChecking
                         ? "text-amber-400 animate-pulse"
-                        : gpsEnabled
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                        : permissionGranted === false
+                          ? "text-red-400"
+                          : gpsEnabled === false
+                            ? "text-amber-400"
+                            : "text-emerald-400"
                     }`}
                   />
                 </div>
@@ -511,44 +648,55 @@ export default function DriverReadinessGate({
                     className={`text-xs font-semibold ${
                       gpsChecking
                         ? "text-amber-400"
-                        : gpsEnabled
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                        : permissionGranted === false
+                          ? "text-red-400"
+                          : gpsEnabled === false
+                            ? "text-amber-400"
+                            : "text-emerald-400"
                     }`}
                   >
                     {gpsChecking
                       ? "MEMERIKSA..."
-                      : gpsEnabled
-                        ? "GPS ON"
-                        : "GPS OFF"}
+                      : permissionGranted === false
+                        ? "IZIN DITOLAK"
+                        : gpsEnabled === false
+                          ? "GPS MATI"
+                          : "GPS ON"}
                   </p>
                 </div>
               </div>
               {gpsChecking ? (
                 <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
-              ) : gpsEnabled ? (
+              ) : permissionGranted !== false && gpsEnabled !== false ? (
                 <CheckCircle2 className="w-6 h-6 text-emerald-400" />
               ) : (
                 <AlertCircle className="w-6 h-6 text-red-400" />
               )}
             </div>
-            {!gpsChecking && !gpsEnabled && (
+            {!gpsChecking && (permissionGranted === false || gpsEnabled === false) && (
               <div className="mt-3 space-y-2">
                 <p className="text-red-300 text-xs bg-red-500/10 rounded-lg p-2">
-                  GPS diperlukan untuk menjalankan Job Order.
+                  {permissionGranted === false 
+                    ? "IZIN LOKASI BELUM DIBERIKAN. Silakan izinkan akses lokasi."
+                    : "GPS / LOKASI PERANGKAT MATI. Silakan aktifkan Location."}
                 </p>
                 <button
                   onClick={handleOpenGpsSettings}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95"
                 >
-                  AKTIFKAN GPS
+                  {permissionGranted === false ? "BERI IZIN" : "AKTIFKAN GPS"}
                 </button>
+                {gpsSettingsError && (
+                  <p className="text-red-300 text-[10px] bg-red-500/10 rounded-lg p-2 leading-relaxed">
+                    {gpsSettingsError}
+                  </p>
+                )}
               </div>
             )}
           </div>
 
           {/* GPS Samples */}
-          {isOnline && gpsEnabled && !gpsChecking && (
+          {isOnline && permissionGranted !== false && gpsEnabled !== false && !gpsChecking && (
             <div className="bg-slate-800/80 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
@@ -559,7 +707,9 @@ export default function DriverReadinessGate({
                   <p className="text-indigo-400 text-xs font-semibold">
                     {validCount >= REQUIRED_SAMPLES
                       ? "GPS READY"
-                      : `Mengumpulkan data GPS...`}
+                      : validCount > 0 
+                        ? "Mengumpulkan data GPS..." 
+                        : "Menunggu lokasi GPS..."}
                   </p>
                 </div>
               </div>
@@ -726,7 +876,7 @@ export default function DriverReadinessGate({
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500 ease-out"
                 style={{
-                  width: `${Math.min(100, (([isOnline, gpsEnabled, validCount >= REQUIRED_SAMPLES, sendStatus === "SENT" || sendStatus === "QUEUED"].filter(Boolean).length + (validCount / REQUIRED_SAMPLES) * 0.5) / 4.5) * 100)}%`,
+                  width: `${Math.min(100, (([isOnline, permissionGranted !== false && gpsEnabled !== false, validCount >= REQUIRED_SAMPLES, sendStatus === "SENT" || sendStatus === "QUEUED"].filter(Boolean).length + (validCount / REQUIRED_SAMPLES) * 0.5) / 4.5) * 100)}%`,
                 }}
               />
             </div>

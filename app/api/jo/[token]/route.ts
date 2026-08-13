@@ -773,6 +773,264 @@ export async function PATCH(
       }
 
       // ─────────────────────────────────────────────────────────────────
+      // GPS PING BATCH — Queue-First Store and Forward Endpoint
+      // ─────────────────────────────────────────────────────────────────
+      case "gps_ping_batch": {
+        const pings = body.pings || [];
+        if (!Array.isArray(pings) || pings.length === 0) {
+          return NextResponse.json({ error: "Empty batch" }, { status: 400 });
+        }
+
+        const accepted: string[] = [];
+        const duplicates: string[] = [];
+        const failed: any[] = [];
+        let geofenceTriggered = false;
+        let arrivedStopName: string | null = null;
+        let geofenceDistanceM: number | null = null;
+        let departedStopName: string | null = null;
+
+        // Sort pings chronologically
+        pings.sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+
+        // We fetch active routes once per batch to process geofence sequentially
+        let { data: activeRoutes } = await supabase
+          .from("job_routes")
+          .select("*")
+          .eq("job_order_id", jo.id)
+          .in("status", jo.status === "MENUNGGU SELESAI" ? ["pending", "arrived", "completed"] : ["pending", "arrived"])
+          .order("sequence", { ascending: true });
+        
+        let currentJoStatus = jo.status;
+        const GEOFENCE_RADIUS_M = 2000;
+
+        for (const ping of pings) {
+          if (!ping.client_ping_id || !ping.latitude || !ping.longitude) {
+            failed.push({ id: ping.client_ping_id, reason: "invalid_data" });
+            continue;
+          }
+
+          const nLat = Number(ping.latitude);
+          const nLng = Number(ping.longitude);
+          const recordedAt = ping.recorded_at ? new Date(ping.recorded_at) : new Date();
+
+          // 1. Idempotency Check & Insert
+          const pingPayload: any = {
+            client_ping_id: ping.client_ping_id,
+            job_order_id: jo.id,
+            status_update: "GPS_PING_BATCH",
+            latitude: nLat,
+            longitude: nLng,
+            source: ping.source || "pwa_batch",
+            notes: "Batch GPS ping",
+            recorded_at: recordedAt.toISOString()
+          };
+          if (ping.accuracy !== undefined) pingPayload.accuracy = ping.accuracy;
+          if (ping.speed !== undefined) pingPayload.speed = ping.speed;
+          if (ping.battery !== undefined) pingPayload.battery_level = ping.battery;
+
+          const { error: pingErr } = await supabase
+            .from("job_tracking")
+            .insert(pingPayload);
+          
+          if (pingErr) {
+            if (pingErr.code === '23505' || pingErr.message.includes('unique')) {
+              duplicates.push(ping.client_ping_id);
+            } else {
+              failed.push({ id: ping.client_ping_id, reason: pingErr.message });
+              continue; // Skip geofence for failed inserts
+            }
+          } else {
+            accepted.push(ping.client_ping_id);
+
+            // Persist to tracking_points (ignoring errors for this supplementary table)
+            await trackingService.recordPing(
+              mockCtx,
+              "JOB_ORDER",
+              jo.id,
+              nLat,
+              nLng,
+              recordedAt,
+              ping.accuracy,
+            );
+          }
+
+          // 2. Process Geofence for this point
+          if (activeRoutes && activeRoutes.length > 0) {
+            const pendingRoutes = activeRoutes.filter((r: any) => r.status === "pending");
+            const arrivedRoutes = activeRoutes.filter((r: any) => r.status === "arrived");
+            const completedRoutes = activeRoutes.filter((r: any) => r.status === "completed");
+
+            // 2a. Arrivals
+            let nearestPending: any = null;
+            let nearestDist = Infinity;
+            for (const route of pendingRoutes) {
+              if (route.latitude && route.longitude) {
+                const distM = calculateHaversineDistance(nLat, nLng, Number(route.latitude), Number(route.longitude));
+                if (route.geofence_triggered_at) {
+                  const lastTrigger = new Date(route.geofence_triggered_at).getTime();
+                  if (recordedAt.getTime() - lastTrigger < 5 * 60 * 1000) continue;
+                }
+                if (distM <= GEOFENCE_RADIUS_M && distM < nearestDist) {
+                  nearestDist = distM;
+                  nearestPending = route;
+                }
+              }
+            }
+
+            if (nearestPending) {
+              geofenceTriggered = true;
+              arrivedStopName = nearestPending.location_name || `Stop #${nearestPending.sequence}`;
+              geofenceDistanceM = Math.round(nearestDist);
+              
+              nearestPending.status = "arrived";
+              nearestPending.actual_arrival = recordedAt.toISOString();
+              nearestPending.geofence_triggered_at = recordedAt.toISOString();
+
+              await supabase.from("job_routes").update({
+                status: "arrived", actual_arrival: nearestPending.actual_arrival, geofence_triggered_at: nearestPending.geofence_triggered_at
+              }).eq("id", nearestPending.id);
+
+              // Auto-complete prior stops
+              const priorStops = activeRoutes.filter((r: any) => r.sequence < nearestPending.sequence && r.status !== "completed");
+              for (const prior of priorStops) {
+                prior.status = "completed";
+                prior.actual_departure = recordedAt.toISOString();
+                if (!prior.actual_arrival) prior.actual_arrival = recordedAt.toISOString();
+                
+                await supabase.from("job_routes").update({
+                  status: prior.status, actual_departure: prior.actual_departure, actual_arrival: prior.actual_arrival, notes: "Auto-completed"
+                }).eq("id", prior.id);
+
+                await supabase.from("job_tracking").insert({
+                  job_order_id: jo.id, job_route_id: prior.id, status_update: `⏭️ Stop dilewati: ${prior.location_name || 'Stop #' + prior.sequence}`,
+                  latitude: nLat, longitude: nLng, recorded_at: recordedAt.toISOString(), notes: `Otomatis dilompati karena driver tiba di ${arrivedStopName}.`
+                });
+              }
+
+              let newJoStatus: string | null = null;
+              if (nearestPending.sequence === 1 || nearestPending.stop_type === "PICKUP") newJoStatus = "TIBA DI LOKASI MUAT";
+              else if (nearestPending.stop_type === "DROPOFF" || nearestPending.sequence === activeRoutes.length) newJoStatus = "TIBA DI LOKASI BONGKAR";
+              else newJoStatus = "TIBA DI LOKASI TRANSIT";
+
+              const updateJoPayload: any = { status: newJoStatus, updated_at: new Date().toISOString() };
+              if (currentJoStatus === "ASSIGNED") {
+                updateJoPayload.accepted_at = recordedAt.toISOString();
+                updateJoPayload.started_at = recordedAt.toISOString();
+                updateJoPayload.driver_response = "accepted";
+              }
+              currentJoStatus = newJoStatus;
+              await supabase.from("job_orders").update(updateJoPayload).eq("id", jo.id);
+
+              await supabase.from("job_tracking").insert({
+                job_order_id: jo.id, job_route_id: nearestPending.id, status_update: `📍 Tiba di ${arrivedStopName} (Geofence Auto)`,
+                latitude: nLat, longitude: nLng, recorded_at: recordedAt.toISOString(), notes: `Otomatis terdeteksi dalam radius ${geofenceDistanceM}m.`
+              });
+            }
+
+            // 2b. Departures
+            for (const route of arrivedRoutes) {
+              if (route.latitude && route.longitude) {
+                const distM = calculateHaversineDistance(nLat, nLng, Number(route.latitude), Number(route.longitude));
+                if (route.actual_arrival && recordedAt.getTime() - new Date(route.actual_arrival).getTime() < 30_000) continue;
+
+                if (distM > 500) {
+                  departedStopName = route.location_name || `Stop #${route.sequence}`;
+                  route.status = "completed";
+                  route.actual_departure = recordedAt.toISOString();
+
+                  await supabase.from("job_routes").update({ status: "completed", actual_departure: route.actual_departure }).eq("id", route.id);
+
+                  let departJoStatus: string | null = null;
+                  const updateJoPayload: any = { updated_at: new Date().toISOString() };
+                  if (route.sequence === 1 || route.stop_type === "PICKUP") {
+                    departJoStatus = "BERANGKAT DARI LOKASI MUAT"; updateJoPayload.loaded_at = recordedAt.toISOString();
+                  } else if (route.stop_type === "DROPOFF" || route.sequence === activeRoutes.length) {
+                    departJoStatus = "MENUNGGU SELESAI"; updateJoPayload.unloaded_at = recordedAt.toISOString(); updateJoPayload.departure_detected_at = recordedAt.toISOString();
+                  } else {
+                    departJoStatus = "MELANJUTKAN PERJALANAN";
+                  }
+                  
+                  currentJoStatus = departJoStatus;
+                  updateJoPayload.status = departJoStatus;
+                  await supabase.from("job_orders").update(updateJoPayload).eq("id", jo.id);
+
+                  await supabase.from("job_tracking").insert({
+                    job_order_id: jo.id, job_route_id: route.id, status_update: `🚦 Keluar dari ${departedStopName} (Geofence Auto)`,
+                    latitude: nLat, longitude: nLng, recorded_at: recordedAt.toISOString(), notes: `Otomatis terdeteksi keluar dari radius ${Math.round(distM)}m.`
+                  });
+                }
+              }
+            }
+
+            // 2c. Re-entry
+            if (currentJoStatus === "MENUNGGU SELESAI") {
+              for (const route of completedRoutes) {
+                if (route.stop_type === "DROPOFF" || route.sequence === activeRoutes.length) {
+                  if (route.latitude && route.longitude) {
+                    const distM = calculateHaversineDistance(nLat, nLng, Number(route.latitude), Number(route.longitude));
+                    if (distM <= 300) {
+                      if (route.geofence_triggered_at && recordedAt.getTime() - new Date(route.geofence_triggered_at).getTime() < 5 * 60 * 1000) continue;
+                      
+                      geofenceTriggered = true;
+                      arrivedStopName = route.location_name || "Lokasi Bongkar";
+                      route.status = "arrived";
+                      route.actual_departure = null;
+                      route.geofence_triggered_at = recordedAt.toISOString();
+
+                      await supabase.from("job_routes").update({ status: "arrived", actual_departure: null, geofence_triggered_at: route.geofence_triggered_at }).eq("id", route.id);
+                      currentJoStatus = "TIBA DI LOKASI BONGKAR";
+                      await supabase.from("job_orders").update({ status: currentJoStatus, departure_detected_at: null, updated_at: new Date().toISOString() }).eq("id", jo.id);
+                      await supabase.from("job_tracking").insert({
+                        job_order_id: jo.id, job_route_id: route.id, status_update: `🔙 Kembali ke ${arrivedStopName} (Re-entry)`,
+                        latitude: nLat, longitude: nLng, recorded_at: recordedAt.toISOString(), notes: `Sistem mendeteksi armada kembali masuk ke radius 300m.`
+                      });
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Upsert fleet_gps_status with the last ping
+        if (pings.length > 0) {
+          const lastPing = pings[pings.length - 1];
+          const isEasyGoFleet = !!(jo.fleet?.easygo_vehicle_id);
+          if (jo.fleet_id && jo.tenant_id && !isEasyGoFleet) {
+            const nSpeed = Number(lastPing.speed) || 0;
+            try {
+              await supabase.from("fleet_gps_status").upsert({
+                fleet_id: jo.fleet_id, tenant_id: jo.tenant_id, latitude: Number(lastPing.latitude), longitude: Number(lastPing.longitude),
+                speed: nSpeed, gps_time: lastPing.recorded_at || new Date().toISOString(), status_vehicle: nSpeed > 5 ? 2 : nSpeed > 0 ? 1 : 0,
+                engine_on: true, provider: lastPing.source || "pwa_batch", updated_at: new Date().toISOString()
+              }, { onConflict: "fleet_id" });
+            } catch (e) {
+              console.warn("[API] fleet_gps_status upsert skipped:", e);
+            }
+          }
+          
+          if (body.internet_connected !== undefined || body.background_running !== undefined || body.battery !== undefined) {
+             let health_status = "GOOD";
+             if (body.internet_connected === false || body.background_running === false) health_status = "CRITICAL";
+             else if (body.battery !== undefined && body.battery < 20) health_status = "WARNING";
+             await supabase.from("job_orders").update({
+               device_health: health_status, last_device_health_ping_at: new Date().toISOString(), gps_status: "ACTIVE"
+             }).eq("id", jo.id);
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          ack: { accepted, duplicates, failed },
+          geofence_triggered: geofenceTriggered,
+          arrived_stop: arrivedStopName,
+          departed_stop: departedStopName,
+          jo_status: currentJoStatus
+        });
+      }
+
+      // ─────────────────────────────────────────────────────────────────
       // PANIC BUTTON SOS
       // ─────────────────────────────────────────────────────────────────
       case "panic_button": {
@@ -1128,3 +1386,4 @@ export async function PATCH(
 // [Phase 4D.17] Allow POST requests (acting as PATCH) for Android Native GPS fallback
 // because Android's built-in HttpURLConnection does not support PATCH.
 export const POST = PATCH;
+

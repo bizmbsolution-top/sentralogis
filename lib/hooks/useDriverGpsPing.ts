@@ -163,121 +163,14 @@ export function useDriverGpsPing(
     ) => {
       if (!token) return;
 
-      // If offline, queue GPS ping to IndexedDB instead of sending to API
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        await enqueueGpsPing(token, lat, lng, source, battery, speed, accuracy);
-        console.log(
-          `[GPS Ping] Queued offline GPS ping for JO: ${token} from ${source}`,
-        );
-        // Get updated queue length for UI
-        const qLen = await getGpsPingQueueLength();
-        emitPingState({ offlineQueueLength: qLen });
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/jo/${token}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true",
-          },
-          body: JSON.stringify({
-            action: "gps_ping",
-            lat,
-            lng,
-            recorded_at: new Date().toISOString(),
-            source,
-            battery,
-            speed,
-            accuracy,
-          }),
-        });
-
-        if (response.ok) {
-          // [Phase 2.1] Reset consecutive failures on success
-          consecutiveFailuresRef.current = 0;
-          pingCountRef.current += 1;
-          emitPingState({
-            status: "active",
-            consecutiveFailures: 0,
-            pingCount: pingCountRef.current,
-            accuracy: accuracy ?? null,
-            speed: speed ?? null,
-            battery: battery ?? null,
-          });
-
-          const result = await response.json();
-
-          // Stop GPS if JO is done on server
-          if (result && result.jo_status && DONE_STATUSES.includes(result.jo_status)) {
-            doneRef.current = true;
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-            emitPingState({ status: "inactive" });
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("sentralogis:jo_completed", {
-                  detail: { status: result.jo_status },
-                }),
-              );
-            }
-            return;
-          }
-
-          if (result && result.geofence_triggered) {
-            console.log("📍 [Geofence Triggered]", result);
-            if (typeof navigator !== "undefined" && navigator.vibrate) {
-              navigator.vibrate([400, 150, 400, 150, 600]);
-            }
-            if (typeof window !== "undefined" && "speechSynthesis" in window) {
-              try {
-                const msg = `Sentra Logis memberi tahu: Anda telah terdeteksi tiba di ${result.arrived_stop || "titik rute pengiriman"}. Status rute otomatis diperbarui.`;
-                const utterance = new SpeechSynthesisUtterance(msg);
-                utterance.lang = "id-ID";
-                window.speechSynthesis.speak(utterance);
-              } catch {}
-            }
-            if (onGeofenceArrival) onGeofenceArrival(result);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("sentralogis:geofence_arrival", {
-                  detail: result,
-                }),
-              );
-            }
-          }
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
-      } catch (e) {
-        console.warn("[GPS Ping] failed:", e);
-        // [Phase 2.1] Track consecutive failures
-        consecutiveFailuresRef.current += 1;
-        emitPingState({
-          status: consecutiveFailuresRef.current >= 3 ? "error" : "active",
-          consecutiveFailures: consecutiveFailuresRef.current,
-        });
-
-        // [Phase 2.1] Max retry: 10 gagal berturut-turut → stop ping, recover after 60s
-        if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
-          console.error(
-            `[GPS Ping] Stopped after ${MAX_CONSECUTIVE_FAILURES} consecutive failures. Will retry in 60s.`,
-          );
-          isStoppedRef.current = true;
-          emitPingState({ status: "error" });
-          setTimeout(() => {
-            consecutiveFailuresRef.current = 0;
-            isStoppedRef.current = false;
-            emitPingState({ status: "recovering" });
-            console.log("[GPS Ping] Recovery timer fired — resuming pings.");
-          }, 60_000);
-        }
-      }
+      // 1. Queue-First: Always enqueue GPS ping to IndexedDB
+      await enqueueGpsPing(token, lat, lng, source, battery, speed, accuracy);
+      console.log(`[QUEUE-FIRST] Queued GPS ping for JO: ${token} from ${source}`);
+      
+      const qLen = await getGpsPingQueueLength();
+      emitPingState({ offlineQueueLength: qLen, status: "active" });
     },
-    [token, onGeofenceArrival, emitPingState],
+    [token, emitPingState],
   );
 
   const pingBrowser = useCallback(async () => {
@@ -417,13 +310,20 @@ export function useDriverGpsPing(
       requestWakeLock();
       console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
       
-      
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
       
       pingBrowser();
-      intervalRef.current = setInterval(pingBrowser, GPS_PING_INTERVAL_MS);
+      intervalRef.current = setInterval(() => {
+         pingBrowser();
+         if (typeof navigator !== "undefined" && navigator.onLine) {
+             syncGpsPingsFirst().then(async () => {
+                 const qLen = await getGpsPingQueueLength();
+                 emitPingState({ offlineQueueLength: qLen });
+             }).catch(() => {});
+         }
+      }, GPS_PING_INTERVAL_MS);
     };
 
     console.log(`[GPS-DEBUG] hook mounted`);

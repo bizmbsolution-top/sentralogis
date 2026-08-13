@@ -214,6 +214,15 @@ class NativeGpsManagerClass {
       return false;
     }
   }
+
+  public async openLocationSettings(): Promise<void> {
+    if (!NativeGps) return;
+    try {
+      await NativeGps.openLocationSettings();
+    } catch (e) {
+      console.warn("[GPS-MANAGER] Failed to open location settings", e);
+    }
+  }
 }
 
 export const NativeGpsManager = new NativeGpsManagerClass();

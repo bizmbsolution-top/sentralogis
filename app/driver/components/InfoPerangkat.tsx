@@ -224,9 +224,22 @@ export default function InfoPerangkat({
     }
   }, [checkServer, readSync]);
 
-  // Read GPS permission from the browser (native values only)
+  // Read GPS permission
   const readGpsPermission = useCallback(async () => {
     try {
+      if (isNative) {
+        const { Geolocation } = await import("@capacitor/geolocation");
+        const perm = await Geolocation.checkPermissions();
+        setGpsPermission(
+          perm.location === "granted" || perm.coarseLocation === "granted"
+            ? "granted"
+            : perm.location === "denied" || perm.coarseLocation === "denied"
+              ? "denied"
+              : "prompt"
+        );
+        return;
+      }
+
       const perm = navigator.permissions;
       if (!perm || !perm.query) {
         setGpsPermission("unsupported");
@@ -243,7 +256,7 @@ export default function InfoPerangkat({
     } catch {
       setGpsPermission("unsupported");
     }
-  }, []);
+  }, [isNative]);
 
   useEffect(() => {
     if (!open) return;
