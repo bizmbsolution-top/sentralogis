@@ -112,6 +112,14 @@ export class DriverPortalQuery {
             .eq("tenant_id", jobOrder.tenant_id)
             .maybeSingle();
           if (linkData) profile_id = linkData.profile_id;
+          
+          // TASK 6 - VERIFY JO PROFILE RESOLUTION
+          console.log("[AUTH_FORENSIC_SERVER]", {
+            link_found: !!linkData,
+            link_profile_id: profile_id,
+            link_driver_id: jobOrder.driver_id,
+            link_tenant_id: jobOrder.tenant_id
+          });
         }
         driverInfo = { ...data, profile_id };
       }

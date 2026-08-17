@@ -141,6 +141,15 @@ export async function GET(
 
     const refreshed = await queryService.getJobOrderData(token);
 
+    if (refreshed) {
+      console.log("[AUTH_FORENSIC_SERVER_GET]", {
+        jo_driver_id: refreshed.driver?.id,
+        jo_tenant_id: refreshed.tenant_id,
+        resolved_profile_id: refreshed.driver?.profile_id,
+        link_found: refreshed.driver?.profile_id !== null && refreshed.driver?.profile_id !== undefined
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: refreshed,
@@ -209,6 +218,21 @@ export async function PATCH(
        const supabaseServer = await createClient();
        const { data: authData } = await supabaseServer.auth.getUser();
        const sessionProfileId = authData.user?.user_metadata?.profile_id;
+       
+       // TASK 5 - VERIFY PROFILE_ID SOURCE
+       console.log("[AUTH_FORENSIC_SERVER]", {
+         user_metadata_profile_id: sessionProfileId
+       });
+
+       // TASK 4 - SERVER API FORENSIC
+       console.log("[AUTH_FORENSIC_SERVER]", {
+         authenticated_user_id: authData.user?.id,
+         authenticated_profile_id: sessionProfileId,
+         jo_tenant_id: jo?.tenant_id,
+         jo_driver_id: jo?.driver_id,
+         resolved_driver_profile_id: jo?.driver?.profile_id,
+         authorization_result: (!sessionProfileId || !jo?.driver?.profile_id || jo.driver.profile_id !== sessionProfileId) ? "DENY" : "ALLOW"
+       });
        
        if (!sessionProfileId) {
            return NextResponse.json({ error: "Sesi driver tidak valid (Missing profile_id)" }, { status: 401 });

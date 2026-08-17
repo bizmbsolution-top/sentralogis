@@ -292,12 +292,53 @@ export default function JoExecutionPage({
       const jo = data.jobOrder || data.data || data;
       setJobOrder(jo);
 
+      // TASK 2 - SESSION FORENSIC
+      console.log("[AUTH_FORENSIC] SESSION", {
+        profile_id: session?.profile_id,
+        driver_id: session?.driver_id,
+        tenant_id: session?.tenant_id
+      });
+
+      // TASK 3 - JO FORENSIC
+      console.log("[AUTH_FORENSIC] JO", {
+        token: token,
+        tenant_id: jo?.tenant_id,
+        driver_id: jo?.driver?.id,
+        driver_profile_id: jo?.driver?.profile_id
+      });
+
       // Verify Assignment (Cross-Tenant Profile ID)
       if (
         !session?.profile_id ||
         !jo?.driver?.profile_id ||
         jo.driver.profile_id !== session.profile_id
       ) {
+        // TASK 1 - BLOCK TRIGGER
+        console.log("[AUTH_FORENSIC] BLOCK_TRIGGER", {
+          reason: "Guard condition triggered",
+          session_profile_id: session?.profile_id,
+          session_driver_id: session?.driver_id,
+          session_tenant_id: session?.tenant_id,
+          jo_driver_id: jo?.driver?.id,
+          jo_driver_profile_id: jo?.driver?.profile_id,
+          jo_tenant_id: jo?.tenant_id,
+          timestamp: new Date().toISOString()
+        });
+
+        console.log("[AUTH_FORENSIC] IDENTITY_COMPARISON", {
+          session_profile_id: session?.profile_id === undefined ? "undefined" : session?.profile_id === null ? "null" : session?.profile_id,
+          jo_driver_profile_id: jo?.driver?.profile_id === undefined ? "undefined" : jo?.driver?.profile_id === null ? "null" : jo?.driver?.profile_id,
+          profile_equal: session?.profile_id === jo?.driver?.profile_id,
+          session_driver_id: session?.driver_id,
+          jo_driver_id: jo?.driver?.id,
+          driver_equal: session?.driver_id === jo?.driver?.id,
+          session_tenant_id: session?.tenant_id,
+          jo_tenant_id: jo?.tenant_id,
+          tenant_equal: session?.tenant_id === jo?.tenant_id,
+          missing_session_profile: !session?.profile_id,
+          missing_jo_profile: !jo?.driver?.profile_id
+        });
+
         setIsBlocked(true);
       } else {
         setIsBlocked(false);
