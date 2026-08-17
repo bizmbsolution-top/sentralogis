@@ -182,8 +182,41 @@ export default function JoExecutionPage({
       }
       console.log("[DETECTION_FORENSIC] pathname=", window.location.pathname.replace(token, "[MASKED_TOKEN]"));
       console.log("[DETECTION_FORENSIC] href=", maskedHref);
+      
+      // VISUAL INJECTION FOR DEVICE SCREENSHOT
+      const div = document.createElement("div");
+      div.id = "diagnostic-overlay";
+      div.style.position = "fixed";
+      div.style.top = "0";
+      div.style.left = "0";
+      div.style.right = "0";
+      div.style.backgroundColor = "rgba(0,0,0,0.85)";
+      div.style.color = "#0f0";
+      div.style.fontSize = "10px";
+      div.style.padding = "8px";
+      div.style.zIndex = "99999";
+      div.style.wordBreak = "break-all";
+      div.style.maxHeight = "50vh";
+      div.style.overflowY = "auto";
+      div.innerHTML = `
+        <b>DIAGNOSTIC FORENSIC</b><br/>
+        cap_isNative: ${Capacitor.isNativePlatform()}<br/>
+        ua: ${navigator.userAgent}<br/>
+        ua_sl: ${navigator.userAgent.includes("SentraLogis_AndroidApp")}<br/>
+        ua_wv: ${/(Android.*WebView|wv)/i.test(navigator.userAgent)}<br/>
+        prot: ${window.location.protocol}<br/>
+        isNativeApp: ${isNativeApp}
+      `;
+      document.body.appendChild(div);
     }
     console.log("[DETECTION_FORENSIC] final_isNativeApp=", isNativeApp);
+    
+    return () => {
+      if (typeof document !== "undefined") {
+        const el = document.getElementById("diagnostic-overlay");
+        if (el) el.remove();
+      }
+    };
 
     console.log("[READINESS_FORENSIC] EXECUTION PAGE MOUNT");
     console.log("[READINESS_FORENSIC] TOKEN IN EXECUTION:", token);
