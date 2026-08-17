@@ -155,6 +155,14 @@ export default function JoExecutionPage({
   const { isLoaded } = useGoogleMaps();
   const { session, isLoading: sessionLoading } = useDriverAuth();
 
+  // Consistent Native Detection Source of Truth
+  const isNativeApp = typeof window !== "undefined" ? (
+    Capacitor.isNativePlatform() || 
+    navigator.userAgent.includes("SentraLogis_AndroidApp") ||
+    /(Android.*WebView|wv)/i.test(navigator.userAgent) ||
+    window.location.protocol === "sentralogis:"
+  ) : false;
+
   useEffect(() => {
     console.log("[ROUTE_FORENSIC] DRIVER_EXECUTION");
     console.log("[ROUTE_FORENSIC] current pathname = /driver/execution/" + token);
@@ -163,8 +171,8 @@ export default function JoExecutionPage({
     console.log("[READINESS_FORENSIC] TOKEN IN EXECUTION:", token);
     const storedToken = localStorage.getItem("pending_jo_token");
     console.log("[READINESS_FORENSIC] pending_jo_token AT EXECUTION:", storedToken);
-    console.log("[READINESS_FORENSIC] IS_NATIVE_EXECUTION:", Capacitor.isNativePlatform());
-  }, [token]);
+    console.log("[READINESS_FORENSIC] IS_NATIVE_EXECUTION:", isNativeApp);
+  }, [token, isNativeApp]);
 
   const [isNative, setIsNative] = useState<boolean>(true);
   const [gpsStatus, setGpsStatus] = useState<
@@ -333,7 +341,6 @@ export default function JoExecutionPage({
 
   // Active GPS tracking hook
   const activeGpsToken = jobOrder?.id || token;
-  const isNativeApp = typeof window !== 'undefined' ? (Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp')) : false;
 
   useDriverGpsPing(
     activeGpsToken,
