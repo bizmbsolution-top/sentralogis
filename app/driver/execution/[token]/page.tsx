@@ -167,6 +167,23 @@ export default function JoExecutionPage({
     console.log("[ROUTE_FORENSIC] DRIVER_EXECUTION");
     console.log("[ROUTE_FORENSIC] current pathname = /driver/execution/" + token);
     
+    console.log("[DETECTION_FORENSIC] window_type=", typeof window);
+    console.log("[DETECTION_FORENSIC] navigator_type=", typeof navigator);
+    if (typeof window !== "undefined") {
+      console.log("[DETECTION_FORENSIC] capacitor_isNative=", Capacitor.isNativePlatform());
+      console.log("[DETECTION_FORENSIC] ua=", navigator.userAgent);
+      console.log("[DETECTION_FORENSIC] ua_sentralogis_android=", navigator.userAgent.includes("SentraLogis_AndroidApp"));
+      console.log("[DETECTION_FORENSIC] ua_android_webview=", /(Android.*WebView|wv)/i.test(navigator.userAgent));
+      console.log("[DETECTION_FORENSIC] protocol=", window.location.protocol);
+      
+      let maskedHref = window.location.href;
+      if (token && maskedHref.includes(token)) {
+        maskedHref = maskedHref.replace(token, "[MASKED_TOKEN]");
+      }
+      console.log("[DETECTION_FORENSIC] href=", maskedHref);
+    }
+    console.log("[DETECTION_FORENSIC] final_isNativeApp=", isNativeApp);
+
     console.log("[READINESS_FORENSIC] EXECUTION PAGE MOUNT");
     console.log("[READINESS_FORENSIC] TOKEN IN EXECUTION:", token);
     const storedToken = localStorage.getItem("pending_jo_token");
