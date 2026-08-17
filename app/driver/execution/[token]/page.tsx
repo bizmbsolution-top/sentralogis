@@ -255,6 +255,7 @@ export default function JoExecutionPage({
   } | null>(null);
 
   const [isBlocked, setIsBlocked] = useState(false);
+  const [authForensic, setAuthForensic] = useState<any>(null);
 
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -325,7 +326,7 @@ export default function JoExecutionPage({
           timestamp: new Date().toISOString()
         });
 
-        console.log("[AUTH_FORENSIC] IDENTITY_COMPARISON", {
+        const forensicData = {
           session_profile_id: session?.profile_id === undefined ? "undefined" : session?.profile_id === null ? "null" : session?.profile_id,
           jo_driver_profile_id: jo?.driver?.profile_id === undefined ? "undefined" : jo?.driver?.profile_id === null ? "null" : jo?.driver?.profile_id,
           profile_equal: session?.profile_id === jo?.driver?.profile_id,
@@ -337,7 +338,9 @@ export default function JoExecutionPage({
           tenant_equal: session?.tenant_id === jo?.tenant_id,
           missing_session_profile: !session?.profile_id,
           missing_jo_profile: !jo?.driver?.profile_id
-        });
+        };
+        console.log("[AUTH_FORENSIC] IDENTITY_COMPARISON", forensicData);
+        setAuthForensic(forensicData);
 
         setIsBlocked(true);
       } else {
@@ -682,8 +685,8 @@ export default function JoExecutionPage({
 
   if (isBlocked) {
     return (
-      <div className="min-h-[100dvh] bg-slate-950 flex items-center justify-center p-6">
-        <div className="bg-slate-900 rounded-3xl p-8 max-w-sm text-center shadow-2xl border border-rose-500/20">
+      <div className="min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="bg-slate-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-rose-500/20">
           <AlertCircle className="w-16 h-16 text-rose-500 mx-auto mb-6" />
           <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tight">
             Akses Ditolak
@@ -698,6 +701,24 @@ export default function JoExecutionPage({
             KEMBALI KE PORTAL
           </button>
         </div>
+
+        {authForensic && (
+          <div className="bg-black border border-lime-500/50 rounded-xl p-4 max-w-sm w-full font-mono text-[10px] text-lime-400 text-left overflow-hidden">
+            <h3 className="font-bold mb-2 text-lime-500">AUTH FORENSIC (SCREENSHOT INI)</h3>
+            <div className="space-y-1 opacity-90 break-all">
+              <p>S_PROFILE: {String(authForensic.session_profile_id)}</p>
+              <p>J_PROFILE: {String(authForensic.jo_driver_profile_id)}</p>
+              <p>P_MATCH: {String(authForensic.profile_equal)}</p>
+              <div className="h-px bg-lime-900 my-2"></div>
+              <p>S_DRIVER: {String(authForensic.session_driver_id)}</p>
+              <p>J_DRIVER: {String(authForensic.jo_driver_id)}</p>
+              <p>D_MATCH: {String(authForensic.driver_equal)}</p>
+              <div className="h-px bg-lime-900 my-2"></div>
+              <p>S_TENANT: {String(authForensic.session_tenant_id)}</p>
+              <p>J_TENANT: {String(authForensic.jo_tenant_id)}</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
