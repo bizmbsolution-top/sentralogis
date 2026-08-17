@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
               (l) => l.driver_id === d.id && l.tenant_id === d.tenant_id
             );
             return !!link;
-          });
+          }).map((d) => ({ ...d, profile_id: profileId }));
         }
       }
     }
@@ -219,7 +219,8 @@ export async function POST(request: NextRequest) {
     const metadata = {
       role: 'driver',
       driver_id: driver.id,
-      tenant_id: driver.tenant_id
+      tenant_id: driver.tenant_id,
+      profile_id: driver.profile_id || null
     };
 
     // 6. Ensure auth.users account exists & metadata is updated
@@ -291,6 +292,7 @@ export async function POST(request: NextRequest) {
       entity_id: driver.entity_id,
       driver_type: driver.entity_id ? "VENDOR" : "OWN",
       tenant_id: driver.tenant_id,
+      profile_id: driver.profile_id || null,
     };
 
     return NextResponse.json({

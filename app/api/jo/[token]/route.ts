@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TrackingService } from "@/src/application/tracking/services/TrackingService";
 import { SupabaseTrackingRepository } from "@/src/infrastructure/repositories/tracking/SupabaseTrackingRepository";
@@ -205,10 +206,19 @@ export async function PATCH(
     
     // Photo uploads don't have an action field in the legacy contract, so they are not background actions.
     if (!isBackgroundAction) {
-       if (!driverIdHeader) {
-           return NextResponse.json({ error: "Sesi driver tidak valid (Missing X-Driver-ID)" }, { status: 401 });
+       const supabaseServer = await createClient();
+       const { data: authData } = await supabaseServer.auth.getUser();
+       const sessionProfileId = authData.user?.user_metadata?.profile_id;
+       
+       if (!sessionProfileId) {
+           return NextResponse.json({ error: "Sesi driver tidak valid (Missing profile_id)" }, { status: 401 });
        }
-       if (jo.driver_id !== driverIdHeader) {
+       
+       if (!jo.driver?.profile_id) {
+           return NextResponse.json({ error: "Akses ditolak: JO tidak memiliki profile_id yang valid" }, { status: 403 });
+       }
+       
+       if (jo.driver.profile_id !== sessionProfileId) {
            return NextResponse.json({ error: "Akses ditolak: Anda tidak berhak memodifikasi JO ini" }, { status: 403 });
        }
     }

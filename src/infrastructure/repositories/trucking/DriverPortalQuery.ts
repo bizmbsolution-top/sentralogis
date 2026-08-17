@@ -102,7 +102,19 @@ export class DriverPortalQuery {
 
     if (jobOrder.driver_id) {
       const { data } = await this.supabase.from("md_drivers").select("id, name, phone").eq("id", jobOrder.driver_id).maybeSingle();
-      if (data) driverInfo = data;
+      if (data) {
+        let profile_id = null;
+        if (jobOrder.tenant_id) {
+          const { data: linkData } = await this.supabase
+            .from("driver_tenant_links")
+            .select("profile_id")
+            .eq("driver_id", jobOrder.driver_id)
+            .eq("tenant_id", jobOrder.tenant_id)
+            .maybeSingle();
+          if (linkData) profile_id = linkData.profile_id;
+        }
+        driverInfo = { ...data, profile_id };
+      }
     }
 
     if (jobOrder.fleet_id) {

@@ -10,6 +10,7 @@ export interface DriverSession {
   name: string;
   tenant_id?: string;
   entity_id?: string | null;
+  profile_id?: string | null;
 }
 
 interface DriverAuthContextType {
@@ -68,6 +69,7 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
         name: driver.name,
         tenant_id: driver.tenant_id,
         entity_id: driver.entity_id,
+        profile_id: driver.profile_id || null,
       };
 
       // Preserve fallback localStorage save for backward compatibility

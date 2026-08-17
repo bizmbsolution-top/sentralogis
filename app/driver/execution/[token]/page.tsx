@@ -292,14 +292,16 @@ export default function JoExecutionPage({
       const jo = data.jobOrder || data.data || data;
       setJobOrder(jo);
 
-      // Verify Assignment (Temporarily disabled for diagnostic testing)
-      // if (jo.driver && session?.driver_id) {
-      //   if (jo.driver.id !== session.driver_id) {
-      //     setIsBlocked(true);
-      //   } else {
-      //     setIsBlocked(false);
-      //   }
-      // }
+      // Verify Assignment (Cross-Tenant Profile ID)
+      if (
+        !session?.profile_id ||
+        !jo?.driver?.profile_id ||
+        jo.driver.profile_id !== session.profile_id
+      ) {
+        setIsBlocked(true);
+      } else {
+        setIsBlocked(false);
+      }
 
       if (jo.container_number) setContainerNo(jo.container_number);
       if (jo.sbu_metadata?.seal_number) setSealNo(jo.sbu_metadata.seal_number);
