@@ -121,12 +121,27 @@ class NativeGpsManagerClass {
 
   private async startTracking() {
     console.log(`[GPS-MANAGER] start requested: ${this.activeJobId}`);
+    let forensicPlugin = "Unknown";
+    let forensicMethod = "Unknown";
     try {
+      const isNativeApp = typeof window !== 'undefined' ? (Capacitor.isNativePlatform() || navigator.userAgent.includes('SentraLogis_AndroidApp')) : false;
+
       const { Geolocation } = await import("@capacitor/geolocation");
+      
+      forensicPlugin = "@capacitor/geolocation";
+      forensicMethod = "checkPermissions";
+      console.log(`[GPS_FORENSIC] BEFORE_PLUGIN_CALL\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nisNative=${isNativeApp}\ntimestamp=${new Date().toISOString()}`);
+      
       const perm = await Geolocation.checkPermissions();
+      console.log(`[GPS_FORENSIC] PLUGIN_CALL_SUCCESS\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nresult=${JSON.stringify(perm)}`);
       
       if (perm.location !== "granted") {
+        forensicMethod = "requestPermissions";
+        console.log(`[GPS_FORENSIC] BEFORE_PLUGIN_CALL\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nisNative=${isNativeApp}\ntimestamp=${new Date().toISOString()}`);
+        
         const req = await Geolocation.requestPermissions();
+        console.log(`[GPS_FORENSIC] PLUGIN_CALL_SUCCESS\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nresult=${JSON.stringify(req)}`);
+        
         if (req.location !== "granted") {
           console.warn("[GPS-MANAGER] Location permission denied");
           this.setState({ permission: "denied", status: "error", errorMessage: "Native Location Permission Denied" });
@@ -140,15 +155,23 @@ class NativeGpsManagerClass {
       
       this.setState({ permission: "granted" });
       
+      forensicPlugin = "NativeGps";
+      forensicMethod = "startTracking";
+      console.log(`[GPS_FORENSIC] BEFORE_PLUGIN_CALL\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nisNative=${isNativeApp}\ntimestamp=${new Date().toISOString()}`);
+
       await NativeGps!.startTracking({
         jobId: this.activeJobId || "unknown",
         apiUrl: window.location.origin,
       });
+      console.log(`[GPS_FORENSIC] PLUGIN_CALL_SUCCESS\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nresult=void`);
 
       this.setState({ nativeServiceActive: true });
       console.log(`[ENTRY_FORENSIC] native_gps_start_result=success`);
 
       if (!this.listener) {
+        forensicMethod = "addListener";
+        console.log(`[GPS_FORENSIC] BEFORE_PLUGIN_CALL\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nisNative=${isNativeApp}\ntimestamp=${new Date().toISOString()}`);
+
         this.listener = await NativeGps!.addListener("onLocationUpdate", (data: any) => {
           console.log(`[GPS-MANAGER] location received`);
           this.setState({
@@ -172,8 +195,11 @@ class NativeGpsManagerClass {
             );
           }
         });
+        console.log(`[GPS_FORENSIC] PLUGIN_CALL_SUCCESS\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nresult=listener_attached`);
       }
     } catch (e: any) {
+      console.log(`[GPS_FORENSIC] PLUGIN_CALL_EXCEPTION\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nname=${e?.name}\nmessage=${e?.message}\nstack=${e?.stack}\ntimestamp=${new Date().toISOString()}`);
+      
       console.error("[GPS-MANAGER] Error starting tracking. Retrying in 3s...", e);
       console.log(`[ENTRY_FORENSIC] native_gps_start_result=failure`);
       this.setState({ status: "error", errorMessage: e?.message || String(e) });
