@@ -14,7 +14,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        registerPlugin(GpsPlugin.class);
 
         // Handle deep link when app is launched from cold start
         handleDeepLink(getIntent());

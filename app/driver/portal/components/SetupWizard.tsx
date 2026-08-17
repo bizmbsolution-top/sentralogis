@@ -24,7 +24,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     setChecking(true);
     
     // 1. Device Compatibility
-    const isNative = Capacitor.isNativePlatform();
+    const isNative = Capacitor.isNativePlatform() || (typeof navigator !== 'undefined' && navigator.userAgent.includes('SentraLogis_AndroidApp'));
     setDeviceReady(isNative);
 
     // 2. Network Check
@@ -99,7 +99,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col p-4 md:p-6 overflow-y-auto font-sans">
       <div className="max-w-2xl w-full mx-auto bg-white shadow-xl rounded-2xl p-6 md:p-8">
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">Persiapan Perangkat</h1>
-        <p className="text-gray-500 text-center mb-8">Selesaikan langkah berikut sebelum menggunakan SentraShip Driver.</p>
+        <p className="text-gray-500 text-center mb-8">Selesaikan langkah berikut sebelum menggunakan SentraLogis Driver.</p>
         
         <div className="space-y-4">
           
@@ -114,7 +114,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
             {deviceReady === false && (
               <div className="mt-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
-                ⚠️ Anda tidak menggunakan aplikasi Native Android SentraShip. Anda mungkin kehilangan fitur Background GPS.
+                ⚠️ Anda tidak menggunakan aplikasi Native Android SentraLogis. Anda mungkin kehilangan fitur Background GPS.
               </div>
             )}
             {deviceReady && <p className="text-sm text-gray-500 pl-9">✅ Aplikasi Native terdeteksi.</p>}
@@ -131,7 +131,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
             {networkStatus === 'offline' && (
               <div className="mt-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex flex-col gap-2">
-                <p>🔴 Tidak Ada Koneksi Internet. SentraShip membutuhkan koneksi internet untuk menerima Job Order.</p>
+                <p>🔴 Tidak Ada Koneksi Internet. SentraLogis membutuhkan koneksi internet untuk menerima Job Order.</p>
                 <button onClick={runChecks} className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium w-fit">Cek Ulang Koneksi</button>
               </div>
             )}
@@ -149,7 +149,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
             {gpsPermission !== 'granted' && gpsPermission !== null && (
               <div className="mt-2 text-sm text-yellow-700 bg-yellow-50 p-3 rounded-lg border border-yellow-100 flex flex-col gap-2">
-                <p>⚠️ Izin Lokasi Belum Diberikan. SentraShip membutuhkan akses lokasi.</p>
+                <p>⚠️ Izin Lokasi Belum Diberikan. SentraLogis membutuhkan akses lokasi.</p>
                 <button onClick={requestGpsPermission} className="bg-yellow-500 text-white px-4 py-2 rounded-lg font-medium w-fit">IZINKAN LOKASI</button>
               </div>
             )}
@@ -167,7 +167,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
             {!bgInfoAcknowledged ? (
               <div className="mt-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-100 flex flex-col gap-3">
-                <p>⚠️ <strong>Penting:</strong> Agar GPS tetap berjalan saat layar mati, pastikan pada <strong>Pengaturan Baterai HP Anda</strong>, aplikasi SentraShip diset ke "Tidak Dibatasi" (Unrestricted).</p>
+                <p>⚠️ <strong>Penting:</strong> Agar GPS tetap berjalan saat layar mati, pastikan pada <strong>Pengaturan Baterai HP Anda</strong>, aplikasi SentraLogis diset ke "Tidak Dibatasi" (Unrestricted).</p>
                 <p>Pilih "Izinkan Sepanjang Waktu" (Allow all the time) jika ditanyakan tentang akses lokasi background oleh Android.</p>
                 <button onClick={() => setBgInfoAcknowledged(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium w-full mt-1 transition-colors">SAYA MENGERTI</button>
               </div>
