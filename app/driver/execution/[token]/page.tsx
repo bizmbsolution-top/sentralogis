@@ -171,8 +171,8 @@ export default function JoExecutionPage({
     console.log("[DETECTION_FORENSIC] navigator_type=", typeof navigator);
     if (typeof window !== "undefined") {
       console.log("[DETECTION_FORENSIC] capacitor_isNative=", Capacitor.isNativePlatform());
-      console.log("[DETECTION_FORENSIC] ua=", navigator.userAgent);
-      console.log("[DETECTION_FORENSIC] ua_sentralogis_android=", navigator.userAgent.includes("SentraLogis_AndroidApp"));
+      console.log("[DETECTION_FORENSIC] userAgent=", navigator.userAgent);
+      console.log("[DETECTION_FORENSIC] ua_sentralogis=", navigator.userAgent.includes("SentraLogis_AndroidApp"));
       console.log("[DETECTION_FORENSIC] ua_android_webview=", /(Android.*WebView|wv)/i.test(navigator.userAgent));
       console.log("[DETECTION_FORENSIC] protocol=", window.location.protocol);
       
@@ -180,6 +180,7 @@ export default function JoExecutionPage({
       if (token && maskedHref.includes(token)) {
         maskedHref = maskedHref.replace(token, "[MASKED_TOKEN]");
       }
+      console.log("[DETECTION_FORENSIC] pathname=", window.location.pathname.replace(token, "[MASKED_TOKEN]"));
       console.log("[DETECTION_FORENSIC] href=", maskedHref);
     }
     console.log("[DETECTION_FORENSIC] final_isNativeApp=", isNativeApp);
