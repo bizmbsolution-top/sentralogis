@@ -257,16 +257,35 @@ export function useDriverGpsPing(
   }, [emitPingState]);
 
   useEffect(() => {
-    // FORCE PWA FALLBACK: Bypass Java plugin due to persistent bridge failures
-    const isNative = false; // isNativeApp === true;
+    console.log(`[ENTRY_FORENSIC] gps_hook_mounted=true`);
 
-    if (!enabled) {
+    // 1. detect native platform
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const isCap = typeof window !== "undefined" && (window as any).Capacitor ? (window as any).Capacitor.isNativePlatform() : false;
+    const isScheme = typeof window !== "undefined" && window.location.protocol === "sentralogis:";
+    const isAppUA = ua.includes("SentraLogis_AndroidApp");
+    const isWebView = /(Android.*WebView|wv)/i.test(ua);
+    
+    // Monotonic detection order: prop > capacitor > fallback checks
+    const isNative = isNativeApp === true || isCap || isScheme || isAppUA || isWebView;
+    
+    // 2. log native detection
+    console.log(`[ENTRY_FORENSIC] native_detection isNative=${isNative}`);
+
+    // We enforce JO token and transit status for BOTH Native and PWA
+    const shouldTrack = enabled && !!token && isActiveTransitStatus(status, startedAt);
+    const isDone = !!status && DONE_STATUSES.includes(status.toUpperCase());
+
+    // 3. handle !enabled or !shouldTrack
+    if (!shouldTrack) {
       if (isNative) {
-        if ((intervalRef as any).nativeUnsubscribe) {
-          (intervalRef as any).nativeUnsubscribe();
-          (intervalRef as any).nativeUnsubscribe = null;
+        if (isDone) {
+          // JO completed — explicitly stop the native service
+          NativeGpsManager.stopAllTracking();
+        } else {
+          // Not tracking for other reasons (no token, component unmount) — just unregister
+          NativeGpsManager.unregisterConsumer(consumerId);
         }
-        NativeGpsManager.unregisterConsumer(consumerId);
       } else {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -283,30 +302,39 @@ export function useDriverGpsPing(
       return;
     }
 
-    // We enforce JO token and transit status for BOTH Native and PWA
-    const shouldTrack = !!token && isActiveTransitStatus(status, startedAt);
-
-    if (!shouldTrack) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      if (wakeLockRef.current) {
-        try {
-          wakeLockRef.current.release();
-        } catch {}
-        wakeLockRef.current = null;
-      }
-      emitPingState({ status: "inactive" });
-      return;
-    }
-
     // Reset stopped state when conditions are met again
     isStoppedRef.current = false;
     doneRef.current = false;
     emitPingState({ status: "loading" });
 
-    const startPwaGps = () => {
+    let nativeUnsubscribe: (() => void) | null = null;
+
+    if (isNative) {
+      // 4. if native:
+      console.log(`[ENTRY_FORENSIC] native_gps_start_attempt`);
+      
+      nativeUnsubscribe = NativeGpsManager.subscribe((state: NativeGpsState) => {
+        emitPingState({
+          status: state.status,
+          accuracy: state.accuracy,
+          speed: state.speed,
+          battery: state.battery,
+          pingCount: state.pingCount,
+          consecutiveFailures: state.consecutiveFailures,
+          errorMessage: state.errorMessage,
+        });
+
+        if (state.status === "active") {
+          console.log(`[ENTRY_FORENSIC] first_native_sample=true`);
+        }
+        console.log(`[ENTRY_FORENSIC] gps_permission=${state.permission || 'unknown'}`);
+        console.log(`[ENTRY_FORENSIC] gps_status=${state.status}`);
+      });
+
+      console.log(`[ENTRY_FORENSIC] native_gps_started=true`);
+      NativeGpsManager.registerConsumer(consumerId, token);
+    } else {
+      // 5. else: browser geolocation fallback
       requestWakeLock();
       console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
       
@@ -324,45 +352,9 @@ export function useDriverGpsPing(
              }).catch(() => {});
          }
       }, GPS_PING_INTERVAL_MS);
-    };
-
-    console.log(`[GPS-DEBUG] hook mounted`);
-    console.log(`[GPS-DEBUG] token = ${token}`);
-    console.log(`[GPS-DEBUG] jobStatus = ${status}`);
-    console.log(`[GPS-DEBUG] enabled = ${enabled}`);
-    console.log(`[GPS-DEBUG] startedAt = ${startedAt}`);
-    console.log(`[GPS-DEBUG] isNativeApp = ${isNativeApp}`);
-    console.log(`[GPS-DEBUG] native platform = ${typeof window !== "undefined" && (window as any).Capacitor ? (window as any).Capacitor.isNativePlatform() : 'unknown'}`);
-    console.log(`[GPS-DEBUG] user agent = ${typeof navigator !== "undefined" ? navigator.userAgent : 'unknown'}`);
-    console.log(`[GPS-DEBUG] session/driver available = ${!!token}`);
-
-    if (isNative) {
-      console.log("[NATIVE-GPS] native detected: true");
-      console.log(`[NATIVE-GPS] tracking requested: ${token}`);
-      
-      const unsubscribe = NativeGpsManager.subscribe((state: NativeGpsState) => {
-        emitPingState({
-          status: state.status,
-          accuracy: state.accuracy,
-          speed: state.speed,
-          battery: state.battery,
-          pingCount: state.pingCount,
-          consecutiveFailures: state.consecutiveFailures,
-          errorMessage: state.errorMessage,
-        });
-      });
-
-      // Register consumer
-      NativeGpsManager.registerConsumer(consumerId, token || "unknown");
-
-      // Return a custom cleanup for native inside this branch 
-      // (The main return handles PWA and unregister)
-      (intervalRef as any).nativeUnsubscribe = unsubscribe;
-
-    } else {
-      startPwaGps();
     }
 
+    // 6. cleanup
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -375,9 +367,9 @@ export function useDriverGpsPing(
         wakeLockRef.current = null;
       }
       if (isNative) {
-        if ((intervalRef as any).nativeUnsubscribe) {
-          (intervalRef as any).nativeUnsubscribe();
-          (intervalRef as any).nativeUnsubscribe = null;
+        if (nativeUnsubscribe) {
+          nativeUnsubscribe();
+          nativeUnsubscribe = null;
         }
         NativeGpsManager.unregisterConsumer(consumerId);
       }

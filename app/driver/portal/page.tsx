@@ -127,6 +127,7 @@ export default function DriverPortal() {
   const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
   const [gpsBattery, setGpsBattery] = useState<number | null>(null);
   const [gpsPingCount, setGpsPingCount] = useState(0);
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string | null>(null);
 
   // Daily Inspection States
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
@@ -489,6 +490,9 @@ export default function DriverPortal() {
       if (state.battery !== undefined) setGpsBattery(state.battery);
       if (state.speed !== undefined) setGpsSpeed(state.speed);
       if (state.pingCount !== undefined) setGpsPingCount(state.pingCount);
+      if (state.errorMessage !== undefined) setGpsErrorMessage(state.errorMessage || null);
+      
+      console.log(`[ENTRY_FORENSIC] portal_gps_state status=${state.status} accuracy=${state.accuracy} speed=${state.speed} pingCount=${state.pingCount}`);
     }
   );
   const fetchTotalKM = async () => {
@@ -2471,8 +2475,9 @@ return Math.min(base, 100);
           const activeJob = jobOrders.find(
             (jo) => jo.driver_response === "accepted",
           );
+          // Show ALL other jobs in the list (including queued accepted jobs)
           const newJobs = jobOrders.filter(
-            (jo) => jo.driver_response !== "accepted",
+            (jo) => jo.id !== activeJob?.id,
           );
 
           return (
@@ -2601,11 +2606,15 @@ return Math.min(base, 100);
                               className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
                                 jo.driver_response === "rejected"
                                   ? "bg-rose-100 text-rose-700"
+                                  : jo.driver_response === "accepted"
+                                  ? "bg-indigo-100 text-indigo-700"
                                   : "bg-amber-100 text-amber-700"
                               }`}
                             >
                               {jo.driver_response === "rejected"
                                 ? "DITOLAK"
+                                : jo.driver_response === "accepted"
+                                ? "ORDER DITERIMA (ANTREAN)"
                                 : "BARU / ASSIGNED"}
                             </span>
                             <ChevronRight size={16} className="opacity-40" />
@@ -4760,6 +4769,11 @@ return Math.min(base, 100);
           onClose={() => setIsInfoPerangkatOpen(false)}
           tenantName={tenantInfo?.name || "SENTRALOGIS"}
           isNative={isNativeApp}
+          gpsStatus={gpsStatus}
+          gpsAccuracy={gpsAccuracy}
+          gpsSpeed={gpsSpeed}
+          gpsPingCount={gpsPingCount}
+          gpsErrorMessage={gpsErrorMessage || undefined}
         />
       )}
     </div>

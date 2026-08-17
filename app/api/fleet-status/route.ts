@@ -2,6 +2,7 @@
 // Returns fleet status combined with GPS live data (supports cross-tenant vendor fleets)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isJoTrackableStatus, JO_TERMINAL_STATUSES } from '@/lib/domain/jo/status';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,13 @@ const supabase = createClient(
 
 export async function GET(req: NextRequest) {
   try {
+    const supabaseServer = await createServerClient();
+    const { data: { user }, error: authError } = await supabaseServer.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const tenantId = req.nextUrl.searchParams.get('tenant_id');
     if (!tenantId) {
       return NextResponse.json({ error: 'tenant_id required' }, { status: 400 });

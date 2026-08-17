@@ -110,7 +110,7 @@ useEffect(() => {
         const mappedTrackingLogs = trackingData.map(t => ({
           id: `trk-${t.id}`,
           operation: 'DRIVER_UPDATE',
-          performed_at: t.created_at,
+          performed_at: t.recorded_at || t.created_at,
           user: { name: 'Supir / Driver App' },
           tracking_status: t.status,
           tracking_notes: t.notes,

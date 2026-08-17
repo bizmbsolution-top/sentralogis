@@ -243,103 +243,15 @@ export default function TripReplayModal({
     );
   }, [polylinePath, routeStops]);
 
-  // Generate detailed road-following points along the journey (`detail selama perjalanan`) with anchored milestones
+  // Use real timelog recorded points only (no mockup / interpolation)
   const playbackPoints = useMemo(() => {
     if (rawMilestones.length === 0) return [];
-    if (rawMilestones.length === 1) return rawMilestones;
-
-    const detailedPoints: any[] = [];
-
-    // If we have Google road directions (`overview_path`), use all detailed road points!
-    let roadPath: { lat: number; lng: number }[] = [];
-    if (
-      directionsResponse &&
-      directionsResponse.routes &&
-      directionsResponse.routes[0] &&
-      directionsResponse.routes[0].overview_path
-    ) {
-      roadPath = directionsResponse.routes[0].overview_path.map((p: any) => ({
-        lat: typeof p.lat === "function" ? p.lat() : p.lat,
-        lng: typeof p.lng === "function" ? p.lng() : p.lng,
-      }));
-    } else {
-      // Interpolate 25 intermediate steps between every pair of consecutive milestones so it never jumps directly from start to end!
-      for (let i = 0; i < rawMilestones.length - 1; i++) {
-        const p1 = rawMilestones[i];
-        const p2 = rawMilestones[i + 1];
-        roadPath.push({ lat: p1.lat, lng: p1.lng });
-
-        const steps = 25;
-        for (let s = 1; s < steps; s++) {
-          const fraction = s / steps;
-          roadPath.push({
-            lat: p1.lat + (p2.lat - p1.lat) * fraction,
-            lng: p1.lng + (p2.lng - p1.lng) * fraction,
-          });
-        }
-      }
-      roadPath.push({
-        lat: rawMilestones[rawMilestones.length - 1].lat,
-        lng: rawMilestones[rawMilestones.length - 1].lng,
-      });
-    }
-
-    const startTimestamp = new Date(rawMilestones[0].timestamp).getTime();
-    const endTimestamp = new Date(
-      rawMilestones[rawMilestones.length - 1].timestamp,
-    ).getTime();
-    const duration = Math.max(1000, endTimestamp - startTimestamp);
-
-    // Track closest road index for each milestone
-    const milestoneFrameIndices = new Map<number, number>();
-    rawMilestones.forEach((m, mIdx) => {
-      let bestIdx = 0;
-      let minDist = Infinity;
-      roadPath.forEach((rp, rIdx) => {
-        const d = Math.pow(rp.lat - m.lat, 2) + Math.pow(rp.lng - m.lng, 2);
-        if (d < minDist) {
-          minDist = d;
-          bestIdx = rIdx;
-        }
-      });
-      milestoneFrameIndices.set(bestIdx, mIdx);
-    });
-
-    roadPath.forEach((rp, rIdx) => {
-      const fraction = roadPath.length > 1 ? rIdx / (roadPath.length - 1) : 0;
-      const frameTime = new Date(
-        startTimestamp + fraction * duration,
-      ).toISOString();
-
-      if (milestoneFrameIndices.has(rIdx)) {
-        const mIdx = milestoneFrameIndices.get(rIdx)!;
-        const m = rawMilestones[mIdx];
-        detailedPoints.push({
-          ...m,
-          lat: rp.lat,
-          lng: rp.lng,
-          id: `frame-${rIdx}-ms-${m.id}`,
-          frameIndex: rIdx,
-          isMilestone: true,
-          milestoneNumber: mIdx + 1,
-        });
-      } else {
-        detailedPoints.push({
-          id: `frame-${rIdx}`,
-          lat: rp.lat,
-          lng: rp.lng,
-          timestamp: frameTime,
-          statusUpdate: "IN_TRANSIT (ROAD TRACK)",
-          notes: "Menempuh perjalanan antar milestone...",
-          speedKmH: Math.round(52 + Math.sin(rIdx * 0.3) * 15),
-          isMilestone: false,
-          frameIndex: rIdx,
-        });
-      }
-    });
-
-    return detailedPoints;
-  }, [rawMilestones, directionsResponse]);
+    // Just return the raw milestones, sorted chronologically, to show exact recorded history
+    return rawMilestones.map((m, idx) => ({
+      ...m,
+      frameIndex: idx, // Add frameIndex to match what the UI expects for progress calculation
+    }));
+  }, [rawMilestones]);
 
   // Calculate dynamic bearing of the current frame relative to previous point
   const currentBearing = useMemo(() => {

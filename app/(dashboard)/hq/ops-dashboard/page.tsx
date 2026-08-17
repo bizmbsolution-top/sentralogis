@@ -252,7 +252,7 @@ export default function HQOpsDashboardPage() {
       const [{ data: wos }, { data: josSla }] = await Promise.all([
         supabase
           .from('work_orders')
-          .select('id, wo_number, status, created_at, updated_at, target_date')
+          .select('id, wo_number, status, created_at, updated_at')
           .eq('tenant_id', profile.tenant_id)
           .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
         supabase

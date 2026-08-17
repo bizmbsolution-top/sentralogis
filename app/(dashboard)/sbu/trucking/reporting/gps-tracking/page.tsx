@@ -18,12 +18,14 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  Play,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { parseUTC } from "@/lib/utils/dateUtils";
 import { haversineDistance, formatDistance, formatSpeed } from "@/lib/utils/geoUtils";
+import TripReplayModal from "@/components/sbu/TripReplayModal";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -102,8 +104,24 @@ export default function GPSTrackingReportPage() {
   const [avgTimeDiff, setAvgTimeDiff] = useState<number>(0);
   const [playbackPage, setPlaybackPage] = useState(1);
   const [playbackTotalPings, setPlaybackTotalPings] = useState(0);
+  const [showTripReplay, setShowTripReplay] = useState(false);
   const PLAYBACK_PAGE_SIZE = 200;
   const GEOFENCE_RADIUS = 500;
+
+  const selectedJoRecord = useMemo(() => {
+    if (!playbackJoId) return null;
+    for (const wo of groupedData) {
+      const jo = wo.jos.find((j: any) => j.jo_id === playbackJoId);
+      if (jo) {
+        return {
+          ...jo,
+          routes: playbackRoutes,
+          tracking_history: playbackPings,
+        };
+      }
+    }
+    return null;
+  }, [playbackJoId, groupedData, playbackRoutes, playbackPings]);
 
   const isTruckingSbu = !!profile && TRUCKING_SBU_ROLES.includes(profile.role);
   const isGlobalRole = !!profile && GLOBAL_ROLES.includes(profile.role);
@@ -1305,6 +1323,16 @@ const matched = rawPings.map((ping: any) => {
             )}
             Muat Telemetry
           </button>
+          
+          {playbackPings.length > 0 && selectedJoRecord && (
+            <button
+              onClick={() => setShowTripReplay(true)}
+              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Play className="w-4 h-4 text-emerald-400 fill-emerald-400" />
+              Buka Blackbox
+            </button>
+          )}
         </div>
       </div>
 
@@ -1534,6 +1562,15 @@ const matched = rawPings.map((ping: any) => {
     </div>
     )}
     </div>
+
+    {showTripReplay && selectedJoRecord && (
+      <TripReplayModal
+        isOpen={showTripReplay}
+        onClose={() => setShowTripReplay(false)}
+        jobOrder={selectedJoRecord}
+      />
+    )}
+
   </div>
   );
 }

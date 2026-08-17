@@ -194,7 +194,14 @@ export async function PATCH(
     // [PHASE 2] STRICT SERVER-SIDE DRIVER SESSION AUTHORIZATION
     // ─────────────────────────────────────────────────────────────────────
     const driverIdHeader = request.headers.get("x-driver-id");
-    const isBackgroundAction = action === "gps_ping" || action === "native_heartbeat";
+    
+    // BACKWARDS COMPATIBILITY: If action is missing but route_id and route_status exist, infer route_status
+    let effectiveAction = action;
+    if (!effectiveAction && route_id && route_status) {
+      effectiveAction = "route_status";
+    }
+    
+    const isBackgroundAction = effectiveAction === "gps_ping" || effectiveAction === "gps_ping_batch" || effectiveAction === "native_heartbeat";
     
     // Photo uploads don't have an action field in the legacy contract, so they are not background actions.
     if (!isBackgroundAction) {
@@ -271,7 +278,7 @@ export async function PATCH(
     // ─────────────────────────────────────────────────────────────────────
     // ACTIONS
     // ─────────────────────────────────────────────────────────────────────
-    switch (action) {
+    switch (effectiveAction) {
       case "update_container":
         await commandRepo.updateContainer(
           jo.id,
@@ -301,6 +308,20 @@ export async function PATCH(
           route_notes,
           body.pod_photo_url,
         );
+
+        // [AI] Fix: If the job was still ASSIGNED but the driver arrived at a route, auto-start the job globally.
+        if (jo.status === "ASSIGNED") {
+          await supabase
+            .from("job_orders")
+            .update({
+              status: "ON JOURNEY",
+              started_at: new Date().toISOString(),
+              departure_detected_at: new Date().toISOString(), // Use as early timelog
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", jo.id);
+        }
+
         return NextResponse.json({ success: true });
 
       // ─────────────────────────────────────────────────────────────────
@@ -776,7 +797,10 @@ export async function PATCH(
       // GPS PING BATCH — Queue-First Store and Forward Endpoint
       // ─────────────────────────────────────────────────────────────────
       case "gps_ping_batch": {
+        console.info(`[GPS_SYNC_FORENSIC] server_received: PATCH /api/jo/${jo.id}`);
         const pings = body.pings || [];
+        console.info(`[GPS_SYNC_FORENSIC] server_batch_count: ${pings.length}`);
+        
         if (!Array.isArray(pings) || pings.length === 0) {
           return NextResponse.json({ error: "Empty batch" }, { status: 400 });
         }
@@ -804,8 +828,9 @@ export async function PATCH(
         const GEOFENCE_RADIUS_M = 2000;
 
         for (const ping of pings) {
-          if (!ping.client_ping_id || !ping.latitude || !ping.longitude) {
-            failed.push({ id: ping.client_ping_id, reason: "invalid_data" });
+          const canonicalPingId = ping.client_ping_id || ping.id;
+          if (!canonicalPingId || !ping.latitude || !ping.longitude) {
+            failed.push({ id: canonicalPingId, reason: "invalid_data" });
             continue;
           }
 
@@ -815,7 +840,7 @@ export async function PATCH(
 
           // 1. Idempotency Check & Insert
           const pingPayload: any = {
-            client_ping_id: ping.client_ping_id,
+            client_ping_id: canonicalPingId,
             job_order_id: jo.id,
             status_update: "GPS_PING_BATCH",
             latitude: nLat,
@@ -828,19 +853,23 @@ export async function PATCH(
           if (ping.speed !== undefined) pingPayload.speed = ping.speed;
           if (ping.battery !== undefined) pingPayload.battery_level = ping.battery;
 
+          console.info(`[GPS_SYNC_FORENSIC] supabase_insert_start: canonical_ping_id=${canonicalPingId}, job_order_id=${jo.id}, recorded_at=${recordedAt.toISOString()}`);
           const { error: pingErr } = await supabase
             .from("job_tracking")
             .insert(pingPayload);
           
           if (pingErr) {
             if (pingErr.code === '23505' || pingErr.message.includes('unique')) {
-              duplicates.push(ping.client_ping_id);
+              console.info(`[GPS_SYNC_FORENSIC] supabase_insert_error: UNIQUE (duplicate) for ${canonicalPingId}`);
+              duplicates.push(canonicalPingId);
             } else {
-              failed.push({ id: ping.client_ping_id, reason: pingErr.message });
+              console.info(`[GPS_SYNC_FORENSIC] supabase_insert_error: ${pingErr.message} for ${canonicalPingId}`);
+              failed.push({ id: canonicalPingId, reason: pingErr.message });
               continue; // Skip geofence for failed inserts
             }
           } else {
-            accepted.push(ping.client_ping_id);
+            console.info(`[GPS_SYNC_FORENSIC] supabase_insert_success: ${canonicalPingId}`);
+            accepted.push(canonicalPingId);
 
             // Persist to tracking_points (ignoring errors for this supplementary table)
             await trackingService.recordPing(

@@ -6,7 +6,7 @@ import { GoogleMapsProvider } from "@/lib/google-maps-context";
 import { LanguageProvider } from "@/lib/i18n/LanguageContext";
 import DeepLinkHandler from "@/components/DeepLinkHandler";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], preload: false });
 
 export const metadata = {
   title: "SENTRALOGIS | Unified Operational Matrix",

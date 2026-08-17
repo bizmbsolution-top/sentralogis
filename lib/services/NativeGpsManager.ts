@@ -90,6 +90,7 @@ class NativeGpsManagerClass {
     
     if (isFirst || jobIdChanged) {
       if (isFirst) this.setState({ status: "loading" });
+      console.log(`[ENTRY_FORENSIC] native_gps_startTracking_called=true`);
       await this.startTracking();
     } else {
       // Already running with same jobId, just broadcast current state
@@ -109,9 +110,13 @@ class NativeGpsManagerClass {
     console.log(`[GPS-MANAGER] unregister consumer: ${consumerId}`);
     console.log(`[GPS-MANAGER] consumer count: ${this.consumers.size}`);
 
-    if (this.consumers.size === 0) {
-      await this.stopTracking();
-    }
+    // [PATCH H-02] Do NOT stop native service when last consumer unregisters.
+    // The native foreground service must continue running independently of
+    // React component lifecycle (page navigation, component remount).
+    // Stopping the service here was the cause of GPS gaps during navigation
+    // and a vulnerability window where trackingActive=false could prevent
+    // automatic restart after process death.
+    // The service should only be stopped via explicit stopAllTracking().
   }
 
   private async startTracking() {
@@ -141,6 +146,7 @@ class NativeGpsManagerClass {
       });
 
       this.setState({ nativeServiceActive: true });
+      console.log(`[ENTRY_FORENSIC] native_gps_start_result=success`);
 
       if (!this.listener) {
         this.listener = await NativeGps!.addListener("onLocationUpdate", (data: any) => {
@@ -169,6 +175,7 @@ class NativeGpsManagerClass {
       }
     } catch (e: any) {
       console.error("[GPS-MANAGER] Error starting tracking. Retrying in 3s...", e);
+      console.log(`[ENTRY_FORENSIC] native_gps_start_result=failure`);
       this.setState({ status: "error", errorMessage: e?.message || String(e) });
       setTimeout(() => {
         if (this.consumers.size > 0) this.startTracking();
@@ -202,6 +209,17 @@ class NativeGpsManagerClass {
     } catch (e) {
       console.error("[GPS-MANAGER] Error stopping tracking", e);
     }
+  }
+
+  /**
+   * Explicitly stop ALL GPS tracking — call when JO completes or driver logs out.
+   * This is the ONLY way to stop the native foreground service.
+   * Do NOT stop the service via component lifecycle (unregisterConsumer).
+   */
+  public async stopAllTracking() {
+    console.log(`[GPS-MANAGER] stopAllTracking called, clearing ${this.consumers.size} consumers`);
+    this.consumers.clear();
+    await this.stopTracking();
   }
 
   // Helper method for legacy check

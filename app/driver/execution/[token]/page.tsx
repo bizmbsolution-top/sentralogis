@@ -338,7 +338,7 @@ export default function JoExecutionPage({
   useDriverGpsPing(
     activeGpsToken,
     jobOrder?.status,
-    !!jobOrder && (readinessComplete || (jobOrder.status || "").toUpperCase() !== "ASSIGNED"),
+    !!jobOrder,
     undefined,
     jobOrder?.started_at,
     isNativeApp,
@@ -369,6 +369,7 @@ export default function JoExecutionPage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "route_status",
           route_id: routeId,
           route_status: routeStatus,
         }),

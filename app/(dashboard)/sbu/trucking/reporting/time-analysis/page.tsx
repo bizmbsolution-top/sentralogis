@@ -131,7 +131,7 @@ export default function TimeAnalysisPage() {
           md_fleets!fleet_id (plate_number)
         `)
         .eq("tenant_id", tenantId)
-        .in("status", ["PEKERJAAN SELESAI", "COMPLETED", "DALAM PERJALANAN", "MENUJU BYD INDO - BYD SUBANG", "MENUNGGU SELESAI", "TIBA DI LOKASI BONGKAR"])
+        .in("status", ["PEKERJAAN SELESAI", "COMPLETED", "completed", "DALAM PERJALANAN", "MENUJU BYD INDO - BYD SUBANG", "MENUNGGU SELESAI", "TIBA DI LOKASI BONGKAR"])
         .gte("created_at", `${startDate}T00:00:00`)
         .lte("created_at", `${endDate}T23:59:59`)
         .not("started_at", "is", null)
