@@ -1,5 +1,5 @@
 // [AI] Service Worker for SentraLogis PWA (Warehouse + Driver Portal)
-const CACHE_NAME = 'sentralogis-pwa-v4';
+const CACHE_NAME = 'sentralogis-pwa-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/login',
