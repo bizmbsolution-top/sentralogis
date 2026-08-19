@@ -9,13 +9,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function normalizePhone(phone: string | null | undefined): string {
-  if (!phone) return "";
-  let p = String(phone).replace(/[^0-9]/g, "");
-  if (p.startsWith("0")) p = "62" + p.substring(1);
-  else if (p.startsWith("8")) p = "62" + p;
-  return p;
-}
+import { normalizePhone } from "@/lib/utils/phone";
 
 // POST /api/driver/link-profile
 // Body: { driver_id, pin? }
@@ -41,10 +35,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Driver not found" }, { status: 404 });
     }
 
-    const phone = normalizePhone(driver.whatsapp);
-    if (!phone) {
+    let phone: string;
+    try {
+      phone = normalizePhone(driver.whatsapp);
+    } catch (e) {
       return NextResponse.json(
-        { error: "Driver has no WhatsApp number to link" },
+        { error: "Driver has invalid WhatsApp number to link" },
         { status: 400 }
       );
     }
@@ -105,10 +101,14 @@ export async function POST(req: NextRequest) {
 // Returns driver_profiles matches so ops can pick which profile to link to.
 export async function GET(req: NextRequest) {
   try {
-    const phone = normalizePhone(req.nextUrl.searchParams.get("phone"));
-
-    if (!phone) {
-      return NextResponse.json({ error: "phone required" }, { status: 400 });
+    let phone: string;
+    try {
+      phone = normalizePhone(req.nextUrl.searchParams.get("phone"));
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Invalid phone number parameter" },
+        { status: 400 }
+      );
     }
 
     const { data: profiles, error } = await supabase

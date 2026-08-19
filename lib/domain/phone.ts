@@ -1,12 +1,13 @@
+import { normalizePhone } from "@/lib/utils/phone";
+
 /** Normalize Indonesian phone numbers for wa.me links (62…). */
 export function normalizePhoneToWa(phone: string): string {
-  let formatted = phone.replace(/\D/g, '');
-  if (formatted.startsWith('0')) {
-    formatted = '62' + formatted.substring(1);
-  } else if (formatted.startsWith('8')) {
-    formatted = '62' + formatted;
+  try {
+    return normalizePhone(phone);
+  } catch (e) {
+    // Fallback for empty/invalid phones to avoid breaking UI links
+    return phone.replace(/\D/g, '');
   }
-  return formatted;
 }
 
 export function buildWaLink(phone: string, message: string): string {

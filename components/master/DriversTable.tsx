@@ -39,8 +39,13 @@ export default function DriversTable({ refreshTrigger, onEdit }: DriversTablePro
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this driver?')) return;
     try {
-      const { error } = await supabase.from('md_drivers').delete().eq('id', id);
-      if (error) throw error;
+      const res = await fetch(`/api/tenant/master/drivers/${id}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete driver');
+      
       toast.success('Driver deleted');
       fetchDrivers();
     } catch (error: any) {
@@ -151,15 +156,17 @@ export default function DriversTable({ refreshTrigger, onEdit }: DriversTablePro
                       <div className="flex items-center justify-end gap-2">
                         <button 
                           onClick={() => onEdit(driver)}
-                          className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
+                          <span>EDIT</span>
                         </button>
                         <button 
                           onClick={() => handleDelete(driver.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
+                          <span>DELETE</span>
                         </button>
                       </div>
                     </td>

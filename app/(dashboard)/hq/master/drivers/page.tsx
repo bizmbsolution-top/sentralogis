@@ -16,6 +16,33 @@ import { Button } from '@/components/ui/Button';
 import { useStatusSync } from '@/lib/hooks/useStatusSync';
 import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
+const isDuplicateDriverPhoneError = (error: any) => {
+  const message = String(
+    error?.message ||
+    error?.details ||
+    error?.hint ||
+    ''
+  ).toLowerCase();
+
+  const constraint = String(
+    error?.constraint ||
+    ''
+  ).toLowerCase();
+
+  return (
+    error?.code === '23505' &&
+    (
+      constraint.includes('md_drivers_tenant_whatsapp_unique') ||
+      message.includes('md_drivers_tenant_whatsapp_unique') ||
+      (
+        message.includes('unique') &&
+        message.includes('whatsapp')
+      )
+    )
+  );
+};
+
+
 interface Driver {
   id: string;
   driver_code: string;
@@ -507,8 +534,12 @@ export default function HQDriversPage() {
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
-      toast.error(error?.message || 'Gagal menyimpan pengemudi.');
-    } finally {
+        if (isDuplicateDriverPhoneError(error)) {
+          toast.error('Nomor WhatsApp sudah digunakan oleh driver lain di tenant ini.');
+        } else {
+          toast.error(error?.message || 'Gagal menyimpan pengemudi.');
+        }
+      } finally {
       setSubmitting(false);
     }
   };
@@ -596,7 +627,7 @@ export default function HQDriversPage() {
             </Button>
             <Button 
               onClick={() => handleOpenModal()}
-              className="h-11 px-6 bg-slate-900 hover:bg-slate-800 text-white shadow-md transition-all text-sm font-bold flex items-center gap-2 w-full md:w-auto justify-center"
+              className="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all text-sm font-bold flex items-center gap-2 w-full md:w-auto justify-center"
             >
               <Plus size={18} /> ADD DRIVER
             </Button>
@@ -705,6 +736,7 @@ export default function HQDriversPage() {
                     const isVendor = d.md_entities?.is_vendor;
                     const issues = getDriverIssues(d);
                     const job = activeJobs[d.id];
+                      const conflict = getConflictingDriver(d);
                     return (
                       <tr key={d.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => openDrawer(d)}>
                         <td className="py-4 px-2">
@@ -771,11 +803,33 @@ export default function HQDriversPage() {
                             <span className="text-slate-300">—</span>
                           )}
                         </td>
-                        <td className="py-4 px-2 text-right">
-                          <Button variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900">
-                            <ChevronRight size={18} />
-                          </Button>
-                        </td>
+                        <td className="py-4 px-2 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-end items-center gap-2">
+                              {getConflictingDriver(d) && (
+                                <button 
+                                  onClick={(e) => handleOpenConflict(e, d, getConflictingDriver(d))}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                                >
+                                  <AlertCircle size={14} />
+                                  <span>RESOLVE</span>
+                                </button>
+                              )}
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleOpenModal(d); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
+                              >
+                                <Edit2 size={14} />
+                                <span>EDIT</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); openDrawer(d); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                              >
+                                <FileText size={14} />
+                                <span>DETAIL</span>
+                              </button>
+                            </div>
+                          </td>
                       </tr>
                     );
                   })}
@@ -789,6 +843,7 @@ export default function HQDriversPage() {
                 const isVendor = d.md_entities?.is_vendor;
                 const issues = getDriverIssues(d);
                 const job = activeJobs[d.id];
+                      const conflict = getConflictingDriver(d);
                 
                 return (
                   <div key={d.id} onClick={() => openDrawer(d)} className="p-4 border border-slate-200 rounded-xl bg-white active:bg-slate-50">
@@ -812,7 +867,35 @@ export default function HQDriversPage() {
                           </div>
                         </div>
                       </div>
-                      <ChevronRight size={18} className="text-slate-400" />
+                      <div className="hidden"></div>
+                      </div>
+                      
+                      {/* Mobile Actions */}
+                      <div className="px-4 pb-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
+                        {getConflictingDriver(d) && (
+                          <button 
+                            onClick={(e) => handleOpenConflict(e, d, getConflictingDriver(d))}
+                            className="flex-1 flex justify-center items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                          >
+                            <AlertCircle size={14} />
+                            <span>RESOLVE</span>
+                          </button>
+                        )}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleOpenModal(d); }}
+                          className="flex-1 flex justify-center items-center gap-1.5 px-3 py-2 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
+                        >
+                          <Edit2 size={14} />
+                          <span>EDIT</span>
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); openDrawer(d); }}
+                          className="flex-1 flex justify-center items-center gap-1.5 px-3 py-2 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                        >
+                          <FileText size={14} />
+                          <span>DETAIL</span>
+                        </button>
+                      
                     </div>
                     
                     {(job || issues.length > 0) && (

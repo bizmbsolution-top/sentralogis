@@ -11,6 +11,33 @@ import {
 import { Card } from '@/components/ui/Card';
 import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
+const isDuplicateDriverPhoneError = (error: any) => {
+  const message = String(
+    error?.message ||
+    error?.details ||
+    error?.hint ||
+    ''
+  ).toLowerCase();
+
+  const constraint = String(
+    error?.constraint ||
+    ''
+  ).toLowerCase();
+
+  return (
+    error?.code === '23505' &&
+    (
+      constraint.includes('md_drivers_tenant_whatsapp_unique') ||
+      message.includes('md_drivers_tenant_whatsapp_unique') ||
+      (
+        message.includes('unique') &&
+        message.includes('whatsapp')
+      )
+    )
+  );
+};
+
+
 interface Driver {
   id: string;
   driver_code: string;
@@ -187,8 +214,12 @@ export default function DriversPage() {
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Terjadi kesalahan saat menyimpan data');
-    } finally {
+        if (isDuplicateDriverPhoneError(error)) {
+          toast.error('Nomor WhatsApp sudah digunakan oleh driver lain di tenant ini.');
+        } else {
+          toast.error(error.message || 'Terjadi kesalahan saat menyimpan data');
+        }
+      } finally {
       setSubmitting(false);
     }
   };
@@ -287,7 +318,7 @@ export default function DriversPage() {
         </div>
         <button 
           onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-medium text-sm shadow-sm active:scale-95"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all font-medium text-sm shadow-sm active:scale-95"
         >
           <Plus size={18} />
           Add Driver
@@ -391,19 +422,23 @@ export default function DriversPage() {
                     <td className="px-4 py-4">
                       {getStatusBadge(d)}
                     </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => handleOpenModal(d)}
-                        className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => { setSelectedDriver(d); setIsDeleteModalOpen(true); }}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end items-center gap-2">
+                        <button 
+                          onClick={() => handleOpenModal(d)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
+                        >
+                          <Edit2 size={14} />
+                          <span>EDIT</span>
+                        </button>
+                        <button 
+                          onClick={() => { setSelectedDriver(d); setIsDeleteModalOpen(true); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                        >
+                          <Trash2 size={14} />
+                          <span>DELETE</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

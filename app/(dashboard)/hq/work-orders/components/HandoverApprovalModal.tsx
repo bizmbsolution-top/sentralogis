@@ -125,8 +125,17 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
           if (fError) throw fError;
         }
         if (driverIds.length > 0) {
-          const { error: dError } = await supabase.from('md_drivers').update({ status: 'on_duty' }).in('id', driverIds);
-          if (dError) throw dError;
+          await Promise.all(driverIds.map(async (id) => {
+            const res = await fetch(`/api/tenant/master/drivers/${id}/status`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'on_duty' })
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || 'Failed to update driver status');
+            }
+          }));
         }
 
         // 3. Update WO Items status
@@ -198,7 +207,13 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
           await supabase.from('md_fleets').update({ status: 'available' }).in('id', fleetIds);
         }
         if (driverIds.length > 0) {
-          await supabase.from('md_drivers').update({ status: 'available' }).in('id', driverIds);
+          await Promise.all(driverIds.map(async (id) => {
+            await fetch(`/api/tenant/master/drivers/${id}/status`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'available' })
+            });
+          }));
         }
  
         // 2. Flag JOs as rejected (NOT delete — preserve audit trail)

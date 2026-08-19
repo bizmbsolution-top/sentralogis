@@ -6,6 +6,33 @@ import { X, Loader2, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
+const isDuplicateDriverPhoneError = (error: any) => {
+  const message = String(
+    error?.message ||
+    error?.details ||
+    error?.hint ||
+    ''
+  ).toLowerCase();
+
+  const constraint = String(
+    error?.constraint ||
+    ''
+  ).toLowerCase();
+
+  return (
+    error?.code === '23505' &&
+    (
+      constraint.includes('md_drivers_tenant_whatsapp_unique') ||
+      message.includes('md_drivers_tenant_whatsapp_unique') ||
+      (
+        message.includes('unique') &&
+        message.includes('whatsapp')
+      )
+    )
+  );
+};
+
+
 interface DriversFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -87,8 +114,12 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
       onSuccess();
       onClose();
     } catch (error: any) {
-      toast.error(error.message);
-    } finally {
+        if (isDuplicateDriverPhoneError(error)) {
+          toast.error('Nomor WhatsApp sudah digunakan oleh driver lain di tenant ini.');
+        } else {
+          toast.error(error.message);
+        }
+      } finally {
       setLoading(false);
     }
   };

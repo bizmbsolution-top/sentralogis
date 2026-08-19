@@ -3,26 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
 
-/**
- * Canonical phone normalization — deterministic.
- *
- * 08xxxxxxxxxx   -> 628xxxxxxxxxx
- * 628xxxxxxxxxx  -> 628xxxxxxxxxx
- * +62 8xxxxxxxxx -> 628xxxxxxxxxx
- * +62-812-xxx    -> 628xxxxxxxxxx
- *
- * Strips all non-digit characters, then maps a leading 0 or 8 to the 62
- * country code. Applied to BOTH the user input AND the stored DB value so
- * the comparison is canonical on both sides regardless of how the number
- * was originally saved.
- */
-function normalizePhone(phone: string | null | undefined): string {
-  if (!phone) return "";
-  let p = String(phone).replace(/[^0-9]/g, "");
-  if (p.startsWith("0")) p = "62" + p.substring(1);
-  else if (p.startsWith("8")) p = "62" + p;
-  return p;
-}
+// Canonical phone normalization — deterministic.
+import { normalizePhone } from "@/lib/utils/phone";
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +19,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedInput = normalizePhone(whatsapp);
+    let normalizedInput: string;
+    try {
+      normalizedInput = normalizePhone(whatsapp);
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, code: "INVALID_PHONE", error: "Format nomor WhatsApp tidak valid" },
+        { status: 400 }
+      );
+    }
     const supabaseAdmin = createAdminClient();
     const inputPin = (pin || "").toString().trim();
 
