@@ -736,8 +736,7 @@ export default function HQDriversPage() {
                     const isVendor = d.md_entities?.is_vendor;
                     const issues = getDriverIssues(d);
                     const job = activeJobs[d.id];
-                      const conflict = getConflictingDriver(d);
-                    return (
+                      return (
                       <tr key={d.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => openDrawer(d)}>
                         <td className="py-4 px-2">
                           <div className="flex items-center gap-4">
@@ -805,15 +804,7 @@ export default function HQDriversPage() {
                         </td>
                         <td className="py-4 px-2 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-end items-center gap-2">
-                              {getConflictingDriver(d) && (
-                                <button 
-                                  onClick={(e) => handleOpenConflict(e, d, getConflictingDriver(d))}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
-                                >
-                                  <AlertCircle size={14} />
-                                  <span>RESOLVE</span>
-                                </button>
-                              )}
+                              
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleOpenModal(d); }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
@@ -843,9 +834,7 @@ export default function HQDriversPage() {
                 const isVendor = d.md_entities?.is_vendor;
                 const issues = getDriverIssues(d);
                 const job = activeJobs[d.id];
-                      const conflict = getConflictingDriver(d);
-                
-                return (
+                      return (
                   <div key={d.id} onClick={() => openDrawer(d)} className="p-4 border border-slate-200 rounded-xl bg-white active:bg-slate-50">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -872,15 +861,7 @@ export default function HQDriversPage() {
                       
                       {/* Mobile Actions */}
                       <div className="px-4 pb-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
-                        {getConflictingDriver(d) && (
-                          <button 
-                            onClick={(e) => handleOpenConflict(e, d, getConflictingDriver(d))}
-                            className="flex-1 flex justify-center items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
-                          >
-                            <AlertCircle size={14} />
-                            <span>RESOLVE</span>
-                          </button>
-                        )}
+                        
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleOpenModal(d); }}
                           className="flex-1 flex justify-center items-center gap-1.5 px-3 py-2 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-lg shadow-sm transition-all"
