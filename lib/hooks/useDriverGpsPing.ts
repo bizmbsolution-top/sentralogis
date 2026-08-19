@@ -95,6 +95,7 @@ export function useDriverGpsPing(
   const consumerId = `jo_hook_${hookInstanceId}_${token || "unknown"}`;
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const wakeLockRef = useRef<any>(null);
   const isPingingRef = useRef<boolean>(false);
 
@@ -287,6 +288,11 @@ export function useDriverGpsPing(
           NativeGpsManager.unregisterConsumer(consumerId);
         }
       } else {
+        if (workerRef.current) {
+          workerRef.current.postMessage({ type: "STOP" });
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
@@ -336,26 +342,70 @@ export function useDriverGpsPing(
     } else {
       // 5. else: browser geolocation fallback
       requestWakeLock();
-      console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
       
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (typeof window !== "undefined" && "Worker" in window) {
+        console.warn("[GPS Ping] Starting PWA Fallback via Web Worker");
+        if (!workerRef.current) {
+          workerRef.current = new Worker("/gps-worker.js");
+          workerRef.current.onmessage = (e) => {
+            const { type, payload } = e.data;
+            if (type === "PING_SUCCESS") {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("sentralogis:native_gps_update", {
+                    detail: {
+                      latitude: payload.lat,
+                      longitude: payload.lng,
+                      speed: payload.speed,
+                      accuracy: payload.accuracy,
+                    },
+                  })
+                );
+              }
+              if (navigator.onLine) {
+                 syncGpsPingsFirst().then(async () => {
+                     const qLen = await getGpsPingQueueLength();
+                     emitPingState({ offlineQueueLength: qLen, status: "active", accuracy: payload.accuracy, speed: payload.speed });
+                 }).catch(() => {});
+              } else {
+                 emitPingState({ status: "active", accuracy: payload.accuracy, speed: payload.speed });
+              }
+            } else if (type === "PING_FAILED" || type === "GEOLOCATION_ERROR") {
+              emitPingState({ status: "active", errorMessage: payload.error || `HTTP ${payload.status}` });
+            }
+          };
+        }
+        
+        workerRef.current.postMessage({
+          type: "START",
+          payload: { token, apiUrl: window.location.origin }
+        });
+      } else {
+        console.warn("[GPS Ping] Starting PWA Fallback via interval pingBrowser()");
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        
+        pingBrowser();
+        intervalRef.current = setInterval(() => {
+           pingBrowser();
+           if (typeof navigator !== "undefined" && navigator.onLine) {
+               syncGpsPingsFirst().then(async () => {
+                   const qLen = await getGpsPingQueueLength();
+                   emitPingState({ offlineQueueLength: qLen });
+               }).catch(() => {});
+           }
+        }, GPS_PING_INTERVAL_MS);
       }
-      
-      pingBrowser();
-      intervalRef.current = setInterval(() => {
-         pingBrowser();
-         if (typeof navigator !== "undefined" && navigator.onLine) {
-             syncGpsPingsFirst().then(async () => {
-                 const qLen = await getGpsPingQueueLength();
-                 emitPingState({ offlineQueueLength: qLen });
-             }).catch(() => {});
-         }
-      }, GPS_PING_INTERVAL_MS);
     }
 
     // 6. cleanup
     return () => {
+      if (workerRef.current) {
+        workerRef.current.postMessage({ type: "STOP" });
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
