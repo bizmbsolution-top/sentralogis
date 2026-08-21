@@ -15,3 +15,7 @@ public/sentralogis_faticon.ico
 docs/
 MySentra/
 middleware.ts
+reports/
+scratch/
+tmp_*.mjs
+*.txt

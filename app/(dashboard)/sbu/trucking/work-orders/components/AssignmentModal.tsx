@@ -52,6 +52,8 @@ import {
   buildInitialAssignmentSlots,
   computeMaxJoCount,
   getActiveAssetIdsFromJos,
+  getHardBlockingAssetIdsFromJos,
+  getReadyForQueueAssetIdsFromJos,
   getRouteOriginDest,
   mapTransportersForTenant,
   matchDriverAllowance,
@@ -71,6 +73,7 @@ interface AssignmentModalProps {
   onSuccess: () => void;
   onHandover?: () => void;
   onSbuHandover?: () => void;
+  onRejectReassign?: (jo: any) => void;
 }
 
 export default function AssignmentModal({
@@ -79,6 +82,7 @@ export default function AssignmentModal({
   onSuccess,
   onHandover,
   onSbuHandover,
+  onRejectReassign,
 }: AssignmentModalProps) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -96,6 +100,8 @@ export default function AssignmentModal({
   // Selection Data
   const [fleets, setFleets] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [queueReadyFleetIds, setQueueReadyFleetIds] = useState<string[]>([]);
+  const [queueReadyDriverIds, setQueueReadyDriverIds] = useState<string[]>([]);
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
   const [transporterFleets, setTransporterFleets] = useState<any[]>([]);
   const [transporterDrivers, setTransporterDrivers] = useState<any[]>([]);
@@ -133,21 +139,23 @@ export default function AssignmentModal({
 
         // Use simpler query like parent page - don't filter by status to avoid RLS issues
         // Fetch JOs - try without select to get all fields
-        const { data: jos, error: joError } = await supabase
-          .from("job_orders")
+        const { data: rawJos, error: joError } = await (supabase
+          .from("job_orders" as any) as any)
           .select("*")
           .eq("wo_item_id", item.id)
           .order("jo_number", { ascending: true });
 
+        const jos: any[] = rawJos || [];
+
         console.log(
           "[AssignmentModal] Found JOs:",
-          jos?.length,
+          jos.length,
           "error:",
           joError?.message,
           "errorDetail:",
           joError,
         );
-        if (jos && jos.length > 0) {
+        if (jos.length > 0) {
           console.log(
             "[AssignmentModal] First JO fields:",
             Object.keys(jos[0]),
@@ -163,28 +171,38 @@ export default function AssignmentModal({
           console.error("[AssignmentModal] Error fetching JOs:", joError);
         }
 
-        setExistingJOs(jos || []);
+        setExistingJOs(jos);
 
-        const assignedFleetIds = (jos || [])
+        const assignedFleetIds = jos
           .map((j) => j.fleet_id)
           .filter(Boolean);
-        const assignedDriverIds = (jos || [])
+        const assignedDriverIds = jos
           .map((j) => j.driver_id)
           .filter(Boolean);
 
         const {
-          activeFleetIds: activeJobFleets,
-          activeDriverIds: activeJobDrivers,
-        } = getActiveAssetIdsFromJos(jos || []);
+          hardBlockingFleetIds: hardJobFleets,
+          hardBlockingDriverIds: hardJobDrivers,
+        } = getHardBlockingAssetIdsFromJos(jos || []);
+
+        const {
+          queueReadyFleetIds: readyFleets,
+          queueReadyDriverIds: readyDrivers,
+        } = getReadyForQueueAssetIdsFromJos(jos || []);
+
+        setQueueReadyFleetIds(readyFleets);
+        setQueueReadyDriverIds(readyDrivers);
+
+        const targetFleetIdsToFetch = Array.from(new Set([...assignedFleetIds, ...readyFleets]));
+        const targetDriverIdsToFetch = Array.from(new Set([...assignedDriverIds, ...readyDrivers]));
 
         // 2. Fetch available assets and transporters
-        // [AI] Also fetch already-assigned fleets/drivers separately so they always appear in dropdowns
-        // even if their status is on_road/is_working=true (they were assigned by this WO item)
+        // [AI] Also fetch already-assigned fleets/drivers + queue-ready assets separately so they always appear in dropdowns
         console.log("[AssignmentModal] Fetching assets. tenantId:", tenantId);
         console.log("[AssignmentModal] assignedFleetIds:", assignedFleetIds);
         console.log("[AssignmentModal] assignedDriverIds:", assignedDriverIds);
-        console.log("[AssignmentModal] activeJobFleets:", activeJobFleets);
-        console.log("[AssignmentModal] activeJobDrivers:", activeJobDrivers);
+        console.log("[AssignmentModal] hardJobFleets (blocking):", hardJobFleets);
+        console.log("[AssignmentModal] readyFleets (queue-ready):", readyFleets);
 
         const [
           fleetRes,
@@ -197,8 +215,8 @@ export default function AssignmentModal({
         ] = await Promise.all([
           // Only show available fleets (include on_duty for checked-in but unassigned)
           (async () => {
-            let query = supabase
-              .from("md_fleets")
+            let query = (supabase
+              .from("md_fleets" as any) as any)
               .select(
                 `
               id,
@@ -217,9 +235,9 @@ export default function AssignmentModal({
               .eq("tenant_id", tenantId)
               .in("status", ["available", "maintenance", "on_duty"]);
 
-            // Exclude fleets with active jobs if any exist
-            if (activeJobFleets.length > 0) {
-              const unquotedFleets = activeJobFleets.join(",");
+            // Exclude only fleets with hard blocking active jobs (on the road before unloading)
+            if (hardJobFleets.length > 0) {
+              const unquotedFleets = hardJobFleets.join(",");
               query = query.not("id", "in", `(${unquotedFleets})`);
             }
             return query;
@@ -227,16 +245,16 @@ export default function AssignmentModal({
 
           // Only show drivers who are available or on_duty (checked in but not yet assigned)
           (async () => {
-            let query = supabase
-              .from("md_drivers")
+            let query = (supabase
+              .from("md_drivers" as any) as any)
               .select("*, md_entities(is_vendor, vendor_tenant_id)")
               .eq("is_active", true)
               .eq("tenant_id", tenantId)
               .in("status", ["available", "on_duty"]);
 
-            // Exclude drivers with active jobs if any exist
-            if (activeJobDrivers.length > 0) {
-              const unquotedDrivers = activeJobDrivers.join(",");
+            // Exclude only drivers with hard blocking active jobs
+            if (hardJobDrivers.length > 0) {
+              const unquotedDrivers = hardJobDrivers.join(",");
               query = query.not("id", "in", `(${unquotedDrivers})`);
             }
             return query;
@@ -258,27 +276,25 @@ export default function AssignmentModal({
             .select("id, name, phone, entity_id, is_active")
             .eq("is_active", true),
 
-          // [AI] Fetch already-assigned fleets by their IDs regardless of status
-          // This ensures the dropdown always shows the currently-assigned fleet even if it's on_road
-          assignedFleetIds.length > 0
-            ? supabase
-                .from("md_fleets")
+          // [AI] Fetch already-assigned fleets and queue-ready fleets by their IDs regardless of status
+          targetFleetIdsToFetch.length > 0
+            ? (supabase
+                .from("md_fleets" as any) as any)
                 .select(
                   `
                 id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id, vendor_tenant_id,
                 md_fleet_types (type_name)
               `,
                 )
-                .in("id", assignedFleetIds)
+                .in("id", targetFleetIdsToFetch)
             : Promise.resolve({ data: [], error: null }),
 
-          // [AI] Fetch already-assigned drivers by their IDs regardless of is_working status
-          // This ensures the dropdown always shows the currently-assigned driver even if is_working=true
-          assignedDriverIds.length > 0
-            ? supabase
-                .from("md_drivers")
+          // [AI] Fetch already-assigned drivers and queue-ready drivers by their IDs regardless of is_working status
+          targetDriverIdsToFetch.length > 0
+            ? (supabase
+                .from("md_drivers" as any) as any)
                 .select("*, md_entities(is_vendor, vendor_tenant_id)")
-                .in("id", assignedDriverIds)
+                .in("id", targetDriverIdsToFetch)
             : Promise.resolve({ data: [], error: null }),
         ]);
 
@@ -342,9 +358,9 @@ export default function AssignmentModal({
           });
 
         // [AI] Merge assigned fleets/drivers into the available lists so dropdowns always show them
-        let availableFleets = fleetRes.data || [];
-        const assignedFleets = assignedFleetRes?.data || [];
-        const availableFleetIds = new Set(availableFleets.map((f) => f.id));
+        let availableFleets: any[] = (fleetRes.data as any[]) || [];
+        const assignedFleets: any[] = (assignedFleetRes?.data as any[]) || [];
+        const availableFleetIds = new Set(availableFleets.map((f: any) => f.id));
         // Add assigned fleets that weren't in the available query (e.g. status=on_road)
         for (const af of assignedFleets) {
           if (!availableFleetIds.has(af.id)) {
@@ -355,12 +371,12 @@ export default function AssignmentModal({
 
         // Final deduplication for fleets just to be safe against duplicate keys
         availableFleets = availableFleets.filter(
-          (v, i, a) => a.findIndex((t) => t.id === v.id) === i,
+          (v: any, i: number, a: any[]) => a.findIndex((t: any) => t.id === v.id) === i,
         );
 
-        let availableDrivers = driverRes.data || [];
-        const assignedDriversList = assignedDriverRes?.data || [];
-        const availableDriverIds = new Set(availableDrivers.map((d) => d.id));
+        let availableDrivers: any[] = (driverRes.data as any[]) || [];
+        const assignedDriversList: any[] = (assignedDriverRes?.data as any[]) || [];
+        const availableDriverIds = new Set(availableDrivers.map((d: any) => d.id));
         // Add assigned drivers that weren't in the available query (e.g. is_working=true)
         for (const ad of assignedDriversList) {
           if (!availableDriverIds.has(ad.id)) {
@@ -371,7 +387,7 @@ export default function AssignmentModal({
 
         // Final deduplication for drivers just to be safe
         availableDrivers = availableDrivers.filter(
-          (v, i, a) => a.findIndex((t) => t.id === v.id) === i,
+          (v: any, i: number, a: any[]) => a.findIndex((t: any) => t.id === v.id) === i,
         );
 
         setFleets(availableFleets);
@@ -410,8 +426,8 @@ export default function AssignmentModal({
           transportersCount: trans.length,
           mergedAssignedFleets: assignedFleets.length,
           mergedAssignedDrivers: assignedDriversList.length,
-          allFleets: availableFleets.map((f) => f.id),
-          allDrivers: availableDrivers.map((d) => d.id),
+          allFleets: availableFleets.map((f: any) => f.id),
+          allDrivers: availableDrivers.map((d: any) => d.id),
         });
 
         console.log(
@@ -429,12 +445,12 @@ export default function AssignmentModal({
           internalHqId,
         );
         setAssignments(finalAssignments);
-        const missingFleetIds = activeJobFleets.filter(
-          (id) => !availableFleets.some((f) => f.id === id),
+        const missingFleetIds = (hardJobFleets as string[]).filter(
+          (id: string) => !availableFleets.some((f: any) => f.id === id),
         );
         if (missingFleetIds.length > 0) {
-          const { data: missingFleets } = await supabase
-            .from("md_fleets")
+          const { data: missingFleets } = await (supabase
+            .from("md_fleets" as any) as any)
             .select(
               `
              id, entity_id, fleet_code, plate_number, brand, model, status, fleet_type_id,
@@ -444,9 +460,9 @@ export default function AssignmentModal({
             .in("id", missingFleetIds);
           if (missingFleets) {
             setFleets((prev) => {
-              const combined = [...prev, ...missingFleets];
+              const combined = [...prev, ...((missingFleets as any[]) || [])];
               return combined.filter(
-                (v, i, a) => a.findIndex((t) => t.id === v.id) === i,
+                (v: any, i: number, a: any[]) => a.findIndex((t: any) => t.id === v.id) === i,
               );
             });
           }
@@ -963,7 +979,8 @@ export default function AssignmentModal({
       filteredFleets = [assignedFleet, ...filteredFleets];
     }
     return filteredFleets.map((f) => {
-      const isBusy = f.status === "on_road" && assign.fleet_id !== f.id;
+      const isQueueReady = queueReadyFleetIds.includes(f.id);
+      const isBusy = f.status === "on_road" && assign.fleet_id !== f.id && !isQueueReady;
       const ownerTenant = f.vendor_tenant_id;
       const plate = displayCode(
         f.plate_number,
@@ -974,7 +991,9 @@ export default function AssignmentModal({
       return {
         value: f.id,
         label: `${f.md_fleet_types?.type_name || "Fleet"} - ${plate}`,
-        description: isBusy
+        description: isQueueReady
+          ? "🟢 SIAP ANTREAN (SEDANG BONGKAR)"
+          : isBusy
           ? "BUSY / ON ROAD"
           : f.status?.toUpperCase() || "AVAILABLE",
         disabled: isBusy,
@@ -994,7 +1013,8 @@ export default function AssignmentModal({
         : d.entity_id === assign.transporter_id;
     });
     return filteredDrivers.map((d) => {
-      const isBusy = d.status === "on_road" && assign.driver_id !== d.id;
+      const isQueueReady = queueReadyDriverIds.includes(d.id);
+      const isBusy = d.status === "on_road" && assign.driver_id !== d.id && !isQueueReady;
       const statusText = d.status?.toUpperCase() || "AVAILABLE";
       const ownerTenant = d.md_entities?.vendor_tenant_id;
       const name = displayCode(
@@ -1006,7 +1026,11 @@ export default function AssignmentModal({
       return {
         value: d.id,
         label: name,
-        description: isBusy ? "BUSY / ON ROAD" : statusText,
+        description: isQueueReady
+          ? "🟢 SIAP ANTREAN (SEDANG BONGKAR)"
+          : isBusy
+          ? "BUSY / ON ROAD"
+          : statusText,
         disabled: isBusy,
       };
     });

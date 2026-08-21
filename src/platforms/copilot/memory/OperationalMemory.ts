@@ -1,3 +1,14 @@
+export interface UserMemoryState {
+  currentUser?: string;
+  updatedAt?: number;
+  [key: string]: any;
+}
+
+export const INITIAL_MEMORY: UserMemoryState = {
+  currentUser: '',
+  updatedAt: 0,
+};
+
 // Mock operational state for memory lookups.
 // In a real system, this would query a Redis cache or real-time materialized views.
 export class OperationalMemory {

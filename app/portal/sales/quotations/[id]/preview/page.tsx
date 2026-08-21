@@ -25,14 +25,15 @@ export default function QuotationPrintPreview({ params }: { params: Promise<{ id
   async function fetchQuotation() {
     setLoading(true);
     try {
-      const { data: quoteData } = await supabase
-        .from('crm_quotations')
+      const { data: rawQuoteData } = await (supabase
+        .from('crm_quotations' as any) as any)
         .select(`
           *, 
           crm_deals(title, entity_id, md_entities(name, billing_address, phone, email))
         `)
         .eq('id', id)
         .single();
+      const quoteData = rawQuoteData as any;
       
       if (quoteData) {
         setQuote(quoteData);
@@ -57,11 +58,11 @@ export default function QuotationPrintPreview({ params }: { params: Promise<{ id
         }
 
         // Fetch SBU Sections
-        const { data: sectionsData } = await supabase
-          .from('crm_quotation_sections')
+        const { data: sectionsData } = await (supabase
+          .from('crm_quotation_sections' as any) as any)
           .select('*')
           .eq('quotation_id', id);
-        setSections(sectionsData || []);
+        setSections((sectionsData as any[]) || []);
 
         // Fetch Items
         const { data: itemsData } = await supabase

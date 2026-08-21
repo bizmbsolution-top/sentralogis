@@ -24,7 +24,7 @@ export default function TallyInboundExecution({ params }: { params: Promise<{ id
         const found = allLocal.find(r => r.id === unwrappedParams.id);
         if (found) {
           setReceipt(found);
-          setItems(found.items);
+          setItems(found.items || []);
         } else {
           toast.error('Receipt tidak ditemukan di memori lokal');
           router.push('/tally');
@@ -97,7 +97,7 @@ export default function TallyInboundExecution({ params }: { params: Promise<{ id
   const handleReceiptChange = (field: keyof OfflineReceipt, val: any) => {
     setReceipt(prev => prev ? { ...prev, [field]: val } : null);
     if (receipt) {
-      saveTallyLocally(receipt.id, items, undefined, { [field]: val }).catch(console.error);
+      saveTallyLocally(receipt.id, items, '', { [field]: val }).catch(console.error);
     }
   };
 

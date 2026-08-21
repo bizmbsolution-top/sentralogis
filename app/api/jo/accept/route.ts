@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { STATUS_MAP } from '@/lib/statusMapping';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { verifyDriverJwt } from '@/lib/auth/driverJwt';
 
 // =====================================================
 // POST: ACCEPT JOB
@@ -11,8 +12,6 @@ export async function POST(req: NextRequest) {
         const { token } = body;
         const supabase = createAdminClient();
 
-        console.log("Accept JO request:", token);
-
         // VALIDASI
         if (!token) {
             return NextResponse.json(
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // [AI] 1. CARI JOB ORDER BERDASARKAN TOKEN / UUID FALLBACK
+        // 1. CARI JOB ORDER BERDASARKAN TOKEN / UUID FALLBACK
         let jobOrder = null;
         let fetchError = null;
 
@@ -57,6 +56,35 @@ export async function POST(req: NextRequest) {
                 { success: false, error: 'Job Order tidak ditemukan' },
                 { status: 404 }
             );
+        }
+
+        // 1b. Cryptographic Authorization Check
+        const authHeader = req.headers.get("authorization") || "";
+        const cookieToken = req.cookies.get("sb-access-token")?.value;
+        const rawToken = authHeader.replace(/^Bearer\s+/i, "").trim() || cookieToken || "";
+
+        if (rawToken) {
+            const verified = verifyDriverJwt(rawToken);
+            if (verified && verified.driver_id && jobOrder.driver_id && verified.driver_id !== jobOrder.driver_id) {
+                // Check if profile matches
+                let profileMatches = false;
+                if (verified.profile_id) {
+                    const { data: linkRow } = await supabase
+                        .from('driver_tenant_links')
+                        .select('id')
+                        .eq('profile_id', verified.profile_id)
+                        .eq('driver_id', jobOrder.driver_id)
+                        .eq('is_active', true)
+                        .maybeSingle();
+                    if (linkRow) profileMatches = true;
+                }
+                if (!profileMatches) {
+                    return NextResponse.json(
+                        { success: false, error: 'Akses ditolak: Anda bukan supir yang ditugaskan untuk JO ini' },
+                        { status: 403 }
+                    );
+                }
+            }
         }
 
         // =====================================================

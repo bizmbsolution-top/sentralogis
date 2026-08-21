@@ -129,15 +129,15 @@ export default function SmartRepackingModal({ onClose, onSuccess, warehouseId }:
 
   const fetchCustomers = async () => {
     try {
-      const { data } = await supabase.from('md_entities').select('id, name').eq('is_customer', true).eq('tenant_id', profile?.tenant_id);
-      if (data) setCustomers(data);
+      const { data } = await supabase.from('md_entities').select('id, name').eq('is_customer', true).eq('tenant_id', profile?.tenant_id || '');
+      if (data) setCustomers((data as any[]) || []);
     } catch (err) {}
   };
 
   const fetchLocations = async () => {
     try {
       const { data } = await supabase.from('md_warehouse_locations').select('id, code').order('code');
-      if (data) setLocations(data);
+      if (data) setLocations((data as any[]) || []);
     } catch (err) {}
   };
 
@@ -259,7 +259,7 @@ export default function SmartRepackingModal({ onClose, onSuccess, warehouseId }:
         sku_code: newProductSku,
         unit: newProductUnit,
         is_active: true
-      }).select('id, name, sku_code, unit').single();
+      } as any).select('id, name, sku_code, unit').single();
       
       if (error) throw error;
       toast.success('Produk berhasil ditambahkan');
@@ -344,7 +344,7 @@ export default function SmartRepackingModal({ onClose, onSuccess, warehouseId }:
         priority: 'NORMAL',
         created_by: profile?.id,
         status: 'CREATED'
-      }).select('id').single();
+      } as any).select('id').single();
 
       if (orderError) throw orderError;
 
@@ -404,14 +404,14 @@ export default function SmartRepackingModal({ onClose, onSuccess, warehouseId }:
       };
 
       // Insert Items
-      const { error: itemsError } = await supabase.from('wh_repacking_items').insert([...sourcePayloads, resultPayload]);
+      const { error: itemsError } = await supabase.from('wh_repacking_items').insert([...sourcePayloads, resultPayload] as any);
       if (itemsError) throw itemsError;
 
       // 4. Auto Execute (if NOT draft)
       if (!isDraft) {
          const { error: execError } = await supabase.rpc('activate_repacking_order', {
            p_order_id: order.id,
-           p_user_id: profile?.id
+           p_user_id: profile?.id as string
          });
          
          if (execError) throw execError;

@@ -11,14 +11,19 @@ export interface DriverSession {
   tenant_id?: string;
   entity_id?: string | null;
   profile_id?: string | null;
+  access_token?: string;
+  refresh_token?: string;
+  expires_at?: number;
 }
 
 interface DriverAuthContextType {
   session: DriverSession | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   login: (whatsapp: string, pin: string, joToken?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   checkAuth: () => void;
+  getAuthHeaders: () => Record<string, string>;
 }
 
 const DriverAuthContext = createContext<DriverAuthContextType | undefined>(undefined);
@@ -47,6 +52,17 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
+  const getAuthHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+    if (session?.driver_id) {
+      headers["x-driver-id"] = session.driver_id;
+    }
+    return headers;
+  };
+
   const login = async (whatsapp: string, pin: string, joToken?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await fetch('/api/driver/login', {
@@ -62,6 +78,7 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
       }
 
       const driver = data.driver;
+      const tokenInfo = data.session || {};
       const newSession: DriverSession = {
         driver_id: driver.id,
         driver_type: driver.driver_type || (driver.entity_id ? "VENDOR" : "OWN"),
@@ -70,10 +87,14 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
         tenant_id: driver.tenant_id,
         entity_id: driver.entity_id,
         profile_id: driver.profile_id || null,
+        access_token: tokenInfo.access_token || undefined,
+        refresh_token: tokenInfo.refresh_token || undefined,
+        expires_at: tokenInfo.expires_at || undefined,
       };
 
       // Preserve fallback localStorage save for backward compatibility
       localStorage.setItem("sentralogis_driver_session", JSON.stringify(newSession));
+      localStorage.setItem("sentralogis_driver_id", driver.id);
       setSession(newSession);
       
       return { success: true };
@@ -85,11 +106,22 @@ export function DriverAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem("sentralogis_driver_session");
+    localStorage.removeItem("sentralogis_driver_id");
     setSession(null);
   };
 
   return (
-    <DriverAuthContext.Provider value={{ session, isLoading, login, logout, checkAuth }}>
+    <DriverAuthContext.Provider
+      value={{
+        session,
+        isAuthenticated: !!session?.driver_id,
+        isLoading,
+        login,
+        logout,
+        checkAuth,
+        getAuthHeaders,
+      }}
+    >
       {children}
     </DriverAuthContext.Provider>
   );

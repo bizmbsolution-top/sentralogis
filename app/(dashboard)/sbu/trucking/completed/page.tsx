@@ -52,6 +52,7 @@ function DocumentsAndFinancesContent() {
   const [uploadingAdvanceForJo, setUploadingAdvanceForJo] = useState<string | null>(null);
 
   const fetchCompletedJobs = useCallback(async () => {
+    if (!profile?.tenant_id) return;
     try {
       setLoading(true);
       
@@ -75,14 +76,14 @@ function DocumentsAndFinancesContent() {
             'awaiting_audit', 'picking_up', 'delivering', 'MENUNGGU BERANGKAT'
         ])
         .not('status', 'in', '("invoiced","paid","INVOICED","PAID")')
-        .eq('tenant_id', profile?.tenant_id)
+        .eq('tenant_id', profile.tenant_id)
         .order('updated_at', { ascending: false });
 
       if (joError) throw joError;
 
       if (jos && jos.length > 0) {
-        const driverIds = Array.from(new Set(jos.map(j => j.driver_id).filter(Boolean)));
-        const fleetIds = Array.from(new Set(jos.map(j => j.fleet_id).filter(Boolean)));
+        const driverIds = Array.from(new Set(jos.map(j => j.driver_id).filter(Boolean))) as string[];
+        const fleetIds = Array.from(new Set(jos.map(j => j.fleet_id).filter(Boolean))) as string[];
         const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
 
         const [driversRes, fleetsRes, woItemsRes, costsRes, viRes] = await Promise.all([
@@ -97,7 +98,7 @@ function DocumentsAndFinancesContent() {
         const fleetsMap = Object.fromEntries((fleetsRes.data || []).map(f => [f.id, f]));
         const woItemsMap = Object.fromEntries((woItemsRes.data || []).map(i => [i.id, i]));
         const costsData = costsRes.data || [];
-        const viData = viRes.data || [];
+        const viData = (viRes.data || []) as any[];
 
         // Build vendor invoice map: jo_id → vendor invoice
         const invoiceByJoId: Record<string, any> = {};
@@ -109,7 +110,7 @@ function DocumentsAndFinancesContent() {
         }
         setViMap(invoiceByJoId);
 
-        const woIds = Array.from(new Set(woItemsRes.data?.map(i => i.wo_id).filter(Boolean)));
+        const woIds = Array.from(new Set(woItemsRes.data?.map(i => i.wo_id).filter(Boolean))) as string[];
         const { data: wosRes } = woIds.length > 0 ? 
           await supabase.from('work_orders').select('id, wo_number, execution_date, md_entities(name)').in('id', woIds) : 
           { data: [] };
@@ -117,11 +118,11 @@ function DocumentsAndFinancesContent() {
 
         const hydrated = jos.map(j => ({
           ...j,
-          md_drivers: driversMap[j.driver_id],
-          md_fleets: fleetsMap[j.fleet_id],
+          md_drivers: driversMap[j.driver_id || ''],
+          md_fleets: fleetsMap[j.fleet_id || ''],
           wo_items: woItemsMap[j.wo_item_id] ? {
             ...woItemsMap[j.wo_item_id],
-            work_orders: wosMap[woItemsMap[j.wo_item_id].wo_id]
+            work_orders: wosMap[woItemsMap[j.wo_item_id].wo_id || '']
           } : null,
           has_pending_audit: costsData.some(c => c.jo_id === j.id && c.status === 'need_approval'),
           has_draft_costs: costsData.some(c => c.jo_id === j.id && c.status === 'draft')
@@ -132,7 +133,7 @@ function DocumentsAndFinancesContent() {
 
         // DEDUPLICATION: Ensure unique JO IDs
         const uniqueHydrated = Array.from(new Map(truckingOnly.map(item => [item.id, item])).values());
-        setJobs(uniqueHydrated);
+        setJobs(uniqueHydrated as CompletedJob[]);
       } else {
         setJobs([]);
       }
@@ -168,7 +169,7 @@ function DocumentsAndFinancesContent() {
     try {
       const { error } = await supabase
         .from('job_orders')
-        .update({ [field]: value })
+        .update({ [field]: value } as any)
         .eq('id', joId);
       
       if (error) throw error;

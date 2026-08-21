@@ -142,7 +142,7 @@ export default function HQContactsPage() {
     if (error) {
       toast.error('Gagal mengambil data kontak');
     } else {
-      setEntities(data || []);
+      setEntities((data || []) as Entity[]);
     }
     setLoading(false);
   }, [tenantId, activeTab]);
@@ -204,8 +204,7 @@ export default function HQContactsPage() {
     let attemptPayload = { ...payload };
     
     for (let attempt = 0; attempt <= OPTIONAL_COLUMNS.length; attempt++) {
-      const { data, error } = await supabase
-        .from(table)
+      const { data, error } = await (supabase.from(table as any) as any)
         .upsert(attemptPayload, { onConflict: options.onConflict })
         .select('id');
 
@@ -404,7 +403,7 @@ export default function HQContactsPage() {
       province: addr.province || '',
       postal_code: addr.postal_code || ''
     }));
-    setOtherAddresses(normalizedData);
+    setOtherAddresses(normalizedData as EntityAddress[]);
   };
 
   const handleOpenModal = (entity?: Entity) => {
@@ -438,7 +437,7 @@ export default function HQContactsPage() {
       });
       // Fetch addresses
       supabase.from('md_entity_addresses').select('*').eq('entity_id', entity.id).then(({ data }) => {
-        setOtherAddresses(data || []);
+        setOtherAddresses((data || []) as EntityAddress[]);
       });
     } else {
       setSelectedEntity(null);

@@ -116,10 +116,10 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
   const fetchProduct = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('md_product_skus').select('*').eq('id', editId).single();
+      const { data, error } = await supabase.from('md_product_skus').select('*').eq('id', editId as string).single();
       if (error) throw error;
-      
-      const safeData = { ...data };
+
+      const safeData: Record<string, any> = { ...data };
       Object.keys(safeData).forEach(key => {
         if (safeData[key] === null) safeData[key] = '';
       });

@@ -159,7 +159,7 @@ export async function GET() {
       success: true,
       current_status: {
         on_duty_drivers: onDutyDrivers.data?.length || 0,
-        on_road_fleets: onRoadFleets.data?.length || 0,
+        on_road_fleets: activeFleets.data?.length || 0,
         active_jobs: activeJobs.data?.length || 0,
         stuck_drivers: stuckDrivers.length,
         stuck_fleets: stuckFleets.length,

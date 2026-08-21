@@ -10,7 +10,7 @@ export async function getOrganizationTree(tenantId: string): Promise<Organizatio
     .eq('tenant_id', tenantId)
     .order('org_path');
   if (error) throw error;
-  return data || [];
+  return (data as unknown as Organization[]) || [];
 }
 
 export async function getOrganizationById(id: string): Promise<Organization | null> {
@@ -20,7 +20,7 @@ export async function getOrganizationById(id: string): Promise<Organization | nu
     .eq('id', id)
     .single();
   if (error) throw error;
-  return data;
+  return (data as unknown as Organization) || null;
 }
 
 export async function getChildOrgs(parentId: string): Promise<Organization[]> {
@@ -30,7 +30,7 @@ export async function getChildOrgs(parentId: string): Promise<Organization[]> {
     .eq('parent_org_id', parentId)
     .eq('is_active', true);
   if (error) throw error;
-  return data || [];
+  return (data as unknown as Organization[]) || [];
 }
 
 export async function getHQOrg(tenantId: string): Promise<Organization | null> {
@@ -41,7 +41,7 @@ export async function getHQOrg(tenantId: string): Promise<Organization | null> {
     .eq('org_type', 'HQ')
     .single();
   if (error) return null;
-  return data;
+  return (data as unknown as Organization) || null;
 }
 
 export function buildOrgTree(orgs: Organization[], parentId: string | null = null): OrgTreeNode[] {

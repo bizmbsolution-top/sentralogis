@@ -68,10 +68,10 @@ export interface CronJobStatus {
 }
 
 export interface DbIntegrityIssue {
-  type: 'orphan' | 'duplicate' | 'invalid_relation' | 'negative_total' | 'missing_reference';
+  type: 'orphan' | 'duplicate' | 'invalid_relation' | 'negative_total' | 'missing_reference' | string;
   table: string;
   count: number;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   remediable?: boolean;
   anomaly_type?: string;
 }

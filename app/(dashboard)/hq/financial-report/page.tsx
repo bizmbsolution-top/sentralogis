@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -45,8 +45,8 @@ export default function HQFinancialReportPage() {
       setLoading(true);
 
       // 1. Fetch Job Orders
-      const { data: jobs, error: jError } = await supabase
-        .from('job_orders')
+      const { data: jobs, error: jError } = await (supabase
+        .from('job_orders' as any) as any)
         .select('id, customer_price, purchase_price, status, tenant_id');
       
       if (jError) throw jError;
@@ -64,7 +64,7 @@ export default function HQFinancialReportPage() {
       let surcharge = 0;
       let reimbursement = 0;
 
-      jobs?.forEach(job => {
+      jobs?.forEach((job: any) => {
         rev += Number(job.customer_price) || 0;
         cogs += Number(job.purchase_price) || 0;
       });
@@ -247,7 +247,7 @@ export default function HQFinancialReportPage() {
               </div>
               <div>
                 <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Audited Integrity</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 italic">Last sync: {new Date().toLocaleTimeString()} • All data is derived from verified JO milestones</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 italic">Last sync: {new Date().toLocaleTimeString()} â€¢ All data is derived from verified JO milestones</p>
               </div>
             </div>
             <div className="flex gap-4">

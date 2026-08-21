@@ -186,10 +186,10 @@ export default function AddCostModal({
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const loadedCosts = data.map((d) => ({
+        const loadedCosts = ((data as any[]) || []).map((d: any) => ({
           id: d.id,
           cost_type: d.cost_type,
-          amount: d.amount.toString(),
+          amount: d.amount?.toString() || "0",
           description: d.description,
           charge_type: d.charge_type || "reimbursement",
           paid_by_entity: d.paid_by_entity || "internal",
@@ -229,7 +229,7 @@ export default function AddCostModal({
     })();
     (async () => {
       if (!profile?.tenant_id) return;
-      const { data: expenseData } = await supabase.from('md_expense_items').select('id, expense_code, expense_name, expense_account_id').eq('tenant_id', profile?.tenant_id);
+      const { data: expenseData } = await (supabase.from('md_expense_items' as any) as any).select('id, expense_code, expense_name, expense_account_id').eq('tenant_id', profile?.tenant_id);
       if (expenseData) setExpenseList(expenseData);
     })();
   }, [profile?.tenant_id]);
@@ -364,7 +364,7 @@ export default function AddCostModal({
 
         try {
           const joObj = jos.find(j => j.id === selectedJoId);
-          await supabase.from("notifications").insert({
+          await (supabase.from("notifications" as any) as any).insert({
             tenant_id: joObj?.tenant_id || selectedJoData?.tenant_id,
             role: "hq_finance",
             title: "Need Approval Add Cost",

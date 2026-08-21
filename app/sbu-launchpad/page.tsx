@@ -21,7 +21,7 @@ import toast, { Toaster } from "react-hot-toast";
 const SBULaunchpad = () => {
   const supabase = createClient();
    const [activeSbus, setActiveSbus] = useState<string[]>(['trucking']);
-  const [companyInfo, setCompanyInfo] = useState({ id: '', name: 'Subsidiary Loading...', logo: null });
+  const [companyInfo, setCompanyInfo] = useState<{ id: string; name: string; logo: string | null }>({ id: '', name: 'Subsidiary Loading...', logo: null });
   const [loading, setLoading] = useState(true);
 
   // Activation State

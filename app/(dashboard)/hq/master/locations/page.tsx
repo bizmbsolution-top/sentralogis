@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -79,7 +79,7 @@ export default function HQLocationsPage() {
     if (error) {
       toast.error('Gagal mengambil data lokasi');
     } else {
-      setLocations(data || []);
+      setLocations((data || []) as unknown as Location[]);
     }
     setLoading(false);
   }, [supabase, tenantId]);

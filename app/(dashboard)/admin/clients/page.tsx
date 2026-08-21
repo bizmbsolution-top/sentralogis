@@ -43,13 +43,13 @@ export default function ClientControlCenter() {
   const fetchClients = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('organizations')
+      const { data, error } = await (supabase
+        .from('organizations' as any) as any)
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setClients(data || []);
+      setClients((data as unknown as Organization[]) || []);
     } catch (error: unknown) {
       toast.error("Gagal sinkron data clients.");
     } finally {
@@ -89,8 +89,8 @@ export default function ClientControlCenter() {
     setUpdating(true);
     try {
       // 1. Create Organization
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
+      const { data: org, error: orgError } = await (supabase
+        .from('organizations' as any) as any)
         .insert([{
           name: formData.name,
           address: formData.address,
@@ -113,7 +113,7 @@ export default function ClientControlCenter() {
           email: formData.admin_email,
           password: formData.admin_password,
           full_name: formData.pic_name,
-          organization_id: org.id,
+          organization_id: (org as any)?.id,
           role: 'admin'
         })
       });
@@ -141,7 +141,7 @@ export default function ClientControlCenter() {
   const handleDeleteClient = async (id: string) => {
     if (!confirm("Hapus client ini dari ekosistem? Data permanen tidak bisa dikembalikan.")) return;
     try {
-      const { error } = await supabase.from('organizations').delete().eq('id', id);
+      const { error } = await (supabase.from('organizations' as any) as any).delete().eq('id', id);
       if (error) throw error;
       toast.success("Client berhasil dihapus.");
       fetchClients();
@@ -158,8 +158,8 @@ export default function ClientControlCenter() {
     if (!selectedClient || topUpAmount <= 0) return toast.error("Masukkan jumlah kredit yang valid.");
     setUpdating(true);
     try {
-      const { error } = await supabase
-        .from('organizations')
+      const { error } = await (supabase
+        .from('organizations' as any) as any)
         .update({ mission_credits: (selectedClient.mission_credits || 0) + topUpAmount })
         .eq('id', selectedClient.id);
       

@@ -548,7 +548,7 @@ export default function MasterWarehousePage() {
     if (!confirm(`Hapus ${name}? (Data di bawahnya akan ikut terhapus)`))
       return;
     try {
-      const { error } = await supabase.from(table).delete().eq("id", id);
+      const { error } = await (supabase.from(table as never) as any).delete().eq("id", id);
       if (error) throw error;
       toast.success(`Berhasil dihapus.`);
       fetchData();
@@ -862,14 +862,14 @@ export default function MasterWarehousePage() {
                                     </div>
                                   ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                      {Object.entries(
+                                      {(Object.entries(
                                         zoneLocs.reduce((acc, loc) => {
                                           const prefix = getPrefix(loc.code);
                                           if (!acc[prefix]) acc[prefix] = [];
                                           acc[prefix].push(loc);
                                           return acc;
                                         }, {} as Record<string, any[]>)
-                                      ).map(([prefix, locs]: [string, any[]]) => {
+                                      ) as [string, any[]][]).map(([prefix, locs]) => {
                                         const totalGroupMaxVol = locs.reduce((sum, l) => {
                                           const cap = locationCapacities.find((c) => c.location_id === l.id);
                                           return sum + (cap?.max_volume_m3 || l.max_volume_m3 || 0);

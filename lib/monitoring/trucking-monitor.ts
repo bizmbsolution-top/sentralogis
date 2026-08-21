@@ -42,7 +42,7 @@ async function checkStuckJobs(): Promise<TruckingIssue[]> {
 
     if (error) throw error;
 
-    for (const job of data || []) {
+    for (const job of (data as any[]) || []) {
       issues.push({
         type: 'stuck_jo',
         severity: 'high',
@@ -74,7 +74,7 @@ async function checkDriverNotAccepted(): Promise<TruckingIssue[]> {
 
     if (error) throw error;
 
-    for (const job of data || []) {
+    for (const job of (data as any[]) || []) {
       issues.push({
         type: 'driver_not_accepted',
         severity: 'medium',
@@ -104,8 +104,8 @@ async function checkDuplicateFleet(): Promise<TruckingIssue[]> {
 
     if (error) throw error;
 
-    const fleetMap = new Map<string, typeof data>();
-    for (const job of data || []) {
+    const fleetMap = new Map<string, any[]>();
+    for (const job of (data as any[]) || []) {
       const key = job.fleet_id;
       if (!fleetMap.has(key)) fleetMap.set(key, []);
       fleetMap.get(key)!.push(job);
@@ -117,7 +117,7 @@ async function checkDuplicateFleet(): Promise<TruckingIssue[]> {
           type: 'duplicate_fleet',
           severity: 'critical',
           message: `Fleet ${jobs[0].plate_number || jobs[0].fleet_id} assigned to multiple active JOs`,
-          details: { fleet_id: jobs[0].fleet_id, plate_number: jobs[0].plate_number, jobs: jobs.map((j) => ({ jo_number: j.jo_number, status: j.status })) },
+          details: { fleet_id: jobs[0].fleet_id, plate_number: jobs[0].plate_number, jobs: jobs.map((j: any) => ({ jo_number: j.jo_number, status: j.status })) },
         });
       }
     }

@@ -97,7 +97,7 @@ export default function AssignmentModal({
         if (itemError) throw itemError;
 
         if (item) {
-          const itemData = item.item_data || {};
+          const itemData = (item as any).item_data || {};
           // AMBIL deal_price dari item_data sesuai instruksi
           setDealPrice(Number(itemData.deal_price) || 0);
           setUnitCount(Number(itemData.unit_count) || 1);
@@ -123,10 +123,11 @@ export default function AssignmentModal({
         setAssignedCount(count || 0);
 
         // 3. Fetch Transporters (Vendors + Own)
-        const { data: entityData, error: entityError } = await supabase
-          .from("md_entities")
+        if (!profile?.tenant_id) return;
+        const { data: entityData, error: entityError } = await (supabase
+          .from("md_entities" as any) as any)
           .select("id, name, is_vendor, is_customer, vendor_type, category")
-          .eq("tenant_id", profile?.tenant_id)
+          .eq("tenant_id", profile.tenant_id)
           .eq("is_active", true);
 
         if (entityError) {
@@ -142,7 +143,7 @@ export default function AssignmentModal({
         const tenantCode = (profile?.tenant_code || "").toUpperCase();
 
         const trans = mapTransportersForTenant(
-          entityData || [],
+          (entityData as any[]) || [],
           tenantName,
           tenantCode,
         );
@@ -176,8 +177,10 @@ export default function AssignmentModal({
 
     try {
       // Fetch Fleets based on transporter
-      let fleetQuery = supabase
-        .from("md_fleets")
+      if (!profile?.tenant_id) return;
+
+      let fleetQuery = (supabase
+        .from("md_fleets" as any) as any)
         .select(
           `
         id, 
@@ -187,7 +190,7 @@ export default function AssignmentModal({
         md_fleet_types (type_name)
       `,
         )
-        .eq("tenant_id", profile?.tenant_id)
+        .eq("tenant_id", profile.tenant_id)
         .eq("is_active", true);
 
       if (isOwn) {
@@ -211,13 +214,13 @@ export default function AssignmentModal({
           details: fError.details,
           hint: fError.hint,
         });
-      setFleets(fleetData || []);
+      setFleets((fleetData as any[]) || []);
 
       // Fetch Drivers
-      let driverQuery = supabase
-        .from("md_drivers")
+      let driverQuery = (supabase
+        .from("md_drivers" as any) as any)
         .select("id, name, phone, md_entities(vendor_tenant_id)")
-        .eq("tenant_id", profile?.tenant_id)
+        .eq("tenant_id", profile.tenant_id)
         .eq("is_active", true);
 
       if (isOwn) {
@@ -240,13 +243,13 @@ export default function AssignmentModal({
           details: dError.details,
           hint: dError.hint,
         });
-      setDrivers(driverData || []);
+      setDrivers((driverData as any[]) || []);
 
       const vendorTenantIds = new Set<string>();
-      for (const f of fleetData || []) {
+      for (const f of (fleetData as any[]) || []) {
         if (f.vendor_tenant_id) vendorTenantIds.add(f.vendor_tenant_id);
       }
-      for (const d of driverData || []) {
+      for (const d of (driverData as any[]) || []) {
         if (d.md_entities?.vendor_tenant_id)
           vendorTenantIds.add(d.md_entities.vendor_tenant_id);
       }
@@ -292,7 +295,7 @@ export default function AssignmentModal({
           wo_item_id: woItemId,
           jo_number: `${woNumber}-${String(assignedCount + 1).padStart(2, "0")}`,
           transporter_id:
-            selectedTransporterId === "own" ? null : selectedTransporterId,
+            selectedTransporterId === "own" ? undefined : selectedTransporterId,
           fleet_id: selectedFleetId,
           driver_id: selectedDriverId,
           driver_phone: driverPhone,
@@ -303,7 +306,7 @@ export default function AssignmentModal({
           status: "pending",
           tracking_token: crypto.randomUUID(),
           driver_link_token: Math.random().toString(36).substring(2, 15),
-        })
+        } as any)
         .select()
         .single();
 

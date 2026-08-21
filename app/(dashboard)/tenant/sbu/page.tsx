@@ -48,8 +48,8 @@ export default function TenantSBUConfigPage() {
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('tenant_sbus')
+      const { data, error } = await (supabase
+        .from('tenant_sbus' as any) as any)
         .select('*')
         .eq('tenant_id', profile.tenant_id)
         .order('created_at', { ascending: true });
@@ -57,7 +57,7 @@ export default function TenantSBUConfigPage() {
       if (error) throw error;
 
       // Fetch staff count per SBU
-      const sbuIds = (data || []).map((s: any) => s.id);
+      const sbuIds = ((data as any[]) || []).map((s: any) => s.id);
       const staffCounts: Record<string, number> = {};
       if (sbuIds.length > 0) {
         const { data: staffData } = await supabase
@@ -72,8 +72,8 @@ export default function TenantSBUConfigPage() {
 
       // [AI] Always display the 4 standard SBUs. If not in DB, mark as inactive.
       const standardTypes: SBUType[] = ['tr', 'wh', 'ink', 'fwd'];
-      const combinedSbus = standardTypes.map(type => {
-        const existing = (data || []).find((s: any) => s.sbu_type === type);
+      const combinedSbus: TenantSBU[] = standardTypes.map(type => {
+        const existing = ((data as any[]) || []).find((s: any) => s.sbu_type === type);
         if (existing) {
           return { ...existing, staff_count: staffCounts[existing.id] || 0 };
         } else {

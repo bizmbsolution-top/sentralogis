@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Search, ChevronLeft, Send, User } from 'lucide-react';
+import { Search, ChevronLeft, Send, User, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function MobileChat() {
@@ -49,7 +49,7 @@ export default function MobileChat() {
       const { data: leads } = await supabase
         .from('md_entities')
         .select('id, name')
-        .eq('sales_rep_id', user?.id);
+        .eq('sales_rep_id', user?.id || '');
 
       if (!leads || leads.length === 0) {
         setChannels([]);

@@ -26,6 +26,7 @@ import {
   getPendingGpsPings,
   syncGpsPingsFirst,
 } from "@/lib/offline/offlineSyncEngine";
+import { NativeGpsManager } from "@/lib/services/NativeGpsManager";
 import { get } from "idb-keyval";
 
 const APP_VERSION_RAW = process.env.NEXT_PUBLIC_APP_VERSION || "0.1.0";
@@ -36,13 +37,20 @@ const APP_VERSION = APP_VERSION_RAW.startsWith("V") || APP_VERSION_RAW.startsWit
 interface InfoPerangkatProps {
   open: boolean;
   onClose: () => void;
+  driverId?: string;
+  driverName?: string;
+  driverWhatsapp?: string;
+  tenantId?: string;
+  tenantName?: string;
   gpsStatus?: string | null;
   gpsAccuracy?: number | null;
   gpsSpeed?: number | null;
+  gpsBattery?: number | null;
   gpsPingCount?: number;
   gpsErrorMessage?: string;
-  tenantName?: string;
+  token?: string | null;
   isNative?: boolean | null;
+  isDark?: boolean;
 }
 
 type Tone = "ok" | "warn" | "err" | "neutral";
@@ -120,6 +128,7 @@ export default function InfoPerangkat({
   gpsAccuracy,
   gpsSpeed,
   gpsPingCount,
+  gpsErrorMessage,
   tenantName,
   isNative,
 }: InfoPerangkatProps) {
@@ -158,27 +167,45 @@ export default function InfoPerangkat({
 
   const readSync = useCallback(async () => {
     try {
+      const isNativeApp = isNative ?? detectNative();
+      let nativePending = 0;
+      let nativeTotal = 0;
+      if (isNativeApp) {
+        try {
+          const status = await NativeGpsManager.getQueueStatus();
+          nativePending = status.pendingCount || 0;
+          nativeTotal = status.totalCount || 0;
+        } catch {}
+      }
+
       const total = await getGpsPingQueueLength();
       const pending = await getPendingGpsPings();
       const mutations: any[] = (await get("offline_mutation_outbox")) || [];
       const pendingMutations = mutations.filter(
         (m) => m.status !== "SYNCED",
       ).length;
-      const pendingTotal = pending.length + pendingMutations;
+      const pendingTotal = nativePending + pending.length + pendingMutations;
+      const storedTotal = nativeTotal + total + mutations.length;
       const lastSyncTs = await get("offline_last_sync_ts");
       setPendingCount(pendingTotal);
-      setStoredCount(total + mutations.length);
+      setStoredCount(storedTotal);
       setLastSync(lastSyncTs ? String(lastSyncTs) : null);
       return { pendingTotal, lastSyncTs };
     } catch {
       return { pendingTotal: 0, lastSyncTs: null };
     }
-  }, []);
+  }, [isNative]);
 
   const checkServer = useCallback(async () => {
     setServer("checking");
     try {
-      const res = await fetch("/api/driver/health", { cache: "no-store" });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch("/api/driver/health", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (res.ok && data.ok) {
         setServer("connected");
@@ -202,6 +229,12 @@ export default function InfoPerangkat({
         // Real server health check
         await checkServer();
         // Attempt to push pending offline data so the queue reflects server ACK
+        const isNativeApp = isNative ?? detectNative();
+        if (isNativeApp) {
+          try {
+            await NativeGpsManager.triggerSync();
+          } catch {}
+        }
         try {
           await syncGpsPingsFirst();
         } catch {}
@@ -222,41 +255,53 @@ export default function InfoPerangkat({
     } finally {
       setRefreshing(false);
     }
-  }, [checkServer, readSync]);
+  }, [checkServer, readSync, isNative]);
 
   // Read GPS permission
   const readGpsPermission = useCallback(async () => {
     try {
       if (isNative) {
-        const { Geolocation } = await import("@capacitor/geolocation");
-        const perm = await Geolocation.checkPermissions();
-        setGpsPermission(
-          perm.location === "granted" || perm.coarseLocation === "granted"
-            ? "granted"
-            : perm.location === "denied" || perm.coarseLocation === "denied"
-              ? "denied"
-              : "prompt"
-        );
-        return;
+        try {
+          const { Geolocation } = await import("@capacitor/geolocation");
+          const perm = await Geolocation.checkPermissions();
+          setGpsPermission(
+            perm.location === "granted" || perm.coarseLocation === "granted"
+              ? "granted"
+              : perm.location === "denied" || perm.coarseLocation === "denied"
+                ? "denied"
+                : "prompt"
+          );
+          return;
+        } catch {}
       }
 
-      const perm = navigator.permissions;
-      if (!perm || !perm.query) {
-        setGpsPermission("unsupported");
-        return;
+      if (typeof navigator !== "undefined" && navigator.permissions && navigator.permissions.query) {
+        try {
+          const result = await navigator.permissions.query({ name: "geolocation" });
+          setGpsPermission(
+            result.state === "granted"
+              ? "granted"
+              : result.state === "denied"
+                ? "denied"
+                : "prompt",
+          );
+          return;
+        } catch {}
       }
-      const result = await perm.query({ name: "geolocation" });
-      setGpsPermission(
-        result.state === "granted"
-          ? "granted"
-          : result.state === "denied"
-            ? "denied"
-            : "prompt",
-      );
+
+      if (gpsStatus === "active" || (gpsAccuracy !== null && gpsAccuracy !== undefined)) {
+        setGpsPermission("granted");
+      } else {
+        setGpsPermission("prompt");
+      }
     } catch {
-      setGpsPermission("unsupported");
+      if (gpsStatus === "active" || (gpsAccuracy !== null && gpsAccuracy !== undefined)) {
+        setGpsPermission("granted");
+      } else {
+        setGpsPermission("unsupported");
+      }
     }
-  }, [isNative]);
+  }, [isNative, gpsStatus, gpsAccuracy]);
 
   useEffect(() => {
     if (!open) return;
@@ -307,7 +352,7 @@ export default function InfoPerangkat({
     gpsLabel = "Memulihkan GPS...";
   } else if (gpsStatus === "inactive") {
     gpsTone = "neutral";
-    gpsLabel = "Tidak Aktif (Tidak ada tugas)";
+    gpsLabel = "Standby (Menunggu Penugasan JO)";
   } else {
     gpsTone = "warn";
     gpsLabel = "Belum mendapatkan lokasi";
@@ -353,11 +398,12 @@ export default function InfoPerangkat({
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
         className={`w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border ${t.sheet} shadow-2xl`}
       >
         {/* Header */}

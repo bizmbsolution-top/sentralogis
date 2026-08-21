@@ -54,8 +54,8 @@ export default function DriverAllowancesPage() {
     
     try {
       const [allowRes, fleetsRes] = await Promise.all([
-        supabase
-          .from('md_driver_allowances')
+        (supabase
+          .from('md_driver_allowances' as any) as any)
           .select('*, md_fleet_types(type_name)')
           .eq('tenant_id', tenantId)
           .order('created_at', { ascending: false }),
@@ -69,8 +69,8 @@ export default function DriverAllowancesPage() {
       if (allowRes.error) throw allowRes.error;
       if (fleetsRes.error) throw fleetsRes.error;
 
-      setAllowances(allowRes.data || []);
-      setFleetTypes(fleetsRes.data || []);
+      setAllowances((allowRes.data as any[]) || []);
+      setFleetTypes((fleetsRes.data as any[]) || []);
     } catch (error) {
       toast.error('Gagal mengambil data master uang jalan');
     } finally {

@@ -26,7 +26,7 @@ export default function OwnerProfilePage() {
       const { error } = await supabase.from('profiles').update({
         full_name: name,
         whatsapp: whatsapp
-      }).eq('id', user?.id);
+      }).eq('id', user?.id as string);
       if (error) throw error;
       toast.success('Administrator Identity Updated');
     } catch (err: any) {

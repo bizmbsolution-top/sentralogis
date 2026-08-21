@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, ShieldCheck, CheckCircle, FileText, Clock, Banknote, Receipt, TrendingUp, TrendingDown, Save, Eye, Loader2, CheckCircle2, Upload, Trash2, ImageIcon } from 'lucide-react';
@@ -14,6 +14,7 @@ interface CompletedJob {
   pod_status: string; wo_item_id: string; wo_items?: any; wo_item?: { wo_id: string } | any;
   md_fleets: { plate_number: string; md_entities?: { is_vendor?: boolean; name?: string; legal_name?: string }; md_fleet_types?: { type_name?: string } } | any;
   md_drivers: { name: string } | any;
+  assignment_documents?: any[];
   has_draft_costs?: boolean; has_pending_audit?: boolean; advance_status?: string;
   is_doc_finished?: boolean; is_cost_finished?: boolean; advance_amount?: number;
   driver_payment_amount?: number; driver_payment_status?: string;
@@ -242,7 +243,7 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
             </div>
             <p className="text-sm text-gray-700 mt-1">
               {job.wo_items?.work_orders?.md_entities?.legal_name || job.wo_items?.work_orders?.md_entities?.name || 'Customer'}
-              {job.wo_items?.work_orders?.wo_number && ` — WO: ${job.wo_items.work_orders.wo_number}`}
+              {job.wo_items?.work_orders?.wo_number && ` â€” WO: ${job.wo_items.work_orders.wo_number}`}
             </p>
           </div>
           <button onClick={onClose} className="p-1 text-gray-500 hover:text-gray-900 transition-colors">
@@ -298,7 +299,7 @@ export default function JobDetailModal({ job, viMap, onClose, onFinalizeGate, on
               <div className="border border-gray-200 p-4">
                 <p className="text-[10px] font-bold text-gray-700 uppercase mb-1">Route</p>
                 <p className="text-sm font-semibold text-gray-900 truncate">
-                  {job.wo_items?.item_data?.origin_name || job.wo_items?.item_data?.shipper_name || job.wo_items?.item_data?.shipper_city || 'Origin'} → {job.wo_items?.item_data?.destination_name || job.wo_items?.item_data?.recipient_name || job.wo_items?.item_data?.recipient_city || 'Dest'}
+                  {job.wo_items?.item_data?.origin_name || job.wo_items?.item_data?.shipper_name || job.wo_items?.item_data?.shipper_city || 'Origin'} â†’ {job.wo_items?.item_data?.destination_name || job.wo_items?.item_data?.recipient_name || job.wo_items?.item_data?.recipient_city || 'Dest'}
                 </p>
               </div>
 

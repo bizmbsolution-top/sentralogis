@@ -55,7 +55,7 @@ export default function SBUAddCostPage() {
 
         if (jos && jos.length > 0) {
           const woItemIds = Array.from(new Set(jos.map(j => j.wo_item_id).filter(Boolean)));
-          const transporterIds = Array.from(new Set(jos.map(j => j.transporter_id).filter(Boolean)));
+          const transporterIds = Array.from(new Set(jos.map(j => j.transporter_id).filter(Boolean))) as string[];
 
           const [woItemsRes, transportersRes] = await Promise.all([
             woItemIds.length > 0
@@ -73,7 +73,7 @@ export default function SBUAddCostPage() {
             jos.map(j => [j.id, {
               ...j,
               wo_items: woItemsMap[j.wo_item_id] || null,
-              transporter: transportersMap[j.transporter_id] || null,
+              transporter: transportersMap[j.transporter_id || ''] || null,
             }])
           );
 
@@ -122,7 +122,7 @@ export default function SBUAddCostPage() {
       if (error) throw error;
 
       try {
-        await supabase.from('notifications').insert({
+        await (supabase.from('notifications' as any) as any).insert({
           tenant_id: profile?.tenant_id,
           role: 'hq_finance',
           title: 'Need Approval Add Cost',

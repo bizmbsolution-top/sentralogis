@@ -83,7 +83,7 @@ export default function SBUDriverPerformancePage() {
         .eq('is_active', true);
       
       if (error) throw error;
-      setDrivers(data || []);
+      setDrivers((data || []) as Driver[]);
 
       const driverIds = (data || []).map(d => d.id);
       if (driverIds.length > 0) {
@@ -94,7 +94,7 @@ export default function SBUDriverPerformancePage() {
           .order('created_at', { ascending: false })
           .limit(100);
         
-        if (!logError) setPerfLogs(logs || []);
+        if (!logError) setPerfLogs((logs || []) as unknown as PerfLog[]);
       } else {
         setPerfLogs([]);
       }
@@ -132,7 +132,7 @@ export default function SBUDriverPerformancePage() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setDriverLogs(data || []);
+      setDriverLogs((data || []) as unknown as PerfLog[]);
     } catch (error: any) {
       toast.error('Gagal mengambil log performance');
     } finally {
@@ -168,7 +168,7 @@ export default function SBUDriverPerformancePage() {
           .order('created_at', { ascending: false }),
       ]);
       const attMap: Record<string, any> = {};
-      (attRes.data || []).forEach(a => { if (!attMap[a.driver_id]) attMap[a.driver_id] = a; });
+      (attRes.data || []).forEach(a => { if (!attMap[a.driver_id || '']) attMap[a.driver_id || ''] = a; });
       const inspMap: Record<string, any> = {};
       (inspRes.data || []).forEach(i => { if (!inspMap[i.driver_id]) inspMap[i.driver_id] = i; });
       const merged = (internalDrivers || []).map(d => ({

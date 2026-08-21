@@ -22,7 +22,7 @@ ${intentDescriptions}
       properties: {
         intent: { type: SchemaType.STRING, description: "The intent ID, or 'UNKNOWN'" },
         confidence: { type: SchemaType.NUMBER, description: "0.0 to 1.0" },
-        entities: { type: SchemaType.OBJECT, description: "Extracted entities" },
+        entities: { type: SchemaType.OBJECT, description: "Extracted entities", properties: {} },
         ambiguities: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
         reasoning: { type: SchemaType.STRING },
         language: { type: SchemaType.STRING },

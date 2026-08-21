@@ -88,15 +88,17 @@ export default function MasterLocationsPage() {
             let query = supabase.from("locations").select("*");
             
             // Apply organization filter if exists
-            const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user?.id).single();
-            const orgId = profile?.organization_id;
-            if (orgId) {
-                query = query.eq('organization_id', orgId);
+            if (user?.id) {
+                const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single();
+                const orgId = profile?.organization_id;
+                if (orgId) {
+                    query = query.eq('organization_id', orgId);
+                }
             }
 
             const { data, error } = await query.order("name", { ascending: true });
             if (error) throw error;
-            setLocations(data || []);
+            setLocations((data as any[]) || []);
         } catch (error: any) {
             console.error("Error fetching locations:", error);
             toast.error("Gagal memuat data lokasi");

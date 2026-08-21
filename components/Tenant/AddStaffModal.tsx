@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -82,9 +82,10 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase.from('tenants').select('tenant_code').eq('user_id', user?.id).single();
+      if (!user?.id) throw new Error('User context not found');
+      const { data: tenant } = await supabase.from('tenants').select('tenant_code').eq('user_id', user.id).single();
       
-      if (!tenant) throw new Error('Tenant context not found');
+      if (!tenant || !tenant.tenant_code) throw new Error('Tenant context not found');
 
       const result = await createStaffAdmin({
         tenantCode: tenant.tenant_code,
@@ -135,7 +136,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
             className="w-full !py-6 !bg-slate-900"
             onClick={() => { 
               setSuccessData(null); 
-              setFormData({ email: '', fullName: '', whatsapp: '', roleCode: '', password: '' });
+              setFormData({ email: '', fullName: '', whatsapp: '', roleCode: '', password: '', division: '' });
               onClose(); 
             }}
           >
@@ -164,7 +165,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess, sbus, wareho
             <div className="grid grid-cols-2 gap-4 p-1.5 bg-slate-100 rounded-2xl">
               <button
                 type="button"
-onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseId(''); setSelectedRegionId(''); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
+                onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseId(''); setSelectedRegionId(''); setJobLevel(''); setFormData({...formData, roleCode: '', division: ''}); }}
                 className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${staffType === 'hq' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-400'}`}
               >
                 HQ Staff
@@ -207,166 +208,169 @@ onClick={() => { setStaffType('hq'); setSelectedSbu(null); setSelectedWarehouseI
                 label="WhatsApp (Optional)" 
                 value={formData.whatsapp}
                 onChange={e => setFormData({...formData, whatsapp: e.target.value})}
+                placeholder="e.g. 08123456789"
                 icon={<Phone className="w-4 h-4 text-slate-400"/>}
               />
-              
+
               {staffType === 'sbu' && (
                 <div className="space-y-1.5 md:col-span-2">
-                   <label className="text-sm font-bold text-slate-700 ml-1">Select Unit (SBU)</label>
+                   <label className="text-sm font-bold text-slate-700 ml-1">Target SBU</label>
                    <select 
-                     className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                     className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
                      required
                      value={selectedSbu?.id || ''}
                      onChange={e => {
-                       const sbu = sbus.find((s: any) => s.id === e.target.value);
-                       setSelectedSbu(sbu);
+                       const s = sbus?.find((item: any) => item.id === e.target.value);
+                       setSelectedSbu(s || null);
+                       setSelectedWarehouseId('');
+                       setSelectedRegionId('');
                        setJobLevel('');
-                       setFormData({...formData, roleCode: '', division: ''});
+                       setFormData({ ...formData, roleCode: '', division: '' });
                      }}
                    >
-                     <option value="">Choose Unit...</option>
-                     {sbus.map((s: any) => (
+                     <option value="">Select SBU...</option>
+                     {sbus?.map((s: any) => (
                        <option key={s.id} value={s.id}>{s.sbu_name} ({s.sbu_code})</option>
                      ))}
                    </select>
                 </div>
               )}
 
-              {(staffType === 'hq' || (staffType === 'sbu' && selectedSbu)) && (
+              {(staffType === 'hq' || selectedSbu) && (
                 <>
-                  <div className="space-y-1.5">
-                     <label className="text-sm font-bold text-slate-700 ml-1">Division (Divisi)</label>
-                     <select 
-                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
-                       value={formData.division}
-                       onChange={e => {
-                         const newDiv = e.target.value;
-                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
-                         const filtered = rawRoles
-                           .filter((r: any) => !newDiv || r.division === newDiv)
-                           .filter((r: any) => !jobLevel || r.level === jobLevel);
-                         const valid = filtered.some((r: any) => r.code === formData.roleCode);
-                         setFormData({
-                           ...formData,
-                           division: newDiv,
-                           roleCode: valid ? formData.roleCode : (filtered.length === 1 ? filtered[0].code : '')
-                         });
-                       }}
-                     >
-                       <option value="">-- All Divisions --</option>
-                       {(staffType === 'hq' 
-                         ? ['General / Management', 'Commercial & Sales', 'Operations', 'Finance', 'HR & Admin', 'IT']
-                         : ['General / Management', 'Operations', 'Finance', 'HR & Admin']
-                       ).map(d => <option key={d} value={d}>{d}</option>)}
-                     </select>
-                  </div>
+                   <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 ml-1">Division (Divisi)</label>
+                      <select 
+                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                        value={formData.division}
+                        onChange={e => {
+                          const newDiv = e.target.value;
+                          const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                          const filtered = rawRoles
+                            .filter((r: any) => !newDiv || r.division === newDiv)
+                            .filter((r: any) => !jobLevel || r.level === jobLevel);
+                          const valid = filtered.some((r: any) => r.code === formData.roleCode);
+                          setFormData(prev => ({
+                            ...prev,
+                            division: newDiv,
+                            roleCode: valid ? prev.roleCode : (filtered.length === 1 ? filtered[0].code : '')
+                          }));
+                        }}
+                      >
+                        <option value="">-- All Divisions --</option>
+                        {(staffType === 'hq' 
+                          ? ['General / Management', 'Commercial & Sales', 'Operations', 'Finance', 'HR & Admin', 'IT']
+                          : ['General / Management', 'Operations', 'Finance', 'HR & Admin']
+                        ).map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                   </div>
 
-                  <div className="space-y-1.5">
-                     <label className="text-sm font-bold text-slate-700 ml-1">Level / Jenjang</label>
-                     <select 
-                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
-                       value={jobLevel}
-                       onChange={e => {
-                         const newLvl = e.target.value;
-                         setJobLevel(newLvl);
-                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
-                         const filtered = rawRoles
-                           .filter((r: any) => !formData.division || r.division === formData.division)
-                           .filter((r: any) => !newLvl || r.level === newLvl);
-                         const valid = filtered.some((r: any) => r.code === formData.roleCode);
-                         if (!valid) {
-                           setFormData(prev => ({
-                             ...prev,
-                             roleCode: filtered.length === 1 ? filtered[0].code : ''
-                           }));
-                         }
-                       }}
-                     >
-                       <option value="">-- All Levels --</option>
-                       {(staffType === 'hq'
-                         ? [{ id: 'director', label: 'Direktur' }, { id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
-                         : [{ id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
-                       ).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-                     </select>
-                  </div>
-
-                  <div className="space-y-1.5 md:col-span-2">
-                     <label className="text-sm font-bold text-slate-700 ml-1">Position / Role Code</label>
-                     <select 
-                       className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
-                       required
-                       value={formData.roleCode}
-                       onChange={e => {
-                         const newCode = e.target.value;
-                         const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
-                         const roleObj = rawRoles.find((r: any) => r.code === newCode);
-                         if (roleObj) {
-                           setJobLevel(roleObj.level);
-                           setFormData({
-                             ...formData,
-                             roleCode: newCode,
-                             division: roleObj.division
-                           });
-                         } else {
-                           setFormData({ ...formData, roleCode: newCode });
-                         }
-                       }}
-                     >
-                       <option value="">Select Position...</option>
-                        {(() => {
+                   <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 ml-1">Level / Jenjang</label>
+                      <select 
+                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                        value={jobLevel}
+                        onChange={e => {
+                          const newLvl = e.target.value;
+                          setJobLevel(newLvl);
                           const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
                           const filtered = rawRoles
                             .filter((r: any) => !formData.division || r.division === formData.division)
-                            .filter((r: any) => !jobLevel || r.level === jobLevel);
-                          const listToShow = filtered.length > 0 ? filtered : rawRoles;
-                          return (
-                            <>
-                              {filtered.length === 0 && (formData.division || jobLevel) && (
-                                <option value="" disabled>-- No exact match for filter (Showing all {rawRoles.length}) --</option>
-                              )}
-                              {listToShow.map((r: any) => (
-                                <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
-                              ))}
-                            </>
-                          );
-                        })()}
-                     </select>
-                  </div>
+                            .filter((r: any) => !newLvl || r.level === newLvl);
+                          const valid = filtered.some((r: any) => r.code === formData.roleCode);
+                          if (!valid) {
+                            setFormData(prev => ({
+                              ...prev,
+                              roleCode: filtered.length === 1 ? filtered[0].code : ''
+                            }));
+                          }
+                        }}
+                      >
+                        <option value="">-- All Levels --</option>
+                        {(staffType === 'hq'
+                          ? [{ id: 'director', label: 'Direktur' }, { id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                          : [{ id: 'manager', label: 'Manager' }, { id: 'staff', label: 'Staff' }]
+                        ).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                      </select>
+                   </div>
 
-{staffType === 'sbu' && selectedSbu && warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
-                     <div className="space-y-1.5 md:col-span-2 mt-2">
-                        <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
-                        <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>
-                        <select 
-                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
-                          value={selectedWarehouseId}
-                          onChange={e => setSelectedWarehouseId(e.target.value)}
-                        >
-                          <option value="">-- All SBU Warehouses --</option>
-                          {warehouses.filter((w: any) => w.sbu_id === selectedSbu.id).map((w: any) => (
-                            <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                          ))}
-                        </select>
-                     </div>
-                   )}
+                   <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-sm font-bold text-slate-700 ml-1">Position / Role Code</label>
+                      <select 
+                        className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5"
+                        required
+                        value={formData.roleCode}
+                        onChange={e => {
+                          const newCode = e.target.value;
+                          const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                          const roleObj = rawRoles.find((r: any) => r.code === newCode);
+                          if (roleObj) {
+                            setJobLevel(roleObj.level);
+                            setFormData({
+                              ...formData,
+                              roleCode: newCode,
+                              division: roleObj.division
+                            });
+                          } else {
+                            setFormData({ ...formData, roleCode: newCode });
+                          }
+                        }}
+                      >
+                        <option value="">Select Position...</option>
+                         {(() => {
+                           const rawRoles = staffType === 'hq' ? hqRoles : (sbuRolesMap[selectedSbu?.sbu_type] || []);
+                           const filtered = rawRoles
+                             .filter((r: any) => !formData.division || r.division === formData.division)
+                             .filter((r: any) => !jobLevel || r.level === jobLevel);
+                           const listToShow = filtered.length > 0 ? filtered : rawRoles;
+                           return (
+                             <>
+                               {filtered.length === 0 && (formData.division || jobLevel) && (
+                                 <option value="" disabled>-- No exact match for filter (Showing all {rawRoles.length}) --</option>
+                               )}
+                               {listToShow.map((r: any) => (
+                                 <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+                               ))}
+                             </>
+                           );
+                         })()}
+                      </select>
+                   </div>
 
-                   {staffType === 'sbu' && selectedSbu && (
-                     <div className="space-y-1.5 md:col-span-2 mt-2">
-                        <label className="text-sm font-bold text-slate-700 ml-1">Assign to Region (Required for Trucking)</label>
-                        <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">Staff will only see WO assignments for this region.</p>
-                        <select 
-                          className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
-                          value={selectedRegionId}
-                          onChange={e => setSelectedRegionId(e.target.value)}
-                          required
-                        >
-                          <option value="">-- Select Region --</option>
-                          {(regions || []).map((r: any) => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
-                     </div>
-                   )}
+                   {staffType === 'sbu' && selectedSbu && warehouses?.filter((w: any) => w.sbu_id === selectedSbu.id).length > 0 && (
+                      <div className="space-y-1.5 md:col-span-2 mt-2">
+                         <label className="text-sm font-bold text-slate-700 ml-1">Assign to Specific Warehouse (Optional)</label>
+                         <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">If empty, staff manages all warehouses in this SBU.</p>
+                         <select 
+                           className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                           value={selectedWarehouseId}
+                           onChange={e => setSelectedWarehouseId(e.target.value)}
+                         >
+                           <option value="">-- All SBU Warehouses --</option>
+                           {warehouses.filter((w: any) => w.sbu_id === selectedSbu.id).map((w: any) => (
+                             <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                           ))}
+                         </select>
+                      </div>
+                    )}
+
+                    {staffType === 'sbu' && selectedSbu && (
+                      <div className="space-y-1.5 md:col-span-2 mt-2">
+                         <label className="text-sm font-bold text-slate-700 ml-1">Assign to Region (Required for Trucking)</label>
+                         <p className="text-[10px] font-bold text-slate-400 ml-1 mb-1">Staff will only see WO assignments for this region.</p>
+                         <select 
+                           className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 appearance-none"
+                           value={selectedRegionId}
+                           onChange={e => setSelectedRegionId(e.target.value)}
+                           required
+                         >
+                           <option value="">-- Select Region --</option>
+                           {(regions || []).map((r: any) => (
+                             <option key={r.id} value={r.id}>{r.name}</option>
+                           ))}
+                         </select>
+                      </div>
+                    )}
                 </>
               )}
            </div>

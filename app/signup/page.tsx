@@ -35,7 +35,7 @@ export default function SignupPage() {
       if (!authData.user) throw new Error("Gagal membuat akun.");
 
       // 2. Create Organization (Multi-tenant)
-      const { data: orgData, error: orgError } = await (supabase.from('organizations') as any)
+      const { data: orgData, error: orgError } = await (supabase.from('organizations' as any) as any)
         .insert([{ name: companyName }])
         .select()
         .single();

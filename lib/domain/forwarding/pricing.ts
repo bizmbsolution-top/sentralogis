@@ -1,15 +1,12 @@
-// lib/domain/forwarding/pricing.ts
-// Pricing and costing auto-populate logic for forwarding orders
-
-import { supabase } from '../../utils/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 
 // Fetch master selling price based on service type
 export async function fetchMasterSellingPrice(
   containerType: string,
   shipmentType: string = 'domestic'
 ): Promise<number | null> {
-  const { data, error } = await supabase
-    .from('fw_price_master')
+  const { data, error } = await (supabase
+    .from('fw_price_master' as any) as any)
     .select('price_amount')
     .eq('container_type', containerType)
     .eq('service_type', 'forwarding')
@@ -25,10 +22,10 @@ export async function fetchMasterSellingPrice(
 export async function fetchMasterCosting(
   originLocationId: string,
   destinationLocationId: string,
-  executionMode: 'OWN' | 'VENDOR'
+  executionMode: 'OWN' | 'VENDOR' = 'OWN'
 ): Promise<{ originCost: number; destinationCost: number } | null> {
-  const { data, error } = await supabase
-    .from('fw_price_master')
+  const { data, error } = await (supabase
+    .from('fw_price_master' as any) as any)
     .select('master_cost_origin_amount, master_cost_destination_amount')
     .eq('origin_location_id', originLocationId)
     .eq('destination_location_id', destinationLocationId)
@@ -46,7 +43,8 @@ export async function fetchMasterCosting(
 export async function autoPopulatePricing(
   containerType: string,
   originLocationId: string,
-  destinationLocationId: string
+  destinationLocationId: string,
+  executionMode: 'OWN' | 'VENDOR' = 'OWN'
 ): Promise<{
   sellingPrice: number;
   costing: { originCost: number; destinationCost: number };

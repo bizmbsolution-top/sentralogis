@@ -54,8 +54,8 @@ export default function CreateOpnameModal({ onClose, onSuccess }: { onClose: () 
         p_opname_type: form.type,
         p_schedule_date: form.scheduleDate,
         p_user_id: profile.id,
-        p_notes: form.notes || null,
-        p_location_id: form.locationId || null
+        p_notes: (form.notes || null) as string,
+        p_location_id: (form.locationId || null) as string
       });
 
       if (error) throw error;

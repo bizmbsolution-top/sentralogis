@@ -105,22 +105,22 @@ export default function SBUTruckingDashboard() {
                 );
             }).length;
 
-            const pending = items.filter(i => ['PENDING', 'NEED_ASSIGNMENT', 'NEED_ASSIGN'].includes(i.status?.toUpperCase())).length;
-            const completed = jos.filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase())).length;
+            const pending = items.filter(i => ['PENDING', 'NEED_ASSIGNMENT', 'NEED_ASSIGN'].includes(i.status?.toUpperCase() || '')).length;
+            const completed = jos.filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '')).length;
             
             // Operation Revenue: from wo_item.unit_price (fallback to base_price)
             const revenue = jos
-                .filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()))
+                .filter(j => (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || ''))
                 .reduce((acc, curr) => acc + (Number(curr.wo_item?.unit_price) || Number(curr.base_price) || 0), 0);
 
-            const pendingHandovers = items.filter(i => i.status?.toUpperCase() === 'HANDOVER_PENDING').length;
+            const pendingHandovers = items.filter(i => (i.status?.toUpperCase() || '') === 'HANDOVER_PENDING').length;
 
             // Idle Drivers calculation
             const activeDriverIds = new Set(
                 jos
                     .filter(j => 
-                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()) && 
-                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
+                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '') && 
+                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '')
                     )
                     .map(j => j.driver_id)
                     .filter(Boolean)
@@ -131,8 +131,8 @@ export default function SBUTruckingDashboard() {
             const activeFleetIds = new Set(
                 jos
                     .filter(j => 
-                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase()) && 
-                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
+                        !(JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '') && 
+                        !(JO_REJECTED_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '')
                     )
                     .map(j => j.fleet_id)
                     .filter(Boolean)
@@ -140,7 +140,7 @@ export default function SBUTruckingDashboard() {
             const fleetUtilization = fleets.length > 0 ? Math.round((activeFleetIds.size / fleets.length) * 100) : 0;
 
             // Service level calculation based on successfully completed vs rejected JOs
-            const totalEnded = completed + jos.filter(j => j.status?.toUpperCase() === 'REJECTED').length;
+            const totalEnded = completed + jos.filter(j => (j.status?.toUpperCase() || '') === 'REJECTED').length;
             const performance = totalEnded > 0 ? Math.round((completed / totalEnded) * 100) : 98;
 
              // Calculate last 7 days total job order requests vs fulfillment
@@ -158,13 +158,13 @@ export default function SBUTruckingDashboard() {
                 
                 const dayFulfilled = dayItems.filter(item => {
                     // Check if wo_item status is completed/fulfilled
-                    const isItemCompleted = (JO_DONE_STATUSES as readonly string[]).includes(item.status?.toUpperCase());
+                    const isItemCompleted = (JO_DONE_STATUSES as readonly string[]).includes(item.status?.toUpperCase() || '');
                     if (isItemCompleted) return true;
                     
                     // Or check if there is any completed job order associated with this wo_item
                     const hasCompletedJO = jos.some(j => 
                         j.wo_item_id === item.id && 
-                        (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase())
+                        (JO_DONE_STATUSES as readonly string[]).includes(j.status?.toUpperCase() || '')
                     );
                     return hasCompletedJO;
                 }).length;

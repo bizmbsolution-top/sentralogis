@@ -8,7 +8,7 @@ import {
   Plus, Filter, MoreVertical, Shield,
   CheckCircle2, Loader2, HardHat, Trash2
 } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
@@ -66,16 +66,16 @@ export default function TenantOrganizationPage() {
       }
 
       // 2. Fetch Raw Data (Decoupled to prevent join failures)
-const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffRes, regionsRes] = await Promise.all([
-         supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
-         supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
-         supabase.from('tenant_roles').select('*'),
-         supabase.from('profiles').select('id, email, full_name, role'),
-         supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id),
-         supabase.from('md_warehouse_staff').select('*, md_warehouses(name)').eq('tenant_id', tenant.id),
-         supabase.from('ground_staff_profiles').select('*').eq('tenant_id', tenant.id),
-         supabase.from('md_trucking_regions').select('*').order('name')
-       ]);
+      const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffRes, regionsRes] = await Promise.all([
+        supabase.from('tenant_users').select('*').eq('tenant_id', tenant.id),
+        supabase.from('tenant_sbus').select('*').eq('tenant_id', tenant.id),
+        supabase.from('tenant_roles').select('*'),
+        supabase.from('profiles').select('id, email, full_name, role'),
+        supabase.from('md_warehouses').select('*').eq('tenant_id', tenant.id),
+        supabase.from('md_warehouse_staff').select('*, md_warehouses(name)').eq('tenant_id', tenant.id),
+        supabase.from('ground_staff_profiles').select('*').eq('tenant_id', tenant.id),
+        supabase.from('md_trucking_regions').select('*').order('name')
+      ]);
 
       if (staffRes.error) throw staffRes.error;
 
@@ -228,7 +228,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
       {activeTab === 'manage_sbu' ? (
         <SBUManager sbus={sbus} onUpdate={fetchData} />
       ) : activeTab === 'field_ops' ? (
-<div className="space-y-6">
+        <div className="space-y-6">
            <Card className="overflow-hidden border-slate-100 shadow-xl shadow-slate-200/50">
              <Table>
                 <TableHeader className="bg-slate-50/50">
@@ -271,38 +271,38 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
                         </TableRow>
                       ))}
                       {fieldStaff.length > 0 && fieldStaff.map((fs) => (
-                   <TableRow key={fs.id} className="hover:bg-slate-50/50 transition-colors">
-                     <TableCell>
-                       <div>
-                         <p className="font-bold text-slate-900 tracking-tight">{fs.name}</p>
-                         <p className="text-[10px] text-slate-500 font-bold italic">{fs.whatsapp}</p>
-                       </div>
-                     </TableCell>
-                     <TableCell>
-                        <Badge variant="default" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
-                         {fs.role}
-                       </Badge>
-                     </TableCell>
-                     <TableCell>
-                        <span className="text-[10px] font-black text-blue-600 uppercase italic tracking-tighter">{fs.md_warehouses?.name || 'All Warehouses'}</span>
-                     </TableCell>
-                     <TableCell>
-                       <div className="flex items-center gap-2">
-                         <div className={`w-1.5 h-1.5 rounded-full ${fs.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${fs.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
-                           {fs.is_active ? 'Active' : 'Offline'}
-                         </span>
-                       </div>
-                     </TableCell>
-</TableRow>
-                  ))}
+                        <TableRow key={fs.id} className="hover:bg-slate-50/50 transition-colors">
+                          <TableCell>
+                            <div>
+                              <p className="font-bold text-slate-900 tracking-tight">{fs.name}</p>
+                              <p className="text-[10px] text-slate-500 font-bold italic">{fs.whatsapp}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                             <Badge variant="default" className="!bg-white !text-slate-900 !border-slate-200 uppercase !text-[9px] font-black italic tracking-widest shadow-sm">
+                              {fs.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                             <span className="text-[10px] font-black text-blue-600 uppercase italic tracking-tighter">{fs.md_warehouses?.name || 'All Warehouses'}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-1.5 h-1.5 rounded-full ${fs.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              <span className={`text-[10px] font-black uppercase tracking-widest ${fs.is_active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                {fs.is_active ? 'Active' : 'Offline'}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                       {(groundStaff.length === 0 && fieldStaff.length === 0) && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-20 text-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">No field staff detected</p>
-                      </TableCell>
-                    </TableRow>
-)}
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-20 text-center">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">No field staff detected</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
                    </>
                   )}
                 </TableBody>
@@ -336,7 +336,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-slate-300" size={32}/></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-slate-300" size={32}/></TableCell></TableRow>
                 ) : filteredStaff.length > 0 ? filteredStaff.map((s) => (
                   <TableRow key={s.id} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell>
@@ -351,7 +351,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
                       </Badge>
                     </TableCell>
                     <TableCell>
-                       <Badge variant="secondary" className="!bg-slate-100 !text-slate-700 !border-slate-200 uppercase !text-[9px] font-bold tracking-widest shadow-sm">
+                       <Badge variant="default" className="!bg-slate-100 !text-slate-700 !border-slate-200 uppercase !text-[9px] font-bold tracking-widest shadow-sm">
                         {s.division || 'General'}
                       </Badge>
                     </TableCell>
@@ -408,7 +408,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-20 text-center">
+                    <TableCell colSpan={6} className="py-20 text-center">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">No staff detected</p>
                     </TableCell>
                   </TableRow>
@@ -419,7 +419,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
         </div>
       )}
 
-<AddStaffModal 
+      <AddStaffModal 
          isOpen={isAddModalOpen} 
          onClose={() => setIsAddModalOpen(false)} 
          onSuccess={fetchData}
@@ -430,7 +430,7 @@ const [staffRes, sbuRes, roleRes, profileRes, whRes, fieldStaffRes, groundStaffR
 
       {selectedStaff && (
         <>
-<EditStaffModal 
+          <EditStaffModal 
              isOpen={isEditModalOpen}
              staff={selectedStaff}
              onClose={() => { setIsEditModalOpen(false); setSelectedStaff(null); }}

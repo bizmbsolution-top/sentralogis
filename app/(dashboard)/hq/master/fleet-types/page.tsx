@@ -67,7 +67,7 @@ export default function HQFleetTypesPage() {
     if (error) {
       toast.error('Gagal mengambil data jenis armada');
     } else {
-      setFleetTypes(data || []);
+      setFleetTypes((data || []) as FleetType[]);
     }
     setLoading(false);
   }, [tenantId]);

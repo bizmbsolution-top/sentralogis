@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
 import type { Consolidation, ContainerAssignment } from '@/lib/domain/forwarding/types';
 
 export default function StuffingManagerPage() {
-  const { id } = useParams();
+  const { id } = useParams() as { id: string };
   const router = useRouter();
   const searchParams = useSearchParams();
   const { profile } = useAuth();
@@ -54,7 +55,7 @@ export default function StuffingManagerPage() {
         router.push('/sbu/forwarding/consol');
         return;
       }
-      setConsol(consolData);
+      setConsol(consolData as unknown as Consolidation);
 
       const { data: containersData, error: containersError } = await supabase
         .from('fw_container_assignments')
@@ -64,7 +65,7 @@ export default function StuffingManagerPage() {
         .order('created_at', { ascending: true });
 
       if (containersError) throw containersError;
-      setContainers(containersData || []);
+      setContainers((containersData || []) as unknown as ContainerAssignment[]);
 
       if (containersData && containersData.length > 0 && !preSelectedContainer) {
         setSelectedContainerId(containersData[0].id);
@@ -211,14 +212,14 @@ export default function StuffingManagerPage() {
     <div className="space-y-6 pb-12">
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push(`/sbu/forwarding/consol/${id}`)} className="rounded-full shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/sbu/forwarding/consol/${id}`)} className="rounded-full shrink-0">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Stuffing Manager</h1>
             <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
               <Ship className="w-3.5 h-3.5" />
-              <span>{consol?.consol_number} — {consol?.vessel_name}</span>
+              <span>{consol?.consol_number} â€” {consol?.vessel_name}</span>
             </div>
           </div>
         </div>
@@ -336,9 +337,9 @@ export default function StuffingManagerPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-bold text-slate-800">{cont.container_number}</div>
-                        <div className="text-xs text-slate-500">{cont.container_type} {cont.max_volume_cbm ? `• ${cont.max_volume_cbm} CBM` : ''}</div>
+                        <div className="text-xs text-slate-500">{cont.container_type} {cont.max_volume_cbm ? `â€¢ ${cont.max_volume_cbm} CBM` : ''}</div>
                       </div>
-                      <div>{getStatusBadge(cont.status)}</div>
+                      <div>{getStatusBadge(cont.status || "")}</div>
                     </div>
                   </div>
                 ))

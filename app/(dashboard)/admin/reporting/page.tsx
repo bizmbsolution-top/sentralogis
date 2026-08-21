@@ -2,20 +2,20 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, BarChart3 } from "lucide-react";
 
 export default function AdminReportingRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // [AI] Redirect old admin route to unified hq/reporting route
-    router.replace("/hq/reporting");
+    router.replace("/reporting");
   }, [router]);
 
   return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center">
       <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Redirecting to Intelligence Matrix...</p>
+      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Mengarahkan ke Reporting Hub...</p>
+      <BarChart3 className="w-8 h-8 text-slate-200" />
     </div>
   );
 }

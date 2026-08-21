@@ -62,8 +62,8 @@ export default function TransportersFormModal({ isOpen, onClose, onSuccess, init
       supabase.from('md_transporter_fleets').select('fleet_id').eq('transporter_id', initialData.id),
       supabase.from('md_transporter_drivers').select('driver_id').eq('transporter_id', initialData.id)
     ]);
-    setAssignedFleetIds(fAssign.data?.map(a => a.fleet_id) || []);
-    setAssignedDriverIds(dAssign.data?.map(a => a.driver_id) || []);
+    setAssignedFleetIds(((fAssign.data as any[]) || []).map((a: any) => a.fleet_id || '').filter(Boolean));
+    setAssignedDriverIds(((dAssign.data as any[]) || []).map((a: any) => a.driver_id || '').filter(Boolean));
   };
 
   if (!isOpen) return null;
@@ -83,36 +83,36 @@ export default function TransportersFormModal({ isOpen, onClose, onSuccess, init
       let transporterId = initialData?.id;
 
       if (transporterId) {
-        const { error } = await supabase
-          .from('md_transporters')
+        const { error } = await (supabase
+          .from('md_transporters' as any) as any)
           .update(payload)
           .eq('id', transporterId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from('md_transporters')
+        const { data, error } = await (supabase
+          .from('md_transporters' as any) as any)
           .insert([payload])
           .select()
           .single();
         if (error) throw error;
-        transporterId = data.id;
+        transporterId = (data as any)?.id;
       }
 
       // Handle Assignments (Simplified: Delete all and re-insert)
       if (transporterId) {
         await Promise.all([
-          supabase.from('md_transporter_fleets').delete().eq('transporter_id', transporterId),
-          supabase.from('md_transporter_drivers').delete().eq('transporter_id', transporterId)
+          (supabase.from('md_transporter_fleets' as any) as any).delete().eq('transporter_id', transporterId),
+          (supabase.from('md_transporter_drivers' as any) as any).delete().eq('transporter_id', transporterId)
         ]);
 
         if (assignedFleetIds.length > 0) {
-          await supabase.from('md_transporter_fleets').insert(
+          await (supabase.from('md_transporter_fleets' as any) as any).insert(
             assignedFleetIds.map(fid => ({ transporter_id: transporterId, fleet_id: fid }))
           );
         }
 
         if (assignedDriverIds.length > 0) {
-          await supabase.from('md_transporter_drivers').insert(
+          await (supabase.from('md_transporter_drivers' as any) as any).insert(
             assignedDriverIds.map(did => ({ transporter_id: transporterId, driver_id: did }))
           );
         }

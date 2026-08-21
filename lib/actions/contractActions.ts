@@ -89,7 +89,7 @@ export async function createWarehouseContract(
       contract_number: contractData.contract_number,
       customer_id: contractData.customer_id,
       warehouse_id: contractData.warehouse_id,
-      area_id: contractData.area_id || null,
+      area_id: contractData.area_id || undefined,
       start_date: contractData.start_date,
       end_date: contractData.end_date,
       committed_space: contractData.committed_space,
@@ -112,7 +112,7 @@ export async function createWarehouseContract(
   if (billingRates.length > 0) {
     const ratesToInsert = billingRates.map((rate) => ({
       tenant_id: tenantId,
-      contract_id: contract.id,
+      contract_id: (contract as any)?.id,
       charge_code: rate.charge_code,
       rate_value: rate.rate_value,
       uom: rate.uom,

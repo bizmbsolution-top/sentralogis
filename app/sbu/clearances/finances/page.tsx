@@ -39,20 +39,21 @@ export default function ClearancesFinanceDashboard() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
+        const { data: profile } = await (supabase
+          .from('profiles' as any) as any)
           .select('*, organizations(*)')
           .eq('id', user.id)
           .single();
         
         if (profile) {
-          setCurrentUser(profile);
+          const prof = profile as any;
+          setCurrentUser(prof);
           setTenant({
-            name: profile.organizations?.name || 'SENTRALOGIS',
-            logo: profile.organizations?.logo_url,
-            mission_credits: profile.organizations?.mission_credits || 0
+            name: prof.organizations?.name || 'SENTRALOGIS',
+            logo: prof.organizations?.logo_url,
+            mission_credits: prof.organizations?.mission_credits || 0
           });
-          fetchData(profile.organization_id);
+          fetchData(prof.tenant_id || prof.organization_id || '');
         }
       }
     }
@@ -60,10 +61,11 @@ export default function ClearancesFinanceDashboard() {
   }, [supabase]);
 
   const fetchData = useCallback(async (orgId: string) => {
+    if (!orgId) return;
     setLoading(true);
     try {
-      const { data: jos } = await supabase
-        .from('job_orders')
+      const { data: jos } = await (supabase
+        .from('job_orders' as any) as any)
         .select(`
             *,
             work_order_items (
@@ -74,30 +76,30 @@ export default function ClearancesFinanceDashboard() {
                 )
             )
         `)
-        .eq('organization_id', orgId)
+        .eq('tenant_id', orgId)
         .order('created_at', { ascending: false });
       
-      const clrJos = jos?.filter(j => j.sbu_type === 'clearances') || [];
+      const clrJos = (jos as any[])?.filter((j: any) => j.sbu_type === 'clearances') || [];
       setJobOrders(clrJos);
 
-      const { data: transactions } = await supabase
-        .from('finance_transactions')
+      const { data: transactions } = await (supabase
+        .from('finance_transactions' as any) as any)
         .select('*')
-        .eq('organization_id', orgId)
+        .eq('tenant_id', orgId)
         .eq('sbu_type', 'clearances')
         .order('created_at', { ascending: false });
       
-      if (transactions) setPettyCash(transactions);
+      if (transactions) setPettyCash(transactions as any[]);
 
-      const rev = clrJos?.reduce((sum, j) => sum + (Number(j.work_order_items?.deal_price || 0)), 0) || 0;
-      const pcBalance = transactions?.reduce((sum, t) => sum + (t.type === 'income' ? (Number(t.amount)||0) : -(Number(t.amount)||0)), 0) || 0;
+      const rev = clrJos?.reduce((sum: number, j: any) => sum + (Number(j.work_order_items?.deal_price || 0)), 0) || 0;
+      const pcBalance = ((transactions as any[]) || []).reduce((sum: number, t: any) => sum + (t.type === 'income' ? (Number(t.amount)||0) : -(Number(t.amount)||0)), 0);
 
       setStats(prev => ({
         ...prev,
-        pendingInvoices: clrJos?.filter(j => j.billing_status !== 'paid').length || 0,
+        pendingInvoices: clrJos?.filter((j: any) => j.billing_status !== 'paid').length || 0,
         totalRevenue: rev,
         pettyCashBalance: pcBalance,
-        activeMissions: clrJos?.filter(j => j.status === 'on_progress').length || 0
+        activeMissions: clrJos?.filter((j: any) => j.status === 'on_progress').length || 0
       }));
 
     } catch (err) {

@@ -32,7 +32,7 @@ export default function MobileDashboard() {
         .from('crm_activities')
         .select(`id, activity_date, status, description, md_entities(name)`)
         .eq('activity_type', 'MEETING')
-        .eq('performed_by', user?.id)
+        .eq('performed_by', user?.id || '')
         .gte('activity_date', startOfDay.toISOString())
         .lte('activity_date', endOfDay.toISOString())
         .order('activity_date', { ascending: true });
@@ -44,7 +44,7 @@ export default function MobileDashboard() {
       const { count } = await supabase
         .from('md_entities')
         .select('id', { count: 'exact', head: true })
-        .eq('sales_rep_id', user?.id)
+        .eq('sales_rep_id', user?.id || '')
         .eq('crm_status', 'NEW'); // Example metric
 
       setUnreadChatsCount(count || 0);

@@ -88,6 +88,18 @@ export class JoAutoCompleteService {
     try {
       const now = new Date().toISOString();
 
+      // 0. Idempotency Check: if already completed, safely return true without duplicate mutations
+      const { data: currentJo } = await this.supabase
+        .from('job_orders')
+        .select('id, status, jo_number, driver_id, fleet_id, wo_item_id, tenant_id, base_price, purchase_price')
+        .eq('id', jo.id)
+        .single();
+
+      if (currentJo && COMPLETED_STATUSES.includes((currentJo.status || '').toUpperCase())) {
+        console.log(`[JoAutoComplete] JO ${jo.jo_number || jo.id} is already completed. Idempotent return.`);
+        return true;
+      }
+
       const { error: updateErr } = await this.supabase
         .from('job_orders')
         .update({
@@ -139,6 +151,17 @@ export class JoAutoCompleteService {
             await sendPushNotification(driver.push_subscription, payload).catch((err) =>
               console.warn(`[JoAutoComplete] Push failed for driver ${driver.name}:`, err)
             );
+          }
+
+          // 🪙 Award driver coin (1 koin = Rp 5.000) — idempotent via RPC
+          try {
+            await this.supabase.rpc('award_driver_coin', {
+              p_driver_id: jo.driver_id,
+              p_tenant_id: jo.tenant_id,
+              p_job_order_id: jo.id,
+            });
+          } catch (e) {
+            console.warn('[JoAutoComplete] Coin award failed:', e);
           }
         }
       }

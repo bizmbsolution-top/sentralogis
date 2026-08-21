@@ -126,8 +126,9 @@ export default function WarehouseZoningPage({ params }: { params: Promise<{ id: 
 
     setSubmitting(true);
     try {
+      const tenantId = profile.tenant_id;
       const payloads = bulkFormData.map(row => ({
-        tenant_id: profile.tenant_id,
+        tenant_id: tenantId,
         warehouse_id: warehouseId,
         code: row.code.toUpperCase(),
         zone: row.zone.toUpperCase(),
@@ -143,7 +144,7 @@ export default function WarehouseZoningPage({ params }: { params: Promise<{ id: 
         max_weight_kg: row.max_weight_kg
       }));
       
-      const { error } = await supabase.from('md_warehouse_locations').insert(payloads);
+      const { error } = await supabase.from('md_warehouse_locations').insert(payloads as never);
       if (error) throw error;
       
       toast.success(`${payloads.length} Lokasi/Zonasi berhasil ditambahkan.`);

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       message_type: body.type,
       message_body: body.message,
       status: result.success ? 'SENT' : 'FAILED',
-      error_message: result.success ? null : result.error || null,
+      error_message: result.success ? undefined : result.error || undefined,
     });
 
     return NextResponse.json({ success: result.success, sid: result.sid });

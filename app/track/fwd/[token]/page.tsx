@@ -6,9 +6,13 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import {
   Loader2, Package, Ship, MapPin, Phone, Truck, Anchor,
-  CheckCircle2, Clock, AlertCircle, ExternalLink
+  CheckCircle2, Clock, AlertCircle, ExternalLink, ArrowRight
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+
+function CardContent({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={className}>{children}</div>;
+}
 
 type TrackingStatus = 'pending' | 'received' | 'stuffed' | 'shipped' | 'arrived' | 'deconsoled' | 'delivered';
 
@@ -34,8 +38,8 @@ export default function CargoOwnerTrackingPage() {
     setError(null);
 
     try {
-      const { data, error } = await supabase
-        .from('fw_container_items')
+      const { data, error } = await (supabase
+        .from('fw_container_items' as any) as any)
         .select(`
           id, tracking_token, volume_cbm, gross_weight_kg, packages, package_type,
           commodity, description, delivery_type, delivery_address, delivery_contact, delivery_phone,
@@ -70,8 +74,8 @@ export default function CargoOwnerTrackingPage() {
       }
 
       if (!data) {
-        const { data: deconsoledData } = await supabase
-          .from('fw_container_items')
+        const { data: deconsoledData } = await (supabase
+          .from('fw_container_items' as any) as any)
           .select(`
             id, tracking_token, volume_cbm, gross_weight_kg, packages, package_type,
             commodity, description, delivery_type, delivery_address, delivery_contact, delivery_phone,

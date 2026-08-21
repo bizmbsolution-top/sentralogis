@@ -129,7 +129,7 @@ export function useCostAuditData() {
       const { data: tenantJos, error: joIdError } = await supabase
         .from("job_orders")
         .select("id")
-        .eq("tenant_id", profile?.tenant_id);
+        .eq("tenant_id", profile?.tenant_id as string);
 
       if (joIdError) throw joIdError;
       const tenantJoIds = tenantJos.map((j) => j.id);
@@ -184,7 +184,7 @@ export function useCostAuditData() {
       const { data: josByStatus, error: josError } = await supabase
         .from("job_orders")
         .select(joSelectQuery)
-        .eq("tenant_id", profile?.tenant_id)
+        .eq("tenant_id", profile?.tenant_id as string)
         .in("status", [
           "pekerjaan selesai",
           "PEKERJAAN SELESAI",

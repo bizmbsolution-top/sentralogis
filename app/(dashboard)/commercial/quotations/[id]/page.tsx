@@ -221,9 +221,10 @@ export default function DesktopQuotationBuilder({ params }: { params: Promise<{ 
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Unknown error during conversion");
+      const result = data as { success?: boolean; error?: string; contract_number?: string; rates_count?: number } | null;
+      if (!result?.success) throw new Error(result?.error || "Unknown error during conversion");
 
-      alert(`Berhasil membuat Master Kontrak resmi: ${data.contract_number} dengan ${data.rates_count} item tarif!`);
+      alert(`Berhasil membuat Master Kontrak resmi: ${result.contract_number} dengan ${result.rates_count} item tarif!`);
       setShowConvertModal(false);
       fetchQuotation();
     } catch (err: any) {

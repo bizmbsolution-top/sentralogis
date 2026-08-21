@@ -36,7 +36,7 @@ export default function RejectReassignModal({ show, jobOrder, onClose, onSuccess
     const { data } = await supabase
       .from('md_entities')
       .select('id, name')
-      .eq('entity_type', 'VENDOR')
+      .eq('is_vendor', true)
       .eq('is_active', true)
       .order('name');
     setTransporters(data || []);

@@ -9,6 +9,17 @@ import {
   ArchitectureMetric
 } from '../../src/features/governance/types';
 
+export interface GovernanceScores {
+  overallHealth: number;
+  architectureMaturity: number;
+  technicalDebt: number;
+  typescriptHealth: number;
+  testHealth: number;
+  securityHealth: number;
+  dependencyHealth: number;
+  isProductionReady: boolean;
+}
+
 export class Calculator {
   public calculate(codeMetrics: RawScannerMetrics, tsDiagnostics: TypeScriptDiagnostic[]): GovernanceSnapshot {
     

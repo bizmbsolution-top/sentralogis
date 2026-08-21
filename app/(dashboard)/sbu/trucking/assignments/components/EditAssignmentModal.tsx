@@ -94,7 +94,7 @@ export default function EditAssignmentModal({ jo, onClose, onSuccess }: EditAssi
         const availableFleetIds = new Set(availableFleets.map(f => f.id));
         for (const af of assignedFleets) {
           if (!availableFleetIds.has(af.id)) {
-            availableFleets.push(af);
+            availableFleets.push(af as typeof availableFleets[number]);
             availableFleetIds.add(af.id);
           }
         }

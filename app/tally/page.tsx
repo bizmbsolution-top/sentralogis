@@ -205,7 +205,7 @@ export default function TallyDashboard() {
                   </div>
                   <div className="mt-4 flex items-center gap-4 text-xs font-medium text-slate-500">
                     <span className="flex items-center gap-1"><Truck size={14} /> {rec.transporter || 'TBA'}</span>
-                    <span className="flex items-center gap-1"><PackageCheck size={14} /> {rec.items.length} SKUs</span>
+                    <span className="flex items-center gap-1"><PackageCheck size={14} /> {rec.items?.length || 0} SKUs</span>
                   </div>
                 </Card>
               </Link>

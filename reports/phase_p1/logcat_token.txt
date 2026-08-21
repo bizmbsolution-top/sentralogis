@@ -1,0 +1,760 @@
+08-19 13:40:51.816  3373  3373 W Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2669-461f3029a91659b4.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: Capacitor plugin "NativeGps" already registered. Cannot register plugins twice.
+08-19 13:40:51.851  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:40:51.853  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:40:51.854  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/app/driver/portal/page-4999dcfc5e97e313.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] portal_gps_state status=inactive accuracy=undefined speed=undefined pingCount=undefined
+08-19 13:40:52.887  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:40:52.887  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:40:52.888  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/app/driver/portal/page-4999dcfc5e97e313.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] portal_gps_state status=inactive accuracy=undefined speed=undefined pingCount=undefined
+08-19 13:41:05.063  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:41:05.065  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:41:05.066  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/app/driver/portal/page-4999dcfc5e97e313.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] portal_gps_state status=inactive accuracy=undefined speed=undefined pingCount=undefined
+08-19 13:41:05.131  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:41:05.132  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:41:05.133  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/app/driver/portal/page-4999dcfc5e97e313.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] portal_gps_state status=inactive accuracy=undefined speed=undefined pingCount=undefined
+08-19 13:41:05.975  3373  3373 W Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2669-461f3029a91659b4.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: Capacitor plugin "NativeGps" already registered. Cannot register plugins twice.
+08-19 13:41:06.061  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:41:06.062  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:41:11.583  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_hook_mounted=true
+08-19 13:41:11.584  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_detection isNative=true
+08-19 13:41:11.585  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_attempt
+08-19 13:41:11.586  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=unknown
+08-19 13:41:11.588  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=idle
+08-19 13:41:11.588  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_started=true
+08-19 13:41:11.589  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=unknown
+08-19 13:41:11.590  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=loading
+08-19 13:41:11.591  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_startTracking_called=true
+08-19 13:41:11.592  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:11.602  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:11.643  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:11.644  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:11.644  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=loading
+08-19 13:41:11.645  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:11.645  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:11.646  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:11.646  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:11.646  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:11.646  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:11.647  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:11.648  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:11.649  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:11.650  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:14.650  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:14.651  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:14.668  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:14.669  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:14.670  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:14.670  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:14.670  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:14.671  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:14.671  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:14.671  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:14.671  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:14.671  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:14.672  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:14.672  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:14.673  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:17.677  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:17.678  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:17.711  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:17.711  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:17.711  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:17.712  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:17.712  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:17.713  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:17.713  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:20.708  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:20.708  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:20.731  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:20.732  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:20.732  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:20.732  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:20.732  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:20.733  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:20.733  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:20.733  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:20.733  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:20.733  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:20.733  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:20.734  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:20.734  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:23.739  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:23.740  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:23.753  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:23.754  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:23.754  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:23.755  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:23.756  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:23.756  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:23.757  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:23.757  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:26.764  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:26.765  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:26.846  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:26.847  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:26.848  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:26.849  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:26.849  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:26.850  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:26.850  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:26.850  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:26.850  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:26.851  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:26.852  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:26.853  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:26.854  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:29.844  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:29.845  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:29.879  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:29.880  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:29.881  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:29.882  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:29.882  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:29.883  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:29.883  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:29.883  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:29.883  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:29.884  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:29.886  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:29.887  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:29.888  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:32.870  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:32.871  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:32.885  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:32.886  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:32.887  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:32.888  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:32.888  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:32.889  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:32.889  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:32.889  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:32.889  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:32.890  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:32.891  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:32.891  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:32.892  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:35.889  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:35.890  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:35.903  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:35.904  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:35.904  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:35.905  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:35.905  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:35.907  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:35.907  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:35.907  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:35.907  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:35.908  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:35.908  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:35.909  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:35.909  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:38.909  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:38.910  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:38.946  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:38.947  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:38.947  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:38.948  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:38.948  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:38.950  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:38.950  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:38.950  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:38.950  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:38.951  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:38.952  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:38.953  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:38.954  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:41.944  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:41.945  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:41.976  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:41.977  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:41.978  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:41.979  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:41.980  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:41.981  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:41.982  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:41.983  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:44.969  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:44.969  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:45.014  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:45.014  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:45.015  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:45.016  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:45.016  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:45.016  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:45.017  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:48.013  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:48.014  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:48.031  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:48.032  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:48.033  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:48.034  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:48.035  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:48.036  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:48.036  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:48.037  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:51.033  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:51.034  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:51.054  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:51.055  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:51.056  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:51.056  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:51.056  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:51.058  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:51.058  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:51.058  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:51.058  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:51.059  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:51.060  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:51.060  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:51.061  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:54.056  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:54.057  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:54.070  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:54.071  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:54.071  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:54.072  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:54.072  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:54.073  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:54.073  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:54.073  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:54.073  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:54.073  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:54.074  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:54.074  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:54.075  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:57.074  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:41:57.075  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:57.097  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:41:57.097  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:57.098  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:41:57.103  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:41:57.103  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:57.104  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:41:57.104  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:41:57.104  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:41:57.104  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:57.105  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:41:57.106  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:41:57.106  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:41:57.107  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:00.101  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:00.102  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:00.119  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:00.120  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:00.121  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:00.122  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:00.122  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:00.123  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:00.123  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:00.123  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:00.123  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:00.124  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:00.124  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:00.125  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:00.126  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:03.122  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:03.123  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:03.138  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:03.139  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:03.140  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:03.141  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:03.141  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:03.142  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:03.142  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:03.142  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:03.142  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:03.143  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:03.143  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:03.144  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:03.145  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:06.145  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:06.146  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:06.164  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:06.165  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:06.166  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:06.167  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:06.167  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:06.168  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:06.168  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:06.168  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:06.168  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:06.169  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:06.169  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:06.170  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:06.171  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:09.168  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:09.170  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:09.182  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:09.183  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:09.183  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:09.184  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:09.184  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:09.185  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:09.185  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:09.185  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:09.185  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:09.185  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:09.186  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:09.186  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:09.187  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:12.184  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:12.184  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:12.202  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:12.202  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:12.202  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:12.203  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:12.203  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:12.204  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:12.204  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:15.197  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:15.197  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:15.240  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:15.240  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:15.241  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:15.242  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:15.242  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:15.243  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:15.243  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:18.229  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:18.230  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:18.269  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:18.269  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:18.270  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:18.271  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:18.271  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:18.271  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:18.272  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:21.268  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:21.269  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:21.290  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:21.291  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:21.292  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:21.293  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:21.293  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:21.294  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:21.294  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:21.294  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:21.294  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:21.295  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:21.296  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:21.297  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:21.297  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:24.303  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:24.304  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:24.330  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:24.331  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:24.332  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:24.333  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:24.333  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:24.335  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:24.335  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:24.335  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:24.335  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:24.336  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:24.337  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:24.338  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:24.339  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:27.343  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:27.344  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:27.378  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:27.378  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:27.379  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:27.380  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:27.380  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:27.381  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:27.381  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:27.381  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:27.381  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:27.382  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:27.383  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:27.384  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:27.385  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:30.376  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:30.377  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:30.412  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:30.413  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:30.414  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:30.415  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:30.415  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:30.416  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:30.416  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:30.416  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:30.416  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:30.417  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:30.418  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:30.419  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:30.420  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:33.403  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:33.404  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:33.417  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:33.417  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:33.418  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:33.419  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:33.420  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:33.421  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:33.422  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:33.423  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:36.421  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:36.422  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:36.454  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:36.454  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:36.455  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:36.456  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:36.456  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:36.457  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:36.457  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:36.457  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:36.457  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:36.458  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:36.458  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:36.459  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:36.460  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:39.454  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:39.455  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:39.488  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:39.489  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:39.490  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:39.491  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:39.491  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:39.493  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:39.493  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:39.493  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:39.493  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:39.494  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:39.495  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:39.496  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:39.496  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:42.488  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:42.489  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:42.522  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:42.523  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:42.523  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:42.524  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:42.525  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:42.525  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:42.526  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:42.526  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:45.518  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:45.519  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:45.544  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:45.544  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:45.545  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:45.546  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:45.547  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:45.547  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:45.548  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:45.548  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:48.553  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:48.554  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:48.588  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:48.589  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:48.590  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:48.591  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:48.591  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:48.592  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:48.592  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:48.592  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:48.592  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:48.592  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:48.593  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:48.594  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:48.595  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:51.583  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:51.584  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:51.596  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:51.597  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:51.598  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:51.599  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:51.599  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:51.601  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:51.601  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:51.601  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:51.601  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:51.602  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:51.603  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:51.603  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:51.604  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:55.447  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:55.447  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:55.457  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:55.458  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:55.458  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:55.459  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:55.459  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:55.460  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:55.460  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:55.460  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:55.460  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:55.460  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:55.461  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:55.462  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:55.462  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:59.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:42:59.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:59.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:42:59.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:59.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:42:59.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:42:59.475  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:59.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:42:59.476  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:42:59.476  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:42:59.476  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:59.478  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:42:59.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:42:59.480  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:42:59.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:03.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:03.450  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:03.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:03.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:03.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:03.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:03.475  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:03.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:03.477  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:03.477  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:03.477  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:03.479  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:03.480  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:03.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:03.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:07.446  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:07.447  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:07.454  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:07.456  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:07.456  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:07.457  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:07.458  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:07.458  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:07.459  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:07.459  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:11.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:11.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:11.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:11.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:11.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:11.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:11.475  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:11.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:11.476  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:11.476  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:11.476  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:11.478  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:11.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:11.480  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:11.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:15.448  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:15.450  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:15.470  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:15.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:15.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:15.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:15.473  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:15.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:15.475  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:15.475  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:15.475  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:15.476  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:15.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:15.478  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:15.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:19.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:19.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:19.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:19.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:19.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:19.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:19.477  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:19.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:19.479  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:19.479  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:19.479  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:19.480  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:19.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:19.483  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:19.484  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:23.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:23.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:23.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:23.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:23.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:23.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:23.477  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:23.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:23.479  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:23.479  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:23.479  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:23.480  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:23.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:23.483  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:23.484  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:27.448  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:27.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:27.469  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:27.470  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:27.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:27.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:27.472  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:27.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:27.473  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:27.473  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:27.473  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:27.474  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:27.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:27.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:27.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:31.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:31.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:31.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:31.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:31.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:31.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:31.475  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:31.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:31.477  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:31.477  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:31.477  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:31.478  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:31.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:31.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:31.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:35.448  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:35.450  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:35.464  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:35.465  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:35.466  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:35.467  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:35.467  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:35.469  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:35.469  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:35.469  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:35.469  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:35.470  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:35.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:35.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:35.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:39.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:39.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:39.471  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:39.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:39.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:39.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:39.474  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:39.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:39.476  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:39.476  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:39.476  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:39.478  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:39.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:39.480  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:39.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:43.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:43.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:43.472  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:43.473  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:43.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:43.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:43.476  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:43.477  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:43.477  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:43.477  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:43.477  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:43.479  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:43.480  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:43.481  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:43.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:47.448  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:47.449  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:47.487  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:47.489  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:47.490  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:47.492  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:47.492  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:47.497  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:47.497  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:47.497  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:47.497  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:47.499  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:47.501  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:47.502  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:47.503  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:51.450  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] start requested: 6a9925d5-19f1-4018-8e72-d55aa2f0ae45
+08-19 13:43:51.451  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:51.474  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_SUCCESS
+08-19 13:43:51.475  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:51.476  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error
+08-19 13:43:51.478  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] BEFORE_PLUGIN_CALL
+08-19 13:43:51.478  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:51.479  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS_FORENSIC] PLUGIN_CALL_EXCEPTION
+08-19 13:43:51.479  3373  3373 I Capacitor/Console: plugin=NativeGps
+08-19 13:43:51.479  3373  3373 I Capacitor/Console: message="NativeGps" plugin is not implemented on android
+08-19 13:43:51.479  3373  3373 I Capacitor/Console: stack=Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:51.481  3373  3373 E Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [GPS-MANAGER] Error starting tracking. Retrying in 3s... Error: "NativeGps" plugin is not implemented on android
+08-19 13:43:51.482  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] native_gps_start_result=failure
+08-19 13:43:51.483  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_permission=granted
+08-19 13:43:51.484  3373  3373 I Capacitor/Console: File: https://www.sentralogis.com/_next/static/chunks/2185-300c103d3f1fe5e6.js?dpl=dpl_8e2gxMh5j3nFMvkpTNrLT6q5zzgL - Line 1 - Msg: [ENTRY_FORENSIC] gps_status=error

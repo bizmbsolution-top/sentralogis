@@ -13,8 +13,8 @@ export default function PrintBASTPage(props: { params: Promise<{ id: string }> }
 
   useEffect(() => {
     const fetchBAST = async () => {
-      const { data: shipData } = await supabase
-        .from('wh_transfer_orders')
+      const { data: rawShipData } = await (supabase
+        .from('wh_transfer_orders' as any) as any)
         .select(`
           *,
           from_warehouse:from_warehouse_id(code, name),
@@ -23,6 +23,7 @@ export default function PrintBASTPage(props: { params: Promise<{ id: string }> }
         .eq('id', params.id)
         .single();
 
+      const shipData: any = rawShipData;
       if (!shipData) return;
 
       let outTransporter: any, outFleet: any, outDriver: any, outCustomer: any;
@@ -87,8 +88,8 @@ export default function PrintBASTPage(props: { params: Promise<{ id: string }> }
       }
 
       if (shipData?.tenant_id) {
-        const { data: tenantData } = await supabase
-          .from('tenants')
+        const { data: tenantData } = await (supabase
+          .from('tenants' as any) as any)
           .select('name, address')
           .eq('id', shipData.tenant_id)
           .maybeSingle();

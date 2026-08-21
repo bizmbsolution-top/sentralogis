@@ -49,7 +49,7 @@ export default function CustomerOutboundPage() {
         .eq('customer_id', profile.customer_id)
         .order('created_at', { ascending: false });
 
-      setOutbounds(data || []);
+      setOutbounds((data as any[]) || []);
     } catch (err) {
       console.error('Error fetching outbounds:', err);
       toast.error('Gagal memuat data barang keluar');
@@ -76,7 +76,7 @@ export default function CustomerOutboundPage() {
         `)
         .eq('shipment_id', shipment.id);
 
-      setShipmentItems(data || []);
+      setShipmentItems((data as any[]) || []);
     } catch (e) {
       console.error('Error fetching shipment items:', e);
       toast.error('Gagal memuat rincian item keluar');

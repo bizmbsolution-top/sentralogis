@@ -211,13 +211,15 @@ export default function IntelligenceMap({ missions = [], onSelectMission, select
             provideRouteAlternatives: false,
           });
           
-          console.log(`[Directions] Leg ${i + 1} response status:`, result.status);
+          const res = result as any;
+          console.log(`[Directions] Leg ${i + 1} response status:`, res?.status || 'OK');
           
-          if (result.status === google.maps.DirectionsStatus.OK && result.routes && result.routes.length > 0) {
-            const route = result.routes[0];
+          if (res && res.routes && res.routes.length > 0) {
+            const route = res.routes[0];
             const polyline = route.overview_polyline;
-            if (polyline && typeof polyline.encoded === 'string' && polyline.encoded.length > 0) {
-              const decoded = decodePolyline(polyline.encoded);
+            const encodedStr = typeof polyline === 'string' ? polyline : (polyline?.points || polyline?.encoded || '');
+            if (encodedStr && encodedStr.length > 0) {
+              const decoded = decodePolyline(encodedStr);
               console.log(`[Directions] Leg ${i + 1} decoded ${decoded.length} points`);
               allPaths.push(...decoded);
             } else {
@@ -225,7 +227,7 @@ export default function IntelligenceMap({ missions = [], onSelectMission, select
               allPaths.push(origin, destination);
             }
           } else {
-            console.error(`[Directions] Leg ${i + 1} failed with status:`, result.status);
+            console.error(`[Directions] Leg ${i + 1} failed with status:`, res?.status);
             console.error('[Directions] Check if Directions API is enabled at: https://console.cloud.google.com/apis/library/directions-backend.googleapis.com');
             allPaths.push(origin, destination);
             hasError = true;

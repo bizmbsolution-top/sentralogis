@@ -279,12 +279,13 @@ export default function WarehouseZoningPage({ params }: { params: Promise<{ id: 
 
     setSubmitting(true);
     try {
+      const tenantId = profile.tenant_id;
       const payloads = bulkFormData.map(row => {
         // Match zone name for legacy field if needed
         const zoneObj = zones.find(z => z.id === row.zone_id);
         
         return {
-          tenant_id: profile.tenant_id,
+          tenant_id: tenantId,
           warehouse_id: warehouseId,
           area_id: row.area_id,
           zone_id: row.zone_id,
@@ -303,7 +304,7 @@ export default function WarehouseZoningPage({ params }: { params: Promise<{ id: 
         }
       });
       
-      const { error } = await supabase.from('md_warehouse_locations').insert(payloads);
+      const { error } = await supabase.from('md_warehouse_locations').insert(payloads as never);
       if (error) throw error;
       
       toast.success(`${payloads.length} Lokasi Storage berhasil ditambahkan.`);

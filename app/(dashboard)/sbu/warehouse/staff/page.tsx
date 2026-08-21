@@ -66,7 +66,7 @@ export default function WarehouseStaffPage() {
           .select('assigned_warehouse_id')
           .eq('user_id', profile.id)
           .maybeSingle();
-        whId = orgUser?.assigned_warehouse_id || null;
+        whId = orgUser?.assigned_warehouse_id || undefined;
       }
       
       if (!whId && selectedWarehouse) {
@@ -146,7 +146,7 @@ export default function WarehouseStaffPage() {
         .insert({
           tenant_id: profile.tenant_id,
           sbu_id: sbuData.id,
-          warehouse_id: formData.warehouse_id || null,
+          warehouse_id: formData.warehouse_id || undefined,
           name: formData.name,
           whatsapp: formData.whatsapp.replace(/\D/g, ''), // Strip non-numeric
           pin: formData.pin,

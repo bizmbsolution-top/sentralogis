@@ -11,12 +11,14 @@ interface GoogleMapsInputProps {
     longitude: number;
     postal_code: string;
   }) => void;
+  onChange?: (place: any) => void;
+  value?: string;
   placeholder?: string;
   defaultValue?: string;
 }
 
-export default function GoogleMapsInput({ onPlaceSelect, placeholder, defaultValue }: GoogleMapsInputProps) {
-  const [inputValue, setInputValue] = useState(defaultValue || '');
+export default function GoogleMapsInput({ onPlaceSelect, onChange, value, placeholder, defaultValue }: GoogleMapsInputProps) {
+  const [inputValue, setInputValue] = useState(value || defaultValue || '');
   const [predictions, setPredictions] = useState<any[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,8 +28,12 @@ export default function GoogleMapsInput({ onPlaceSelect, placeholder, defaultVal
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setInputValue(defaultValue || '');
-  }, [defaultValue]);
+    if (value !== undefined) {
+      setInputValue(value || '');
+    } else if (defaultValue !== undefined) {
+      setInputValue(defaultValue || '');
+    }
+  }, [value, defaultValue]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,14 +102,16 @@ export default function GoogleMapsInput({ onPlaceSelect, placeholder, defaultVal
           if (types.includes('postal_code')) postalCode = component.long_name;
         });
 
-        onPlaceSelect?.({
+        const payload = {
           address: place.formatted_address,
           city,
           province,
           latitude: place.geometry.location.lat(),
           longitude: place.geometry.location.lng(),
           postal_code: postalCode,
-        });
+        };
+        onPlaceSelect?.(payload);
+        onChange?.(payload);
       }
     });
   };

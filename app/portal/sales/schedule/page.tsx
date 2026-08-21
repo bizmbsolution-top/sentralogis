@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -41,7 +41,7 @@ export default function MobileSchedule() {
         .from('crm_activities')
         .select(`id, activity_date, status, description, location, check_in_time, check_in_lat, check_in_lng, md_entities(name)`)
         .eq('activity_type', 'MEETING')
-        .eq('performed_by', user?.id)
+        .eq('performed_by', user?.id || '')
         .order('activity_date', { ascending: true });
         
       setMeetings(data || []);
@@ -57,7 +57,7 @@ export default function MobileSchedule() {
       const { data } = await supabase
         .from('md_entities')
         .select('id, name')
-        .eq('sales_rep_id', user?.id)
+        .eq('sales_rep_id', user?.id || '')
         .order('name', { ascending: true });
       setLeads(data || []);
     } catch (err) {
@@ -166,13 +166,13 @@ export default function MobileSchedule() {
 
     try {
       const { error } = await supabase.from('crm_activities').insert([{
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         entity_id: newMeeting.entity_id,
         activity_type: 'MEETING',
         status: 'SCHEDULED',
         activity_date: new Date(newMeeting.activity_date).toISOString(),
         description: newMeeting.description || 'Visit to prospect',
-        performed_by: user?.id,
+        performed_by: user?.id as string,
         is_all_day: false
       }]);
 

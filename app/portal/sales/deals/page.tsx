@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -31,7 +31,7 @@ export default function MobileDeals() {
       const { data } = await supabase
         .from('crm_deals')
         .select(`id, title, stage, expected_revenue, sbu_target, md_entities(name)`)
-        .eq('created_by', user?.id)
+        .eq('created_by', user?.id || '')
         .order('created_at', { ascending: false });
         
       setDeals(data || []);
@@ -47,7 +47,7 @@ export default function MobileDeals() {
       const { data } = await supabase
         .from('md_entities')
         .select('id, name')
-        .eq('sales_rep_id', user?.id)
+        .eq('sales_rep_id', user?.id || '')
         .order('name', { ascending: true });
       setLeads(data || []);
     } catch (err) {
@@ -62,7 +62,7 @@ export default function MobileDeals() {
 
     try {
       const { error } = await supabase.from('crm_deals').insert([{
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         entity_id: newDeal.entity_id,
         title: newDeal.title,
         stage: 'PROSPECTING',

@@ -233,15 +233,15 @@ export default function WarehouseTaskExecutionPage() {
              setJoAssignments(assignmentsData);
           }
           
-          setItems(itemsData || []);
+          setItems((itemsData as any[]) || []);
           if ((userRoles.includes('PUTAWAY') || ['PUTAWAY', 'TALLY_AND_PUTAWAY'].includes(taskData.assigned_role)) && itemsData) {
             const initialGood: Record<string, PutawayEntry[]> = {};
-            itemsData.forEach(item => {
+            ((itemsData as any[]) || []).forEach((item: any) => {
               if (Number(item.actual_good_qty) > 0) {
                 initialGood[item.id] = [{
                   id: Math.random().toString(36).substr(2, 9),
                   locationCode: '',
-                  qty: item.actual_good_qty.toString()
+                  qty: item.actual_good_qty?.toString() || '0'
                 }];
               }
             });
@@ -251,21 +251,21 @@ export default function WarehouseTaskExecutionPage() {
 
         // Fetch quarantine damage records for PUTAWAY role
         if (userRoles.includes('PUTAWAY') || ['PUTAWAY', 'TALLY_AND_PUTAWAY'].includes(taskData.assigned_role)) {
-          const { data: damageData } = await supabase
-            .from('wh_inbound_damage_records')
+          const { data: damageData } = await (supabase
+            .from('wh_inbound_damage_records' as any) as any)
             .select('*, location:md_warehouse_locations!planned_quarantine_location_id(code)')
             .eq('receipt_id', taskData.receipt_id)
             .eq('decision', 'ACCEPT_QUARANTINE')
             .order('created_at', { ascending: true });
-          setQuarantineRecords(damageData || []);
+          setQuarantineRecords((damageData as any[]) || []);
           
           if (damageData) {
             const initialQrt: Record<string, PutawayEntry[]> = {};
-            damageData.forEach(rec => {
+            ((damageData as any[]) || []).forEach((rec: any) => {
               initialQrt[rec.id] = [{
                 id: Math.random().toString(36).substr(2, 9),
                 locationCode: '',
-                qty: rec.qty.toString()
+                qty: rec.qty?.toString() || '0'
               }];
             });
             setQuarantineEntries(initialQrt);
@@ -401,7 +401,7 @@ export default function WarehouseTaskExecutionPage() {
           warehouse_id: receipt.warehouse_id,
           location_id: locationId,
           product_sku_id: productSkuId,
-          customer_id: customerId, // [AI] Populate customer_id dari md_product_skus
+          customer_id: customerId || undefined, // [AI] Populate customer_id dari md_product_skus
           quantity,
           status,
           received_date: new Date().toISOString().split('T')[0],
@@ -524,7 +524,7 @@ export default function WarehouseTaskExecutionPage() {
         const { error: itmErr } = await supabase
           .from('wh_inbound_receipt_items')
           .update({ 
-            putaway_location_id: firstLocations[itemId] || null, 
+            putaway_location_id: firstLocations[itemId] || undefined, 
             putaway_entries: itemLogs[itemId],
             putaway_at: new Date().toISOString() 
           })
@@ -568,20 +568,20 @@ export default function WarehouseTaskExecutionPage() {
   };
 
   const fetchUnloadingSessions = async (receiptId: string) => {
-    const { data } = await supabase
-      .from('wh_unloading_sessions')
+    const { data } = await (supabase
+      .from('wh_unloading_sessions' as any) as any)
       .select('*')
       .eq('receipt_id', receiptId)
       .order('session_number', { ascending: true });
     setUnloadingSessions(data || []);
 
-    const activeSession = (data || []).find(s => !s.end_time);
+    const activeSession = ((data as any[]) || []).find((s: any) => !s.end_time);
     if (activeSession) {
       const runningSince = new Date(activeSession.start_time).getTime();
       setElapsedSeconds(Math.floor((Date.now() - runningSince) / 1000));
       setTimerRunning(true);
     } else {
-      const totalSeconds = (data || []).reduce((sum, s) => {
+      const totalSeconds = ((data as any[]) || []).reduce((sum: number, s: any) => {
         if (s.end_time) return sum + Math.floor((new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 1000);
         return sum;
       }, 0);

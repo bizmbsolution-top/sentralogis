@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -50,7 +50,7 @@ const TaxManagementPage = () => {
       const { data, error } = await supabase
         .from('md_taxes')
         .select('*')
-        .eq('tenant_id', profile?.tenant_id)
+        .eq('tenant_id', profile?.tenant_id as string)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -103,7 +103,7 @@ const TaxManagementPage = () => {
 
       const taxData = {
         ...formData,
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         updated_at: new Date().toISOString()
       };
 
@@ -112,7 +112,7 @@ const TaxManagementPage = () => {
         // Update existing tax
         const { data, error } = await supabase
           .from('md_taxes')
-          .update(taxData)
+          .update(taxData as any)
           .eq('id', editingTaxId);
 
         if (error) throw error;
@@ -121,7 +121,7 @@ const TaxManagementPage = () => {
         // Insert new tax
         const { data, error } = await supabase
           .from('md_taxes')
-          .insert([taxData])
+          .insert([taxData as any])
           .select()
           .single();
 

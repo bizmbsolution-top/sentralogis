@@ -7,6 +7,16 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getDashboardRoute } from '@/lib/utils/dashboardRoute';
 
+// Forensic-only redaction hash (FNV-1a 32-bit) — avoids logging raw UUIDs.
+function forensicHash(id: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return "h" + h.toString(16).padStart(8, "0");
+}
+
 interface Profile {
   id: string;
   email: string;
@@ -418,6 +428,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] Auth event:', event);
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        const uid = session?.user?.id ?? null;
+        const pid = session?.user?.user_metadata?.profile_id ?? null;
+        console.log(`[AUTH_FORENSIC] ${event} ts=${Date.now()} user_id=${uid ? forensicHash(uid) : 'none'} profile_id=${pid ? forensicHash(String(pid)) : 'none'}`);
+      }
 
       if (session?.user) {
         setUser(session.user);

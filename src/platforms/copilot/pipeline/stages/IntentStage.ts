@@ -22,7 +22,13 @@ export class IntentStage implements PipelineStage {
         content: resolved.suggestions?.length 
           ? `Did you mean to ${resolved.suggestions.join(' or ')}?`
           : "I'm sorry, I couldn't understand that command. Could you please clarify?",
-        metrics: { totalMs: 0 } // Replaced by pipeline orchestrator
+        metrics: {
+          intentResolutionMs: 0,
+          entityResolutionMs: 0,
+          validationMs: 0,
+          planningMs: 0,
+          totalResponseMs: 0,
+        } // Replaced by pipeline orchestrator
       };
       return { status: PipelineStatus.REQUIRES_CLARIFICATION };
     }

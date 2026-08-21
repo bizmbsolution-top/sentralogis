@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -87,7 +87,7 @@ type DueAlert = {
 const SLA_CONFIG = [
   { 
     id: 'SLA 1', 
-    label: 'WO Draft → Submit', 
+    label: 'WO Draft â†’ Submit', 
     desc: 'CS finalisasi order', 
     target: '30 min', 
     icon: Zap, 
@@ -96,7 +96,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 2', 
-    label: 'Submit → SBU Assigned', 
+    label: 'Submit â†’ SBU Assigned', 
     desc: 'Routing ke SBU', 
     target: '60 min', 
     icon: Timer, 
@@ -105,7 +105,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 3', 
-    label: 'Assigned → Completed', 
+    label: 'Assigned â†’ Completed', 
     desc: 'Proses Eksekusi per SBU', 
     target: '2-5 hari', 
     icon: Truck, 
@@ -114,7 +114,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 4', 
-    label: 'Done → Ready Billing', 
+    label: 'Done â†’ Ready Billing', 
     desc: 'Doc & cost complete', 
     target: '3 hari', 
     icon: Package, 
@@ -123,7 +123,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 5', 
-    label: 'Ready → Invoiced', 
+    label: 'Ready â†’ Invoiced', 
     desc: 'Finance audit', 
     target: '1 hari', 
     icon: FileCheck, 
@@ -132,7 +132,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 6', 
-    label: 'Accepted → Paid', 
+    label: 'Accepted â†’ Paid', 
     desc: 'AR collection', 
     target: 'per ToP', 
     icon: DollarSign, 
@@ -141,7 +141,7 @@ const SLA_CONFIG = [
   },
   { 
     id: 'SLA 7', 
-    label: 'Vendor Invoice → Paid', 
+    label: 'Vendor Invoice â†’ Paid', 
     desc: 'AP discipline', 
     target: 'per ToP', 
     icon: CreditCard, 
@@ -268,7 +268,7 @@ export default function HQOpsDashboardPage() {
       const localSlaData: any[] = [];
       const localBreaches: any[] = [];
 
-      // [AI] Only show real data — no mock/hardcoded values for empty tenants
+      // [AI] Only show real data â€” no mock/hardcoded values for empty tenants
       if (totalWO === 0) {
         // Empty state: all SLA at 0%
         for (let i = 1; i <= 7; i++) {
@@ -403,7 +403,7 @@ export default function HQOpsDashboardPage() {
 
       // If no actual breaches found, show empty state (no mock data)
       if (localBreaches.length === 0 && totalWO === 0) {
-        // No breaches — all clear
+        // No breaches â€” all clear
       }
 
       setBreaches(localBreaches.sort((a, b) => b.overdue_minutes - a.overdue_minutes).slice(0, 10));
@@ -461,7 +461,7 @@ export default function HQOpsDashboardPage() {
         setWoAlerts(alerts.slice(0, 10));
       }
 
-      // 4. AR due alerts (customer invoices) — scoped to tenant via work_orders
+      // 4. AR due alerts (customer invoices) â€” scoped to tenant via work_orders
       const { data: tenantWos } = await supabase
         .from('work_orders')
         .select('id, customer_id')
@@ -500,9 +500,9 @@ export default function HQOpsDashboardPage() {
         setArDueAlerts(arAlerts);
       }
 
-      // 5. AP due alerts (vendor invoices) — scoped to tenant
-      const { data: apInvoices } = await supabase
-        .from('vendor_invoices')
+      // 5. AP due alerts (vendor invoices) â€” scoped to tenant
+      const { data: apInvoices } = await (supabase
+        .from('vendor_invoices' as any) as any)
         .select('id, invoice_number, invoice_amount, status, received_at, vendor_id')
         .eq('tenant_id', profile.tenant_id)
         .in('status', ['verified', 'submitted'])
@@ -510,7 +510,7 @@ export default function HQOpsDashboardPage() {
         .limit(10);
 
       if (apInvoices && apInvoices.length > 0) {
-        const vendorIds = apInvoices.map(i => i.vendor_id).filter(Boolean);
+        const vendorIds = apInvoices.map((i: any) => i.vendor_id).filter(Boolean);
         const { data: vendors } = await supabase
           .from('md_entities')
           .select('id, name')
@@ -518,7 +518,7 @@ export default function HQOpsDashboardPage() {
           .in('id', vendorIds);
 
         const vendorMap = new Map((vendors || []).map(v => [v.id, v.name]));
-        const apResult = apInvoices.map(vi => ({
+        const apResult = apInvoices.map((vi: any) => ({
           ...vi,
           vendor: vendorMap.has(vi.vendor_id) ? { name: vendorMap.get(vi.vendor_id) } : null,
         }));
@@ -566,14 +566,14 @@ export default function HQOpsDashboardPage() {
 
       const jos = joRes.data || [];
       setMetrics({
-        activeMissions: jos.filter(j => !['completed', 'cancelled', 'paid', 'ready_for_billing'].includes(j.status)).length,
+        activeMissions: jos.filter(j => !['completed', 'cancelled', 'paid', 'ready_for_billing'].includes(j.status as string)).length,
         totalFleet: fleetRes.count || 0,
         activeDrivers: driverRes.count || 0,
         pendingJobs: jos.filter(j => j.status === 'pending').length,
         readyToInvoice: jos.filter(j => j.status === 'ready_for_billing').length
       });
 
-      // 6b. JO Fulfillment Breakdown — slots from wo_items + job_orders
+      // 6b. JO Fulfillment Breakdown â€” slots from wo_items + job_orders
       const { data: fulfillmentWos } = await supabase
         .from('work_orders')
         .select('id, wo_number, wo_items(id, item_data, status, job_orders(id, status, driver_id, transporter_id, fleet_id))')
@@ -817,8 +817,8 @@ export default function HQOpsDashboardPage() {
                   <Truck size={16} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">SLA 3 — Proses Eksekusi per SBU</h3>
-                  <p className="text-xs text-slate-400">Assigned → Completed (target berbeda per SBU)</p>
+                  <h3 className="text-sm font-semibold text-slate-900">SLA 3 â€” Proses Eksekusi per SBU</h3>
+                  <p className="text-xs text-slate-400">Assigned â†’ Completed (target berbeda per SBU)</p>
                 </div>
               </div>
             </div>
@@ -855,7 +855,7 @@ export default function HQOpsDashboardPage() {
         </div>
       )}
 
-      {/* SLA Trend — Last 4 Weeks */}
+      {/* SLA Trend â€” Last 4 Weeks */}
       {slaTrend.length > 0 && (
         <div className="max-w-7xl mx-auto mb-8">
           <Card className="border border-slate-200 shadow-sm rounded-xl bg-white overflow-hidden">
@@ -865,7 +865,7 @@ export default function HQOpsDashboardPage() {
                   <TrendingUp size={16} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">SLA Trend — Last 4 Weeks</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">SLA Trend â€” Last 4 Weeks</h3>
                   <p className="text-xs text-slate-400">Compliance mingguan per stage (rekapan snapshot harian)</p>
                 </div>
               </div>
@@ -910,7 +910,7 @@ export default function HQOpsDashboardPage() {
                     const status = getSlaStatus(latestPct);
 
                     const renderWeekBadge = (val: number | null) => {
-                      if (val === null) return <span className="text-slate-300">—</span>;
+                      if (val === null) return <span className="text-slate-300">â€”</span>;
                       const st = getSlaStatus(val);
                       return (
                         <span className={`inline-block px-2 py-0.5 rounded font-semibold text-[11px] ${st.color}`}>
@@ -970,7 +970,7 @@ export default function HQOpsDashboardPage() {
                 <AlertTriangle size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Breach Aktif — Perlu Intervensi</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Breach Aktif â€” Perlu Intervensi</h3>
                 <p className="text-xs text-slate-400">Top 10 paling overdue</p>
               </div>
             </div>
@@ -1014,11 +1014,11 @@ export default function HQOpsDashboardPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-xs font-mono text-slate-700">{b.wo_number}</td>
-                      <td className="px-5 py-3 text-xs font-mono text-slate-500">{b.jo_number || '—'}</td>
+                      <td className="px-5 py-3 text-xs font-mono text-slate-500">{b.jo_number || 'â€”'}</td>
                       <td className="px-5 py-3">
                         <span className="text-xs font-semibold text-rose-600">{formatOverdue(b.overdue_minutes)}</span>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600">{b.customer_name || b.vendor_name || '—'}</td>
+                      <td className="px-5 py-3 text-xs text-slate-600">{b.customer_name || b.vendor_name || 'â€”'}</td>
                       <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate">{b.details}</td>
                     </tr>
                   ))}
@@ -1039,7 +1039,7 @@ export default function HQOpsDashboardPage() {
                   <Siren size={16} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-rose-900">SLA Escalations — Active</h3>
+                  <h3 className="text-sm font-semibold text-rose-900">SLA Escalations â€” Active</h3>
                   <p className="text-xs text-rose-600">Auto-escalated breaches requiring attention</p>
                 </div>
               </div>
@@ -1069,10 +1069,10 @@ export default function HQOpsDashboardPage() {
                       4: 'bg-red-100 text-red-800 border-red-300',
                     };
                     const levelLabels: Record<number, string> = {
-                      1: '⚠ Warning',
-                      2: '🔔 Breach',
-                      3: '🚨 Critical',
-                      4: '💀 Emergency',
+                      1: 'âš  Warning',
+                      2: 'ðŸ”” Breach',
+                      3: 'ðŸš¨ Critical',
+                      4: 'ðŸ’€ Emergency',
                     };
                     return (
                       <tr key={esc.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1083,13 +1083,13 @@ export default function HQOpsDashboardPage() {
                         </td>
                         <td className="px-5 py-3 text-xs font-mono text-slate-700">{esc.sla_stage}</td>
                         <td className="px-5 py-3">
-                          <div className="text-xs font-mono text-slate-900">{esc.wo_id ? esc.wo_id.slice(0, 8) : '—'}</div>
+                          <div className="text-xs font-mono text-slate-900">{esc.wo_id ? esc.wo_id.slice(0, 8) : 'â€”'}</div>
                           {esc.jo_id && <div className="text-[10px] text-slate-400 font-mono">{esc.jo_id.slice(0, 8)}</div>}
                         </td>
-                        <td className="px-5 py-3 text-xs text-slate-600">{esc.notified_role || '—'}</td>
+                        <td className="px-5 py-3 text-xs text-slate-600">{esc.notified_role || 'â€”'}</td>
                         <td className="px-5 py-3 text-xs text-slate-500 max-w-[250px] truncate">{esc.details}</td>
                         <td className="px-5 py-3 text-xs text-slate-400">
-                          {esc.created_at ? new Date(esc.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {esc.created_at ? new Date(esc.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'â€”'}
                         </td>
                       </tr>
                     );
@@ -1117,7 +1117,7 @@ export default function HQOpsDashboardPage() {
                 <Package size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">JO Fulfillment — Slot Status</h3>
+                <h3 className="text-sm font-semibold text-slate-900">JO Fulfillment â€” Slot Status</h3>
                 <p className="text-xs text-slate-400">Truck assignment slot breakdown (rejected / assigned / unfilled)</p>
               </div>
             </div>
@@ -1196,7 +1196,7 @@ export default function HQOpsDashboardPage() {
                     <div key={i} className="p-4 bg-rose-50 rounded-lg border border-rose-100">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-mono font-bold text-rose-800">{d.wo_number}</span>
-                        <span className="text-[10px] text-rose-500">{d.rejected_at ? new Date(d.rejected_at).toLocaleString('id-ID') : '—'}</span>
+                        <span className="text-[10px] text-rose-500">{d.rejected_at ? new Date(d.rejected_at).toLocaleString('id-ID') : 'â€”'}</span>
                       </div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="px-2 py-0.5 bg-rose-200 text-rose-800 rounded text-[10px] font-bold">{d.reason}</span>
@@ -1260,7 +1260,7 @@ export default function HQOpsDashboardPage() {
               <DollarSign size={16} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Invoice Customer — Jatuh Tempo</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Invoice Customer â€” Jatuh Tempo</h3>
               <p className="text-xs text-slate-400">AR yang perlu ditagih</p>
             </div>
           </div>
@@ -1300,7 +1300,7 @@ export default function HQOpsDashboardPage() {
               <CreditCard size={16} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Invoice Vendor — Perlu Dibayar</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Invoice Vendor â€” Perlu Dibayar</h3>
               <p className="text-xs text-slate-400">AP yang perlu diproses</p>
             </div>
           </div>

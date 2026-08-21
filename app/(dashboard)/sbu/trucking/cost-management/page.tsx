@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
@@ -56,8 +56,8 @@ export default function SBUCostManagementPage() {
 
         // 2. Ambil Driver & Entity secara terpisah (Rule 1)
         const [driverRes, entityRes, itemRes] = await Promise.all([
-          driverIds.length > 0 ? supabase.from('md_drivers').select('*').in('id', driverIds) : { data: [] },
-          transporterIds.length > 0 ? supabase.from('md_entities').select('id, name, vendor_type').in('id', transporterIds) : { data: [] },
+          driverIds.length > 0 ? supabase.from('md_drivers').select('*').in('id', driverIds as string[]) : { data: [] },
+          transporterIds.length > 0 ? supabase.from('md_entities').select('id, name, vendor_type').in('id', transporterIds as string[]) : { data: [] },
           woItemIds.length > 0 ? supabase.from('wo_items').select('id, item_code, sbu_type').in('id', woItemIds) : { data: [] }
         ]);
 

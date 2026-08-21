@@ -1,0 +1,66 @@
+PHASE P1 - ENVIRONMENT DISCOVERY
+================================
+Date captured : 2026-08-19 (local)
+Operator      : manual via adb (Windows PowerShell)
+
+PACKAGE_NAME          : com.sentralogis.driver
+APK_PATH              : C:\Users\sonad\projectQ\sentralogis\android\app\build\outputs\apk\debug\app-debug.apk
+APK_SIZE              : 8,511,766 bytes (~8.5 MB)
+APK_BUILD_TIME        : 2026-08-19 11:26:08 (local)
+
+DEVICE_CONNECTED      : YES
+DEVICE_SERIAL         : RR8T101AKHX
+DEVICE_MODEL          : SM-A325F (Samsung A32)
+DEVICE_MANUFACTURER   : samsung
+ANDROID_VERSION       : 13 (API 33)
+DISPLAY               : 1080x2400
+LOCALE                : en-GB
+adb transport_id      : 1
+
+BUILD_VERSION         : versionName=1.0, versionCode=1
+                       minSdk=23, targetSdk=35
+APP_INSTALL_STATE     : already installed (firstInstallTime=2026-08-17 13:51:13)
+
+GIT_COMMIT            : 6c73b7a3d741569de1f27a797439152d36546e13
+GIT_COMMIT_DATE       : 2026-08-19 10:22:56 +0700
+GIT_SUBJECT           : feat(gps): integrate gps-worker.js for PWA background ping to survive tab suspension
+WORKING_TREE         : has uncommitted P0.2 modifications (GpsForegroundService.java,
+                       GpsPlugin.java, OfflineGpsDbHelper.java, app/api/jo/[token]/route.ts,
+                       lib/hooks/useDriverGpsPing.ts, lib/offline/offlineSyncEngine.ts,
+                       lib/services/NativeGpsManager.ts, public/gps-worker.js,
+                       untracked app/api/jo/[token]/gps-session/route.ts)
+
+PRODUCTION_API_URL    : https://www.sentralogis.com (NEXT_PUBLIC_BASE_URL)
+SUPABASE_URL          : https://nsvkewvmzivudkcczhnk.supabase.co
+
+END-TO-END CONTRACT (P0.2, inspected read-only)
+----------------------------------------------
+1. Driver portal / JO page POSTs to /api/jo/{token}/gps-session
+2. gps-session validates Supabase auth (profile_id), JO ownership (403 if mismatch),
+   JO active status (403 if inactive list) -> returns signed 300s JWT
+3. JWT payload: driver_id, tenant_id, job_order_id, iat, exp(300s), iss, aud
+   (lib/auth/gpsSession.ts, HS256, GPS_SESSION_SECRET)
+4. NativeGpsManager.ts schedules refresh at (exp - 75s) or default 4min,
+   with bounded backoff retry + app-resume recovery
+5. GpsForegroundService.java receives EXTRA_GPS_SESSION_TOKEN, stores in
+   SharedPreferences PREF_GPS_SESSION_TOKEN, sets isAuthValid via isTokenExpired()
+6. Sync uses PATCH /api/jo/{jobId} with Authorization: Bearer <gps token>
+   (never logged; only "[GPS Native HTTP] URL=" with jobId)
+7. OfflineGpsDbHelper (SQLite) buffers [QUEUE-FIRST] when auth invalid/offline
+8. job_tracking dedup: UNIQUE(job_order_id, client_ping_id)
+
+SAFE LOG MARKERS (SentraLogisGPS tag)
+-------------------------------------
+[WAKELOCK] acquired / released
+[GPS_AUTH] fresh token received, authValid=
+[GPS_AUTH] token near expiry / refresh required on restart
+[GPS_AUTH] sync paused awaiting fresh token
+[GPS_AUTH] sync resumed
+[SYNC_ENGINE] Batch started / response_ok=true / partial/full ACK
+[GPS_SYNC_FORENSIC] queue_count / batch_size / accepted_count / duplicate_count
+[QUEUE-FIRST] Queued GPS ping
+[GPS-JAVA-TRACE] Service lifecycle markers
+[GPS_TOKEN_REFRESH] JS-side schedule/retry markers
+
+NOTE: per P1 rule, no JWT plaintext is expected in any log. Authorization header
+value is never logged. "[GPS Native HTTP] URL=" contains only the job id, no token.

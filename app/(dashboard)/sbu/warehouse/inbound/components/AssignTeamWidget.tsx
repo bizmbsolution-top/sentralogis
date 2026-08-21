@@ -36,18 +36,18 @@ export default function AssignTeamWidget({ receiptId, joId, tenantId, warehouseI
         setStaff(staffData || []);
 
         // 2. Fetch existing assignments
-        const { data: assignData } = await supabase
-          .from('wh_jo_staff_assignments')
+        const { data: assignData } = await (supabase
+          .from('wh_jo_staff_assignments' as any) as any)
           .select('*')
           .eq('receipt_id', receiptId);
           
-        setAssignments(assignData || []);
+        setAssignments((assignData as any[]) || []);
 
         // Pre-fill selection
         if (assignData) {
-          const sec = assignData.find(a => a.assigned_role === 'SECURITY');
-          const tally = assignData.find(a => a.assigned_role === 'TALLY');
-          const putaway = assignData.find(a => a.assigned_role === 'PUTAWAY');
+          const sec = (assignData as any[]).find((a: any) => a.assigned_role === 'SECURITY');
+          const tally = (assignData as any[]).find((a: any) => a.assigned_role === 'TALLY');
+          const putaway = (assignData as any[]).find((a: any) => a.assigned_role === 'PUTAWAY');
           
           if (sec) setSelectedSecurity(sec.staff_id);
           if (tally) setSelectedTally(tally.staff_id);
@@ -67,7 +67,7 @@ export default function AssignTeamWidget({ receiptId, joId, tenantId, warehouseI
     setSaving(true);
     try {
       // For simplicity, we just delete existing assignments for this receipt and insert new ones
-      await supabase.from('wh_jo_staff_assignments').delete().eq('receipt_id', receiptId);
+      await (supabase.from('wh_jo_staff_assignments' as any) as any).delete().eq('receipt_id', receiptId);
 
       const inserts = [];
       // Note: A real implementation might require a joId to be present if it's tied to job_orders.
@@ -85,7 +85,7 @@ export default function AssignTeamWidget({ receiptId, joId, tenantId, warehouseI
       }
 
       if (inserts.length > 0) {
-        const { error } = await supabase.from('wh_jo_staff_assignments').insert(inserts);
+        const { error } = await (supabase.from('wh_jo_staff_assignments' as any) as any).insert(inserts);
         if (error) throw error;
       }
       

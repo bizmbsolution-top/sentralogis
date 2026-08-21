@@ -47,7 +47,13 @@ export class CopilotEngine {
     return {
       type: 'text',
       content: 'I encountered an unexpected issue while processing that request.',
-      metrics: { totalMs: 0 }
+      metrics: {
+        intentResolutionMs: 0,
+        entityResolutionMs: 0,
+        validationMs: 0,
+        planningMs: 0,
+        totalResponseMs: 0,
+      }
     };
   }
 

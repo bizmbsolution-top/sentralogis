@@ -65,8 +65,8 @@ export default function FleetHubPage() {
       if (!user) return;
 
       // 1. Ambil Profile untuk mendapatkan tenant_id
-      const { data: profile } = await supabase
-        .from('profiles')
+      const { data: profile } = await (supabase
+        .from('profiles' as any) as any)
         .select('tenant_id')
         .eq('id', user.id)
         .single();

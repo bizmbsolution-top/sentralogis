@@ -57,6 +57,11 @@ public class GpsPlugin extends Plugin {
             intent.setAction(GpsForegroundService.ACTION_START);
             intent.putExtra(GpsForegroundService.EXTRA_JOB_ID, jobId);
             intent.putExtra(GpsForegroundService.EXTRA_API_URL, apiUrl);
+            
+            String token = call.getString("gpsSessionToken");
+            if (token != null) {
+                intent.putExtra(GpsForegroundService.EXTRA_GPS_SESSION_TOKEN, token);
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent);
@@ -73,11 +78,55 @@ public class GpsPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void updateToken(PluginCall call) {
+        String token = call.getString("gpsSessionToken");
+        if (token != null) {
+            Context context = getContext();
+            Intent intent = new Intent(context, GpsForegroundService.class);
+            intent.setAction(GpsForegroundService.ACTION_UPDATE_TOKEN);
+            intent.putExtra(GpsForegroundService.EXTRA_GPS_SESSION_TOKEN, token);
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
     public void stopTracking(PluginCall call) {
         Context context = getContext();
         Intent intent = new Intent(context, GpsForegroundService.class);
         intent.setAction(GpsForegroundService.ACTION_STOP);
         context.startService(intent);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getQueueStatus(PluginCall call) {
+        try {
+            Context context = getContext();
+            OfflineGpsDbHelper helper = new OfflineGpsDbHelper(context);
+            int total = helper.getTotalLocationsCount();
+            int pending = helper.getPendingLocationsCount();
+            
+            JSObject ret = new JSObject();
+            ret.put("pendingCount", pending);
+            ret.put("totalCount", total);
+            call.resolve(ret);
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("pendingCount", 0);
+            ret.put("totalCount", 0);
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void triggerSync(PluginCall call) {
+        try {
+            Context context = getContext();
+            Intent intent = new Intent(context, GpsForegroundService.class);
+            intent.setAction(GpsForegroundService.ACTION_HEARTBEAT);
+            context.startService(intent);
+        } catch (Exception ignored) {}
         call.resolve();
     }
 

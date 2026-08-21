@@ -33,21 +33,23 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
     try {
       if (exception.anomaly_type === 'SLA_DEADLOCK') {
         // 1. Fetch Job Order
-        const { data: joData, error: joErr } = await supabase
-          .from('job_orders')
+        const { data: joDataRaw, error: joErr } = await (supabase
+          .from('job_orders' as any) as any)
           .select('*')
           .eq('id', exception.reference_id)
           .single();
+        const joData = joDataRaw as any;
         
         if (joErr) throw joErr;
 
         if (joData) {
           // 2. Fetch WO Item
-          const { data: woItem } = await supabase
-            .from('wo_items')
+          const { data: woItemRaw } = await (supabase
+            .from('wo_items' as any) as any)
             .select('*')
             .eq('id', joData.wo_item_id)
             .single();
+          const woItem = woItemRaw as any;
 
           // 3. Fetch Work Order
           let wo: any = null;
@@ -74,12 +76,12 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
           }
           
           if (wo?.created_by) {
-            const { data: tu } = await supabase.from('tenant_users').select('full_name').eq('user_id', wo.created_by).single();
+            const { data: tu } = await (supabase.from('tenant_users' as any) as any).select('full_name').eq('user_id', wo.created_by).single();
             if (tu) adminName = tu.full_name;
           }
 
           if (joData.updated_by) {
-            const { data: upd } = await supabase.from('tenant_users').select('full_name').eq('user_id', joData.updated_by).single();
+            const { data: upd } = await (supabase.from('tenant_users' as any) as any).select('full_name').eq('user_id', joData.updated_by).single();
             if (upd) updaterName = upd.full_name;
           }
 
@@ -87,10 +89,10 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
             const { data: t } = await supabase.from('md_entities').select('name').eq('id', joData.transporter_id).single();
             if (t) executorName = t.name;
           } else if (joData.driver_id) {
-            const { data: d } = await supabase.from('md_drivers').select('name, phone_number').eq('id', joData.driver_id).single();
+            const { data: d } = await (supabase.from('md_drivers' as any) as any).select('name, phone').eq('id', joData.driver_id).single();
             if (d) {
               executorName = d.name;
-              executorContact = d.phone_number || 'No Phone';
+              executorContact = d.phone || 'No Phone';
             }
           }
 
@@ -149,11 +151,12 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
         }
       } else if (exception.anomaly_type === 'VENDOR_ANOMALY') {
         // 1. Fetch Job Order
-        const { data: joData } = await supabase
-          .from('job_orders')
+        const { data: joDataRaw } = await (supabase
+          .from('job_orders' as any) as any)
           .select('*')
           .eq('id', exception.reference_id)
           .single();
+        const joData = joDataRaw as any;
 
         let vendorName = 'External Vendor';
         if (joData?.vendor_id) {
@@ -184,15 +187,16 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
           idleFleets: idleFleets || []
         });
       } else if (exception.anomaly_type === 'CLEARANCE_DEMURRAGE_RISK') {
-        const { data: joData } = await supabase
-          .from('job_orders')
+        const { data: joDataRaw } = await (supabase
+          .from('job_orders' as any) as any)
           .select('*')
           .eq('id', exception.reference_id)
           .single();
+        const joData = joDataRaw as any;
 
         let woItemSpecs: any = {};
         if (joData?.wo_item_id) {
-          const { data: wi } = await supabase.from('wo_items').select('item_data, sbu_type').eq('id', joData.wo_item_id).single();
+          const { data: wi } = await (supabase.from('wo_items' as any) as any).select('item_data, sbu_type').eq('id', joData.wo_item_id).single();
           if (wi?.item_data) {
             try {
               woItemSpecs = typeof wi.item_data === 'string' ? JSON.parse(wi.item_data) : wi.item_data;
@@ -201,7 +205,7 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
         }
 
         const dwellHours = joData?.created_at ? differenceInHours(new Date(), new Date(joData.created_at)) : 75;
-        const dwellDays = Math.max(1, (dwellHours / 24).toFixed(1));
+        const dwellDays = Math.max(1, parseFloat((dwellHours / 24).toFixed(1)));
         const estimatedDemurrage = Math.max(0, Math.ceil(Number(dwellDays) - 3) * 750000); // Rp 750,000 / container / day past 3 free days
 
         setDetails({
@@ -220,11 +224,12 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
         });
       } else if (exception.anomaly_type === 'WAREHOUSE_STAGNATION' || exception.anomaly_type === 'INVENTORY_DISCREPANCY') {
         if (exception.anomaly_type === 'WAREHOUSE_STAGNATION') {
-          const { data: taskData } = await supabase
-            .from('wh_tasks')
+          const { data: taskDataRaw } = await (supabase
+            .from('wh_tasks' as any) as any)
             .select('*, md_warehouses(name)')
             .eq('id', exception.reference_id)
             .single();
+          const taskData = taskDataRaw as any;
 
           setDetails({
             type: 'WAREHOUSE_RCA',
@@ -241,11 +246,12 @@ export default function ExceptionInvestigationModal({ isOpen, onClose, exception
             }
           });
         } else {
-          const { data: invData } = await supabase
-            .from('wh_inventory')
+          const { data: invDataRaw } = await (supabase
+            .from('wh_inventory' as any) as any)
             .select('*, md_warehouses(name), md_product_skus(sku_code, sku_name)')
             .eq('id', exception.reference_id)
             .single();
+          const invData = invDataRaw as any;
 
           setDetails({
             type: 'WAREHOUSE_RCA',

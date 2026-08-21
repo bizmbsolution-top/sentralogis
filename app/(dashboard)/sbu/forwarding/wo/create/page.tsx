@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { 
-  ArrowLeft, ArrowRight, Save, Loader2, Package, Truck, Anchor, CheckCircle2, DollarSign, MapPin
+import {
+  ArrowLeft, ArrowRight, Save, Loader2, Package, Truck, Anchor, CheckCircle2, DollarSign, MapPin, Plus
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -321,7 +321,7 @@ export default function CreateForwardingWOPage() {
           <h2 className="text-2xl font-bold text-slate-800">Detail Kontainer & Alamat</h2>
           <p className="text-slate-500 mt-1">Isi informasi barang dan lokasi Door (Pickup/Delivery).</p>
         </div>
-        <Button onClick={addContainer} variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+        <Button onClick={addContainer} variant="secondary" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
           <Plus className="w-4 h-4 mr-2" /> Tambah Kontainer
         </Button>
       </div>
@@ -562,7 +562,7 @@ export default function CreateForwardingWOPage() {
       <div className="bg-white border-b border-slate-200 px-6 py-4 -mx-6 -mt-6 mb-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="rounded-full">
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </Button>
             <div>
@@ -596,8 +596,8 @@ export default function CreateForwardingWOPage() {
       {/* Footer Wizard */}
       <div className="bg-white border-t border-slate-200 p-4 -mx-6 -mb-6 mt-auto sticky bottom-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="secondary"
             onClick={currentStep === 1 ? () => router.back() : prevStep}
             disabled={submitting}
             className="px-6 border-slate-300 text-slate-600"

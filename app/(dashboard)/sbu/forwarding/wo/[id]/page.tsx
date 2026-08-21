@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 
 export default function ForwardingWODetailPage() {
-  const { id } = useParams();
+  const { id } = useParams() as { id: string };
   const router = useRouter();
   
   const [wo, setWo] = useState<any>(null);
@@ -99,7 +99,7 @@ export default function ForwardingWODetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="rounded-full shrink-0">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Button>
           <div>

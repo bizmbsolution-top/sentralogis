@@ -5,6 +5,8 @@ import { TrackingService } from "@/src/application/tracking/services/TrackingSer
 import { SupabaseTrackingRepository } from "@/src/infrastructure/repositories/tracking/SupabaseTrackingRepository";
 import { DriverPortalQuery } from "@/src/infrastructure/repositories/trucking/DriverPortalQuery";
 import { DriverPortalCommandRepository } from "@/src/infrastructure/repositories/trucking/DriverPortalCommandRepository";
+import { verifyDriverJwt } from "@/lib/auth/driverJwt";
+import { verifyGpsSessionToken } from '@/lib/auth/gpsSession';
 import { JoAutoCompleteService } from "@/src/application/trucking/services/JoAutoCompleteService";
 
 export const dynamic = "force-dynamic";
@@ -201,10 +203,8 @@ export async function PATCH(
       return NextResponse.json({ error: "JO not found" }, { status: 404 });
 
     // ─────────────────────────────────────────────────────────────────────
-    // [PHASE 2] STRICT SERVER-SIDE DRIVER SESSION AUTHORIZATION
+    // [PHASE 4] STRICT CRYPTOGRAPHIC SERVER-SIDE AUTHORIZATION
     // ─────────────────────────────────────────────────────────────────────
-    const driverIdHeader = request.headers.get("x-driver-id");
-    
     // BACKWARDS COMPATIBILITY: If action is missing but route_id and route_status exist, infer route_status
     let effectiveAction = action;
     if (!effectiveAction && route_id && route_status) {
@@ -213,38 +213,96 @@ export async function PATCH(
     
     const isBackgroundAction = effectiveAction === "gps_ping" || effectiveAction === "gps_ping_batch" || effectiveAction === "native_heartbeat";
     
-    // Photo uploads don't have an action field in the legacy contract, so they are not background actions.
-    if (!isBackgroundAction) {
-       const supabaseServer = await createClient();
-       const { data: authData } = await supabaseServer.auth.getUser();
-       const sessionProfileId = authData.user?.user_metadata?.profile_id;
-       
-       // TASK 5 - VERIFY PROFILE_ID SOURCE
-       console.log("[AUTH_FORENSIC_SERVER]", {
-         user_metadata_profile_id: sessionProfileId
-       });
+    // Extract Authorization Bearer token or HttpOnly cookie
+    const authHeader = request.headers.get("authorization") || "";
+    const cookieToken = request.cookies.get("sb-access-token")?.value;
+    const rawToken = authHeader.replace(/^Bearer\s+/i, "").trim() || cookieToken || "";
 
-       // TASK 4 - SERVER API FORENSIC
-       console.log("[AUTH_FORENSIC_SERVER]", {
-         authenticated_user_id: authData.user?.id,
-         authenticated_profile_id: sessionProfileId,
-         jo_tenant_id: jo?.tenant_id,
-         jo_driver_id: jo?.driver_id,
-         resolved_driver_profile_id: jo?.driver?.profile_id,
-         authorization_result: (!sessionProfileId || !jo?.driver?.profile_id || jo.driver.profile_id !== sessionProfileId) ? "DENY" : "ALLOW"
-       });
-       
-       if (!sessionProfileId) {
-           return NextResponse.json({ error: "Sesi driver tidak valid (Missing profile_id)" }, { status: 401 });
-       }
-       
-       if (!jo.driver?.profile_id) {
-           return NextResponse.json({ error: "Akses ditolak: JO tidak memiliki profile_id yang valid" }, { status: 403 });
-       }
-       
-       if (jo.driver.profile_id !== sessionProfileId) {
-           return NextResponse.json({ error: "Akses ditolak: Anda tidak berhak memodifikasi JO ini" }, { status: 403 });
-       }
+    if (!isBackgroundAction) {
+      // 1. Validate Driver Session JWT cryptographically
+      const verifiedSession = verifyDriverJwt(rawToken);
+
+      if (!verifiedSession || !verifiedSession.driver_id) {
+        console.warn("[AUTH_FORENSIC_SERVER] Rejecting unauthorized request: invalid or missing Driver JWT signature");
+        return NextResponse.json(
+          { error: "Akses ditolak: Sesi tidak valid atau token kadaluarsa" },
+          { status: 401 }
+        );
+      }
+
+      const sessionDriverId = verifiedSession.driver_id;
+      const sessionProfileId = verifiedSession.profile_id;
+      const linkedTenantIds = verifiedSession.linked_tenant_ids || [];
+
+      // 2. Strict Driver Ownership Verification
+      let isAuthorized =
+        (sessionProfileId && jo.driver?.profile_id && jo.driver.profile_id === sessionProfileId) ||
+        (sessionDriverId && jo.driver_id === sessionDriverId);
+
+      // Multi-tenant profile lookup fallback if driver_tenant_links connects to this JO's driver
+      if (!isAuthorized && sessionProfileId && jo.driver_id) {
+        const { data: linkRow } = await supabase
+          .from("driver_tenant_links")
+          .select("id")
+          .eq("profile_id", sessionProfileId)
+          .eq("driver_id", jo.driver_id)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (linkRow) {
+          isAuthorized = true;
+        }
+      }
+
+      console.log("[AUTH_FORENSIC_SERVER]", {
+        authenticated_driver_id: sessionDriverId,
+        authenticated_profile_id: sessionProfileId,
+        jo_tenant_id: jo?.tenant_id,
+        jo_driver_id: jo?.driver_id,
+        resolved_driver_profile_id: jo?.driver?.profile_id,
+        authorization_result: isAuthorized ? "ALLOW" : "DENY",
+      });
+
+      if (!isAuthorized) {
+        return NextResponse.json(
+          { error: "Akses ditolak: Anda tidak berhak memodifikasi Job Order ini" },
+          { status: 403 }
+        );
+      }
+    } else {
+      // Background GPS actions: verify GPS session token or Driver session JWT
+      let isGpsAuthorized = false;
+      let gpsPayload = null;
+
+      try {
+        gpsPayload = verifyGpsSessionToken(rawToken);
+        if (
+          gpsPayload &&
+          gpsPayload.job_order_id === jo.id &&
+          gpsPayload.driver_id === jo.driver_id &&
+          gpsPayload.tenant_id === jo.tenant_id
+        ) {
+          isGpsAuthorized = true;
+        }
+      } catch (e) {
+        // Fallback: verify as Driver Session JWT
+        const verifiedSession = verifyDriverJwt(rawToken);
+        if (
+          verifiedSession &&
+          (verifiedSession.driver_id === jo.driver_id ||
+            (verifiedSession.profile_id && jo.driver?.profile_id === verifiedSession.profile_id))
+        ) {
+          isGpsAuthorized = true;
+        }
+      }
+
+      if (!isGpsAuthorized) {
+        console.warn("[AUTH_FORENSIC_SERVER] Rejecting unauthorized GPS submission for JO:", jo.id);
+        return NextResponse.json(
+          { error: "Akses ditolak: Token GPS tidak valid atau tidak cocok dengan Job Order ini" },
+          { status: 403 }
+        );
+      }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -330,6 +388,12 @@ export async function PATCH(
         await commandRepo.rejectJob(jo.id, rejection_note || "Ditolak driver");
         return NextResponse.json({ success: true });
 
+      case "complete_job": {
+        const autoCompleteService = new JoAutoCompleteService(supabase);
+        const success = await autoCompleteService.completeJo(jo);
+        return NextResponse.json({ success, completed: success });
+      }
+
       case "route_status":
         if (!route_id || !route_status)
           return NextResponse.json(
@@ -354,6 +418,35 @@ export async function PATCH(
               updated_at: new Date().toISOString(),
             })
             .eq("id", jo.id);
+        }
+
+        // [AI] Fix: If this is the last route stop or all stops are completed, transition JO status to MENUNGGU SELESAI
+        if (route_status === "completed") {
+          const { data: allRoutes } = await supabase
+            .from("job_routes")
+            .select("id, sequence, stop_type, status")
+            .eq("job_order_id", jo.id)
+            .order("sequence", { ascending: true });
+
+          if (allRoutes && allRoutes.length > 0) {
+            const lastRoute = allRoutes[allRoutes.length - 1];
+            const isLastOrAllDone =
+              lastRoute.id === route_id ||
+              allRoutes.every((r) => r.id === route_id || r.status === "completed");
+
+            if (isLastOrAllDone) {
+              const now = new Date().toISOString();
+              await supabase
+                .from("job_orders")
+                .update({
+                  status: "MENUNGGU SELESAI",
+                  unloaded_at: now,
+                  departure_detected_at: now,
+                  updated_at: now,
+                })
+                .eq("id", jo.id);
+            }
+          }
         }
 
         return NextResponse.json({ success: true });
@@ -831,6 +924,7 @@ export async function PATCH(
       // GPS PING BATCH — Queue-First Store and Forward Endpoint
       // ─────────────────────────────────────────────────────────────────
       case "gps_ping_batch": {
+        const batchStartTime = Date.now();
         console.info(`[GPS_SYNC_FORENSIC] server_received: PATCH /api/jo/${jo.id}`);
         const pings = body.pings || [];
         console.info(`[GPS_SYNC_FORENSIC] server_batch_count: ${pings.length}`);
@@ -861,63 +955,109 @@ export async function PATCH(
         let currentJoStatus = jo.status;
         const GEOFENCE_RADIUS_M = 2000;
 
+        const validPings: any[] = [];
+        const canonicalPingIds: string[] = [];
+
         for (const ping of pings) {
           const canonicalPingId = ping.client_ping_id || ping.id;
-          if (!canonicalPingId || !ping.latitude || !ping.longitude) {
+          if (!canonicalPingId || ping.latitude === undefined || ping.longitude === undefined) {
             failed.push({ id: canonicalPingId, reason: "invalid_data" });
             continue;
           }
-
-          const nLat = Number(ping.latitude);
-          const nLng = Number(ping.longitude);
-          const recordedAt = ping.recorded_at ? new Date(ping.recorded_at) : new Date();
-
-          // 1. Idempotency Check & Insert
-          const pingPayload: any = {
-            client_ping_id: canonicalPingId,
-            job_order_id: jo.id,
-            status_update: "GPS_PING_BATCH",
-            latitude: nLat,
-            longitude: nLng,
+          validPings.push({
+            canonicalPingId,
+            latitude: Number(ping.latitude),
+            longitude: Number(ping.longitude),
+            accuracy: ping.accuracy,
+            speed: ping.speed,
+            battery: ping.battery,
             source: ping.source || "pwa_batch",
-            notes: "Batch GPS ping",
-            recorded_at: recordedAt.toISOString()
-          };
-          if (ping.accuracy !== undefined) pingPayload.accuracy = ping.accuracy;
-          if (ping.speed !== undefined) pingPayload.speed = ping.speed;
-          if (ping.battery !== undefined) pingPayload.battery_level = ping.battery;
+            recordedAt: ping.recorded_at ? new Date(ping.recorded_at) : new Date(),
+          });
+          canonicalPingIds.push(canonicalPingId);
+        }
 
-          console.info(`[GPS_SYNC_FORENSIC] supabase_insert_start: canonical_ping_id=${canonicalPingId}, job_order_id=${jo.id}, recorded_at=${recordedAt.toISOString()}`);
-          const { error: pingErr } = await supabase
+        // Check for existing records in one query to handle duplicates fast
+        const { data: existingRecords } = await supabase
+          .from("job_tracking")
+          .select("client_ping_id")
+          .eq("job_order_id", jo.id)
+          .in("client_ping_id", canonicalPingIds);
+
+        const existingSet = new Set((existingRecords || []).map((r: any) => r.client_ping_id));
+
+        const toInsertPayloads: any[] = [];
+        const toInsertIds: string[] = [];
+
+        for (const p of validPings) {
+          if (existingSet.has(p.canonicalPingId)) {
+            duplicates.push(p.canonicalPingId);
+          } else {
+            toInsertIds.push(p.canonicalPingId);
+            const pingPayload: any = {
+              client_ping_id: p.canonicalPingId,
+              job_order_id: jo.id,
+              status_update: "GPS_PING_BATCH",
+              latitude: p.latitude,
+              longitude: p.longitude,
+              source: p.source,
+              notes: "Batch GPS ping",
+              recorded_at: p.recordedAt.toISOString(),
+            };
+            if (p.accuracy !== undefined) pingPayload.accuracy = p.accuracy;
+            if (p.speed !== undefined) pingPayload.speed = p.speed;
+            if (p.battery !== undefined) pingPayload.battery_level = p.battery;
+            toInsertPayloads.push(pingPayload);
+          }
+        }
+
+        if (toInsertPayloads.length > 0) {
+          const { error: batchInsertErr } = await supabase
             .from("job_tracking")
-            .insert(pingPayload);
-          
-          if (pingErr) {
-            if (pingErr.code === '23505' || pingErr.message.includes('unique')) {
-              console.info(`[GPS_SYNC_FORENSIC] supabase_insert_error: UNIQUE (duplicate) for ${canonicalPingId}`);
-              duplicates.push(canonicalPingId);
-            } else {
-              console.info(`[GPS_SYNC_FORENSIC] supabase_insert_error: ${pingErr.message} for ${canonicalPingId}`);
-              failed.push({ id: canonicalPingId, reason: pingErr.message });
-              continue; // Skip geofence for failed inserts
+            .insert(toInsertPayloads);
+
+          if (batchInsertErr) {
+            console.warn("[GPS_SYNC_FORENSIC] Bulk insert error, fallback individual insert:", batchInsertErr.message);
+            for (const payload of toInsertPayloads) {
+              const { error: singleErr } = await supabase.from("job_tracking").insert(payload);
+              if (singleErr) {
+                if (singleErr.code === '23505' || singleErr.message.includes('unique')) {
+                  duplicates.push(payload.client_ping_id);
+                } else {
+                  failed.push({ id: payload.client_ping_id, reason: singleErr.message });
+                }
+              } else {
+                accepted.push(payload.client_ping_id);
+              }
             }
           } else {
-            console.info(`[GPS_SYNC_FORENSIC] supabase_insert_success: ${canonicalPingId}`);
-            accepted.push(canonicalPingId);
+            accepted.push(...toInsertIds);
+          }
+        }
 
-            // Persist to tracking_points (ignoring errors for this supplementary table)
+        // Persist the latest ping to tracking_points (once per batch instead of 50 times)
+        if (validPings.length > 0) {
+          const latestPing = validPings[validPings.length - 1];
+          try {
             await trackingService.recordPing(
               mockCtx,
               "JOB_ORDER",
               jo.id,
-              nLat,
-              nLng,
-              recordedAt,
-              ping.accuracy,
+              latestPing.latitude,
+              latestPing.longitude,
+              latestPing.recordedAt,
+              latestPing.accuracy,
             );
+          } catch (e) {
+            console.warn("[GPS_SYNC] trackingService.recordPing skipped:", e);
           }
+        }
 
-          // 2. Process Geofence for this point
+        // Process Geofence for valid points in memory
+        for (const ping of validPings) {
+          const nLat = ping.latitude;
+          const nLng = ping.longitude;
+          const recordedAt = ping.recordedAt;
           if (activeRoutes && activeRoutes.length > 0) {
             const pendingRoutes = activeRoutes.filter((r: any) => r.status === "pending");
             const arrivedRoutes = activeRoutes.filter((r: any) => r.status === "arrived");
@@ -1082,6 +1222,9 @@ export async function PATCH(
              }).eq("id", jo.id);
           }
         }
+
+        const durationMs = Date.now() - batchStartTime;
+        console.info(`[GPS_BATCH] batch_count=${pings.length} validated_count=${validPings.length} inserted_count=${accepted.length} duplicate_count=${duplicates.length} failed_count=${failed.length} duration_ms=${durationMs}`);
 
         return NextResponse.json({
           success: true,

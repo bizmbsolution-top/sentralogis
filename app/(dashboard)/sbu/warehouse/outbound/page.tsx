@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { toast } from "react-hot-toast";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2, TrendingUp, Search, Plus, Filter,
@@ -15,13 +16,16 @@ import OutboundDetailModal from "./components/OutboundDetailModal";
 
 interface TaskItem {
   id: string;
-  task_number: string;
-  task_type: string;
+  task_number?: string;
+  shipment_number?: string;
+  task_type?: string;
   status: string;
-  priority: string;
-  notes: string;
+  priority?: string;
+  notes?: string;
   created_at: string;
   assigned_to?: string;
+  wo_item?: any;
+  [key: string]: any;
 }
 
 interface InventoryItem {
@@ -149,7 +153,7 @@ export default function SBUOutboundPage() {
         { event: '*', schema: 'public', table: 'wh_outbound_shipments' },
         (payload) => {
           fetchTasks(); // Refetch when there's an update from the portal
-          toast.success(`Pembaruan status pengiriman: ${payload.new?.shipment_number || 'Sistem'}`);
+          toast.success(`Pembaruan status pengiriman: ${(payload.new as any)?.shipment_number || 'Sistem'}`);
         }
       )
       .subscribe();
@@ -187,8 +191,8 @@ export default function SBUOutboundPage() {
         setSelectedWarehouse(whId);
       }
 
-      const { data, error } = await supabase
-        .from('wh_outbound_shipments')
+      const { data, error } = await (supabase
+        .from('wh_outbound_shipments' as any) as any)
         .select('*')
         .eq('tenant_id', tid)
         .eq('warehouse_id', whId)
@@ -198,7 +202,7 @@ export default function SBUOutboundPage() {
       if (error) throw error;
       
       let finalData = data || [];
-      const woItemIds = [...new Set(finalData.map((d: any) => d.wo_item_id).filter(Boolean))];
+      const woItemIds = [...new Set(finalData.map((d: any) => d.wo_item_id).filter(Boolean))] as string[];
       if (woItemIds.length > 0) {
          const { data: joData } = await supabase.from('job_orders').select('jo_number, wo_item_id').in('wo_item_id', woItemIds);
          const { data: woItemData } = await supabase.from('wo_items').select('id, wo_id').in('id', woItemIds);
@@ -215,7 +219,7 @@ export default function SBUOutboundPage() {
             };
          });
       }
-      setTasks(finalData);
+      setTasks((finalData as any[]) || []);
     } catch (e) {
       console.error('Failed to fetch outbound tasks:', e);
     } finally {
@@ -282,7 +286,7 @@ export default function SBUOutboundPage() {
   const filteredTasks = tasks.filter(t => {
     if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
     if (search && !(
-      t.task_number.toLowerCase().includes(search.toLowerCase()) ||
+      (t.task_number || t.shipment_number || '').toLowerCase().includes(search.toLowerCase()) ||
       (t.notes || '').toLowerCase().includes(search.toLowerCase())
     )) return false;
     if (dateFrom && new Date(t.created_at) < new Date(dateFrom)) return false;
@@ -375,20 +379,21 @@ export default function SBUOutboundPage() {
       const shipmentNumber = `OUT-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
 
       // 1. Create shipment
-      const { data: shipment, error: shipErr } = await supabase
-        .from('wh_outbound_shipments')
+      const { data: rawShipment, error: shipErr } = await (supabase
+        .from('wh_outbound_shipments' as any) as any)
         .insert({
           tenant_id: tid,
           warehouse_id: warehouseId,
           shipment_number: shipmentNumber,
           status: 'PLANNED',
-          notes: outboundNotes || null,
-          created_by: profile?.id || null,
+          notes: outboundNotes || undefined,
+          created_by: profile?.id || undefined,
         })
         .select()
         .single();
 
       if (shipErr) throw shipErr;
+      const shipment = rawShipment as any;
 
       // 2. Auto-allocate inventory (FIFO/FEFO) and create shipment items
       for (const line of validLines) {
@@ -457,14 +462,14 @@ export default function SBUOutboundPage() {
             reference_type: 'OUTBOUND_SHIPMENT',
             reference_id: shipment.id,
             notes: `Auto-allocated via ${line.storage_rule}`,
-            created_by: profile?.id || null,
+            created_by: profile?.id || undefined,
           });
 
           remaining -= pickQty;
         }
 
         // Create shipment item
-        await supabase.from('wh_outbound_shipment_items').insert({
+        await (supabase.from('wh_outbound_shipment_items' as any) as any).insert({
           shipment_id: shipment.id,
           product_sku_id: sku.id,
           requested_qty: line.requested_qty,
@@ -484,7 +489,7 @@ export default function SBUOutboundPage() {
         status: 'PENDING',
         priority: 'NORMAL',
         notes: `Shipment ${shipmentNumber} - ${validLines.length} item(s)`,
-        created_by: profile?.id || null,
+        created_by: profile?.id || undefined,
       });
 
       toast.success(`Outbound order ${shipmentNumber} berhasil dibuat!`);

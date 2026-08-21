@@ -21,7 +21,7 @@ export default function BarcodeScannerModal({ onScan, onClose, title = "Scan Bar
       {
         fps: 10,
         qrbox: { width: 250, height: 250 },
-        supportedFormats: [
+        formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -30,7 +30,7 @@ export default function BarcodeScannerModal({ onScan, onClose, title = "Scan Bar
           Html5QrcodeSupportedFormats.UPC_A,
         ],
         rememberLastUsedCamera: true,
-      },
+      } as any,
       false
     );
     

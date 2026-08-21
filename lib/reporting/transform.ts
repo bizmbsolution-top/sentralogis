@@ -19,6 +19,7 @@ export interface FlattenOptions {
   truckTypeFilter?: string;
   transporterFilter?: string; // "all" | "internal" | "vendor"
   vendorFilter?: string; // specific vendor entity id
+  joNumberFilter?: string; // JO number search
   warehouseFilter?: string;
   opTypeFilter?: string;
   clearanceModeFilter?: string;
@@ -88,6 +89,7 @@ export function flattenWorkOrderReport(
     truckTypeFilter = "",
     transporterFilter = "all",
     vendorFilter = "all",
+    joNumberFilter = "",
     warehouseFilter = "",
     opTypeFilter = "all",
     clearanceModeFilter = "all",
@@ -185,6 +187,7 @@ export function flattenWorkOrderReport(
           if (transporterFilter === "internal" && !isInternal) return;
           if (transporterFilter === "vendor" && isInternal) return;
           if (vendorFilter !== "all" && jo.fleets?.companies?.id !== vendorFilter) return;
+          if (joNumberFilter && !jo.jo_number?.toLowerCase().includes(joNumberFilter.toLowerCase())) return;
         }
 
         const fin = computeJoFinancials({

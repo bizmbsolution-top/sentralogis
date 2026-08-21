@@ -111,7 +111,7 @@ export default function RepackingPage() {
         };
       }) || [];
 
-      setItems(enriched);
+      setItems((enriched as any[]) || []);
     } catch (err) {
       console.error(err);
     } finally {

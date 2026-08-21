@@ -6,6 +6,23 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 
 ## Progress
 ### Done
+- **[DONE] P0 GPS Forensic Fix — Auth Lifecycle + Bulk Sync + Backlog Recovery** (reports: `reports/phase_p0/P0_GPS_AUTH_BULK_FORENSIC_REPORT.md`, `reports/phase_p0/P0_GPS_AUTH_BULK_FIX_REPORT.md`)
+  - Status: **PASS (16/16 Acceptance Criteria Verified)**
+  - Physical device tested: Samsung Galaxy A32 (`SM-A325F`, Serial: `RR8T101AKHX`), JO `CC-RAS-0826-001-01`
+  - Forensic discovery: Native Android Foreground Service & SQLite survived 13h 35m continuously (1,658 records recorded overnight with 3% battery drop); gap caused by 300s JWT TTL + suspended JS timers during screen off + sequential DB round-trips causing 15s timeout
+  - P0-A (Auth Lifecycle): 24h JWT TTL (86,400s) + dynamic secret resolution in `lib/auth/gpsSession.ts` + Bearer fallback on server & `getAuthHeaders()` in driver portal/execution/order pages
+  - P0-B (Bulk Sync): Batch 50 records re-engineered into 1 bulk check + 1 bulk insert + 1 telemetry update (< 1s per batch, down from > 15s)
+  - Idempotency & Recovery: Unique constraint `(job_order_id, client_ping_id)` + ACK contract verified (0 duplicate DB rows on retry)
+  - Backlog Recovery: 1,658 offline records safely flushed to Supabase with 0 data loss (Total verified in Supabase: 2,158 records)
+  - Next.js Production Build: PASS (Code 0)
+- **[DONE] P0.3.2 GPS Regression & Reliability Audit** (report: `reports/phase_p0/P0_3_2_GPS_REGRESSION_REPORT.md`)
+  - Status: **PASS** — all scenarios verified with physical device testing
+  - 272 rows in DB, 0 anomalies, device health ACTIVE/GOOD
+  - Screen OFF: 587s gap, service survived, pings resume immediately
+  - Offline queue: 7 batch uploads, up to 283s offline window, 0 data loss
+  - Extended movement: 52 pings over 47 min, consistent ~60s intervals
+  - Migration 186 applied (gps_status, device_health, last_device_health_ping_at)
+  - Google Play readiness: GPS pipeline fully verified
 - **[NEW] Unified Driver Portal (internal + vendor) + Phase 2 Cross-Tenant**
   - Portal: gating absen & inspeksi dihapus → 2 tombol opsional "Fasilitas Harian" (Absen Masuk + Cek Kendaraan)
   - Portal: order list selalu tampil, empty-state "Menunggu penugasan baru dari kantor."
@@ -56,6 +73,7 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Deploy ke Vercel Pro (cron support)
 
 ### In Progress
+- (none)
 - **[NEW] Cross-Tenant Driver/Fleet/Transporter** (PRD: `docs/prd-cross-tenant-driver-fleet.md`)
   - Phase A (done): migration driver_profiles/driver_tenant_links + login resolve via profile/links
   - Phase B (done): displayCode helper + fleet-status display_plate/vendor_tenant_code + vendor badge + badge tenant di dropdown & master pages
@@ -121,9 +139,11 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Set Twilio credentials di Vercel env
 
 ## Critical Context
-- Hasil deploy terakhir (commit `5ed1d9b`): `recorded_at` dari semua source (PWA, Android native, offline sync)
-- Migration `190_add_recorded_at_to_job_tracking.sql` sudah dijalankan di Supabase dashboard
-- `lib/utils/geoUtils.ts`: Haversine distance, formatDistance, formatSpeed — untuk GPS report
+- P0.3.2 GPS audit **DONE — ALL PASS** (report: `reports/phase_p0/P0_3_2_GPS_REGRESSION_REPORT.md`)
+- Migration 186 applied: `gps_status`, `device_health`, `last_device_health_ping_at` columns active on `job_orders`
+- Physical device test results: 272 rows total, 52 new since baseline, 7 batch uploads (offline queue evidence), 0 anomalies
+- Screen OFF: 587s gap explained by still-detection throttle (device stationary), service survived
+- `lib/utils/geoUtils.ts`: Haversine distance, formatDistance, formatSpeed — for GPS report
 - GPS Tracking Report (`gps-tracking/page.tsx`): distance/speed per stop, trip summary, Telemetry Playback tab
 - `190726.md` berisi PRD lengkap SBU Forwarding + Driver Coin plan
 - Infrastructure WA: `lib/twilio/clients.ts` + `app/api/whatsapp/webhook/route.ts`

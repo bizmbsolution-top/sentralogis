@@ -77,7 +77,7 @@ export default function ChatComposeModal({ onClose, onChatOpen, tenantId, userId
       .maybeSingle();
 
     if (data) {
-      onChatOpen(data.id);
+      onChatOpen((data as any).id);
     }
   };
 
@@ -92,7 +92,7 @@ export default function ChatComposeModal({ onClose, onChatOpen, tenantId, userId
   const handleCreateGroup = async () => {
     if (!groupName.trim() || selectedMembers.length === 0) return;
     setLoading(true);
-    const members = [userId, ...selectedMembers.filter(id => id !== userId)];
+    const members = [userId || '', ...selectedMembers.filter(id => id !== userId)].filter(Boolean);
     const channel = await createGroup(groupName.trim(), groupDesc.trim(), members);
     setLoading(false);
     if (channel) onChatOpen(channel.id);

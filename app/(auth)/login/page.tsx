@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, LogIn, ShieldCheck } from 'lucide-react';
@@ -278,10 +279,10 @@ export default function LoginPage() {
       
       {/* Exit Button */}
       <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50 pt-safe-area-top">
-        <a href="/" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full backdrop-blur-md border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)] active:scale-95">
+        <Link href="/" className="flex items-center gap-2 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full backdrop-blur-md border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)] active:scale-95">
           <ArrowRight className="w-4 h-4 rotate-180 text-cyan-400" />
           <span className="text-xs font-bold uppercase tracking-wider">Kembali ke Portal Hub</span>
-        </a>
+        </Link>
       </div>
 
       {/* Language Selector */}

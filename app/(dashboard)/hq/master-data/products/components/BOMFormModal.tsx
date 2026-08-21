@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -94,7 +94,7 @@ export default function BOMFormModal({ editId, onClose, onSuccess }: BOMFormModa
       const { data: bom, error: bomErr } = await supabase
         .from('md_bill_of_materials')
         .select('*')
-        .eq('id', editId)
+        .eq('id', editId as string)
         .single();
       if (bomErr) throw bomErr;
 
@@ -113,7 +113,7 @@ export default function BOMFormModal({ editId, onClose, onSuccess }: BOMFormModa
       const { data: items, error: itemsErr } = await supabase
         .from('md_bom_items')
         .select('*')
-        .eq('bom_id', editId);
+        .eq('bom_id', editId as string);
       if (itemsErr) throw itemsErr;
 
       if (items && items.length > 0) {
@@ -185,14 +185,14 @@ export default function BOMFormModal({ editId, onClose, onSuccess }: BOMFormModa
         const { error: updErr } = await supabase
           .from('md_bill_of_materials')
           .update(bomPayload)
-          .eq('id', editId);
+          .eq('id', editId as string);
         if (updErr) throw updErr;
 
         // Delete old items
         const { error: delErr } = await supabase
           .from('md_bom_items')
           .delete()
-          .eq('bom_id', editId);
+          .eq('bom_id', editId as string);
         if (delErr) throw delErr;
       } else {
         const { data: newBom, error: insErr } = await supabase
@@ -216,7 +216,7 @@ export default function BOMFormModal({ editId, onClose, onSuccess }: BOMFormModa
 
       const { error: itemsErr } = await supabase
         .from('md_bom_items')
-        .insert(itemsPayload);
+        .insert(itemsPayload as any);
       if (itemsErr) throw itemsErr;
 
       toast.success(editId ? 'BOM updated successfully' : 'BOM created successfully');

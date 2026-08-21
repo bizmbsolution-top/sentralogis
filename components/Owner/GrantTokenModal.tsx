@@ -36,13 +36,15 @@ export default function GrantTokenModal({ isOpen, tenant, onClose, onSuccess }: 
 
       if (error) throw error;
 
-      if (data?.success) {
-        toast.success(data.message || 'Berhasil grant token!');
+      const result = data as { success?: boolean; message?: string } | null;
+
+      if (result?.success) {
+        toast.success(result.message || 'Berhasil grant token!');
         onSuccess();
         onClose();
         setAmount('');
       } else {
-        toast.error(data?.message || 'Gagal grant token');
+        toast.error(result?.message || 'Gagal grant token');
       }
     } catch (err: any) {
       console.error('Grant error:', err);

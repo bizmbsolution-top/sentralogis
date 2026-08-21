@@ -48,8 +48,8 @@ export default function OutboundDetailModal({ shipmentId, onClose }: OutboundDet
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: shipData, error: shipError } = await supabase
-        .from('wh_outbound_shipments')
+      const { data: rawShipData, error: shipError } = await (supabase
+        .from('wh_outbound_shipments' as any) as any)
         .select(`
           *,
           transporter:transporter_id(name),
@@ -65,6 +65,7 @@ export default function OutboundDetailModal({ shipmentId, onClose }: OutboundDet
         .single();
       
       if (shipError) throw shipError;
+      const shipData: any = rawShipData;
 
       // [AI] Map customer
       if (shipData.customer_id) {
@@ -111,8 +112,8 @@ export default function OutboundDetailModal({ shipmentId, onClose }: OutboundDet
       }
 
       if (['CHECKING', 'READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(shipData.status)) {
-        const { data: damageData } = await supabase
-          .from('wh_outbound_damage_records')
+        const { data: damageData } = await (supabase
+          .from('wh_outbound_damage_records' as any) as any)
           .select('*')
           .eq('shipment_id', shipmentId);
         setDamageRecords(damageData || []);

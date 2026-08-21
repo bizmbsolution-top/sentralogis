@@ -65,7 +65,7 @@ function buildRoutePayloads(joId: string, itemData: WoItemContext) {
   const estDistanceKm = itemData.est_distance_km ?? null;
   const estDuration = itemData.est_duration ?? null;
 
-  return stops.map((stop: Record<string, unknown>, sIdx: number) => ({
+  return (stops as any[]).map((stop: any, sIdx: number) => ({
     job_order_id: joId,
     sequence: sIdx + 1,
     stop_type: (stop.stop_type as string) || (sIdx === 0 ? 'PICKUP' : 'DROPOFF'),

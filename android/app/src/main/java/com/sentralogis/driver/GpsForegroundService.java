@@ -20,9 +20,11 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.util.Log;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Network;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -52,8 +54,10 @@ public class GpsForegroundService extends Service  {
     public static final String ACTION_START = "ACTION_START";
     public static final String ACTION_STOP = "ACTION_STOP";
     public static final String ACTION_HEARTBEAT = "ACTION_HEARTBEAT";
+    public static final String ACTION_UPDATE_TOKEN = "ACTION_UPDATE_TOKEN";
     public static final String EXTRA_JOB_ID = "EXTRA_JOB_ID";
     public static final String EXTRA_API_URL = "EXTRA_API_URL";
+    public static final String EXTRA_GPS_SESSION_TOKEN = "EXTRA_GPS_SESSION_TOKEN";
 
     private static final long HEARTBEAT_INTERVAL_MS = 60_000;    // 1 menit
     private static final long MOTION_TIMEOUT_MS = 120_000;        // 2 menit
@@ -64,6 +68,35 @@ public class GpsForegroundService extends Service  {
     private LocationCallback locationCallback;
     private String currentJobId = "";
     private String currentApiUrl = "";
+    private String gpsSessionToken = "";
+    private boolean isAuthValid = false;
+
+    private boolean isTokenExpired(String token) {
+        if (token == null || token.isEmpty()) {
+            Log.d("SentraLogisGPS", "[GPS_AUTH] token_present=false auth_state=MISSING");
+            return true;
+        }
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) {
+                Log.d("SentraLogisGPS", "[GPS_AUTH] token_present=true auth_state=INVALID_FORMAT");
+                return true;
+            }
+            String payload = new String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE), "UTF-8");
+            org.json.JSONObject json = new org.json.JSONObject(payload);
+            long exp = json.optLong("exp", 0);
+            long iat = json.optLong("iat", 0);
+            long now = System.currentTimeMillis() / 1000;
+            long tokenAge = now - iat;
+            long remaining = exp - now;
+            boolean expired = remaining < 30; // 30 seconds margin
+            Log.d("SentraLogisGPS", "[GPS_AUTH] token_present=true token_expiry=" + exp + " token_age=" + tokenAge + "s remaining=" + remaining + "s auth_state=" + (expired ? "EXPIRED" : "VALID"));
+            return expired;
+        } catch (Exception e) {
+            Log.d("SentraLogisGPS", "[GPS_AUTH] token_present=true auth_state=PARSE_ERROR");
+            return true;
+        }
+    }
 
     private OfflineGpsDbHelper dbHelper;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -73,7 +106,37 @@ public class GpsForegroundService extends Service  {
     private static final String PREF_JOB_ID = "jobId";
     private static final String PREF_API_URL = "apiUrl";
     private static final String PREF_TRACKING_ACTIVE = "trackingActive";
+    private static final String PREF_GPS_SESSION_TOKEN = "gpsSessionToken";
     private PowerManager.WakeLock wakeLock;
+
+    /**
+     * Acquire a partial wake lock to keep CPU running while tracking.
+     * Guarded against null and double‑acquire.
+     */
+    private void acquireWakeLock() {
+        if (wakeLock == null) {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SentraLogis:GpsWakeLock");
+            }
+        }
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            wakeLock.acquire();
+            Log.d("SentraLogisGPS", "[WAKELOCK] acquired");
+        }
+    }
+
+    /**
+     * Release the wake lock if held. Guarded against null and double‑release.
+     */
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+            Log.d("SentraLogisGPS", "[WAKELOCK] released");
+        }
+        wakeLock = null;
+    }
+
 
     // Screen state & motion
     
@@ -86,6 +149,7 @@ public class GpsForegroundService extends Service  {
     
     // Static listener for Capacitor bridging
     public static LocationUpdateListener listener;
+    private ConnectivityManager.NetworkCallback networkCallback;
 
     public interface LocationUpdateListener {
         void onLocationUpdate(JSONObject locationData);
@@ -98,6 +162,22 @@ public class GpsForegroundService extends Service  {
         android.util.Log.d("SentraLogisGPS", "[GPS-JAVA-TRACE] Service onCreate");
         dbHelper = new OfflineGpsDbHelper(this);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            networkCallback = new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(Network network) {
+                    Log.d("SentraLogisGPS", "[GPS_NETWORK] Network restored, triggering immediate offline sync");
+                    syncOfflineRecords();
+                }
+            };
+            try {
+                cm.registerDefaultNetworkCallback(networkCallback);
+            } catch (Exception e) {
+                Log.w("SentraLogisGPS", "Failed to register network callback", e);
+            }
+        }
 
         locationCallback = new LocationCallback() {
             @Override
@@ -115,7 +195,15 @@ public class GpsForegroundService extends Service  {
     public void onDestroy() {
         super.onDestroy();
         
-                cancelHeartbeat();
+        if (networkCallback != null) {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                try { cm.unregisterNetworkCallback(networkCallback); } catch (Exception ignored) {}
+            }
+        }
+
+        cancelHeartbeat();
+        releaseWakeLock();
         executorService.shutdown();
         offlineSyncExecutor.shutdown();
     }
@@ -176,6 +264,10 @@ public class GpsForegroundService extends Service  {
                         location.getAccuracy(), location.getSpeed(), battery, location.getTime());
                 Log.d("SentraLogisGPS", "[QUEUE-FIRST] Queued GPS ping: " + clientPingId);
                 lastPingTime = System.currentTimeMillis();
+
+                if (isNetworkConnected()) {
+                    syncOfflineRecords();
+                }
             } catch (Exception e) {
                 Log.e("SentraLogisGPS", "Error queuing GPS ping", e);
             }
@@ -183,99 +275,104 @@ public class GpsForegroundService extends Service  {
     }
 
     private void syncOfflineRecords() {
+        if (!isAuthValid) {
+            Log.d("SentraLogisGPS", "[GPS_AUTH] sync paused awaiting fresh token");
+            return;
+        }
         offlineSyncExecutor.execute(() -> {
-            try {
-                // Cleanup synced records
-                dbHelper.deleteSyncedLocations();
+            int maxBatches = 50;
+            int batchIteration = 0;
+            while (isAuthValid && isNetworkConnected() && batchIteration < maxBatches) {
+                batchIteration++;
+                try {
+                    // Cleanup synced records
+                    dbHelper.deleteSyncedLocations();
 
-                List<OfflineGpsDbHelper.OfflineLocation> pendingList = dbHelper.getPendingLocations(50);
-                if (pendingList.isEmpty()) return;
-                
-                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] queue_count: " + dbHelper.getTotalLocationsCount() + ", batch_size: " + pendingList.size());
-                Log.d("SentraLogisGPS", "[SYNC_ENGINE] Batch started. " + pendingList.size() + " PENDING records.");
-                
-                List<String> pingIds = new java.util.ArrayList<>();
-                JSONArray pingsArray = new JSONArray();
-                for (OfflineGpsDbHelper.OfflineLocation loc : pendingList) {
-                    pingIds.add(loc.clientPingId);
-                    JSONObject offPayload = new JSONObject();
-                    offPayload.put("client_ping_id", loc.clientPingId);
-                    offPayload.put("latitude", loc.lat);
-                    offPayload.put("longitude", loc.lng);
-                    offPayload.put("recorded_at", Instant.ofEpochMilli(loc.timestamp).toString());
-                    offPayload.put("source", "native_android_batch");
-                    offPayload.put("battery", loc.battery);
-                    offPayload.put("speed", loc.speed);
-                    offPayload.put("accuracy", loc.accuracy);
-                    pingsArray.put(offPayload);
-                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] canonical_ping_id: " + loc.clientPingId + ", job_order_id: " + currentJobId + ", recorded_at: " + offPayload.optString("recorded_at"));
-                }
-                
-                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] pending_ping_ids: " + TextUtils.join(", ", pingIds));
-
-                dbHelper.updateStatus(pingIds, "SYNCING");
-
-                JSONObject batchPayload = new JSONObject();
-                batchPayload.put("action", "gps_ping_batch");
-                batchPayload.put("job_order_id", currentJobId);
-                batchPayload.put("pings", pingsArray);
-                batchPayload.put("internet_connected", isNetworkConnected());
-                batchPayload.put("background_running", true);
-
-                Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] request_start: PATCH /api/jo/" + currentJobId + ", method: PATCH, batch_count: " + pingsArray.length());
-                String response = performHttpRequestWithResponse(batchPayload.toString());
-                if (response != null) {
-                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] response_ok: true, response_body_summary: " + response.substring(0, Math.min(response.length(), 200)));
-                    JSONObject respJson = new JSONObject(response);
-                    if (respJson.optBoolean("success", false)) {
-                        // [FORENSIC FIX] Strictly follow ACK Trust Model
-                        JSONObject ackObj = respJson.optJSONObject("ack");
-                        List<String> ackedIds = new java.util.ArrayList<>();
-                        
-                        if (ackObj != null) {
-                            JSONArray acceptedArr = ackObj.optJSONArray("accepted");
-                            if (acceptedArr != null) {
-                                for (int i = 0; i < acceptedArr.length(); i++) ackedIds.add(acceptedArr.getString(i));
-                            }
-                            JSONArray duplicatesArr = ackObj.optJSONArray("duplicates");
-                            if (duplicatesArr != null) {
-                                for (int i = 0; i < duplicatesArr.length(); i++) ackedIds.add(duplicatesArr.getString(i));
-                            }
-                        }
-
-                        if (!ackedIds.isEmpty()) {
-                            dbHelper.updateStatus(ackedIds, "SYNCED");
-                            
-                            // FORENSIC LOG: Filter queue verification
-                            List<OfflineGpsDbHelper.OfflineLocation> remaining = dbHelper.getPendingLocations(50);
-                            StringBuilder remainingIds = new StringBuilder();
-                            for(int i=0; i<remaining.size(); i++) {
-                                remainingIds.append(remaining.get(i).clientPingId);
-                                if(i<remaining.size()-1) remainingIds.append(",");
-                            }
-                            Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] FILTER_QUEUE queue_storage_source=sqlite mark_synced=" + ackedIds.size() + " remain_pending=" + remaining.size() + " remaining_ids=[" + remainingIds.toString() + "]");
-                            
-                            Log.d("SentraLogisGPS", "[SYNC_ENGINE] Partial/Full ACK Received. Marked " + ackedIds.size() + " as SYNCED.");
-                        } else {
-                            Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] FILTER_QUEUE queue_storage_source=sqlite mark_synced=0 remain_pending=all");
-                        }
-                        
-                        Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] accepted_count: " + (ackObj != null && ackObj.optJSONArray("accepted") != null ? ackObj.optJSONArray("accepted").length() : 0) + ", duplicate_count: " + (ackObj != null && ackObj.optJSONArray("duplicates") != null ? ackObj.optJSONArray("duplicates").length() : 0) + ", failed_count: " + (ackObj != null && ackObj.optJSONArray("failed") != null ? ackObj.optJSONArray("failed").length() : 0));
-                        // Revert any syncing records that were NOT explicitly ACKED back to PENDING
-                        dbHelper.resetSyncingToPending();
-                    } else {
-                        Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] mark_synced: 0, remain_pending: all");
-                        Log.d("SentraLogisGPS", "[SYNC_ENGINE] Server Error (success=false). Reverting to PENDING.");
-                        dbHelper.resetSyncingToPending();
+                    List<OfflineGpsDbHelper.OfflineLocation> pendingList = dbHelper.getPendingLocations(50);
+                    if (pendingList.isEmpty()) {
+                        break;
                     }
-                } else {
-                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] response_ok: false, mark_synced: 0, remain_pending: all");
-                    Log.d("SentraLogisGPS", "[SYNC_ENGINE] Network timeout or empty response. Reverting to PENDING.");
+                    
+                    Log.d("SentraLogisGPS", "[GPS_SYNC_FORENSIC] queue_count: " + dbHelper.getTotalLocationsCount() + ", batch_size: " + pendingList.size());
+                    Log.d("SentraLogisGPS", "[SYNC_ENGINE] Batch started. " + pendingList.size() + " PENDING records (iteration " + batchIteration + ").");
+                    
+                    List<String> pingIds = new java.util.ArrayList<>();
+                    JSONArray pingsArray = new JSONArray();
+                    for (OfflineGpsDbHelper.OfflineLocation loc : pendingList) {
+                        pingIds.add(loc.clientPingId);
+                        JSONObject offPayload = new JSONObject();
+                        offPayload.put("client_ping_id", loc.clientPingId);
+                        offPayload.put("latitude", loc.lat);
+                        offPayload.put("longitude", loc.lng);
+                        offPayload.put("recorded_at", Instant.ofEpochMilli(loc.timestamp).toString());
+                        offPayload.put("source", "native_android_batch");
+                        offPayload.put("battery", loc.battery);
+                        offPayload.put("speed", loc.speed);
+                        offPayload.put("accuracy", loc.accuracy);
+                        pingsArray.put(offPayload);
+                    }
+                    
+                    dbHelper.updateStatus(pingIds, "SYNCING");
+
+                    JSONObject batchPayload = new JSONObject();
+                    batchPayload.put("action", "gps_ping_batch");
+                    batchPayload.put("job_order_id", currentJobId);
+                    batchPayload.put("pings", pingsArray);
+                    batchPayload.put("internet_connected", isNetworkConnected());
+                    batchPayload.put("background_running", true);
+
+                    long requestStart = System.currentTimeMillis();
+                    int pendingBefore = dbHelper.getTotalLocationsCount();
+
+                    String response = performHttpRequestWithResponse(batchPayload.toString());
+                    long requestFinish = System.currentTimeMillis();
+                    long durationMs = requestFinish - requestStart;
+
+                    if (response != null) {
+                        JSONObject respJson = new JSONObject(response);
+                        if (respJson.optBoolean("success", false)) {
+                            JSONObject ackObj = respJson.optJSONObject("ack");
+                            List<String> ackedIds = new java.util.ArrayList<>();
+                            
+                            if (ackObj != null) {
+                                JSONArray acceptedArr = ackObj.optJSONArray("accepted");
+                                if (acceptedArr != null) {
+                                    for (int i = 0; i < acceptedArr.length(); i++) ackedIds.add(acceptedArr.getString(i));
+                                }
+                                JSONArray duplicatesArr = ackObj.optJSONArray("duplicates");
+                                if (duplicatesArr != null) {
+                                    for (int i = 0; i < duplicatesArr.length(); i++) ackedIds.add(duplicatesArr.getString(i));
+                                }
+                            }
+
+                            if (!ackedIds.isEmpty()) {
+                                dbHelper.updateStatus(ackedIds, "SYNCED");
+                                dbHelper.deleteSyncedLocations();
+                            }
+                            
+                            int pendingAfter = dbHelper.getTotalLocationsCount();
+                            Log.d("SentraLogisGPS", "[GPS_SYNC] batch_count=" + pingsArray.length() + " pending_before=" + pendingBefore + " pending_after=" + pendingAfter + " duration_ms=" + durationMs);
+
+                            // Revert any syncing records that were NOT explicitly ACKED back to PENDING
+                            dbHelper.resetSyncingToPending();
+                            
+                            // If this batch had fewer than 50, we're done
+                            if (pendingList.size() < 50) {
+                                break;
+                            }
+                        } else {
+                            dbHelper.resetSyncingToPending();
+                            break;
+                        }
+                    } else {
+                        dbHelper.resetSyncingToPending();
+                        break;
+                    }
+                } catch (Exception e) {
+                    Log.e("SentraLogisGPS", "Error in syncOfflineRecords", e);
                     dbHelper.resetSyncingToPending();
+                    break;
                 }
-            } catch (Exception e) {
-                Log.e("SentraLogisGPS", "Error in syncOfflineRecords", e);
-                dbHelper.resetSyncingToPending();
             }
         });
     }
@@ -289,6 +386,9 @@ public class GpsForegroundService extends Service  {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
             conn.setRequestProperty("Content-Type", "application/json");
+            if (gpsSessionToken != null && !gpsSessionToken.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + gpsSessionToken);
+            }
             conn.setDoOutput(true);
             conn.setConnectTimeout(15000); // 15s to match vercel
             conn.setReadTimeout(15000);
@@ -331,16 +431,24 @@ public class GpsForegroundService extends Service  {
                 if (currentJobId == null) currentJobId = "Active Job";
                 currentApiUrl = intent.getStringExtra(EXTRA_API_URL);
                 if (currentApiUrl == null) currentApiUrl = "https://www.sentralogis.com";
+                String tokenExtra = intent.getStringExtra(EXTRA_GPS_SESSION_TOKEN);
+                if (tokenExtra != null) {
+                    gpsSessionToken = tokenExtra;
+                    isAuthValid = !isTokenExpired(gpsSessionToken);
+                }
 
                 // Persist state
                 prefs.edit()
                     .putString(PREF_JOB_ID, currentJobId)
                     .putString(PREF_API_URL, currentApiUrl)
+                    .putString(PREF_GPS_SESSION_TOKEN, gpsSessionToken)
                     .putBoolean(PREF_TRACKING_ACTIVE, true)
                     .apply();
 
                 createNotificationChannel();
                 startForegroundNotification();
+                // Acquire partial wake lock for CPU while tracking
+                acquireWakeLock();
                 
                 // App startup recovery
                 executorService.execute(() -> {
@@ -354,13 +462,34 @@ public class GpsForegroundService extends Service  {
 
             } else if (ACTION_STOP.equals(action)) {
                 Log.d("SentraLogisGPS", "SERVICE_STOPPED");
-                prefs.edit().putBoolean(PREF_TRACKING_ACTIVE, false).apply();
+                gpsSessionToken = "";
+                isAuthValid = false;
+                prefs.edit()
+                    .remove(PREF_GPS_SESSION_TOKEN)
+                    .putBoolean(PREF_TRACKING_ACTIVE, false)
+                    .apply();
                 cancelHeartbeat();
                 stopLocationUpdates();
                 stopForeground(true);
+                releaseWakeLock();
                 stopSelf();
 
+            } else if (ACTION_UPDATE_TOKEN.equals(action)) {
+                String tokenExtra = intent.getStringExtra(EXTRA_GPS_SESSION_TOKEN);
+                if (tokenExtra != null) {
+                    gpsSessionToken = tokenExtra;
+                    isAuthValid = !isTokenExpired(gpsSessionToken);
+                    prefs.edit().putString(PREF_GPS_SESSION_TOKEN, gpsSessionToken).apply();
+                    Log.d("SentraLogisGPS", "[GPS_AUTH] fresh token received, authValid=" + isAuthValid);
+                    if (isAuthValid) {
+                        Log.d("SentraLogisGPS", "[GPS_AUTH] sync resumed");
+                        syncOfflineRecords();
+                    }
+                }
             } else if (ACTION_HEARTBEAT.equals(action)) {
+                if (isTokenExpired(gpsSessionToken)) {
+                    isAuthValid = false;
+                }
                 syncOfflineRecords();
                 scheduleHeartbeat();
             }
@@ -370,6 +499,13 @@ public class GpsForegroundService extends Service  {
             if (trackingActive) {
                 currentJobId = prefs.getString(PREF_JOB_ID, "Active Job");
                 currentApiUrl = prefs.getString(PREF_API_URL, "https://www.sentralogis.com");
+                gpsSessionToken = prefs.getString(PREF_GPS_SESSION_TOKEN, "");
+                isAuthValid = !isTokenExpired(gpsSessionToken);
+                
+                if (!isAuthValid) {
+                    Log.d("SentraLogisGPS", "[GPS_AUTH] token near expiry / refresh required on restart");
+                }
+                
                 Log.d("SentraLogisGPS", "SERVICE_RESTARTED (Null Intent), STATE_RECOVERED: jobId=" + currentJobId);
                 
                 createNotificationChannel();

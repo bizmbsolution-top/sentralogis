@@ -36,7 +36,7 @@ export default function TenantLocationsPage() {
       .select('*')
       .eq('tenant_id', profile.tenant_id)
       .order('name', { ascending: true });
-    setLocations(data || []);
+    setLocations((data as any[]) || []);
     setLoading(false);
   }, [profile?.tenant_id]);
 

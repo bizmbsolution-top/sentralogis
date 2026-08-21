@@ -102,7 +102,7 @@ export default function LocationsFormModal({ isOpen, onClose, onSuccess, initial
             <label className="form-label">Search Address (Google Maps)</label>
             <GoogleMapsInput
               value={formData.address}
-              onChange={(data) => {
+              onChange={(data: any) => {
                 setFormData({
                   ...formData,
                   address: data.address,

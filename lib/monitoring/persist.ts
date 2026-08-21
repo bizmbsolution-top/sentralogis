@@ -29,7 +29,7 @@ export async function persistCheck(
     return;
   }
   try {
-    await client.from('monitoring_checks').insert({
+    await (client.from('monitoring_checks' as any) as any).insert({
       check_type: checkType,
       status,
       module: module || null,

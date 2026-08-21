@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (eventErr) throw eventErr;
 
-    const statusUpdate: Record<string, string> = {
+    const statusUpdate: Record<string, string | null> = {
       GATE_IN_DEPOT: "TIBA DI LOKASI MUAT",
       GATE_OUT_DEPOT: "BERANGKAT DARI LOKASI MUAT",
       GATE_IN_FACTORY: "TIBA DI LOKASI TRANSIT",

@@ -56,7 +56,7 @@ export default function TenantTruckingRegionsPage() {
     if (error) {
       toast.error('Gagal mengambil data wilayah');
     } else {
-      setRegions(data || []);
+      setRegions((data as any[]) || []);
     }
     setLoading(false);
   }, [profile?.tenant_id]);
@@ -114,8 +114,8 @@ export default function TenantTruckingRegionsPage() {
       } else {
         const { error } = await supabase
           .from('md_trucking_regions')
-          .insert({
-            tenant_id: profile?.tenant_id,
+.insert({
+ tenant_id: profile?.tenant_id as string,
             name: formData.name,
             level: formData.level,
             parent_id: formData.parent_id || null,

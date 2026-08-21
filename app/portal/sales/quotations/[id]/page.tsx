@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -120,11 +120,12 @@ export default function MobileQuotationBuilder({ params }: { params: Promise<{ i
   async function fetchQuotation() {
     setLoading(true);
     try {
-      const { data: quoteData } = await supabase
-        .from('crm_quotations')
+      const { data: rawQuoteData } = await (supabase
+        .from('crm_quotations' as any) as any)
         .select(`*, crm_deals(title, entity_id, md_entities(name, billing_address))`)
         .eq('id', id)
         .single();
+      const quoteData = rawQuoteData as any;
       
       if (quoteData) {
         setQuote(quoteData);
@@ -132,27 +133,27 @@ export default function MobileQuotationBuilder({ params }: { params: Promise<{ i
         setValidityDays(quoteData.validity_days || 30);
         
         // Fetch Sections
-        const { data: sectionsData } = await supabase
-          .from('crm_quotation_sections')
+        const { data: sectionsData } = await (supabase
+          .from('crm_quotation_sections' as any) as any)
           .select('*')
           .eq('quotation_id', id)
           .order('sbu_type', { ascending: true });
           
-        const currentSections = sectionsData || [];
+        const currentSections = (sectionsData as any[]) || [];
         setSections(currentSections);
 
         // Fetch Items
-        const { data: itemsData } = await supabase
-          .from('crm_quotation_items')
+        const { data: itemsData } = await (supabase
+          .from('crm_quotation_items' as any) as any)
           .select('*')
           .eq('quotation_id', id)
           .order('created_at', { ascending: true });
           
-        const currentItems = itemsData || [];
+        const currentItems = (itemsData as any[]) || [];
         setItems(currentItems);
 
         // Determine active tab if not set or not valid
-        const activeSbus = currentSections.map(s => s.sbu_type);
+        const activeSbus = currentSections.map((s: any) => s.sbu_type);
         if (currentSections.length > 0) {
           if (!activeTab || !activeSbus.includes(activeTab)) {
             setActiveTab(currentSections[0].sbu_type);
@@ -370,7 +371,7 @@ export default function MobileQuotationBuilder({ params }: { params: Promise<{ i
 
     try {
       const itemPayload: any = {
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         quotation_id: id,
         section_id: activeSec.id,
         service_id: newItem.service_id || null,
@@ -565,13 +566,13 @@ export default function MobileQuotationBuilder({ params }: { params: Promise<{ i
 
   const handleApproveSection = async (sectionId: string, approve: boolean, reason?: string) => {
     try {
-      const { error } = await supabase
-        .from('crm_quotation_sections')
+      const { error } = await (supabase
+        .from('crm_quotation_sections' as any) as any)
         .update({
           approval_status: approve ? 'APPROVED' : 'REJECTED',
-          approved_by: approve ? user?.id : null,
-          approved_at: approve ? new Date().toISOString() : null,
-          rejection_reason: approve ? null : reason
+          approved_by: approve ? user?.id : undefined,
+          approved_at: approve ? new Date().toISOString() : undefined,
+          rejection_reason: approve ? undefined : reason
         })
         .eq('id', sectionId);
 
@@ -597,14 +598,14 @@ export default function MobileQuotationBuilder({ params }: { params: Promise<{ i
       // Reset any rejected sections to PENDING
       const rejectedSections = sections.filter(s => s.approval_status === 'REJECTED');
       for (const sec of rejectedSections) {
-        await supabase
-          .from('crm_quotation_sections')
-          .update({ approval_status: 'PENDING', rejection_reason: null })
+        await (supabase
+          .from('crm_quotation_sections' as any) as any)
+          .update({ approval_status: 'PENDING', rejection_reason: undefined })
           .eq('id', sec.id);
       }
       
-      const { error } = await supabase
-        .from('crm_quotations')
+      const { error } = await (supabase
+        .from('crm_quotations' as any) as any)
         .update({ status: 'WAITING_APPROVAL' })
         .eq('id', id);
         

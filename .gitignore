@@ -72,3 +72,21 @@ build-output*.txt
 lint_output.txt
 err.txt
 dev.log
+
+# Session temp artifacts
+tmp_*.mjs
+tmp_*.js
+audit_*_report.txt
+audit_report.txt
+update_*.js
+inject.js
+create_index.js
+create_index_report.txt
+dev-output.txt
+*_tbody.txt
+p032_verify.js
+remove_conflict.js
+scratch_*.js
+scratch/
+audit.js
+reports/phase_p0/*.txt

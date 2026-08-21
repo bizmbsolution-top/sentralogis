@@ -19,6 +19,8 @@ export interface RawScannerMetrics {
   complexModulesCount: number;
 }
 
+export type CodeMetrics = RawScannerMetrics;
+
 export class CodeScanner {
   private metrics: RawScannerMetrics = {
     totalFiles: 0,

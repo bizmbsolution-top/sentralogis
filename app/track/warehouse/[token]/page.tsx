@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { use } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Truck, Package, PackageCheck, AlertTriangle, ArrowLeft, ShieldCheck, Box, Clock, LayoutGrid } from 'lucide-react';
+import { Truck, Package, PackageCheck, AlertTriangle, ArrowLeft, ShieldCheck, Box, Clock, LayoutGrid, MapPin } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 
 export default function WarehouseTrackingPage({ params }: { params: Promise<{ token: string }> }) {

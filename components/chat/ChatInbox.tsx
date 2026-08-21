@@ -131,7 +131,7 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
             transporter: transporter,
             orderDate: wo?.order_date || "TBA",
             executionDate: wo?.execution_date || "TBA",
-            quantity: jo.wo_item?.item_data?.unit_count ? `${jo.wo_item.item_data.unit_count} Units` : "1 Unit"
+            quantity: (jo.wo_item?.item_data as any)?.unit_count ? `${(jo.wo_item.item_data as any).unit_count} Units` : "1 Unit"
           });
         }
       }
@@ -636,7 +636,7 @@ export default function ChatInbox({ userId, tenantId, isOpen, onClose }: ChatInb
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900 text-sm font-semibold truncate">
                       {activeChannel.channel_type === 'direct'
-                        ? activeChannel.participants?.find((p: any) => p.user_id !== userId)?.full_name || activeChannel.title || 'Chat'
+                        ? (activeChannel.participants?.find((p: any) => p.user_id !== userId)?.profile?.full_name || (activeChannel.participants?.find((p: any) => p.user_id !== userId) as any)?.full_name || activeChannel.title || 'Chat')
                         : activeChannel.title || activeChannel.group_name || 'Chat'}
                     </p>
                     <p className="text-gray-500 text-xs">

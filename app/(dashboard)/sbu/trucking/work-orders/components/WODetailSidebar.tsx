@@ -56,9 +56,9 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
     setLoading(true);
     
     try {
-      // 1. Fetch WO Header
-      const { data: woData, error: woError } = await supabase
-        .from('work_orders')
+      // 1. Fetch WO + Customer
+      const { data: woData, error: woError } = await (supabase
+        .from('work_orders' as any) as any)
         .select(`
           *,
           customer:md_entities!customer_id(name, legal_name)
@@ -67,33 +67,33 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
         .single();
 
       if (woError) throw woError;
-      setWo(woData);
+      setWo(woData as any);
 
       // 2. Fetch WO Items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('wo_items')
+      const { data: itemsData, error: itemsError } = await (supabase
+        .from('wo_items' as any) as any)
         .select('*')
         .eq('wo_id', woId)
         .eq('sbu_type', 'TRUCKING');
 
       if (itemsError) throw itemsError;
-      const baseItems = itemsData || [];
+      const baseItems = (itemsData as any[]) || [];
 
       // 3. Fetch all Job Orders
-      const itemIds = baseItems.map(i => i.id);
+      const itemIds = baseItems.map((i: any) => i.id);
       if (itemIds.length > 0) {
-        const { data: joData, error: joError } = await supabase
-          .from('job_orders')
+        const { data: joData, error: joError } = await (supabase
+          .from('job_orders' as any) as any)
           .select('*')
           .in('wo_item_id', itemIds);
 
         if (joError) throw joError;
-        const baseJOs = joData || [];
+        const baseJOs = (joData as any[]) || [];
 
         // 4. Manual Fetch Relations
-        const transporterIds = [...new Set(baseJOs.map(j => j.transporter_id).filter(Boolean))];
-        const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
-        const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))];
+        const transporterIds = [...new Set(baseJOs.map((j: any) => j.transporter_id).filter(Boolean))] as string[];
+        const fleetIds = [...new Set(baseJOs.map((j: any) => j.fleet_id).filter(Boolean))] as string[];
+        const driverIds = [...new Set(baseJOs.map((j: any) => j.driver_id).filter(Boolean))] as string[];
 
         const [transporters, fleets, drivers] = await Promise.all([
           transporterIds.length > 0 ? supabase.from('md_entities').select('id, name').in('id', transporterIds) : { data: [] },
@@ -101,20 +101,20 @@ export default function WODetailSidebar({ woId, onClose }: WODetailSidebarProps)
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] }
         ]);
 
-        const enrichedJOs = baseJOs.map(jo => ({
+        const enrichedJOs = baseJOs.map((jo: any) => ({
           ...jo,
-          transporter: transporters.data?.find(t => t.id === jo.transporter_id),
-          md_fleets: fleets.data?.find(f => f.id === jo.fleet_id),
-          md_drivers: drivers.data?.find(d => d.id === jo.driver_id)
+          transporter: (transporters.data as any[])?.find((t: any) => t.id === jo.transporter_id),
+          md_fleets: (fleets.data as any[])?.find((f: any) => f.id === jo.fleet_id),
+          md_drivers: (drivers.data as any[])?.find((d: any) => d.id === jo.driver_id)
         }));
 
-        const itemsWithJOs = baseItems.map(item => ({
+        const itemsWithJOs = baseItems.map((item: any) => ({
           ...item,
-          job_orders: enrichedJOs.filter(jo => jo.wo_item_id === item.id)
+          job_orders: enrichedJOs.filter((jo: any) => jo.wo_item_id === item.id)
         }));
-        setItems(itemsWithJOs);
+        setItems((itemsWithJOs as any[]) || []);
       } else {
-        setItems(baseItems);
+        setItems((baseItems as any[]) || []);
       }
     } catch (error: any) {
       console.error('Error fetching WO details:', error);

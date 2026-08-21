@@ -37,7 +37,6 @@ const isDuplicateDriverPhoneError = (error: any) => {
   );
 };
 
-
 interface Driver {
   id: string;
   driver_code: string;
@@ -80,7 +79,7 @@ export default function DriversPage() {
     sim_number: '',
     sim_class: 'B1',
     sim_expiry: '',
-    status: 'available',
+    status: 'available' as 'available' | 'on_duty' | 'unavailable',
     is_active: true,
   });
 
@@ -97,8 +96,8 @@ export default function DriversPage() {
 
     try {
       // Fetch Drivers
-      const { data: driverData, error: driverError } = await supabase
-        .from('md_drivers')
+      const { data: driverData, error: driverError } = await (supabase
+        .from('md_drivers' as any) as any)
         .select('*, md_entities(name)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
@@ -114,8 +113,8 @@ export default function DriversPage() {
         .eq('vendor_type', 'TRANSPORTER')
         .eq('is_active', true);
 
-      setDrivers(driverData || []);
-      setVendors(vendorData || []);
+      setDrivers((driverData as any[]) || []);
+      setVendors((vendorData as any[]) || []);
     } catch (error: any) {
       toast.error('Gagal mengambil data master');
     } finally {

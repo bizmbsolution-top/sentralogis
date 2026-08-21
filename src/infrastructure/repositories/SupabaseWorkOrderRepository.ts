@@ -2,7 +2,7 @@ import { IWorkOrderRepository } from '../../domains/work-order/repositories/IWor
 import { WorkOrder, WorkOrderProps } from '../../domains/work-order/entities/WorkOrder';
 import { WorkOrderItem, WorkOrderItemProps } from '../../domains/work-order/entities/WorkOrderItem';
 import { createClient } from '../../../lib/supabase/server';
-import { Database } from '../../../lib/supabase/types';
+import { Database, Json } from '../../../lib/supabase/types';
 
 type WorkOrderRow = Database['public']['Tables']['wo_work_orders']['Row'];
 type WorkOrderItemRow = Database['public']['Tables']['wo_work_order_items']['Row'];
@@ -94,11 +94,10 @@ export class SupabaseWorkOrderRepository implements IWorkOrderRepository {
       approved_at: entity.props.approvedAt || undefined,
       target_date: entity.props.targetDate || undefined,
       completed_at: entity.props.completedAt || undefined,
-      metadata: entity.props.metadata || undefined,
+      metadata: (entity.props.metadata || undefined) as Json | undefined,
       created_at: entity.props.createdAt
     };
     
-    // @ts-expect-error Supabase SSR type inference bug for upsert
     await supabase.from('wo_work_orders').upsert(woInsert);
 
     if (entity.items.length > 0) {
@@ -119,10 +118,9 @@ export class SupabaseWorkOrderRepository implements IWorkOrderRepository {
         batch_number: i.props.batchNumber || undefined,
         expiry_date: i.props.expiryDate || undefined,
         unit_cost: i.props.unitCost || undefined,
-        metadata: i.props.metadata || undefined,
+        metadata: (i.props.metadata || undefined) as Json | undefined,
         created_at: i.props.createdAt
       }));
-      // @ts-expect-error Supabase SSR type inference bug for upsert
       await supabase.from('wo_work_order_items').upsert(itemsInsert);
     }
   }

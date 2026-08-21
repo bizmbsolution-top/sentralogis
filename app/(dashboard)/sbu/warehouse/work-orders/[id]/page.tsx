@@ -645,17 +645,17 @@ function AllocationEditorModal({
         if (!existingTransferShipment && actualWarehouseId) {
            const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
            
-           const { data: rawWoItem } = await supabase.from('wo_items').select('item_data').eq('id', jo.wo_item_id).single();
-           const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+           const { data: rawWoItem } = await (supabase.from('wo_items' as any) as any).select('item_data').eq('id', jo.wo_item_id).single();
+           const toWarehouseId = (rawWoItem as any)?.item_data?.to_warehouse_id || null;
 
-           const { data: newTransfer, error: trfErr } = await supabase.from('wh_transfer_orders').insert({
+           const { data: newTransfer, error: trfErr } = await (supabase.from('wh_transfer_orders' as any) as any).insert({
               tenant_id: profile?.tenant_id,
               from_warehouse_id: actualWarehouseId, 
               to_warehouse_id: toWarehouseId,
               transfer_number: transferNumber,
               status: 'CREATED',
               notes: `Transfer shipment for JO ${jo.jo_number}`,
-              created_by: profile?.id || null
+              created_by: profile?.id || undefined
            }).select('id').single();
 
            if (newTransfer && !trfErr) {
@@ -782,7 +782,7 @@ function AllocationEditorModal({
         
         for (const lot of (lots || [])) {
           if (remainingQty <= 0) break;
-          const pickQty = Math.min(remainingQty, lot.available_quantity);
+          const pickQty = Math.min(remainingQty, Number(lot.available_quantity) || 0);
           
           // Find the location code from props
           const loc = locations.find((l: any) => l.id === lot.location_id);
@@ -931,7 +931,7 @@ function AllocationEditorModal({
               </div>
             </div>
             <div className="grid gap-3">
-              {skuSummaries.map((summary) => (
+              {skuSummaries.map((summary: any) => (
                 <div
                   key={summary.id}
                   className="rounded-2xl bg-white border border-slate-200 p-4 grid gap-3 sm:grid-cols-[1fr_auto]"
@@ -1300,8 +1300,8 @@ function JOCard({
         }
 
         // We need to fetch the original to_warehouse_id from wo_items since the item_data processing might have deleted it
-        const { data: rawWoItem } = await supabase.from('wo_items').select('item_data').eq('id', jo.wo_item_id).single();
-        const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+        const { data: rawWoItem } = await (supabase.from('wo_items' as any) as any).select('item_data').eq('id', jo.wo_item_id).single();
+        const toWarehouseId = (rawWoItem as any)?.item_data?.to_warehouse_id || null;
 
         if (!toWarehouseId) {
           toast.error("Gudang tujuan belum ditentukan di WO ini. Silakan edit Manifest/Alokasi untuk menetapkan tujuan.");
@@ -1310,14 +1310,14 @@ function JOCard({
         }
 
         const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
-        const { data: newTransfer, error: trfErr } = await supabase.from('wh_transfer_orders').insert({
+        const { data: newTransfer, error: trfErr } = await (supabase.from('wh_transfer_orders' as any) as any).insert({
             tenant_id: profile?.tenant_id,
             from_warehouse_id: actualWarehouseId,
             to_warehouse_id: toWarehouseId,
             transfer_number: transferNumber,
             status: 'CREATED',
             notes: `Transfer shipment for JO ${jo.jo_number}`,
-            created_by: profile?.id || null
+            created_by: profile?.id || undefined
         }).select('id').single();
 
         if (trfErr) throw trfErr;
@@ -1421,16 +1421,18 @@ function JOCard({
         }
 
         const receiptNumber = jo.jo_number ? `RCV-${jo.jo_number}` : `RCV-S${Date.now()}`;
-        const { data: newReceipt, error: recErr } = await supabase.from('wh_inbound_receipts').insert({
-          tenant_id: profile?.tenant_id,
-          warehouse_id: actualWarehouseId,
-          wo_item_id: jo.wo_item_id,
-          receipt_number: receiptNumber,
-          status: 'EXPECTED',
-          expected_arrival: expectedArrival,
-          notes: `Inbound receipt for JO ${jo.jo_number}`,
-          created_by: profile?.id || null,
-        }).select('id').single();
+        const { data: newReceipt, error: recErr } = await (supabase
+          .from('wh_inbound_receipts' as any) as any)
+          .insert({
+            tenant_id: profile?.tenant_id,
+            warehouse_id: actualWarehouseId,
+            wo_item_id: jo.wo_item_id,
+            receipt_number: receiptNumber,
+            status: 'EXPECTED',
+            expected_arrival: expectedArrival || undefined,
+            notes: `Inbound receipt for JO ${jo.jo_number}`,
+            created_by: profile?.id || undefined,
+          }).select('id').single();
 
         if (recErr) throw recErr;
 
@@ -1442,7 +1444,7 @@ function JOCard({
             actual_good_qty: 0,
           }));
           if (itemsPayload.length > 0) {
-            const { error: itemErr } = await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+            const { error: itemErr } = await (supabase.from('wh_inbound_receipt_items' as any) as any).insert(itemsPayload);
             if (itemErr) throw itemErr;
           }
         }
@@ -1648,8 +1650,8 @@ export default function WarehouseExecutionPage() {
     try {
       setLoading(true);
 
-      const { data: itemData, error: itemErr } = await supabase
-        .from("wo_items")
+      const { data: rawItemData, error: itemErr } = await (supabase
+        .from("wo_items" as any) as any)
         .select(
           `
           *,
@@ -1664,13 +1666,18 @@ export default function WarehouseExecutionPage() {
         .single();
 
       if (itemErr) throw itemErr;
+      const itemData = rawItemData as any;
 
       if (itemData.item_data) {
          const resolved = { ...itemData.item_data };
          
          const fetchName = async (table: string, id: string) => {
             if (!id || id === 'null') return null;
-            const { data } = await supabase.from(table).select('name').eq('id', id).maybeSingle();
+            const { data } = await (supabase
+              .from(table as never) as any)
+              .select('name')
+              .eq('id', id)
+              .maybeSingle();
             return data ? data.name : null;
          };
 
@@ -1715,8 +1722,8 @@ export default function WarehouseExecutionPage() {
 
       setWoItemData(itemData);
 
-      const { data: joData, error: joErr } = await supabase
-        .from("job_orders")
+      const { data: rawJoData, error: joErr } = await (supabase
+        .from("job_orders" as any) as any)
         .select(
           `
           *,
@@ -1728,6 +1735,7 @@ export default function WarehouseExecutionPage() {
         .order("created_at", { ascending: true });
 
       if (joErr) throw joErr;
+      const joData = (rawJoData as any[]) || [];
 
       // --- AUTO HEAL: If no job order exists for this WO item ---
       if (joData && joData.length === 0) {
@@ -1746,7 +1754,7 @@ export default function WarehouseExecutionPage() {
           });
         }
         
-        const { error: createJoErr } = await supabase.from('job_orders').insert(newJos);
+        const { error: createJoErr } = await (supabase.from('job_orders' as any) as any).insert(newJos);
         if (!createJoErr) {
           return fetchData();
         }
@@ -1772,8 +1780,8 @@ export default function WarehouseExecutionPage() {
           const actualWhId = firstJo.warehouse_id || itemData.item_data?.warehouse_id || profile?.warehouse_id;
           if (actualWhId) {
             const receiptNumber = firstJo.jo_number ? `RCV-${firstJo.jo_number}` : `RCV-S${Date.now()}`;
-            const { data: newReceipt, error: recErr } = await supabase
-              .from('wh_inbound_receipts')
+            const { data: newReceipt, error: recErr } = await (supabase
+              .from('wh_inbound_receipts' as any) as any)
               .insert({
                 tenant_id: itemData.tenant_id,
                 warehouse_id: actualWhId,
@@ -1781,7 +1789,7 @@ export default function WarehouseExecutionPage() {
                 receipt_number: receiptNumber,
                 status: 'EXPECTED',
                 notes: `Auto-healed inbound receipt for JO ${firstJo.jo_number}`,
-                created_by: profile?.id || null,
+                created_by: profile?.id || undefined,
               })
               .select('id')
               .single();
@@ -1795,7 +1803,7 @@ export default function WarehouseExecutionPage() {
                 actual_good_qty: 0,
               }));
               if (itemsPayload.length > 0) {
-                await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+                await (supabase.from('wh_inbound_receipt_items' as any) as any).insert(itemsPayload);
               }
             }
           }
@@ -1974,12 +1982,12 @@ export default function WarehouseExecutionPage() {
 
             if (!existingTransfer) {
               // [AI] reading from wo_items to get to_warehouse_id
-              const { data: rawWoItem } = await supabase
-                .from('wo_items')
+              const { data: rawWoItem } = await (supabase
+                .from('wo_items' as any) as any)
                 .select('item_data')
                 .eq('id', jo.wo_item_id)
                 .single();
-              const toWarehouseId = rawWoItem?.item_data?.to_warehouse_id || null;
+              const toWarehouseId = (rawWoItem as any)?.item_data?.to_warehouse_id || null;
 
               if (!toWarehouseId) {
                  console.warn("Skipping auto-generate transfer for JO", jo.jo_number, "because to_warehouse_id is missing");
@@ -1987,8 +1995,8 @@ export default function WarehouseExecutionPage() {
               }
 
               const transferNumber = jo.jo_number || `TRF-S${Date.now()}`;
-              const { data: newTransfer, error: trfErr } = await supabase
-                .from('wh_transfer_orders')
+              const { data: newTransfer, error: trfErr } = await (supabase
+                .from('wh_transfer_orders' as any) as any)
                 .insert({
                   tenant_id: profile?.tenant_id,
                   from_warehouse_id: jo.assigned_warehouse_id,
@@ -1996,7 +2004,7 @@ export default function WarehouseExecutionPage() {
                   transfer_number: transferNumber,
                   status: 'CREATED',
                   notes: `Transfer shipment for JO ${jo.jo_number}`,
-                  created_by: profile?.id || null,
+                  created_by: profile?.id || undefined,
                 })
                 .select('id')
                 .single();
@@ -2007,8 +2015,8 @@ export default function WarehouseExecutionPage() {
                 // and inventory_id is not known. We only create wh_outbound_shipment_items.
 
                 // Create linking outbound shipment
-                const { data: newShipment } = await supabase
-                  .from('wh_outbound_shipments')
+                const { data: newShipment } = await (supabase
+                  .from('wh_outbound_shipments' as any) as any)
                   .insert({
                     tenant_id: profile?.tenant_id,
                     warehouse_id: jo.assigned_warehouse_id,
@@ -2017,7 +2025,7 @@ export default function WarehouseExecutionPage() {
                     shipment_number: `OUT-${transferNumber}`,
                     status: 'PLANNED',
                     notes: `Outbound shipment for Transfer JO ${jo.jo_number}`,
-                    created_by: profile?.id || null,
+                    created_by: profile?.id || undefined,
                   })
                   .select('id')
                   .single();
@@ -2032,15 +2040,15 @@ export default function WarehouseExecutionPage() {
                     loaded_qty: 0,
                   }));
                   if (shipItemPayloads.length > 0) {
-                    await supabase.from('wh_outbound_shipment_items').insert(shipItemPayloads);
+                    await (supabase.from('wh_outbound_shipment_items' as any) as any).insert(shipItemPayloads);
                   }
                 }
 
                 // [AI] CREATE INBOUND SIDE FOR DESTINATION WAREHOUSE
                 // Create inbound WO Item for destination warehouse
                 const inboundWoItemNumber = `WO-${transferNumber}-IN`;
-                const { data: newInboundWoItem } = await supabase
-                  .from('wo_items')
+                const { data: newInboundWoItem } = await (supabase
+                  .from('wo_items' as any) as any)
                   .insert({
                     tenant_id: profile?.tenant_id,
                     wo_id: jo.wo_id,
@@ -2059,8 +2067,8 @@ export default function WarehouseExecutionPage() {
                 if (newInboundWoItem) {
                   // Create inbound Job Order for destination warehouse
                   const inboundJoNumber = `JO-${transferNumber}-IN`;
-                  const { data: newInboundJo } = await supabase
-                    .from('job_orders')
+                  const { data: newInboundJo } = await (supabase
+                    .from('job_orders' as any) as any)
                     .insert({
                       tenant_id: profile?.tenant_id,
                       wo_item_id: newInboundWoItem.id,
@@ -2075,8 +2083,8 @@ export default function WarehouseExecutionPage() {
 
                   if (newInboundJo) {
                     // Create inbound receipt for destination warehouse
-                    const { data: newInboundReceipt } = await supabase
-                      .from('wh_inbound_receipts')
+                    const { data: newInboundReceipt } = await (supabase
+                      .from('wh_inbound_receipts' as any) as any)
                       .insert({
                         tenant_id: profile?.tenant_id,
                         warehouse_id: toWarehouseId,
@@ -2085,7 +2093,7 @@ export default function WarehouseExecutionPage() {
                         receipt_number: `RCV-${transferNumber}`,
                         status: 'EXPECTED',
                         notes: `Inbound receipt for Transfer ${transferNumber} (JO ${jo.jo_number})`,
-                        created_by: profile?.id || null,
+                        created_by: profile?.id || undefined,
                       })
                       .select('id')
                       .single();
@@ -2099,7 +2107,7 @@ export default function WarehouseExecutionPage() {
                         actual_good_qty: 0,
                       }));
                       if (receiptItemPayloads.length > 0) {
-                        await supabase.from('wh_inbound_receipt_items').insert(receiptItemPayloads);
+                        await (supabase.from('wh_inbound_receipt_items' as any) as any).insert(receiptItemPayloads);
                       }
                     }
                   }
@@ -2117,8 +2125,8 @@ export default function WarehouseExecutionPage() {
 
             if (!existingShipment) {
               const shipmentNumber = jo.jo_number || `OUT-S${Date.now()}`;
-              const { data: newShipment, error: shipErr } = await supabase
-                .from('wh_outbound_shipments')
+              const { data: newShipment, error: shipErr } = await (supabase
+                .from('wh_outbound_shipments' as any) as any)
                 .insert({
                   tenant_id: profile?.tenant_id,
                   warehouse_id: jo.assigned_warehouse_id,
@@ -2126,7 +2134,7 @@ export default function WarehouseExecutionPage() {
                   shipment_number: shipmentNumber,
                   status: 'PLANNED',
                   notes: `Outbound shipment for JO ${jo.jo_number}`,
-                  created_by: profile?.id || null,
+                  created_by: profile?.id || undefined,
                 })
                 .select('id')
                 .single();
@@ -2141,7 +2149,7 @@ export default function WarehouseExecutionPage() {
                   loaded_qty: 0,
                 }));
                 if (itemsPayload.length > 0) {
-                  await supabase.from('wh_outbound_shipment_items').insert(itemsPayload);
+                  await (supabase.from('wh_outbound_shipment_items' as any) as any).insert(itemsPayload);
                 }
               }
             }
@@ -2161,8 +2169,8 @@ export default function WarehouseExecutionPage() {
 
               if (!existingReceipt) {
                 const receiptNumber = jo.jo_number ? `RCV-${jo.jo_number}` : `RCV-S${Date.now()}`;
-                const { data: newReceipt, error: recErr } = await supabase
-                  .from('wh_inbound_receipts')
+                const { data: newReceipt, error: recErr } = await (supabase
+                  .from('wh_inbound_receipts' as any) as any)
                   .insert({
                     tenant_id: profile?.tenant_id,
                     warehouse_id: jo.assigned_warehouse_id,
@@ -2170,7 +2178,7 @@ export default function WarehouseExecutionPage() {
                     receipt_number: receiptNumber,
                     status: 'EXPECTED',
                     notes: `Inbound receipt for JO ${jo.jo_number}`,
-                    created_by: profile?.id || null,
+                    created_by: profile?.id || undefined,
                   })
                   .select('id')
                   .single();
@@ -2183,7 +2191,7 @@ export default function WarehouseExecutionPage() {
                     actual_good_qty: 0,
                   }));
                   if (itemsPayload.length > 0) {
-                    await supabase.from('wh_inbound_receipt_items').insert(itemsPayload);
+                    await (supabase.from('wh_inbound_receipt_items' as any) as any).insert(itemsPayload);
                   }
                 }
               }
@@ -2195,7 +2203,7 @@ export default function WarehouseExecutionPage() {
       const { error: err1 } = await supabase
         .from("wo_items")
         .update({ status: newStatus })
-        .eq("id", itemId);
+        .eq("id", itemId || "");
       if (err1) throw err1;
 
       const joIds = jos.map((j) => j.id);

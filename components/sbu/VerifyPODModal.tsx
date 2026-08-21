@@ -36,8 +36,8 @@ export default function VerifyPODModal({ job, onClose, onSuccess }: VerifyPODMod
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { error } = await supabase
-        .from('job_orders')
+      const { error } = await (supabase
+        .from('job_orders' as any) as any)
         .update({ 
           pod_status: 'verified',
           pod_received_at: new Date().toISOString(),

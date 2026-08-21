@@ -44,8 +44,8 @@ export default function TenantSuperAdminBIDashboard() {
       setLoading(true);
       
       // 1. Fetch all work order items for this tenant
-      const { data: woItems, error: itemsError } = await supabase
-        .from('work_order_items')
+      const { data: woItems, error: itemsError } = await (supabase
+        .from('work_order_items' as any) as any)
         .select(`
           deal_price, quantity, sbu_type,
           work_orders!inner(
@@ -88,7 +88,7 @@ export default function TenantSuperAdminBIDashboard() {
         return d > 0 ? d : 0;
       };
 
-      woItems?.forEach((item: any) => {
+      ((woItems as unknown as any[]) || []).forEach((item: any) => {
         const rev = (item.deal_price || 0) * (item.quantity || 1);
         totalRev += rev;
 
@@ -96,27 +96,27 @@ export default function TenantSuperAdminBIDashboard() {
         sbuMap.set(sbuKey, (sbuMap.get(sbuKey) || 0) + rev);
 
         const wo = item.work_orders;
-        const v1 = diffH(wo.customer_request_at, wo.submitted_to_sbu_at);
+        const v1 = diffH(wo?.customer_request_at, wo?.submitted_to_sbu_at);
         if (v1 !== null) { kpi.cs.sum += v1; kpi.cs.count++; }
 
-        const v2 = diffH(wo.submitted_to_sbu_at, wo.sbu_processed_at);
+        const v2 = diffH(wo?.submitted_to_sbu_at, wo?.sbu_processed_at);
         if (v2 !== null) { kpi.sbu.sum += v2; kpi.sbu.count++; }
 
-        const v3 = diffH(wo.submitted_to_sbu_at, wo.assignment_completed_at);
+        const v3 = diffH(wo?.submitted_to_sbu_at, wo?.assignment_completed_at);
         if (v3 !== null) { kpi.assign.sum += v3; kpi.assign.count++; }
 
-        const v4 = diffH(wo.sbu_processed_at, wo.approved_at);
+        const v4 = diffH(wo?.sbu_processed_at, wo?.approved_at);
         if (v4 !== null) { kpi.dec.sum += v4; kpi.dec.count++; }
       });
 
-      joAudit?.forEach((jo: any) => {
+      ((joAudit as unknown as any[]) || []).forEach((jo: any) => {
         const v5 = diffH(jo.delivered_at, jo.physical_doc_collected_at);
         if (v5 !== null) { kpi.pod.sum += v5; kpi.pod.count++; }
       });
 
       setBiStats({
         totalRevenue: totalRev,
-        totalOrders: woItems?.length || 0,
+        totalOrders: (woItems as unknown as any[])?.length || 0,
         sbuDistribution: Array.from(sbuMap.entries()).map(([name, value]) => ({ name, value })),
         phaseVelocity: {
           drafting: kpi.cs.count ? kpi.cs.sum / kpi.cs.count : 0,
@@ -138,12 +138,13 @@ export default function TenantSuperAdminBIDashboard() {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
+        const { data: rawProfile } = await supabase
           .from('profiles')
           .select('*, organizations(*)')
           .eq('id', user.id)
           .single();
         
+        const profile = rawProfile as any;
         if (profile) {
           setUserProfile(profile);
           setTenantInfo(profile.organizations);

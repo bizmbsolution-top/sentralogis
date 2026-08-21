@@ -39,6 +39,7 @@ export interface OfflineReceipt {
   _localVehiclePhoto?: File;
   _localPodPhoto?: File;
   _synced: boolean; // false means there are pending offline changes
+  items?: OfflineReceiptItem[];
 }
 
 export interface OfflineReceiptItem {
@@ -108,16 +109,16 @@ export async function downloadReceiptsToDevice(tenantId: string, warehouseId: st
         id: rec.id,
         receipt_number: rec.receipt_number,
         status: rec.status,
-        expected_arrival: rec.expected_arrival,
+        expected_arrival: rec.expected_arrival || null,
         transporter: (rec.transporter as any)?.name || null,
         fleet: (rec.fleet as any)?.plate_number || null,
-        transporter_name_manual: rec.transporter_name_manual,
-        driver_name_manual: rec.driver_name_manual,
-        driver_phone: rec.driver_phone,
-        vehicle_photo_url: rec.vehicle_photo_url,
-        pod_document_url: rec.pod_document_url,
-        unloading_start_time: rec.unloading_start_time,
-        unloading_end_time: rec.unloading_end_time,
+        transporter_name_manual: rec.transporter_name_manual || null,
+        driver_name_manual: rec.driver_name_manual || null,
+        driver_phone: rec.driver_phone || null,
+        vehicle_photo_url: rec.vehicle_photo_url || null,
+        pod_document_url: rec.pod_document_url || null,
+        unloading_start_time: rec.unloading_start_time || null,
+        unloading_end_time: rec.unloading_end_time || null,
         _synced: true,
         items: itemsData.map((item: any) => ({
           id: item.id,
@@ -210,7 +211,7 @@ export async function syncTalliesToCloud(): Promise<number> {
 
       // 1. Update items
       let sentBytes = 0;
-      for (const item of rec.items) {
+      for (const item of rec.items || []) {
         if (item._localPhotoFile) {
           const url = await uploadPhotoToCloud(item._localPhotoFile, `damage_${item.id}_${Date.now()}.jpg`);
           if (url) item.damage_photo_url = url;
@@ -266,13 +267,13 @@ export async function syncTalliesToCloud(): Promise<number> {
         .update({ 
           status: rec.status, 
           updated_at: new Date().toISOString(),
-          transporter_name_manual: rec.transporter_name_manual,
-          driver_name_manual: rec.driver_name_manual,
-          driver_phone: rec.driver_phone,
-          vehicle_photo_url: rec.vehicle_photo_url,
-          pod_document_url: rec.pod_document_url,
-          unloading_start_time: rec.unloading_start_time,
-          unloading_end_time: rec.unloading_end_time
+          transporter_name_manual: rec.transporter_name_manual || undefined,
+          driver_name_manual: rec.driver_name_manual || undefined,
+          driver_phone: rec.driver_phone || undefined,
+          vehicle_photo_url: rec.vehicle_photo_url || undefined,
+          pod_document_url: rec.pod_document_url || undefined,
+          unloading_start_time: rec.unloading_start_time || undefined,
+          unloading_end_time: rec.unloading_end_time || undefined
         })
         .eq('id', rec.id);
       

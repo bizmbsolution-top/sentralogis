@@ -42,7 +42,7 @@ export default function PaymentModal({ jo, paymentType, label, maxAmount, defaul
       paid_by: paidBy,
       paid_by_user: profile?.id,
       paid_at: new Date().toISOString(),
-      notes: notes || null,
+      notes: notes || undefined,
     }).select('id').single();
 
     if (error || !inserted) {

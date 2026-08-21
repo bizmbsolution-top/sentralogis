@@ -74,8 +74,8 @@ export default function MovementsPage() {
       }
 
       const [movRes, staffRes] = await Promise.all([
-        supabase
-          .from("wh_internal_movements")
+        (supabase
+          .from("wh_internal_movements" as any) as any)
           .select(`
             id, quantity, movement_date, reference_type, status, notes, assigned_to,
             product:product_sku_id(name, sku_code),
@@ -99,7 +99,7 @@ export default function MovementsPage() {
         if (movRes.error.code === "42P01") { setItems([]); }
         else { console.error(movRes.error); }
       } else {
-        setItems(movRes.data || []);
+        setItems((movRes.data as any[]) || []);
       }
 
       setStaffList(staffRes.data || []);
@@ -117,7 +117,7 @@ export default function MovementsPage() {
     try {
       const { error } = await supabase
         .from("wh_internal_movements")
-        .update({ assigned_to: staffId || null })
+        .update({ assigned_to: staffId || undefined })
         .eq("id", movId);
       if (error) throw error;
       await load();

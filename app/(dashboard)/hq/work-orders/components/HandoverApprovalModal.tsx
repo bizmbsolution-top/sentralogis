@@ -61,7 +61,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
 
         // Fetch driver names separately (due to RLS complexity)
         if (jos && jos.length > 0) {
-          const driverIds = jos.map(j => j.driver_id).filter(Boolean);
+          const driverIds = jos.map(j => j.driver_id).filter(Boolean) as string[];
           if (driverIds.length > 0) {
             const { data: driverData, error: dError } = await supabase
               .from('md_drivers')
@@ -74,7 +74,7 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
               const driverMap = Object.fromEntries((driverData || []).map(d => [d.id, d]));
               const enrichedJOs = jos.map(j => ({
                 ...j,
-                md_drivers: driverMap[j.driver_id]
+                md_drivers: driverMap[j.driver_id as string]
               }));
               
               const handoverItemIds = handoverItems.map((i: any) => i.id);

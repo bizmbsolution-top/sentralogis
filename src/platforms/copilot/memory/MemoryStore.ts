@@ -1,4 +1,4 @@
-import { OperationalMemory, INITIAL_MEMORY } from './OperationalMemory';
+import { UserMemoryState, INITIAL_MEMORY } from './OperationalMemory';
 
 /**
  * In-memory store for Operational Context, scoped by User ID.
@@ -6,10 +6,10 @@ import { OperationalMemory, INITIAL_MEMORY } from './OperationalMemory';
  */
 export class MemoryStore {
   private static instance: MemoryStore;
-  private store: Map<string, OperationalMemory>;
+  private store: Map<string, UserMemoryState>;
 
   private constructor() {
-    this.store = new Map<string, OperationalMemory>();
+    this.store = new Map<string, UserMemoryState>();
   }
 
   public static getInstance(): MemoryStore {
@@ -19,14 +19,14 @@ export class MemoryStore {
     return MemoryStore.instance;
   }
 
-  public getMemory(userId: string): OperationalMemory {
+  public getMemory(userId: string): UserMemoryState {
     if (!this.store.has(userId)) {
       this.store.set(userId, { ...INITIAL_MEMORY, currentUser: userId });
     }
     return this.store.get(userId)!;
   }
 
-  public updateMemory(userId: string, updates: Partial<OperationalMemory>): void {
+  public updateMemory(userId: string, updates: Partial<UserMemoryState>): void {
     const current = this.getMemory(userId);
     this.store.set(userId, {
       ...current,

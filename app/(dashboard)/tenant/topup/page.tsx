@@ -78,7 +78,7 @@ export default function TenantTopupPage() {
     setUploading(true);
     try {
       if (whatsapp !== profile?.whatsapp) {
-        await supabase.from('profiles').update({ whatsapp }).eq('id', user?.id);
+        await supabase.from('profiles').update({ whatsapp }).eq('id', user?.id || '');
       }
 
       const fileExt = file.name.split('.').pop();

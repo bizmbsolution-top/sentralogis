@@ -51,12 +51,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const woItem = woItemMap.get(jo.wo_item_id) || null;
       const isOutbound = woItem?.item_code === 'WHOUT' || woItem?.sbu_type?.includes('OUTBOUND');
 
-      let receipt = null;
-      let shipment = null;
+      let receipt: any = null;
+      let shipment: any = null;
 
       if (isOutbound) {
-        const { data } = await supabase
-          .from('wh_outbound_shipments')
+        const { data } = await (supabase
+          .from('wh_outbound_shipments' as any) as any)
           .select(`
             id, shipment_number, status, created_at, updated_at,
             surat_jalan_url, bast_url,
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           .maybeSingle();
         shipment = data;
       } else {
-        const { data } = await supabase
-          .from('wh_inbound_receipts')
+        const { data } = await (supabase
+          .from('wh_inbound_receipts' as any) as any)
           .select(`
             id, receipt_number, status, expected_arrival, 
             unloading_start_time, unloading_end_time,

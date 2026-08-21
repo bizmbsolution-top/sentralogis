@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -27,7 +27,7 @@ export default function MobileLeads() {
       const { data, error } = await supabase
         .from('md_entities')
         .select(`id, name, phone, email, crm_status, updated_at`)
-        .eq('sales_rep_id', user?.id)
+        .eq('sales_rep_id', user?.id || '')
         .order('updated_at', { ascending: false });
         
       if (error) throw error;
@@ -44,8 +44,8 @@ export default function MobileLeads() {
     if (!formData.name.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('md_entities').insert([{
-        tenant_id: profile?.tenant_id,
+      const { error } = await (supabase.from('md_entities' as any) as any).insert([{
+        tenant_id: profile?.tenant_id as string,
         entity_type: 'CUSTOMER',
         name: formData.name,
         phone: formData.phone,

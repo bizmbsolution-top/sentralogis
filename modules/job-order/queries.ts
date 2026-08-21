@@ -11,7 +11,7 @@ export async function getJobOrders(orgId: string, limit = 50): Promise<JobOrder[
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data || [];
+  return (data as unknown as JobOrder[]) || [];
 }
 
 export async function getJobOrdersByWorkOrder(woId: string): Promise<JobOrder[]> {
@@ -21,7 +21,7 @@ export async function getJobOrdersByWorkOrder(woId: string): Promise<JobOrder[]>
     .eq('work_order_id', woId)
     .order('sequence_order');
   if (error) throw error;
-  return data || [];
+  return (data as unknown as JobOrder[]) || [];
 }
 
 export async function getJobOrderById(id: string): Promise<JobOrder | null> {
@@ -31,11 +31,11 @@ export async function getJobOrderById(id: string): Promise<JobOrder | null> {
     .eq('id', id)
     .single();
   if (error) return null;
-  return data;
+  return (data as unknown as JobOrder) || null;
 }
 
 export async function updateJobOrderStatus(id: string, status: string, result?: Record<string, unknown>): Promise<void> {
-  const update: Record<string, unknown> = {
+  const update: any = {
     status,
     updated_at: new Date().toISOString(),
   };

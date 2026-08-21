@@ -70,8 +70,8 @@ export default function WarehouseDocumentsPage() {
           .eq('warehouse_id', whId || '00000000-0000-0000-0000-000000000000')
           .order('updated_at', { ascending: false }),
         
-        supabase
-          .from('wh_transfer_orders')
+        (supabase
+          .from('wh_transfer_orders' as any) as any)
           .select(`
             *, 
             from_warehouse:from_warehouse_id(name),
@@ -80,8 +80,8 @@ export default function WarehouseDocumentsPage() {
           .eq('tenant_id', profile.tenant_id)
           .order('updated_at', { ascending: false }),
         
-        supabase
-          .from('wh_internal_movements')
+        (supabase
+          .from('wh_internal_movements' as any) as any)
           .select(`
             *, 
             warehouse:warehouse_id(name)
@@ -90,8 +90,8 @@ export default function WarehouseDocumentsPage() {
           .eq('warehouse_id', whId || '00000000-0000-0000-0000-000000000000')
           .order('updated_at', { ascending: false }),
         
-        supabase
-          .from('wh_repacking_orders')
+        (supabase
+          .from('wh_repacking_orders' as any) as any)
           .select(`
             *, 
             warehouse:warehouse_id(name)
@@ -104,9 +104,9 @@ export default function WarehouseDocumentsPage() {
       const allDocs: Document[] = [];
 
       if (inboundRes.data) {
-        allDocs.push(...inboundRes.data.map(r => ({
+        allDocs.push(...(inboundRes.data as any[]).map(r => ({
           id: r.id,
-          type: 'INBOUND_RECEIPT',
+          type: 'INBOUND_RECEIPT' as const,
           title: 'Inbound Receipt',
           number: r.receipt_number,
           status: r.status,
@@ -120,9 +120,9 @@ export default function WarehouseDocumentsPage() {
       }
 
       if (outboundRes.data) {
-        allDocs.push(...outboundRes.data.map(s => ({
+        allDocs.push(...(outboundRes.data as any[]).map(s => ({
           id: s.id,
-          type: 'OUTBOUND_SHIPMENT',
+          type: 'OUTBOUND_SHIPMENT' as const,
           title: 'Outbound Shipment',
           number: s.shipment_number,
           status: s.status,
@@ -136,9 +136,9 @@ export default function WarehouseDocumentsPage() {
       }
 
       if (transferRes.data) {
-        allDocs.push(...transferRes.data.map(t => ({
+        allDocs.push(...(transferRes.data as any[]).map(t => ({
           id: t.id,
-          type: 'TRANSFER_ORDER',
+          type: 'TRANSFER_ORDER' as const,
           title: 'Transfer Order',
           number: t.transfer_number,
           status: t.status,
@@ -152,9 +152,9 @@ export default function WarehouseDocumentsPage() {
       }
 
       if (movementRes.data) {
-        allDocs.push(...movementRes.data.map(m => ({
+        allDocs.push(...(movementRes.data as any[]).map(m => ({
           id: m.id,
-          type: 'INTERNAL_MOVEMENT',
+          type: 'INTERNAL_MOVEMENT' as const,
           title: 'Internal Movement',
           number: m.movement_number || `MOVE-${m.id.substring(0, 8)}`,
           status: m.status,
@@ -168,9 +168,9 @@ export default function WarehouseDocumentsPage() {
       }
 
       if (repackingRes.data) {
-        allDocs.push(...repackingRes.data.map(r => ({
+        allDocs.push(...(repackingRes.data as any[]).map(r => ({
           id: r.id,
-          type: 'REPACKING_ORDER',
+          type: 'REPACKING_ORDER' as const,
           title: 'Repacking Order',
           number: r.order_number,
           status: r.status,

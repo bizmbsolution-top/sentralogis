@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -88,7 +88,7 @@ export default function ConsolidationListPage() {
 
       const { data, error } = await supabase
         .from('fw_consolidations')
-        .insert([payload])
+        .insert([payload as any])
         .select('id')
         .single();
       
@@ -214,13 +214,13 @@ export default function ConsolidationListPage() {
                         </Link>
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {new Date(item.created_at).toLocaleDateString('id-ID')}
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                         {item.origin_port} 
-                        <span className="text-slate-400 text-xs">→</span> 
+                        <span className="text-slate-400 text-xs">â†’</span> 
                         {item.destination_port}
                       </div>
                       <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
@@ -242,11 +242,11 @@ export default function ConsolidationListPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {getStatusBadge(item.status)}
+                      {getStatusBadge(item.status || "")}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link href={`/sbu/forwarding/consol/${item.id}`}>
-                        <Button variant="outline" size="sm" className="text-xs h-8">
+                        <Button variant="secondary" size="sm" className="text-xs h-8">
                           Detail <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>
                       </Link>
@@ -358,9 +358,9 @@ export default function ConsolidationListPage() {
               </div>
 
               <div className="mt-8 flex justify-end gap-3">
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="secondary"
                   onClick={() => setIsModalOpen(false)}
                   disabled={submitting}
                 >

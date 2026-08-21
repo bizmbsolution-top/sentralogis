@@ -139,7 +139,7 @@ export default function CostAuditPage() {
           {([
             { id: 'all', label: 'All SBU', icon: Layers },
             ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-          ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
+          ] as Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }>).map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
             return (

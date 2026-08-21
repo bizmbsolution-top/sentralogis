@@ -21,8 +21,7 @@ export default function WorkOrderReportPage() {
         const fetchWoData = async () => {
             try {
                 // Fetch Work Order Item with JOs and Costs
-                const { data, error } = await supabase
-                    .from("work_order_items")
+                const { data, error } = await (supabase.from("work_order_items" as any) as any)
                     .select(`
                         *,
                         work_orders!inner (

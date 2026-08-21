@@ -23,6 +23,19 @@ type ClearanceItem = {
         lane?: string;
         aju_number?: string;
         status_clearance?: string;
+        carrier?: string;
+        pol?: string;
+        eta?: string;
+        etd?: string;
+        incoterms?: string;
+        currency?: string;
+        gross_weight?: number | string;
+        bc11_number?: string;
+        container_info?: string;
+        tps?: string;
+        items?: any[];
+        checklist?: any[];
+        [key: string]: any;
     };
     deal_price: number;
     notes?: string;
@@ -43,7 +56,7 @@ type ClearanceItem = {
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
-export default function SBUClearancesPage() {
+export default function ClearancesDashboard() {
     const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -66,8 +79,8 @@ export default function SBUClearancesPage() {
     const fetchData = useCallback(async () => {
         try {
             setRefreshing(true);
-            const { data, error } = await supabase
-                .from("work_order_items")
+            const { data, error } = await (supabase
+                .from("work_order_items" as any) as any)
                 .select(`
                     *,
                     work_orders!inner (
@@ -80,7 +93,7 @@ export default function SBUClearancesPage() {
 
             if (error) throw error;
 
-            const clearanceItems = data || [];
+            const clearanceItems: ClearanceItem[] = (data as any[]) || [];
             setItems(clearanceItems);
 
             // Calculate stats
@@ -111,8 +124,8 @@ export default function SBUClearancesPage() {
     // =====================================================
     const updateClearanceMetadata = async (itemId: string, metadata: any) => {
         try {
-            const { error } = await supabase
-                .from("work_order_items")
+            const { error } = await (supabase
+                .from("work_order_items" as any) as any)
                 .update({ sbu_metadata: metadata })
                 .eq("id", itemId);
 

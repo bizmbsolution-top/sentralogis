@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -12,7 +12,7 @@ import {
   Clock, CheckCircle2, Navigation as NavIcon,
   AlertCircle, Activity, ClipboardList,
   Warehouse, Ship, LayoutGrid, Users, ArrowRight, Play, MessageSquare,
-  Layers, Box, FileText
+  Layers, Box, FileText, X
 } from 'lucide-react';
 import { SBU_MAP } from '@/lib/utils/sbuMapping';
 import { toast, Toaster } from 'react-hot-toast';
@@ -26,7 +26,7 @@ import HistoryModal from '@/components/shared/HistoryModal';
 
 const supabase = createClient();
 
-const TABS = [
+const TABS: Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
   { id: 'all', label: 'All', icon: Layers },
   { id: 'new', label: 'New', icon: Box },
   { id: 'assigned', label: 'Assigned', icon: Truck },
@@ -35,9 +35,9 @@ const TABS = [
   { id: 'completed', label: 'Done', icon: CheckCircle2 },
 ];
 
-// [AI] SBU visual indicators for JO cards — colors aligned with SBU_MAP
+// [AI] SBU visual indicators for JO cards â€” colors aligned with SBU_MAP
 const SBU_BADGE_CONFIG: Record<string, {
-  label: string; icon: React.ElementType;
+  label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   bg: string; text: string; border: string;
 }> = {
   TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
@@ -121,8 +121,8 @@ export default function HQJobOrdersPage() {
         const warehouseJoIds = baseJOs.filter(j => j.wo_item?.sbu_type === 'WAREHOUSE').map(j => j.id);
 
         const [driversRes, fleetsRes, warehouseReceiptsRes] = await Promise.all([
-          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds) : { data: [] as any[] },
-          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds) : { data: [] as any[] },
+          driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds as string[]) : { data: [] as any[] },
+          fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds as string[]) : { data: [] as any[] },
           warehouseJoIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseJoIds) : { data: [] as any[] }
         ]);
 
@@ -183,7 +183,7 @@ export default function HQJobOrdersPage() {
             initials = latestLog.user.profile.name.substring(0, 2).toUpperCase();
           } else if (latestLog?.user?.profile?.email) {
             initials = latestLog.user.profile.email.substring(0, 2).toUpperCase();
-          } else if (jo.updated_by || jo.created_by) {
+          } else if ((jo as any).updated_by || (jo as any).created_by) {
             initials = 'U';
           }
           return { ...jo, lastInitials: initials };
@@ -347,7 +347,7 @@ export default function HQJobOrdersPage() {
           )}
         </div>
 
-        {/* Mobile Tab Bar — horizontal scroll */}
+        {/* Mobile Tab Bar â€” horizontal scroll */}
         <div className="px-4 pb-3">
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {TABS.map(tab => {
@@ -385,7 +385,7 @@ export default function HQJobOrdersPage() {
             {([
               { id: 'all', label: 'All SBU', icon: Layers },
               ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-            ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
+            ] as Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }>).map(item => {
               const isActive = sbuFilter === item.id;
               const Icon = item.icon;
               return (
@@ -476,7 +476,7 @@ export default function HQJobOrdersPage() {
           {([
             { id: 'all', label: 'All SBU', icon: Layers },
             ...Object.entries(SBU_BADGE_CONFIG).map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-          ] as Array<{ id: string; label: string; icon: React.ElementType }>).map(item => {
+          ] as Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }>).map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
             return (

@@ -50,7 +50,7 @@ export default function CustomerInboundPage() {
         .eq('customer_id', profile.customer_id)
         .order('created_at', { ascending: false });
 
-      setInbounds(data || []);
+      setInbounds((data as any[]) || []);
     } catch (err) {
       console.error('Error fetching inbounds:', err);
       toast.error('Gagal memuat data barang masuk');
@@ -77,7 +77,7 @@ export default function CustomerInboundPage() {
         `)
         .eq('receipt_id', receipt.id);
 
-      setReceiptItems(data || []);
+      setReceiptItems((data as any[]) || []);
     } catch (e) {
       console.error('Error fetching receipt items:', e);
       toast.error('Gagal memuat rincian item');

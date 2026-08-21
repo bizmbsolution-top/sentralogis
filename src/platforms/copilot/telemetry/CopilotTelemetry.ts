@@ -15,8 +15,8 @@ export class CopilotTelemetry {
       eventId: `evt-${Math.random().toString(36).substring(2, 9)}`,
       pipelineId: context.pipelineId,
       sessionId: context.context.conversation.getConversationId(),
-      tenantId: context.context.tenant.id,
-      userId: context.context.user.id,
+      tenantId: context.context.tenant.getId(),
+      userId: context.context.user.getId(),
       correlationId: context.correlationId,
       timestamp: Date.now(),
       ...payload

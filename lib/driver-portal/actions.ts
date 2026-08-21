@@ -126,8 +126,8 @@ export async function logKM(
   kmStart: number,
   kmEnd: number
 ): Promise<DriverPerformanceLog> {
-  const { data, error } = await supabase
-    .from('driver_performance_logs')
+  const { data, error } = await (supabase
+    .from('driver_performance_logs' as any) as any)
     .insert({
       driver_id: driverId,
       tenant_id: tenantId,
@@ -151,8 +151,8 @@ export async function logSafetyIncident(
   description: string,
   incidentDate: string
 ): Promise<DriverPerformanceLog> {
-  const { data, error } = await supabase
-    .from('driver_performance_logs')
+  const { data, error } = await (supabase
+    .from('driver_performance_logs' as any) as any)
     .insert({
       driver_id: driverId,
       tenant_id: tenantId,
@@ -177,29 +177,29 @@ export async function getDriverJobOrders(driverId: string): Promise<any[]> {
     .order('created_at', { ascending: false });
 
   if (error) return [];
-  return data || [];
+  return (data as any[]) || [];
 }
 
 export async function getDriverAttendance(driverId: string): Promise<DriverAttendance[]> {
-  const { data, error } = await supabase
-    .from('driver_attendance')
+  const { data, error } = await (supabase
+    .from('driver_attendance' as any) as any)
     .select('*')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false })
     .limit(30);
 
   if (error) return [];
-  return data || [];
+  return (data as unknown as DriverAttendance[]) || [];
 }
 
 export async function getDriverPerformance(driverId: string): Promise<DriverPerformanceLog[]> {
-  const { data, error } = await supabase
-    .from('driver_performance_logs')
+  const { data, error } = await (supabase
+    .from('driver_performance_logs' as any) as any)
     .select('*')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false })
     .limit(30);
 
   if (error) return [];
-  return data || [];
+  return (data as unknown as DriverPerformanceLog[]) || [];
 }

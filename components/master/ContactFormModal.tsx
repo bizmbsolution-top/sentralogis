@@ -118,8 +118,8 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId, initial
         updated_at: new Date().toISOString()
       };
 
-      const { data: entity, error } = await supabase
-        .from('md_entities')
+      const { data: entity, error } = await (supabase
+        .from('md_entities' as any) as any)
         .insert(payload)
         .select()
         .single();
@@ -128,10 +128,10 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId, initial
 
       if (otherAddresses.length > 0) {
         const addressesToInsert = otherAddresses.map(addr => ({
-          entity_id: entity.id,
+          entity_id: (entity as any)?.id,
           ...addr
         }));
-        await supabase.from('md_entity_addresses').insert(addressesToInsert);
+        await (supabase.from('md_entity_addresses' as any) as any).insert(addressesToInsert);
       }
 
       toast.success('Kontak berhasil disimpan');

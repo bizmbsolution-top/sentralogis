@@ -101,7 +101,7 @@ export default function WoListCard({ group, paymentMap, onSelect }: WoListCardPr
                 {sbuTypes.map(sbu => {
                   const config = SBU_BADGE_CONFIG[sbu];
                   if (!config) return null;
-                  const Icon = config.icon as React.ElementType;
+                  const Icon = config.icon as React.ComponentType<{ size?: number; className?: string }>;
                   return (
                     <Badge
                       key={sbu}

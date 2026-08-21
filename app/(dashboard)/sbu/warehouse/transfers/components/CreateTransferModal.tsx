@@ -41,12 +41,12 @@ export default function CreateTransferModal({ onClose, onSuccess }: Props) {
       const { data: whData } = await supabase
         .from('md_warehouses')
         .select('id, code, name')
-        .eq('tenant_id', tenantId)
-        .neq('id', sbuId)
+        .eq('tenant_id', tenantId || '')
+        .neq('id', sbuId || '')
         .eq('status', 'ACTIVE')
         .order('name');
         
-      setDestWarehouses(whData || []);
+      setDestWarehouses((whData as any[]) || []);
 
       // Fetch products in stock
       const { data: invData } = await supabase
@@ -56,12 +56,12 @@ export default function CreateTransferModal({ onClose, onSuccess }: Props) {
           quantity,
           product:product_sku_id (id, name, sku_code)
         `)
-        .eq('tenant_id', tenantId)
-        .eq('warehouse_id', sbuId)
+        .eq('tenant_id', tenantId || '')
+        .eq('warehouse_id', sbuId || '')
         .gt('quantity', 0);
         
       if (invData) {
-        setProducts(invData);
+        setProducts((invData as any[]) || []);
       }
     } catch (e) {
       console.error(e);
@@ -100,6 +100,10 @@ export default function CreateTransferModal({ onClose, onSuccess }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDestId) return;
+    if (!tenantId || !sbuId) {
+      setError("Missing tenant or warehouse context.");
+      return;
+    }
     
     // Validate items
     const validItems = items.filter(i => i.inventory_id && i.quantity && Number(i.quantity) > 0);
@@ -128,7 +132,7 @@ export default function CreateTransferModal({ onClose, onSuccess }: Props) {
           quantity: Number(i.quantity)
         })),
         p_notes: notes,
-        p_user_id: user?.id || null
+        p_user_id: (user?.id || null) as string
       });
 
       if (rpcError) throw rpcError;

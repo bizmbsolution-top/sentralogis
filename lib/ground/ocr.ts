@@ -21,7 +21,7 @@ async function getSimWorker(): Promise<Tesseract.Worker> {
     logger: () => {},
   });
   await worker.setParameters({
-    tessedit_pageseg_mode: '6',
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
   });
   simWorkerInstance = worker;
   return worker;

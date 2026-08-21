@@ -129,9 +129,9 @@ export async function fetchMissionControlData(): Promise<MonitoringData> {
       const checks = checkRes.value.data || [];
       const cronTypes = [...new Set(checks.map((c: any) => c.check_type))];
       for (const type of cronTypes.slice(0, 10)) {
-        const last = checks.filter((c: any) => c.check_type === type)[0];
+        const last: any = (checks as any[]).filter((c: any) => c.check_type === type)[0];
         crons.push({
-          name: type,
+          name: String(type),
           last_run: last?.checked_at || new Date().toISOString(),
           status: last?.status === 'pass' ? 'success' : 'failed',
         });

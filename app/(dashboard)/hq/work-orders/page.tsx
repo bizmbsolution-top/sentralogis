@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 // Refreshed at: 2026-05-20T10:35:00Z
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -38,7 +38,7 @@ interface WorkOrder {
   lastInitials?: string;
 }
 
-const TABS = [
+const TABS: Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
   { id: 'all', label: 'All', icon: Layers },
   { id: 'draft', label: 'Draft', icon: FileText },
   { id: 'pending', label: 'New', icon: Plus },
@@ -49,9 +49,9 @@ const TABS = [
   { id: 'completed', label: 'Done', icon: CheckCircle2 },
 ];
 
-// [AI] SBU visual indicators for WO cards — colors aligned with SBU_MAP from sbuMapping.ts
+// [AI] SBU visual indicators for WO cards â€” colors aligned with SBU_MAP from sbuMapping.ts
 const SBU_BADGE_CONFIG: Record<string, {
-  label: string; icon: React.ElementType;
+  label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   bg: string; text: string; border: string;
 }> = {
   TRUCKING:   { label: 'Trucking',   icon: Truck,      bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
@@ -79,7 +79,7 @@ export default function HQWorkOrdersPage() {
   const [selectedEntityForHistory, setSelectedEntityForHistory] = useState<{id: string, type: 'work_order'|'job_order', title: string} | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  // [AI] SBU filter state — synced with URL ?sbu= param
+  // [AI] SBU filter state â€” synced with URL ?sbu= param
   const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
   const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
 
@@ -244,7 +244,7 @@ export default function HQWorkOrdersPage() {
         return { ...wo, hasPendingCosts: hasPending, lastInitials: initials };
       });
 
-      setWorkOrders(hydratedWos);
+      setWorkOrders(hydratedWos as WorkOrder[]);
     } catch (err) {
       console.error('Fetch Error:', err);
       toast.error('Gagal mengambil data Work Order');
@@ -554,7 +554,7 @@ export default function HQWorkOrdersPage() {
           )}
         </div>
 
-        {/* Mobile Tab Bar — horizontal scroll */}
+        {/* Mobile Tab Bar â€” horizontal scroll */}
         <div className="px-4 pb-2">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {TABS.map(tab => {
@@ -589,12 +589,12 @@ export default function HQWorkOrdersPage() {
         {/* [AI] Mobile SBU Type Filter */}
         <div className="px-4 pb-3">
           <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {[
+            {([
               { id: 'all', label: 'All SBU', icon: Layers },
               ...Object.entries(SBU_BADGE_CONFIG)
                 .filter(([key]) => activeSbuTypes.size === 0 || activeSbuTypes.has(key))
                 .map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-            ].map(item => {
+            ] as Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }>).map(item => {
               const isActive = sbuFilter === item.id;
               const Icon = item.icon;
               return (
@@ -676,12 +676,12 @@ export default function HQWorkOrdersPage() {
         {/* [AI] Desktop SBU Type Filter */}
         <div className="mt-3 flex items-center gap-2">
           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">SBU</span>
-          {[
+          {([
             { id: 'all', label: 'All SBU', icon: Layers },
             ...Object.entries(SBU_BADGE_CONFIG)
               .filter(([key]) => activeSbuTypes.size === 0 || activeSbuTypes.has(key))
               .map(([key, val]) => ({ id: key, label: val.label, icon: val.icon })),
-          ].map(item => {
+          ] as Array<{ id: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }>).map(item => {
             const isActive = sbuFilter === item.id;
             const Icon = item.icon;
             return (
@@ -861,7 +861,7 @@ export default function HQWorkOrdersPage() {
                       <div className="flex items-center gap-1.5 text-black font-bold text-sm">
                         <Calendar size={14} className="text-blue-600" />
                         {wo.execution_date ? new Date(wo.execution_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBA'}
-                        {wo.execution_time && <span className="text-black font-bold tabular-nums">· {wo.execution_time}</span>}
+                        {wo.execution_time && <span className="text-black font-bold tabular-nums">Â· {wo.execution_time}</span>}
                       </div>
                     </div>
                     <div className="w-[1px] h-8 bg-slate-200"></div>

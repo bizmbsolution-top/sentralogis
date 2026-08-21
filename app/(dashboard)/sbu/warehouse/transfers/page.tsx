@@ -179,8 +179,8 @@ export default function SBUTransferPage() {
         setSelectedWarehouse(whId);
       }
 
-      const { data, error } = await supabase
-        .from('wh_transfer_orders')
+      const { data, error } = await (supabase
+        .from('wh_transfer_orders' as any) as any)
         .select('*')
         .eq('tenant_id', tid)
         .eq('from_warehouse_id', whId)
@@ -193,15 +193,15 @@ export default function SBUTransferPage() {
       const transferIds = [...new Set(finalData.map((d: any) => d.id).filter(Boolean))];
       
       if (transferIds.length > 0) {
-         const { data: outShipments } = await supabase.from('wh_outbound_shipments').select('transfer_id, wo_item_id, status').in('transfer_id', transferIds);
+         const { data: outShipments } = await supabase.from('wh_outbound_shipments').select('transfer_id, wo_item_id, status').in('transfer_id', transferIds as string[]);
          
          const woItemIds = [...new Set((outShipments || []).map((s: any) => s.wo_item_id).filter(Boolean))];
          
          let joData: any[] = [];
          let woItemData: any[] = [];
          if (woItemIds.length > 0) {
-            const { data: _joData } = await supabase.from('job_orders').select('jo_number, wo_item_id').in('wo_item_id', woItemIds);
-            const { data: _woItemData } = await supabase.from('wo_items').select('id, wo_id').in('id', woItemIds);
+            const { data: _joData } = await supabase.from('job_orders').select('jo_number, wo_item_id').in('wo_item_id', woItemIds as string[]);
+            const { data: _woItemData } = await supabase.from('wo_items').select('id, wo_id').in('id', woItemIds as string[]);
             joData = _joData || [];
             woItemData = _woItemData || [];
          }
@@ -221,7 +221,7 @@ export default function SBUTransferPage() {
             };
          });
       }
-      setTasks(finalData);
+      setTasks((finalData as any[]) || []);
     } catch (e) {
       console.error('Failed to fetch transfer tasks:', e);
     } finally {
@@ -381,20 +381,21 @@ export default function SBUTransferPage() {
       const shipmentNumber = `OUT-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
 
       // 1. Create shipment
-      const { data: shipment, error: shipErr } = await supabase
-        .from('wh_transfer_orders')
+      const { data: rawShipment, error: shipErr } = await (supabase
+        .from('wh_transfer_orders' as any) as any)
         .insert({
           tenant_id: tid,
           from_warehouse_id: warehouseId,
           transfer_number: shipmentNumber,
           status: 'CREATED',
-          notes: transferNotes || null,
-          created_by: profile?.id || null,
+          notes: transferNotes || undefined,
+          created_by: profile?.id || undefined,
         })
         .select()
         .single();
 
       if (shipErr) throw shipErr;
+      const shipment = rawShipment as any;
 
       // 2. Auto-allocate inventory (FIFO/FEFO) and create shipment items
       for (const line of validLines) {
@@ -463,14 +464,14 @@ export default function SBUTransferPage() {
             reference_type: 'TRANSFER_SHIPMENT',
             reference_id: shipment.id,
             notes: `Auto-allocated via ${line.storage_rule}`,
-            created_by: profile?.id || null,
+            created_by: profile?.id || undefined,
           });
 
           remaining -= pickQty;
         }
 
         // Create shipment item
-        await supabase.from('wh_transfer_details').insert({
+        await (supabase.from('wh_transfer_details' as any) as any).insert({
           transfer_id: shipment.id,
           product_sku_id: sku.id,
           requested_qty: line.requested_qty,
@@ -490,7 +491,7 @@ export default function SBUTransferPage() {
         status: 'PENDING',
         priority: 'NORMAL',
         notes: `Shipment ${shipmentNumber} - ${validLines.length} item(s)`,
-        created_by: profile?.id || null,
+        created_by: profile?.id || undefined,
       });
 
       toast.success(`Transfer order ${shipmentNumber} berhasil dibuat!`);

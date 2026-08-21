@@ -15,7 +15,7 @@ import type { BoxAssignment, BoxItem } from '@/lib/domain/forwarding/types';
 import Link from 'next/link';
 
 export default function BoxManagerPage() {
-  const { id: consolId, containerId } = useParams();
+  const { id: consolId, containerId } = useParams() as { id: string; containerId: string };
   const router = useRouter();
   const { profile } = useAuth();
 
@@ -69,8 +69,8 @@ export default function BoxManagerPage() {
       }
       setContainer(containerData);
 
-      const { data: boxesData, error: boxesError } = await supabase
-        .from('fw_box_assignments')
+      const { data: boxesData, error: boxesError } = await (supabase
+        .from('fw_box_assignments' as any) as any)
         .select('*')
         .eq('container_assignment_id', containerId)
         .eq('tenant_id', tenantId)
@@ -80,8 +80,8 @@ export default function BoxManagerPage() {
 
       const boxesWithItems = await Promise.all(
         (boxesData || []).map(async (box: any) => {
-          const { data: boxItems } = await supabase
-            .from('fw_box_items')
+          const { data: boxItems } = await (supabase
+            .from('fw_box_items' as any) as any)
             .select(`
               id, quantity, description, commodity, volume_cbm, gross_weight_kg,
               wo_item:wo_items!inner (
@@ -101,7 +101,7 @@ export default function BoxManagerPage() {
       setBoxes(boxesWithItems);
 
       const assignedWoItemIds = new Set(
-        boxesWithItems.flatMap(b => b.items.map(i => i.wo_item_id))
+        boxesWithItems.flatMap(b => b.items.map((i: any) => i.wo_item_id))
       );
 
       const { data: allContainerItems } = await supabase
@@ -212,7 +212,7 @@ export default function BoxManagerPage() {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenant_id,
+          tenant_id: tenantId,
           wo_item_id: woItemId || null
         })
       });
@@ -270,7 +270,7 @@ export default function BoxManagerPage() {
     <div className="space-y-6 pb-12">
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push(`/sbu/forwarding/consol/${consolId}`)} className="rounded-full shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/sbu/forwarding/consol/${consolId}`)} className="rounded-full shrink-0">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Button>
           <div>
@@ -286,7 +286,7 @@ export default function BoxManagerPage() {
             <Plus className="w-4 h-4 mr-2" /> Buat Box Baru
           </Button>
           <Link href={`/sbu/forwarding/consol/${consolId}`}>
-            <Button variant="outline">Kembali ke Consol</Button>
+            <Button variant="secondary">Kembali ke Consol</Button>
           </Link>
         </div>
       </div>
@@ -370,7 +370,7 @@ export default function BoxManagerPage() {
                 <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setShowCreateBox(false)}>
+                <Button type="button" variant="secondary" onClick={() => setShowCreateBox(false)}>
                   Batal
                 </Button>
               </div>
@@ -556,7 +556,7 @@ export default function BoxManagerPage() {
                               >
                                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                               </Button>
-                              <Button variant="outline" onClick={() => { setSelectedBoxId(null); setAddItemForm({ wo_item_id: '', quantity: 1, description: '', commodity: '', volume_cbm: '', gross_weight_kg: '' }); }}>
+                              <Button variant="secondary" onClick={() => { setSelectedBoxId(null); setAddItemForm({ wo_item_id: '', quantity: 1, description: '', commodity: '', volume_cbm: '', gross_weight_kg: '' }); }}>
                                 Batal
                               </Button>
                             </div>
@@ -565,7 +565,7 @@ export default function BoxManagerPage() {
                       </Card>
                     ) : (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => setSelectedBoxId(box.id)}
                         className="text-xs"

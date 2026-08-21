@@ -1,9 +1,9 @@
-import { OperationalContext } from '../../context/OperationalContext';
-import { EntityResolutionResult } from '../../intelligence/entities/models';
-import { StructuralValidationResult } from '../../validation/ValidationModels';
-import { ExplainabilityData } from '../../metrics/ExplainabilityData';
-import { EnrichedOperationalContext } from '../../engine/ContextEnricher';
-import { CopilotResponse } from '../../engine/CopilotEngine';
+import { OperationalContext } from '../context/OperationalContext';
+import { EntityResolutionResult } from '../intelligence/entities/models';
+import { StructuralValidationResult } from '../validation/ValidationModels';
+import { ExplainabilityData } from '../metrics/ExplainabilityData';
+import { EnrichedOperationalContext } from '../engine/ContextEnricher';
+import { CopilotResponse } from '../engine/CopilotEngine';
 
 export enum PipelineStatus {
   CONTINUE = 'CONTINUE',
@@ -33,7 +33,7 @@ export class PipelineContext {
   
   validationResult?: StructuralValidationResult;
   
-  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   requiredPermissions?: string[];
   
   explainabilityData?: ExplainabilityData;

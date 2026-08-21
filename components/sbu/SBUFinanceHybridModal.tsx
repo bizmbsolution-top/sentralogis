@@ -118,17 +118,18 @@ export default function SBUFinanceHybridModal({
 
       if (error) throw error;
       if (data) {
-        setTransferAmount(data.driver_payment_amount?.toString() || "");
+        const jobData = data as any;
+        setTransferAmount(jobData.driver_payment_amount?.toString() || "");
         setTransferProof(
-          data.advance_receipt_url || data.transfer_proof_url || null,
+          jobData.advance_receipt_url || jobData.transfer_proof_url || null,
         );
-        setAdvanceAmount(data.advance_amount?.toString() || "");
-        setAdvanceStatus(data.advance_status || "unpaid");
+        setAdvanceAmount(jobData.advance_amount?.toString() || "");
+        setAdvanceStatus(jobData.advance_status || "unpaid");
 
         // Fetch existing POD docs
-        if (data.pod_photo_url) {
+        if (jobData.pod_photo_url) {
           try {
-            const urls = JSON.parse(data.pod_photo_url);
+            const urls = JSON.parse(jobData.pod_photo_url);
             if (Array.isArray(urls)) {
               setDocs(
                 urls.map((url: string, index: number) => ({
@@ -141,14 +142,14 @@ export default function SBUFinanceHybridModal({
               );
             }
           } catch (e) {
-            if (data.pod_photo_url.length > 5) {
+            if (jobData.pod_photo_url.length > 5) {
               setDocs([
                 {
                   id: "existing-0",
                   name: "Existing Document",
                   description: "",
                   file: null,
-                  url: data.pod_photo_url,
+                  url: jobData.pod_photo_url,
                 },
               ]);
             }
@@ -170,7 +171,7 @@ export default function SBUFinanceHybridModal({
       if (error) throw error;
       if (data && data.length > 0) {
         setExtraCosts(
-          data.map((c) => ({
+          ((data as any[]) || []).map((c: any) => ({
             id: c.id,
             name: c.description || c.cost_type,
             amount: c.amount.toString(),
@@ -390,7 +391,7 @@ export default function SBUFinanceHybridModal({
             paid_by: 'sbu',
             paid_by_user: profile?.id,
             paid_at: new Date().toISOString(),
-            transfer_proof_url: transferProof,
+            transfer_proof_url: transferProof || undefined,
             notes: isFirstPayment ? 'Uang Jalan (Advance)' : 'Pelunasan Driver',
           });
         } catch (payErr) {
@@ -502,7 +503,7 @@ export default function SBUFinanceHybridModal({
         .from("job_orders")
         .update({
           driver_payment_amount: Number(parseThousand(transferAmount)) || 0,
-          advance_receipt_url: transferProof,
+          advance_receipt_url: transferProof || undefined,
           advance_status: transferProof ? "paid" : job.advance_status,
         })
         .eq("id", job.id);

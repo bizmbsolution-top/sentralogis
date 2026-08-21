@@ -50,19 +50,16 @@ function GovernanceDashboardContent() {
 
   // Map Governance Data to InsightCard format
   const insightData: InsightData = {
-    title: 'Codebase Scan Results',
-    description: `Found ${metrics.technicalDebt.deepNestingCount} deeply nested lines, ${metrics.technicalDebt.duplicatedCodeCount} duplications, and ${metrics.technicalDebt.todoCount} TODOs.`,
-    metricLabel: 'Overall Health',
-    metricValue: `${metrics.productionReadiness.overallScore}/100`,
-    metricTrend: 'up',
-    trendValue: 'Latest Run',
-    priority: metrics.productionReadiness.overallScore < 80 ? 'High' : 'Normal',
-    actionLabel: 'View Detailed Reports',
-    actionHref: '#'
+    detectedSituation: 'Codebase Scan Results',
+    operationalReason: `Found ${metrics.technicalDebt.deepNestingCount} deeply nested lines, ${metrics.technicalDebt.duplicatedCodeCount} duplications, and ${metrics.technicalDebt.todoCount} TODOs.`,
+    businessImpact: `Overall Health ${metrics.productionReadiness.overallScore}/100`,
+    recommendedStrategy: metrics.productionReadiness.overallScore < 80
+      ? 'High priority: reduce technical debt before next release.'
+      : 'Maintain current quality gates.',
   };
 
   // Map History to TimelinePanel format
-  const milestones: TimelineMilestone[] = history.slice(-5).map((entry, index) => ({
+  const milestones: TimelineMilestone[] = history.slice(-5).map((entry, index): TimelineMilestone => ({
     key: entry.timestamp,
     label: `Run Score: ${entry.overallScore}`,
     status: 'DONE',
@@ -115,7 +112,7 @@ function GovernanceDashboardContent() {
         <div>
           <TimelinePanel 
             milestones={milestones}
-            activeJobId="Governance Timeline"
+            jobId="Governance Timeline"
           />
         </div>
       </div>

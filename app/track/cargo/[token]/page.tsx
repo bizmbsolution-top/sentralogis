@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { use } from 'react';
 import CargoTrackingClient from '@/components/tracking/CargoTrackingClient';
 
-export default function CargoTrackPage({ params }: { params: { token: string } }) {
+export default function CargoTrackPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
   // Mock data for demo
   const cargoData = {
-    sku: `CARGO-${params.token.toUpperCase()}`,
+    sku: `CARGO-${token?.toUpperCase() || ''}`,
     owner: 'Forwarder Partner A'
   };
 

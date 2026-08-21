@@ -171,7 +171,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         }
         
         // Normalize oldItems to new items shape
-        const normalizedOldItems = (oldItems || []).map(old => ({
+        const normalizedOldItems = (oldItems || []).map((old: any) => ({
           ...old,
           item_data: old.sbu_metadata || { unit_count: old.quantity, deal_price: old.deal_price },
           sbu_type: old.sbu_type || 'TRUCKING',
@@ -199,7 +199,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
               .eq('wo_item_id', item.id);
 
             // Fetch extra details if jobs exist
-            let enrichedJobs = [];
+            let enrichedJobs: any[] = [];
             if (jobOrders && jobOrders.length > 0) {
               enrichedJobs = await Promise.all(jobOrders.map(async (jo) => {
                 let transporter = null;
@@ -228,7 +228,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
               item_data: typeof item.item_data === 'string' ? JSON.parse(item.item_data) : item.item_data,
               job_orders: enrichedJobs,
               // [AI] Map wo_item_manifests to manifests, flatten md_product_skus for AddWarehouseItemModal
-              manifests: (item.wo_item_manifests || []).map((m: any) => ({
+              manifests: ((item as any).wo_item_manifests || []).map((m: any) => ({
                 ...m,
                 // Flatten nested md_product_skus fields to top level
                 sku_code: m.md_product_skus?.sku_code || '',
@@ -246,7 +246,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         setFormData({
           customer_id: wo.customer_id || '',
           order_date: wo.order_date || todayLocal(),
-          order_time: wo.order_time || nowLocalTime(),
+          order_time: (wo as any).order_time || nowLocalTime(),
           execution_date: wo.execution_date || todayLocal(),
           execution_time: wo.execution_time || nowLocalTime(),
           notes: wo.notes || '',
@@ -380,7 +380,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
       if (editId) {
         step = 'update-work-order';
-        let { error } = await supabase.from('work_orders').update(payload).eq('id', editId);
+        let { error } = await supabase.from('work_orders').update(payload as any).eq('id', editId);
         if (error && /order_time/i.test(error.message || '')) {
           const { order_time, ...safePayload } = payload;
           ({ error } = await supabase.from('work_orders').update(safePayload).eq('id', editId));
@@ -388,7 +388,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         if (error) throw error;
       } else {
         step = 'insert-work-order';
-        let { data: wo, error } = await supabase.from('work_orders').insert(payload).select().single();
+        let { data: wo, error } = await supabase.from('work_orders').insert(payload as any).select().single();
         if (error && /order_time/i.test(error.message || '')) {
           const { order_time, ...safePayload } = payload;
           ({ data: wo, error } = await supabase.from('work_orders').insert(safePayload).select().single());
@@ -399,7 +399,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       // STEP 1: If editId is present, check existing wo_items in database
       let existingDbItemIds: string[] = [];
       if (editId) {
-        const { data: dbItems } = await supabase.from('wo_items').select('id').eq('wo_id', woId);
+        const { data: dbItems } = await supabase.from('wo_items').select('id').eq('wo_id', woId as string);
         existingDbItemIds = (dbItems || []).map(i => i.id);
 
         // Delete items from DB that are no longer in woItems state
@@ -410,7 +410,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           }
         }
       } else {
-        await supabase.from('wo_items').delete().eq('wo_id', woId);
+        await supabase.from('wo_items').delete().eq('wo_id', woId as string);
       }
 
       const sbuCounts: Record<string, number> = {};
@@ -660,7 +660,7 @@ for (const [index, item] of woItems.entries()) {
                       received_qty: 0
                     }));
                     if (detailPayloads.length > 0) {
-                      await supabase.from('wh_transfer_order_items').insert(detailPayloads);
+                      await (supabase.from('wh_transfer_order_items' as any) as any).insert(detailPayloads);
                     }
                   }
                 } else {

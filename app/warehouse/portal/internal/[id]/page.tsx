@@ -7,36 +7,38 @@ import { Loader2, Warehouse, CheckCircle2, ArrowRight, XCircle } from 'lucide-re
 import { toast } from 'react-hot-toast';
 
 export default function InternalMovementTaskPage() {
-  const { id } = useParams();
+  const params = useParams();
+  const rawId = params?.id;
+  const movementId = Array.isArray(rawId) ? rawId[0] : (rawId || '');
   const router = useRouter();
   const [mov, setMov] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!movementId) return;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('wh_internal_movements')
+      const { data } = await (supabase
+        .from('wh_internal_movements' as any) as any)
         .select(`
           id, quantity, movement_date, status, notes,
           product:product_sku_id(name, sku_code),
           from_location:from_location_id(code),
           to_location:to_location_id(code)
         `)
-        .eq('id', id)
+        .eq('id', movementId)
         .single();
       setMov(data);
       setLoading(false);
     })();
-  }, [id]);
+  }, [movementId]);
 
   const finish = async () => {
     setExecuting(true);
     try {
       const { error } = await supabase.rpc('execute_internal_movement', {
-        p_movement_id: id,
+        p_movement_id: movementId,
       });
       if (error) throw error;
       toast.success('Movement berhasil dieksekusi!');

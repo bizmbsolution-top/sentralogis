@@ -73,7 +73,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
 
       if (!error && data) {
         legacyNotifs = data
-          .filter((n) => !(n.item_data?.read_by || []).includes(profile.id))
+          .filter((n) => !((n.item_data as any)?.read_by || []).includes(profile.id))
           .map((n) => ({
             id: `wo_${n.id}`,
             type: "handover",
@@ -104,7 +104,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         .limit(10);
 
       if (!error && data) {
-        let userWhId = profile.warehouse_id || null;
+        let userWhId: string | null = profile.warehouse_id || null;
         if (!userWhId && profile.id) {
           try {
             const { data: orgUser } = await supabase
@@ -112,12 +112,12 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
               .select("assigned_warehouse_id")
               .eq("user_id", profile.id)
               .maybeSingle();
-            if (orgUser) userWhId = orgUser.assigned_warehouse_id;
+            if (orgUser) userWhId = (orgUser as any).assigned_warehouse_id || null;
           } catch (e) {}
         }
 
         legacyNotifs = data
-          .filter((n) => !(n.item_data?.read_by || []).includes(profile.id))
+          .filter((n) => !((n.item_data as any)?.read_by || []).includes(profile.id))
           .filter((n) => {
             const isWhRole =
               roleUpper.includes("WH") ||
@@ -141,8 +141,8 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
                 return false;
               if (
                 userWhId &&
-                n.item_data?.warehouse_id &&
-                n.item_data.warehouse_id !== userWhId
+                (n.item_data as any)?.warehouse_id &&
+                (n.item_data as any).warehouse_id !== userWhId
               )
                 return false;
               return true;
@@ -158,8 +158,8 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
             if (userWhId) {
               if (n.sbu_type === "TRUCKING") return false;
               return (
-                !n.item_data?.warehouse_id ||
-                n.item_data?.warehouse_id === userWhId
+                !(n.item_data as any)?.warehouse_id ||
+                (n.item_data as any)?.warehouse_id === userWhId
               );
             }
             return true;
@@ -430,15 +430,15 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           .select("item_data")
           .eq("id", itemId)
           .single();
-        const currentReadBy = currentItem?.item_data?.read_by || [];
+        const currentReadBy = (currentItem?.item_data as any)?.read_by || [];
         if (!currentReadBy.includes(profile.id)) {
           await supabase
             .from("wo_items")
             .update({
               item_data: {
-                ...currentItem?.item_data,
+                ...((currentItem?.item_data as any) || {}),
                 read_by: [...currentReadBy, profile.id],
-              },
+              } as any,
             })
             .eq("id", itemId);
         }
@@ -448,7 +448,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         .filter((n) => n.type === "jo_completed")
         .map((n) => n.id.replace("jo_", ""));
       for (const joId of joIds) {
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications" as any) as any).insert({
           tenant_id: profile.tenant_id,
           user_id: profile.id,
           title: "MISSION_ACK",
@@ -463,7 +463,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         .filter((n) => n.type === "add_cost")
         .map((n) => n.id.replace("ec_", ""));
       for (const ecId of ecIds) {
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications" as any) as any).insert({
           tenant_id: profile.tenant_id,
           user_id: profile.id,
           title: "EXTRA_COST_ACK",
@@ -499,21 +499,21 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
           .select("item_data")
           .eq("id", itemId)
           .single();
-        const currentReadBy = currentItem?.item_data?.read_by || [];
+        const currentReadBy = (currentItem?.item_data as any)?.read_by || [];
         if (!currentReadBy.includes(profile?.id)) {
           await supabase
             .from("wo_items")
             .update({
               item_data: {
-                ...currentItem?.item_data,
+                ...((currentItem?.item_data as any) || {}),
                 read_by: [...currentReadBy, profile?.id],
-              },
+              } as any,
             })
             .eq("id", itemId);
         }
       } else if (n.type === "jo_completed") {
         const joId = n.id.replace("jo_", "");
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications" as any) as any).insert({
           tenant_id: profile?.tenant_id,
           user_id: profile?.id,
           title: "MISSION_ACK",
@@ -524,7 +524,7 @@ const TopNavbar = ({ onMenuClick }: TopNavbarProps) => {
         });
       } else if (n.type === "add_cost") {
         const ecId = n.id.replace("ec_", "");
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications" as any) as any).insert({
           tenant_id: profile?.tenant_id,
           user_id: profile?.id,
           title: "EXTRA_COST_ACK",

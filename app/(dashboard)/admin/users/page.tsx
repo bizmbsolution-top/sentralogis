@@ -135,28 +135,28 @@ export default function UserManagementPage() {
         .select('*, organizations(name)')
         .order('created_at', { ascending: false });
 
-      if (currentProfile?.role !== 'superadmin') {
-        profilesQuery = profilesQuery.eq('organization_id', currentProfile?.organization_id);
+      if (currentProfile?.role !== 'superadmin' && currentProfile?.organization_id) {
+        profilesQuery = profilesQuery.eq('organization_id', currentProfile.organization_id);
       }
 
       const { data: pData, error: pError } = await profilesQuery;
       if (pError) throw pError;
-      setProfiles(pData || []);
+      setProfiles((pData as any[]) || []);
 
       // 3. Fetch Organizations with conditional filtering
-      let orgsQuery = supabase.from('organizations').select('id, name').order('name');
+      let orgsQuery = (supabase.from('organizations' as any) as any).select('id, name').order('name');
       
-      if (currentProfile?.role !== 'superadmin') {
-        orgsQuery = orgsQuery.eq('id', currentProfile?.organization_id);
+      if (currentProfile?.role !== 'superadmin' && currentProfile?.organization_id) {
+        orgsQuery = orgsQuery.eq('id', currentProfile.organization_id);
       }
 
       const { data: oData } = await orgsQuery;
-      setOrganizations(oData || []);
+      setOrganizations((oData as any[]) || []);
 
       // 4. Fetch Warehouses
       const whQuery = supabase.from('md_warehouses').select('id, name, organization_id').eq('is_active', true);
       const { data: wData } = await whQuery;
-      setWarehouses(wData || []);
+      setWarehouses((wData as any[]) || []);
 
     } catch (error: unknown) {
       toast.error("Gagal sinkronisasi data kredensial.");

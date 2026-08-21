@@ -62,11 +62,14 @@ export default function TenantBrandShowcase({
 
   const fetchSingleTenantByCodeOrId = async (param: string) => {
     try {
-      let { data } = await supabase
-        .from('md_tenants')
+      let data: any = null;
+      const { data: mdTenant } = await (supabase
+        .from('md_tenants' as any) as any)
         .select('id, name, logo_url, tenant_code')
         .or(`id.eq.${param},tenant_code.ilike.${param}`)
         .maybeSingle();
+
+      data = mdTenant;
 
       if (!data) {
         const res = await supabase
@@ -82,7 +85,7 @@ export default function TenantBrandShowcase({
           id: data.id,
           name: data.name,
           logo_url: data.logo_url,
-          code: data.tenant_code,
+          code: data.tenant_code || '',
         };
         setActiveTenant(brand);
         localStorage.setItem('sentralogis_active_tenant_brand', JSON.stringify(brand));

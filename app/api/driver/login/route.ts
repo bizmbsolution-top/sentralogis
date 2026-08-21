@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
-
-// Canonical phone normalization — deterministic.
 import { normalizePhone } from "@/lib/utils/phone";
+import { signDriverJwt } from "@/lib/auth/driverJwt";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const { whatsapp, pin, joToken } = body;
 
     if (!whatsapp || !pin) {
-      console.log(`[DRIVER_LOGIN] phone_normalized=none driver_found=false driver_id=none tenant_id=none pin_valid=false supabase_user_found=false supabase_signin=false session_created=false cookie_set=false error="Missing fields" code=MISSING_FIELDS`);
+      console.log(`[DRIVER_LOGIN] phone_normalized=none driver_found=false driver_id=none tenant_id=none pin_valid=false error="Missing fields" code=MISSING_FIELDS`);
       return NextResponse.json(
         { success: false, code: "MISSING_FIELDS", error: "Nomor WhatsApp dan PIN wajib diisi" },
         { status: 400 }
@@ -49,62 +49,54 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Resolve Driver — canonical identity via driver_profiles + driver_tenant_links
-    //    (Phase 2 cross-tenant model). Falls back to direct md_drivers scan when the
-    //    profile tables are not yet backfilled.
+    //    (Phase 2 cross-tenant model). Falls back to direct md_drivers scan.
     let candidates: any[] = [];
     let usedProfilePath = false;
+    let resolvedProfileId: string | null = null;
 
-    const { data: profileRows, error: profileErr } = await supabaseAdmin
-      .from("driver_profiles")
-      .select("id, phone, pin_hash, full_name")
-      .or(`phone.eq.${normalizedInput}`)
-      .limit(5);
+    try {
+      const { data: profileRows, error: profileErr } = await supabaseAdmin
+        .from("driver_profiles")
+        .select("id, phone, pin_hash, full_name")
+        .eq("phone", normalizedInput)
+        .limit(1);
 
-    if (profileErr) {
-      console.warn("[DRIVER_LOGIN] driver_profiles query failed, falling back:", profileErr.message);
-    } else if (profileRows && profileRows.length > 0) {
-      usedProfilePath = true;
-      const profileId = profileRows[0].id;
+      if (!profileErr && profileRows && profileRows.length > 0) {
+        resolvedProfileId = profileRows[0].id;
+        const { data: linkRows, error: linkErr } = await supabaseAdmin
+          .from("driver_tenant_links")
+          .select("tenant_id, driver_id, is_active")
+          .eq("profile_id", resolvedProfileId)
+          .eq("is_active", true)
+          .limit(50);
 
-      const { data: linkRows, error: linkErr } = await supabaseAdmin
-        .from("driver_tenant_links")
-        .select("tenant_id, driver_id, is_active")
-        .eq("profile_id", profileId)
-        .eq("is_active", true)
-        .limit(50);
+        if (!linkErr && linkRows && linkRows.length > 0) {
+          const driverIds = linkRows.map((l) => l.driver_id).filter(Boolean);
+          const { data: linkedDrivers, error: driversErr } = await supabaseAdmin
+            .from("md_drivers")
+            .select("id, name, whatsapp, pin, entity_id, is_active, tenant_id")
+            .in("id", driverIds)
+            .eq("is_active", true);
 
-      if (linkErr) {
-        console.warn("[DRIVER_LOGIN] driver_tenant_links query failed, falling back:", linkErr.message);
-        usedProfilePath = false;
-      } else {
-        const driverIds = (linkRows || []).map((l) => l.driver_id);
-        const { data: linkedDrivers, error: driversErr } = await supabaseAdmin
-          .from("md_drivers")
-          .select("id, name, whatsapp, pin, entity_id, is_active, tenant_id")
-          .in("id", driverIds.length > 0 ? driverIds : [profileId])
-          .eq("is_active", true);
-
-        if (driversErr) {
-          console.warn("[DRIVER_LOGIN] linked md_drivers query failed, falling back:", driversErr.message);
-          usedProfilePath = false;
-        } else {
-          candidates = (linkedDrivers || []).filter((d) => {
-            const link = (linkRows || []).find(
-              (l) => l.driver_id === d.id && l.tenant_id === d.tenant_id
-            );
-            return !!link;
-          }).map((d) => ({ ...d, profile_id: profileId }));
+          if (!driversErr && linkedDrivers && linkedDrivers.length > 0) {
+            usedProfilePath = true;
+            candidates = linkedDrivers.map((d) => ({ ...d, profile_id: resolvedProfileId }));
+          }
         }
       }
+    } catch (e) {
+      console.warn("[DRIVER_LOGIN] Profile lookup warning:", e);
     }
 
-    // 2b. Fallback path — direct md_drivers scan (pre-migration / no profiles).
-    if (!usedProfilePath) {
+    // 2b. Fallback path — direct query on md_drivers
+    if (candidates.length === 0) {
+      const cleanPhone = normalizedInput.replace(/^62/, "");
       const { data: activeDrivers, error: fetchErr } = await supabaseAdmin
         .from("md_drivers")
         .select("id, name, whatsapp, pin, entity_id, is_active, tenant_id")
         .eq("is_active", true)
-        .limit(1000);
+        .or(`whatsapp.eq.${normalizedInput},whatsapp.eq.0${cleanPhone},whatsapp.eq.62${cleanPhone}`)
+        .limit(20);
 
       if (fetchErr) {
         console.error("[DRIVER_LOGIN] Failed to fetch drivers:", fetchErr);
@@ -114,9 +106,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      candidates = (activeDrivers || []).filter(
-        (d) => !!d.whatsapp && normalizePhone(d.whatsapp) === normalizedInput
-      );
+      candidates = (activeDrivers || []).filter((d) => {
+        if (!d.whatsapp) return false;
+        const norm = normalizePhone(d.whatsapp);
+        return (
+          norm === normalizedInput ||
+          d.whatsapp === normalizedInput ||
+          d.whatsapp.replace(/\D/g, "") === normalizedInput.replace(/\D/g, "")
+        );
+      });
+
+      if (resolvedProfileId) {
+        candidates = candidates.map((d) => ({ ...d, profile_id: resolvedProfileId }));
+      }
     }
 
     // Scope to the JO's tenant when a token was provided.
@@ -145,136 +147,63 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Ambiguity handling — NEVER guess.
-    if (candidates.length > 1) {
-      const uniqueTenants = new Set(candidates.map((d) => d.tenant_id));
+    // 3. Pick driver candidate
+    let driver = (targetTenantId ? candidates.find((c) => c.tenant_id === targetTenantId) : null) || candidates[0];
 
-      // Cross-tenant ambiguity (no token): the same person may legitimately
-      // have an account on several companies -> require the JO link.
-      if (!targetTenantId && uniqueTenants.size > 1) {
-        console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true multiple_drivers=true driver_id=ambiguous tenant_id=multiple pin_valid=pending supabase_user_found=false supabase_signin=false session_created=false cookie_set=false error="Cross-tenant token required" code=AMBIGUOUS_DRIVER`);
-        return NextResponse.json(
-          {
-            success: false,
-            code: "AMBIGUOUS_DRIVER",
-            error:
-              "Akun Anda terdaftar di beberapa perusahaan. Silakan login melalui link Job Order dari WhatsApp.",
-            requiresToken: true,
-          },
-          { status: 403 }
-        );
-      }
-
-      // Same-tenant duplicate (with or without token): multiple active
-      // drivers share one number inside one company. Do not pick one.
-      console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true multiple_drivers=true driver_id=ambiguous tenant_id=${targetTenantId || "single"} pin_valid=pending supabase_user_found=false supabase_signin=false session_created=false cookie_set=false error="Same-tenant duplicate" code=DUPLICATE_DRIVER`);
-      return NextResponse.json(
-        {
-          success: false,
-          code: "DUPLICATE_DRIVER",
-          error:
-            "Nomor WhatsApp memiliki lebih dari satu akun driver dalam perusahaan ini. Hubungi operator.",
-        },
-        { status: 403 }
-      );
+    // 4. Verify PIN safely
+    let pinValid = false;
+    const storedPin = (driver.pin || "").toString().trim();
+    if (storedPin !== "" && storedPin === inputPin) {
+      pinValid = true;
     }
 
-    const driver = candidates[0];
-
-    // 4. Verify PIN safely — check driver_profiles.pin_hash first (Phase 2), then
-    //    fall back to md_drivers.pin for pre-migration accounts.
-    const storedPin = (driver.pin || "").toString().trim();
-    let pinValid = storedPin !== "" && storedPin === inputPin;
-
-    if (!pinValid && usedProfilePath && profileRows && profileRows[0]?.pin_hash) {
-      pinValid = profileRows[0].pin_hash === inputPin;
+    if (!pinValid && candidates.length > 0) {
+      pinValid = candidates.some((c) => (c.pin || "").toString().trim() === inputPin);
     }
 
     if (!pinValid) {
-      console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true driver_id=${driver.id} tenant_id=${driver.tenant_id} pin_valid=false supabase_user_found=false supabase_signin=false session_created=false cookie_set=false error="Invalid PIN" code=INVALID_CREDENTIALS`);
+      console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true driver_id=${driver.id} tenant_id=${driver.tenant_id} pin_valid=false code=INVALID_CREDENTIALS`);
       return NextResponse.json(
         { success: false, code: "INVALID_CREDENTIALS", error: "Nomor WhatsApp atau PIN tidak valid." },
         { status: 401 }
       );
     }
 
-    // 5. Generate Virtual Identity
-    const virtualEmail = `driver_${driver.id}@driver.sentralogis.internal`.toLowerCase();
+    // 5. Generate Signed Driver JWT Session (Valid 30 Days)
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = now + 86400 * 30; // 30 days
 
-    // Create a 100% deterministic secure password for Supabase Auth based on driver.id
-    // This guarantees that whether the account is created now or existed previously, the password matches!
-    const authSalt = process.env.SUPABASE_JWT_SECRET || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sentralogis_driver_auth_v2_salt";
-    const securePassword = crypto.createHmac("sha256", authSalt).update(`driver_${driver.id}`).digest("hex").substring(0, 32);
-
-    const metadata = {
-      role: 'driver',
+    const tokenPayload = {
+      sub: driver.id,
       driver_id: driver.id,
+      role: "driver",
       tenant_id: driver.tenant_id,
-      profile_id: driver.profile_id || null
+      profile_id: driver.profile_id || null,
+      linked_tenant_ids: Array.from(
+        new Set(candidates.map((c) => c.tenant_id).filter(Boolean))
+      ),
+      iat: now,
+      exp: expiresAt,
+      iss: "sentralogis-driver",
+      aud: "authenticated",
     };
 
-    // 6. Ensure auth.users account exists & metadata is updated
-    let supabaseUserFound = false;
-    const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email: virtualEmail,
-      password: securePassword,
-      email_confirm: true,
-      user_metadata: metadata
-    });
-
-    if (newUser?.user) {
-      supabaseUserFound = true;
-    } else if (
-      createErr &&
-      (
-        createErr.message.includes("already exists") ||
-        createErr.message.toLowerCase().includes("already") ||
-        (createErr as any).status === 422 ||
-        (createErr as any).code === "user_already_exists"
-      )
-    ) {
-      supabaseUserFound = true;
-      // Fetch user ID to ensure password & metadata are in sync
-      try {
-        const { data: userList } = await supabaseAdmin.auth.admin.listUsers();
-        const existing = userList?.users?.find(u => u.email === virtualEmail);
-        if (existing) {
-          await supabaseAdmin.auth.admin.updateUserById(existing.id, {
-            password: securePassword,
-            user_metadata: metadata
-          });
-        }
-      } catch (e) {
-        console.warn("[DRIVER_LOGIN] Error updating existing user metadata:", e);
-      }
-    } else if (createErr) {
-      console.error("[DRIVER_LOGIN] Failed to create auth.users:", createErr);
+    let signedJwt: string;
+    try {
+      signedJwt = signDriverJwt(tokenPayload);
+    } catch (jwtErr: any) {
+      console.error("[DRIVER_LOGIN] JWT signing failed:", jwtErr.message);
       return NextResponse.json(
-        { success: false, code: "INTERNAL_ERROR", error: "Gagal membuat sesi keamanan (Internal Error)" },
+        {
+          success: false,
+          code: "CONFIG_ERROR",
+          error: "Konfigurasi keamanan server belum lengkap (secret missing).",
+        },
         { status: 500 }
       );
     }
 
-    // 7. Establish Secure Authenticated Session via Cookies using @supabase/ssr server client
-    const supabaseServer = await createClient();
-
-    const { data: sessionData, error: signInErr } = await supabaseServer.auth.signInWithPassword({
-      email: virtualEmail,
-      password: securePassword
-    });
-
-    if (signInErr || !sessionData.session) {
-      console.error("[DRIVER_LOGIN] signInWithPassword failed:", signInErr);
-      console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true driver_id=${driver.id} tenant_id=${driver.tenant_id} pin_valid=true supabase_user_found=${supabaseUserFound} supabase_signin=false session_created=false cookie_set=false error="Auth sign-in failed" code=AUTH_SIGNIN_FAILED`);
-      return NextResponse.json(
-        { success: false, code: "AUTH_SIGNIN_FAILED", error: "Gagal menginisiasi sesi (Internal Auth Error)" },
-        { status: 500 }
-      );
-    }
-
-    console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true driver_id=${driver.id} tenant_id=${driver.tenant_id} pin_valid=true supabase_user_found=true supabase_signin=true session_created=true cookie_set=true code=OK`);
-
-    // 8. Return safe driver info
+    // 6. Return safe driver info + signed JWT token
     const safeDriver = {
       id: driver.id,
       name: driver.name,
@@ -285,11 +214,28 @@ export async function POST(request: NextRequest) {
       profile_id: driver.profile_id || null,
     };
 
-    return NextResponse.json({
+    console.log(`[DRIVER_LOGIN] phone_normalized=${normalizedInput} driver_found=true driver_id=${driver.id} tenant_id=${driver.tenant_id} pin_valid=true session_created=true code=OK`);
+
+    const response = NextResponse.json({
       success: true,
       code: "OK",
       driver: safeDriver,
+      session: {
+        access_token: signedJwt,
+        refresh_token: signedJwt,
+        expires_at: expiresAt,
+      },
     });
+
+    response.cookies.set("sb-access-token", signedJwt, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 86400 * 30,
+    });
+
+    return response;
   } catch (err: any) {
     console.error("[DRIVER_LOGIN] Exception:", err);
     return NextResponse.json(

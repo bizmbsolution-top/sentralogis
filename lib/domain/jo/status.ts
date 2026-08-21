@@ -140,6 +140,25 @@ export function isJoTrackableStatus(status: string | null | undefined): boolean 
   return categorizeJoStatus(status) === 'active';
 }
 
+/** Statuses where truck is at/leaving final unloading stop and ready for next queue assignment */
+export function isJoReadyForNextAssignment(status: string | null | undefined): boolean {
+  const s = normalizeStatus(status);
+  if (!s) return false;
+  return (
+    s === 'TIBA DI LOKASI BONGKAR' ||
+    s === 'UNLOADING' ||
+    s === 'SELESAI BONGKAR' ||
+    s === 'MENUNGGU SELESAI'
+  );
+}
+
+/** JOs that still strictly occupy fleet/driver on the road before the final unloading phase */
+export function isJoHardBlockingAsset(status: string | null | undefined): boolean {
+  const s = normalizeStatus(status);
+  if (!s || isJoDone(s) || isJoRejected(s)) return false;
+  return !isJoReadyForNextAssignment(s);
+}
+
 /** JOs that still occupy fleet/driver on this WO item (not terminal states). */
 export function isJoBlockingAsset(status: string | null | undefined): boolean {
   const s = normalizeStatus(status);

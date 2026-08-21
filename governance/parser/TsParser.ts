@@ -1,6 +1,14 @@
 import * as fs from 'fs';
 import { TypeScriptDiagnostic } from '../../src/features/governance/types';
 
+export interface TsError {
+  file: string;
+  line: number;
+  column: number;
+  code: string;
+  message: string;
+}
+
 const ERROR_REGEX = /^(.+)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.*)$/;
 const ANSI_REGEX = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 

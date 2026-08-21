@@ -84,17 +84,17 @@ export default function DriverPerformancePage() {
         .eq('is_active', true);
       
       if (error) throw error;
-      setDrivers(data || []);
+      setDrivers((data || []) as Driver[]);
 
       // Fetch recent performance logs
       const { data: logs, error: logError } = await supabase
         .from('driver_performance_logs')
         .select('*, job_orders(jo_number, status)')
-        .eq('driver_id', (data || []).map(d => d.id))
+        .eq('driver_id', (data || []).map(d => d.id) as unknown as string)
         .order('created_at', { ascending: false })
         .limit(100);
       
-      if (!logError) setPerfLogs(logs || []);
+      if (!logError) setPerfLogs((logs || []) as unknown as PerfLog[]);
 
       // Fetch GPS quality data
       const { data: gpsData, error: gpsError } = await supabase
@@ -129,7 +129,7 @@ export default function DriverPerformancePage() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setDriverLogs(data || []);
+      setDriverLogs((data || []) as unknown as PerfLog[]);
     } catch (error: any) {
       toast.error('Gagal mengambil log performance');
     } finally {
@@ -165,7 +165,7 @@ export default function DriverPerformancePage() {
           .order('created_at', { ascending: false }),
       ]);
       const attMap: Record<string, any> = {};
-      (attRes.data || []).forEach(a => { attMap[a.driver_id] = a; });
+      (attRes.data || []).forEach(a => { if (!a.driver_id) return; attMap[a.driver_id] = a; });
       const inspMap: Record<string, any> = {};
       (inspRes.data || []).forEach(i => { if (!inspMap[i.driver_id]) inspMap[i.driver_id] = i; });
       const merged = (internalDrivers || []).map(d => ({

@@ -52,8 +52,8 @@ export default function TenantDashboard() {
       // [AI] Only update profiles table — tenants table has no admin_full_name column
       const { error: pError } = await supabase
         .from('profiles')
-        .update({ full_name: editName, whatsapp: editWhatsApp || null })
-        .eq('id', user?.id);
+        .update({ full_name: editName, whatsapp: editWhatsApp || undefined })
+        .eq('id', user?.id || '');
       
       if (pError) throw pError;
 

@@ -258,7 +258,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
         setCustomers(custData || []);
         
       } else if (data) {
-        setCustomers(data);
+        setCustomers(data as Customer[]);
       }
     } catch (err: any) {
       console.error(err);
@@ -339,7 +339,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
         console.error('Error fetching result products:', error);
         toast.error('Gagal memuat master produk: ' + error.message);
       } else if (data) {
-        setResultProducts(data);
+        setResultProducts(data as Product[]);
       }
     } catch (err: any) {
       console.error(err);
@@ -469,7 +469,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
   const fetchLocations = async () => {
     try {
       const { data, error } = await supabase.from('md_warehouse_locations').select('id, code, zone, rack, shelf, bin').order('code');
-      if (!error && data) setLocations(data);
+      if (!error && data) setLocations((data as any[]) || []);
     } catch (err) {}
   };
 
@@ -582,7 +582,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
       const { data: order, error: orderError } = await supabase.from('wh_repacking_orders').insert({
         tenant_id: profile?.tenant_id, warehouse_id: warehouseId, customer_id: selectedCustomerId,
         order_number: orderNumber, order_type: orderType, description, priority, notes, created_by: profile?.id,
-      }).select('id').single();
+      } as any).select('id').single();
 
       if (orderError) throw orderError;
 
@@ -602,7 +602,7 @@ export default function CreateRepackingModal({ onClose, onSuccess, warehouseId }
         batch_number: item.batch_number || null, expiry_date: item.expiry_date || null, notes: item.notes || null,
       }));
 
-      const { error: itemsError } = await supabase.from('wh_repacking_items').insert([...sourcePayloads, ...resultPayloads]);
+      const { error: itemsError } = await supabase.from('wh_repacking_items').insert([...sourcePayloads, ...resultPayloads] as any);
       if (itemsError) throw itemsError;
 
       toast.success(`Order ${orderNumber} created!`);

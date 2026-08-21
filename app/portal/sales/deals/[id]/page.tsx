@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -30,20 +30,21 @@ export default function MobileDealDetail({ params }: { params: Promise<{ id: str
   async function fetchDealAndQuotations() {
     setLoading(true);
     try {
+      const dealId = Array.isArray(id) ? id[0] : (id || '');
       const { data: dealData } = await supabase
         .from('crm_deals')
         .select(`*, md_entities(name)`)
-        .eq('id', id)
+        .eq('id', dealId)
         .single();
       
       if (dealData) {
         setDeal(dealData);
-        const { data: quotesData } = await supabase
-          .from('crm_quotations')
+        const { data: quotesData } = await (supabase
+          .from('crm_quotations' as any) as any)
           .select('*')
-          .eq('deal_id', id)
+          .eq('deal_id', dealId)
           .order('created_at', { ascending: false });
-        setQuotations(quotesData || []);
+        setQuotations((quotesData as any[]) || []);
       }
     } catch (err) {
       console.warn(err);
@@ -60,7 +61,7 @@ export default function MobileDealDetail({ params }: { params: Promise<{ id: str
       const quoteNumber = `QT-${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2, '0')}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
       
       const { data, error } = await supabase.from('crm_quotations').insert([{
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         deal_id: deal.id,
         quote_number: quoteNumber,
         status: 'DRAFT',

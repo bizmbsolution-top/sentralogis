@@ -68,15 +68,15 @@ export default function FleetsFormModal({ isOpen, onClose, onSuccess, initialDat
       const payload = { ...formData, created_by: user?.id };
 
       if (initialData?.id) {
-        const { error } = await supabase
-          .from('md_fleets')
+        const { error } = await (supabase
+          .from('md_fleets' as any) as any)
           .update(payload)
           .eq('id', initialData.id);
         if (error) throw error;
         toast.success('Fleet vehicle updated');
       } else {
-        const { error } = await supabase
-          .from('md_fleets')
+        const { error } = await (supabase
+          .from('md_fleets' as any) as any)
           .insert([payload]);
         if (error) throw error;
         toast.success('Fleet vehicle created');

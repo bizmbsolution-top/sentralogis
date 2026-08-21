@@ -19,7 +19,7 @@ export async function sendNotification(
       role: notif.role,
       title: notif.title,
       message: notif.message,
-      type: notif.metadata?.type || 'info',
+      type: String(notif.metadata?.type || 'info'),
       is_read: false,
       metadata: {
         ...(notif.metadata || {}),

@@ -131,9 +131,9 @@ export default function WarehouseAttendancePage() {
       // Admin staff
       if (adminStaff) {
         for (const s of adminStaff) {
-          const att = attMap[s.user_id] || null;
+          const att = s.user_id ? attMap[s.user_id] : null;
           combined.push({
-            id: s.user_id,
+            id: s.user_id || '',
             name: s.full_name || 'Unknown',
             role: s.role_code || 'ADMIN',
             staff_type: 'admin',

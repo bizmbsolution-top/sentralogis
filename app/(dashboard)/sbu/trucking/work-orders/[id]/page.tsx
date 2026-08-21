@@ -29,6 +29,7 @@ import {
   Box,
   Send,
   Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -63,10 +64,15 @@ interface WOItem {
     id: string;
     jo_number: string;
     status: string;
-    transporter: { name: string };
-    md_fleets: { plate_number: string; md_fleet_types: { type_name: string } };
-    md_drivers: { name: string; phone: string };
+    notes?: string;
+    container_number?: string;
+    sbu_metadata?: any;
+    transporter?: { name: string };
+    md_fleets?: { plate_number: string; md_fleet_types?: { type_name: string } };
+    md_drivers?: { name: string; phone: string };
+    [key: string]: any;
   }[];
+  [key: string]: any;
 }
 
 const recomputeVendorInvoiceAmount = async (
@@ -112,57 +118,58 @@ export default function WorkOrderDetailPage() {
   const [allJOs, setAllJOs] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
-    if (!id || !profile?.tenant_id || id === "[id]") return;
+    const idStr = Array.isArray(id) ? id[0] : id;
+    if (!idStr || !profile?.tenant_id || idStr === "[id]") return;
     setLoading(true);
 
     try {
       // 1. Fetch WO Header
-      const { data: woData, error: woError } = await supabase
-        .from("work_orders")
+      const { data: woData, error: woError } = await (supabase
+        .from("work_orders" as any) as any)
         .select(
           `
           *,
           customer:md_entities!customer_id(name, legal_name)
         `,
         )
-        .eq("id", id)
+        .eq("id", idStr)
         .single();
 
       if (woError) throw woError;
-      setWo(woData);
+      setWo(woData as any);
 
       // 2. Fetch WO Items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from("wo_items")
+      const { data: itemsData, error: itemsError } = await (supabase
+        .from("wo_items" as any) as any)
         .select("*")
-        .eq("wo_id", id)
+        .eq("wo_id", idStr)
         .eq("sbu_type", "TRUCKING");
 
       if (itemsError) throw itemsError;
-      const baseItems = itemsData || [];
+      const baseItems = (itemsData as any[]) || [];
 
       // 3. Fetch all Job Orders for these items
-      const itemIds = baseItems.map((i) => i.id);
+      const itemIds = baseItems.map((i: any) => i.id);
       if (itemIds.length > 0) {
         // AMBIL DATA JO TANPA JOIN (MANUAL FETCH UNTUK STABILITAS TOTAL)
-        const { data: joData, error: joError } = await supabase
-          .from("job_orders")
+        const { data: joData, error: joError } = await (supabase
+          .from("job_orders" as any) as any)
           .select("*")
           .in("wo_item_id", itemIds);
 
         if (joError) throw joError;
-        const baseJOs = joData || [];
+        const baseJOs = (joData as any[]) || [];
 
         // 4. Manual Fetch Relasi untuk menghindari "Schema Cache" error
         const transporterIds = [
-          ...new Set(baseJOs.map((j) => j.transporter_id).filter(Boolean)),
-        ];
+          ...new Set(baseJOs.map((j: any) => j.transporter_id).filter(Boolean)),
+        ] as string[];
         const fleetIds = [
-          ...new Set(baseJOs.map((j) => j.fleet_id).filter(Boolean)),
-        ];
+          ...new Set(baseJOs.map((j: any) => j.fleet_id).filter(Boolean)),
+        ] as string[];
         const driverIds = [
-          ...new Set(baseJOs.map((j) => j.driver_id).filter(Boolean)),
-        ];
+          ...new Set(baseJOs.map((j: any) => j.driver_id).filter(Boolean)),
+        ] as string[];
 
         const [transporters, fleets, drivers] = await Promise.all([
           transporterIds.length > 0
@@ -186,23 +193,23 @@ export default function WorkOrderDetailPage() {
         ]);
 
         // Map relasi kembali ke JO
-        const enrichedJOs = baseJOs.map((jo) => ({
+        const enrichedJOs = baseJOs.map((jo: any) => ({
           ...jo,
-          transporter: transporters.data?.find(
-            (t) => t.id === jo.transporter_id,
+          transporter: (transporters.data as any[])?.find(
+            (t: any) => t.id === jo.transporter_id,
           ),
-          md_fleets: fleets.data?.find((f) => f.id === jo.fleet_id),
-          md_drivers: drivers.data?.find((d) => d.id === jo.driver_id),
+          md_fleets: (fleets.data as any[])?.find((f: any) => f.id === jo.fleet_id),
+          md_drivers: (drivers.data as any[])?.find((d: any) => d.id === jo.driver_id),
         }));
 
         // Map JOs back to items
-        const itemsWithJOs = baseItems.map((item) => ({
+        const itemsWithJOs = baseItems.map((item: any) => ({
           ...item,
-          job_orders: enrichedJOs.filter((jo) => jo.wo_item_id === item.id),
+          job_orders: enrichedJOs.filter((jo: any) => jo.wo_item_id === item.id),
         }));
-        setItems(itemsWithJOs);
+        setItems((itemsWithJOs as any[]) || []);
       } else {
-        setItems(baseItems);
+        setItems((baseItems as any[]) || []);
       }
     } catch (error: any) {
       console.error("Error fetching WO details:", error);
@@ -217,7 +224,8 @@ export default function WorkOrderDetailPage() {
   }, [fetchData]);
 
   const fetchVendorInvoices = useCallback(async () => {
-    if (!id) return;
+    const idStr = Array.isArray(id) ? id[0] : id;
+    if (!idStr) return;
     setVendorLoading(true);
     try {
       const { data, error } = await supabase
@@ -228,7 +236,7 @@ export default function WorkOrderDetailPage() {
           vendor:md_entities!vendor_id(name, vendor_type)
         `,
         )
-        .eq("wo_id", id)
+        .eq("wo_id", idStr)
         .order("received_at", { ascending: false });
 
       if (error) throw error;
@@ -328,9 +336,10 @@ export default function WorkOrderDetailPage() {
     }
 
     try {
+      const idStr = Array.isArray(id) ? id[0] : id;
       const { error } = await supabase.from("vendor_invoices").insert({
-        wo_id: id,
-        tenant_id: profile?.tenant_id,
+        wo_id: idStr || "",
+        tenant_id: profile?.tenant_id || "",
         vendor_id: createFormData.vendor_id,
         invoice_number: createFormData.invoice_number || `VEND-${Date.now()}`,
         invoice_amount: Number(createFormData.invoice_amount),
@@ -338,7 +347,7 @@ export default function WorkOrderDetailPage() {
         notes: createFormData.notes,
         status: "pending",
         received_at: new Date().toISOString(),
-      });
+      } as any);
 
       if (error) throw error;
       toast.success("Vendor invoice created");

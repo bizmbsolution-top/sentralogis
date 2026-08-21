@@ -5,11 +5,22 @@ import { IRequestContext } from '@/src/domains/security/contracts/IRequestContex
 import { AcceptJobCommand } from '@/src/application/trucking/commands/AcceptJobCommand';
 import { Result } from '@/src/shared/kernel/Result';
 
+type UserProfileQuery = {
+  from(table: 'user_profiles'): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        single(): PromiseLike<{ data: { tenant_id: string; role: string } | null }>;
+      };
+    };
+  };
+};
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: jobOrderId } = await params;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -17,7 +28,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await (supabase as unknown as UserProfileQuery)
       .from('user_profiles')
       .select('tenant_id, role')
       .eq('id', user.id)
@@ -26,8 +37,6 @@ export async function POST(
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 403 });
     }
-
-    const { id: jobOrderId } = params;
 
     const ctx: IRequestContext = {
       userId: user.id,

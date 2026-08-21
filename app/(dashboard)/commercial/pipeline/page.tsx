@@ -99,7 +99,7 @@ function DealDrawer({ dealId, onClose, onDealUpdated }: { dealId: string; onClos
     try {
       const quoteNumber = `QT-${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2, '0')}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
       const { data, error } = await supabase.from('crm_quotations').insert([{
-        tenant_id: profile?.tenant_id,
+        tenant_id: profile?.tenant_id as string,
         deal_id: deal.id,
         quote_number: quoteNumber,
         status: 'DRAFT',
@@ -338,7 +338,7 @@ export default function SalesPipelinePage() {
           fee_type: d.fee_type,
           fee_value: d.fee_value
         }));
-        setDeals(formatted);
+        setDeals(formatted as Deal[]);
 
         // Calc metrics
         let rev = 0;

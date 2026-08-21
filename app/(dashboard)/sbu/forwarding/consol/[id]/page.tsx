@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -9,13 +9,13 @@ import {
   ArrowLeft, Ship, MapPin, Calendar, Loader2, Package, CheckCircle2,
   XCircle, AlertTriangle, ArrowRight, Box, FileText, Truck
 } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/Card';
+import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import type { Consolidation, ContainerAssignment } from '@/lib/domain/forwarding/types';
 import Link from 'next/link';
 
 export default function ConsolidationDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams() as { id: string };
   const router = useRouter();
   const { profile } = useAuth();
 
@@ -47,7 +47,7 @@ export default function ConsolidationDetailPage() {
         router.push('/sbu/forwarding/consol');
         return;
       }
-      setConsol(consolData);
+      setConsol(consolData as unknown as Consolidation);
 
       const { data: containersData, error: containersError } = await supabase
         .from('fw_container_assignments')
@@ -57,7 +57,7 @@ export default function ConsolidationDetailPage() {
         .order('created_at', { ascending: true });
 
       if (containersError) throw containersError;
-      setContainers(containersData || []);
+      setContainers((containersData || []) as unknown as ContainerAssignment[]);
 
       const assignedWoItemIds = (containersData || []).flatMap(c => {
         if (!c.id) return [];
@@ -189,7 +189,7 @@ export default function ConsolidationDetailPage() {
     <div className="space-y-6 pb-12">
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="rounded-full shrink-0">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </Button>
           <div>
@@ -201,7 +201,7 @@ export default function ConsolidationDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {getStatusBadge(consol.status)}
+          {getStatusBadge(consol.status || "")}
           {canStuff && (
             <Link href={`/sbu/forwarding/consol/${id}/stuffing`}>
               <Button className="bg-amber-600 hover:bg-amber-700 text-white">
@@ -349,10 +349,10 @@ export default function ConsolidationDetailPage() {
                             {cont.seal_number ? <div>Seal: {cont.seal_number}</div> : <div className="text-slate-400">-</div>}
                             {cont.bl_number ? <div>BL: {cont.bl_number}</div> : null}
                           </td>
-                          <td className="px-4 py-3 text-center">{getContainerStatusBadge(cont.status)}</td>
+                          <td className="px-4 py-3 text-center">{getContainerStatusBadge(cont.status || "")}</td>
                           <td className="px-4 py-3 text-right">
                             <Link href={`/sbu/forwarding/consol/${id}/stuffing?container=${cont.id}`}>
-                              <Button variant="outline" size="sm" className="text-xs h-8">
+                              <Button variant="secondary" size="sm" className="text-xs h-8">
                                 Detail <ArrowRight className="w-3 h-3 ml-1" />
                               </Button>
                             </Link>
@@ -398,7 +398,7 @@ export default function ConsolidationDetailPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link href={`/sbu/forwarding/consol/${id}/stuffing`}>
-                              <Button variant="outline" size="sm" className="text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-100">
+                              <Button variant="secondary" size="sm" className="text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-100">
                                 Assign <ArrowRight className="w-3 h-3 ml-1" />
                               </Button>
                             </Link>

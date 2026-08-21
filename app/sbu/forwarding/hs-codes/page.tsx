@@ -29,11 +29,12 @@ export default function HSCodeEngine() {
           .eq('id', user.id)
           .single();
         if (profile) {
+          const org = (profile as any).organizations || {};
           setUserProfile(profile);
           setTenantInfo({
-            name: profile.organizations?.name || 'SENTRALOGIS',
-            logo: profile.organizations?.logo_url,
-            mission_credits: profile.organizations?.mission_credits || 0
+            name: org.name || 'SENTRALOGIS',
+            logo: org.logo_url,
+            mission_credits: org.mission_credits || 0
           });
         }
       }

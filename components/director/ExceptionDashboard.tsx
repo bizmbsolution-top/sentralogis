@@ -70,7 +70,7 @@ export default function ExceptionDashboard({ cluster, title, description }: { cl
              throw fetchError;
           }
         } else {
-          setExceptions(data || []);
+          setExceptions((data as any[]) || []);
         }
       } catch (err: any) {
         console.error('Failed to fetch exceptions', err);

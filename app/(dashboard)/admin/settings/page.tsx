@@ -56,8 +56,8 @@ export default function CompanySettingsPage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
+      const { data: profile } = await (supabase
+        .from("profiles" as any) as any)
         .select("*, organizations(*)")
         .eq("id", user.id)
         .single();
@@ -128,8 +128,8 @@ export default function CompanySettingsPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("organizations")
+      const { error } = await (supabase
+        .from("organizations" as any) as any)
         .update({
           name: formData.name,
           address: formData.address,

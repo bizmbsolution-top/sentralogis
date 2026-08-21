@@ -85,8 +85,8 @@ export default function AddForwardingItemModal({
       setLoading(true);
       try {
         const [locRes, priceRes] = await Promise.all([
-          supabase.from('md_locations').select('id, name, city, address').eq('tenant_id', profile.tenant_id).eq('is_active', true).order('name'),
-          supabase.from('fw_price_master').select('*').eq('tenant_id', profile.tenant_id).eq('is_active', true),
+          supabase.from('md_locations').select('id, name, city, address').eq('tenant_id', profile.tenant_id as string).eq('is_active', true).order('name'),
+          supabase.from('fw_price_master').select('*').eq('tenant_id', profile.tenant_id as string).eq('is_active', true),
         ]);
         if (locRes.data) setMdLocations(locRes.data);
         if (priceRes.data) setMasterPrices(priceRes.data);

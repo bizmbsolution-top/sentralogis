@@ -62,7 +62,7 @@ export default function HQFinanceSummaryPage() {
           .select(`
               id, status, base_price, purchase_price, driver_share_percentage, driver_payment_amount,
               created_at, completed_at, is_cost_finished,
-              wo_item:wo_items!wo_item_id (sbu_type, total_revenue, unit_price)
+              wo_item:wo_items!wo_item_id (id, sbu_type, total_revenue, unit_price)
           `)
           .eq('tenant_id', profile.tenant_id),
         supabase
@@ -114,20 +114,20 @@ export default function HQFinanceSummaryPage() {
           cogs += extraCostsByJoId[jo.id] || 0;
 
           // 2. Audit Status
-          if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status)) {
+          if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status as string)) {
               auditTotal++;
               if (jo.is_cost_finished) auditFinished++;
           }
 
           // 3. Cash Flow / AR Aging (use wo_item revenue distribution)
           const wiId = jo.wo_item?.id;
-          if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status)) {
+          if (['completed', 'ready_for_billing', 'invoiced', 'paid'].includes(jo.status as string)) {
               if (jo.status === 'completed' && wiId && !countedWoForUnbilled.has(wiId)) {
                   countedWoForUnbilled.add(wiId);
                   unbilled += Number(jo.wo_item?.total_revenue) || val;
               }
 
-              if (['invoiced', 'ready_for_billing'].includes(jo.status)) {
+              if (['invoiced', 'ready_for_billing'].includes(jo.status as string)) {
                   const compDate = jo.completed_at ? new Date(jo.completed_at) : new Date(jo.created_at);
                   const diffDays = Math.floor((now.getTime() - compDate.getTime()) / (1000 * 60 * 60 * 24));
                   const arVal = Number(jo.wo_item?.total_revenue) || val;

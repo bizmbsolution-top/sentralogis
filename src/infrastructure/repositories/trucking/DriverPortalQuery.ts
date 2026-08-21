@@ -56,7 +56,7 @@ export class DriverPortalQuery {
       .order("sequence", { ascending: true });
 
     // Fetch location photos (1-to-many from documents) grouped by route
-    let routePhotosByRoute: Record<string, any[]> = {};
+    const routePhotosByRoute: Record<string, any[]> = {};
     try {
       const { data: locationPhotos } = await this.supabase
         .from("documents")

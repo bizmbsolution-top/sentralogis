@@ -81,7 +81,7 @@ export default function HQInvoiceVendorPage() {
           vendor:md_entities!vendor_id(name, vendor_type),
           work_orders!wo_id(wo_number)
         `)
-        .eq('tenant_id', profile.tenant_id)
+        .eq('tenant_id' as any, profile.tenant_id)
         .order('received_at', { ascending: false });
 
       if (invError) throw invError;
@@ -160,7 +160,7 @@ export default function HQInvoiceVendorPage() {
       const { error } = await supabase.from('vendor_invoices').update({
         status: 'verified',
         verified_at: new Date().toISOString(),
-      }).eq('id', row.id);
+      } as any).eq('id', row.id);
 
       if (error) throw error;
       toast.success('Invoice verified');
@@ -175,7 +175,7 @@ export default function HQInvoiceVendorPage() {
       const { error } = await supabase.from('vendor_invoices').update({
         status: 'approved',
         approved_at: new Date().toISOString(),
-      }).eq('id', row.id);
+      } as any).eq('id', row.id);
 
       if (error) throw error;
 

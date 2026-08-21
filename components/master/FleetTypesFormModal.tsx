@@ -36,15 +36,15 @@ export default function FleetTypesFormModal({ isOpen, onClose, onSuccess, initia
     setLoading(true);
     try {
       if (initialData?.id) {
-        const { error } = await supabase
-          .from('md_fleet_types')
+        const { error } = await (supabase
+          .from('md_fleet_types' as any) as any)
           .update(formData)
           .eq('id', initialData.id);
         if (error) throw error;
         toast.success('Fleet Type updated');
       } else {
-        const { error } = await supabase
-          .from('md_fleet_types')
+        const { error } = await (supabase
+          .from('md_fleet_types' as any) as any)
           .insert([formData]);
         if (error) throw error;
         toast.success('Fleet Type created');

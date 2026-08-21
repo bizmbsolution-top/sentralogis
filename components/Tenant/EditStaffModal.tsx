@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { X, Shield, RefreshCcw, Power, UserCircle } from 'lucide-react';
+import { X, RefreshCcw, Power, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
@@ -51,25 +51,26 @@ const sbuRolesMap: any = {
 };
 
 export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus, warehouses, regions }: any) {
+  const staffObj = (staff || {}) as any;
   const [loading, setLoading] = useState(false);
-  const [isActive, setIsActive] = useState(staff.is_active);
-  const [fullName, setFullName] = useState(staff.full_name);
-  const [roleCode, setRoleCode] = useState(staff.role_code);
-  const [sbuId, setSbuId] = useState(staff.sbu_id || '');
-  const [warehouseId, setWarehouseId] = useState(staff.warehouse_id || '');
-  const [regionId, setRegionId] = useState(staff.region_id || '');
+  const [isActive, setIsActive] = useState(staffObj.is_active ?? true);
+  const [fullName, setFullName] = useState(staffObj.full_name ?? '');
+  const [roleCode, setRoleCode] = useState(staffObj.role_code ?? '');
+  const [sbuId, setSbuId] = useState(staffObj.sbu_id || '');
+  const [warehouseId, setWarehouseId] = useState(staffObj.warehouse_id || '');
+  const [regionId, setRegionId] = useState(staffObj.region_id || '');
   const [division, setDivision] = useState(() => {
-    const allRoles = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
-    const found = allRoles.find((r: any) => r.code === staff.role_code);
-    return found ? found.division : (staff.division === 'General' ? 'General / Management' : (staff.division || ''));
+    const allRoles: any[] = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
+    const found = allRoles.find((r: any) => r.code === staffObj.role_code);
+    return found ? found.division : (staffObj.division === 'General' ? 'General / Management' : (staffObj.division || ''));
   });
   const [jobLevel, setJobLevel] = useState(() => {
-    const allRoles = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
-    const found = allRoles.find((r: any) => r.code === staff.role_code);
+    const allRoles: any[] = [...hqRoles, ...Object.values(sbuRolesMap).flat()];
+    const found = allRoles.find((r: any) => r.code === staffObj.role_code);
     return found ? found.level : '';
   });
 
-  if (!isOpen) return null;
+  if (!isOpen || !staff) return null;
 
   const selectedSbu = sbus?.find((s: any) => s.id === sbuId);
 
@@ -105,8 +106,8 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('tenant_users')
+      const { error } = await (supabase
+        .from('tenant_users' as any) as any)
         .update({ 
           full_name: fullName,
           role_code: roleCode,
@@ -117,17 +118,17 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
           is_active: isActive,
           updated_at: new Date().toISOString()
         })
-        .eq('id', staff.id);
+        .eq('id', staffObj.id);
 
       if (error) throw error;
       
       // Sync assigned_region_id to wo_organization_users for SBU Trucking region filtering
       if (sbuId) {
-        const { error: woOrgError } = await supabaseAdmin
-          .from('wo_organization_users')
+        const { error: woOrgError } = await (supabase
+          .from('wo_organization_users' as any) as any)
           .update({ assigned_region_id: regionId || null })
-          .eq('user_id', staff.user_id)
-          .eq('tenant_id', staff.tenant_id);
+          .eq('user_id', staffObj.user_id)
+          .eq('tenant_id', staffObj.tenant_id);
 
         if (woOrgError) {
           console.error('[EditStaffModal] Failed to update wo_organization_users:', woOrgError);
@@ -135,10 +136,10 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
       }
 
       // Also update profile full_name and role for consistency
-      await supabase.from('profiles').update({ 
+      await (supabase.from('profiles' as any) as any).update({ 
         full_name: fullName,
         role: roleCode
-      }).eq('id', staff.user_id);
+      }).eq('id', staffObj.user_id);
 
       toast.success('Staff updated successfully');
       onSuccess();
@@ -169,7 +170,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, sbus
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Account Identifier</p>
-                    <p className="text-sm font-bold text-slate-900 italic">{staff.profiles?.email}</p>
+                    <p className="text-sm font-bold text-slate-900 italic">{staffObj.profiles?.email}</p>
                  </div>
                  <div className="flex items-center gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-300'}`} />

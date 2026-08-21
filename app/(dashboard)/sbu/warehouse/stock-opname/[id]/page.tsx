@@ -28,12 +28,12 @@ export default function StockOpnameDetail() {
     setLoading(true);
     try {
       const [headerRes, itemsRes] = await Promise.all([
-        supabase
+        (supabase as any)
           .from("wh_stock_opname")
           .select("*, warehouse:warehouse_id(name), creator:created_by(full_name), approver:approved_by(full_name)")
           .eq("id", id)
           .single(),
-        supabase
+        (supabase as any)
           .from("wh_stock_opname_items")
           .select("*, product:product_sku_id(name, sku_code), location:location_id(code), counter:counted_by(full_name)")
           .eq("opname_id", id)
@@ -63,10 +63,10 @@ export default function StockOpnameDetail() {
     
     setSaving(itemId);
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("wh_stock_opname_items")
-        .update({ 
-          counted_qty, 
+        .update({
+          counted_qty,
           count_status: counted_qty !== null ? 'COUNTED' : 'PENDING',
           counted_by: counted_qty !== null ? profile.id : null,
           counted_at: counted_qty !== null ? new Date().toISOString() : null
@@ -92,7 +92,7 @@ export default function StockOpnameDetail() {
 
       // Update header status if it was DRAFT
       if (opname.status === 'DRAFT') {
-        await supabase.from("wh_stock_opname").update({ status: 'IN_PROGRESS', started_at: new Date().toISOString() }).eq("id", id);
+        await (supabase as any).from("wh_stock_opname").update({ status: 'IN_PROGRESS', started_at: new Date().toISOString() }).eq("id", id);
         setOpname((prev: any) => ({ ...prev, status: 'IN_PROGRESS' }));
       }
 
@@ -114,7 +114,7 @@ export default function StockOpnameDetail() {
     
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("wh_stock_opname").update({ status: 'REVIEW' }).eq("id", id);
+      const { error } = await (supabase as any).from("wh_stock_opname").update({ status: 'REVIEW' }).eq("id", id);
       if (error) throw error;
       setOpname((prev: any) => ({ ...prev, status: 'REVIEW' }));
     } catch (err) {
@@ -131,7 +131,7 @@ export default function StockOpnameDetail() {
     setSubmitting(true);
     try {
       const { error } = await supabase.rpc("finalize_stock_opname", {
-        p_opname_id: id,
+        p_opname_id: String(id),
         p_user_id: profile.id
       });
       if (error) throw error;

@@ -1,5 +1,5 @@
 import { PipelineContext, PipelineStage, PipelineStatus } from './PipelineModels';
-import { PerformanceMetrics } from '../metrics/PerformanceMetrics';
+import { CopilotMetrics, PerformanceMetrics } from '../metrics/PerformanceMetrics';
 
 export class CopilotPipeline {
   private _stages: PipelineStage[] = [];
@@ -17,7 +17,8 @@ export class CopilotPipeline {
       const t0 = performance.now();
       try {
         const result = await stage.execute(context);
-        metrics.record(`${stage.name}Ms`, performance.now() - t0);
+        const metricKey = `${stage.name}Ms` as keyof CopilotMetrics;
+        metrics.record(metricKey, performance.now() - t0);
 
         if (result.status !== PipelineStatus.CONTINUE) {
           // If the pipeline needs to halt (e.g. requires clarification or blocked)
@@ -26,7 +27,6 @@ export class CopilotPipeline {
           break;
         }
       } catch (err: any) {
-        metrics.record(`${stage.name}Ms_Error`, performance.now() - t0);
         console.error(`Pipeline error at stage ${stage.name}:`, err);
         
         context.finalResponse = {

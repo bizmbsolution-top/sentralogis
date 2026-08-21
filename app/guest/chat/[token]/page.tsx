@@ -61,7 +61,7 @@ export default function GuestChatPortal() {
       });
 
       if (error) throw error;
-      setMessages(data || []);
+      setMessages((data as any) || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load messages');
     } finally {

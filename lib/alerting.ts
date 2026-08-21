@@ -41,7 +41,7 @@ function formatAlertConsole(alert: Alert): string {
   return `${color}[${label}]${'\x1b[0m'} [${alert.module}] ${alert.title} — ${alert.message}`;
 }
 
-function sendConsoleAlert(alert: Alert) {
+async function sendConsoleAlert(alert: Alert) {
   const formatted = formatAlertConsole(alert);
   if (alert.severity === 'critical' || alert.severity === 'high') {
     console.error(formatted, alert.metadata || '');

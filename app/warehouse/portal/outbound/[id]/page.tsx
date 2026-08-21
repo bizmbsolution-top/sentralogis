@@ -25,7 +25,7 @@ export default function OutboundTaskExecutionPage() {
   const [scanLocation, setScanLocation] = useState('');
   const [scanSkuId, setScanSkuId] = useState('');
   const [scanQty, setScanQty] = useState('');
-  const [showScanner, setShowScanner] = useState<'LOCATION' | 'SKU' | null>(null);
+  const [showScanner, setShowScanner] = useState<'LOCATION' | 'SKU' | 'REPLACEMENT' | null>(null);
 
   // Tally state
   const [pinConfirm, setPinConfirm] = useState('');
@@ -151,7 +151,7 @@ export default function OutboundTaskExecutionPage() {
           .select('id, name').eq('tenant_id', shipmentData.tenant_id).eq('is_vendor', false).eq('is_active', true).limit(1);
         
         setTransporters([...(internalData || []), ...(vendorData || [])]);
-        setTransporterName(shipmentData.transporter?.name || '');
+        setTransporterName((shipmentData.transporter as any)?.name || '');
         setSelectedTransporterId(shipmentData.transporter_id || null);
         setDriverName(shipmentData.driver?.name || '');
         setSelectedDriverId(shipmentData.driver_id || '');
@@ -192,20 +192,20 @@ export default function OutboundTaskExecutionPage() {
   }, [selectedTransporterId, shipment?.tenant_id]);
 
   const fetchLoadingSessions = async (id: string) => {
-    const { data } = await supabase.from('wh_loading_sessions').select('*').eq('shipment_id', id).order('session_number', { ascending: true });
-    setLoadingSessions(data || []);
+    const { data } = await (supabase.from('wh_loading_sessions' as any) as any).select('*').eq('shipment_id', id).order('session_number', { ascending: true });
+    setLoadingSessions((data as any[]) || []);
     
     // Hitung total detik dari sesi-sesi sebelumnya yang sudah selesai
-    const pastSessionsSeconds = (data || []).reduce((acc: number, s: any) => {
+    const pastSessionsSeconds = ((data as any[]) || []).reduce((acc: number, s: any) => {
       if (s.end_time) {
         return acc + Math.floor((new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 1000);
       }
       return acc;
     }, 0);
 
-    const active = (data || []).find((s: any) => !s.end_time);
+    const active = ((data as any[]) || []).find((s: any) => !s.end_time);
     if (active) {
-      const activeMs = Date.now() - new Date(active.start_time).getTime();
+      const activeMs = Date.now() - new Date((active as any).start_time).getTime();
       setElapsedSeconds(pastSessionsSeconds + Math.floor(activeMs / 1000));
       setTimerRunning(true);
     } else {
@@ -231,7 +231,7 @@ export default function OutboundTaskExecutionPage() {
       if (newStatus === 'COMPLETED') {
         const transferDetailsPayloads: any[] = [];
         // Stock Deduction Logic uses picking_entries saved by the Picker
-        const { data: finalItems } = await supabase.from('wh_outbound_shipment_items').select('id, product_sku_id, picking_entries').eq('shipment_id', shipmentId);
+        const { data: finalItems } = await (supabase.from('wh_outbound_shipment_items' as any) as any).select('id, product_sku_id, picking_entries').eq('shipment_id', shipmentId);
         
         if (finalItems && finalItems.length > 0) {
            // Find quarantine location
@@ -239,13 +239,13 @@ export default function OutboundTaskExecutionPage() {
            const quarantineLocationId = qLoc?.id || null;
 
            // Fetch damages
-           const { data: damages } = await supabase.from('wh_outbound_damage_records').select('shipment_item_id, damage_qty').eq('shipment_id', shipmentId);
+           const { data: damages } = await (supabase.from('wh_outbound_damage_records' as any) as any).select('shipment_item_id, damage_qty').eq('shipment_id', shipmentId);
 
-           for (const itm of finalItems) {
+           for (const itm of (finalItems as any[])) {
               const skuId = itm.product_sku_id;
               
               // 1. Deduct picked items from source racks
-              const entries = itm.picking_entries || [];
+              const entries = (itm.picking_entries as any[]) || [];
               for (const pe of entries) {
                  if (skuId && pe.location_id) {
                     const { data: invData } = await supabase.from('wh_inventory')
@@ -285,31 +285,31 @@ export default function OutboundTaskExecutionPage() {
                     await supabase.from('wh_inventory').update({ quantity: qInv.quantity + totalDamagedQty }).eq('id', qInv.id);
                     qInvId = qInv.id;
                  } else {
-                    const { data: nInv } = await supabase.from('wh_inventory').insert({
+                    const { data: nInv } = await (supabase.from('wh_inventory' as any) as any).insert({
                        tenant_id: shipment.tenant_id,
                        warehouse_id: shipment.warehouse_id,
                        product_sku_id: skuId,
-                       location_id: quarantineLocationId,
+                       location_id: quarantineLocationId || undefined,
                        quantity: totalDamagedQty,
                        reserved_quantity: 0,
                        available_quantity: totalDamagedQty,
                        status: 'QUARANTINE',
-                       created_by: session?.user?.id || null
+                       created_by: session?.user?.id || undefined
                     }).select('id').single();
                     qInvId = nInv?.id;
                  }
 
                  if (qInvId) {
-                    await supabase.from('wh_inventory_movements').insert({
+                    await (supabase.from('wh_inventory_movements' as any) as any).insert({
                        tenant_id: shipment.tenant_id,
                        inventory_id: qInvId,
                        movement_type: 'QUARANTINE_TRANSFER',
                        quantity: totalDamagedQty,
                        reference_type: 'OUTBOUND_SHIPMENT',
                        reference_id: shipment.id,
-                       to_location_id: quarantineLocationId,
+                       to_location_id: quarantineLocationId || undefined,
                        notes: 'Pindah ke quarantine akibat damage saat outbound checking',
-                       created_by: session?.user?.id || null
+                       created_by: session?.user?.id || undefined
                     });
                  }
               }
@@ -620,10 +620,11 @@ export default function OutboundTaskExecutionPage() {
     if (!stopReason.trim()) { toast.error('Isi alasan berhenti'); return; }
     setSubmitting(true);
     try {
-      const { data: active } = await supabase.from('wh_loading_sessions').select('*').eq('shipment_id', shipmentId).is('end_time', null).single();
+      const { data: activeRaw } = await (supabase.from('wh_loading_sessions' as any) as any).select('*').eq('shipment_id', shipmentId).is('end_time', null).single();
+      const active = activeRaw as any;
       const finalReason = stopReason === 'Lainnya' ? customStopReason : stopReason;
       if (active) {
-         const { error } = await supabase.from('wh_loading_sessions').update({ end_time: new Date().toISOString(), pause_reason: finalReason }).eq('id', active.id);
+         const { error } = await (supabase.from('wh_loading_sessions' as any) as any).update({ end_time: new Date().toISOString(), pause_reason: finalReason }).eq('id', active.id);
          if (error) throw error;
       }
       
@@ -640,14 +641,14 @@ export default function OutboundTaskExecutionPage() {
     try {
       const active = loadingSessions.find((s: any) => !s.end_time);
       if (active) {
-         const { error } = await supabase.from('wh_loading_sessions').update({ end_time: new Date().toISOString() }).eq('id', active.id);
+         const { error } = await (supabase.from('wh_loading_sessions' as any) as any).update({ end_time: new Date().toISOString() }).eq('id', active.id);
          if (error) throw error;
       }
       
       await fetchLoadingSessions(shipmentId);
       
-      const { data: all } = await supabase.from('wh_loading_sessions').select('*').eq('shipment_id', shipmentId);
-      const mins = (all || []).reduce((sum, s) => s.end_time ? sum + (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 60000 : sum, 0);
+      const { data: all } = await (supabase.from('wh_loading_sessions' as any) as any).select('*').eq('shipment_id', shipmentId);
+      const mins = ((all as any[]) || []).reduce((sum: number, s: any) => s.end_time ? sum + (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 60000 : sum, 0);
       
       await supabase.from('wh_outbound_shipments').update({ status: 'READY_FOR_DOCUMENTS', total_loading_minutes: Math.round(mins * 100) / 100 }).eq('id', shipmentId);
       toast.success('Loading selesai');

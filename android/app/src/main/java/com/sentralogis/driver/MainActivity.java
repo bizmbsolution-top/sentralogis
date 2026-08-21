@@ -13,6 +13,13 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Register the app-local NativeGps plugin BEFORE the Capacitor bridge
+        // is built (super.onCreate -> load()), otherwise calls from JS to
+        // "NativeGps" throw: plugin is not implemented on android.
+        // Capacitor 8 loads third-party plugins from capacitor.plugins.json
+        // (assets); app-local plugins must be registered manually here.
+        registerPlugin(GpsPlugin.class);
+
         super.onCreate(savedInstanceState);
 
         // Handle deep link when app is launched from cold start

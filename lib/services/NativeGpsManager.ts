@@ -1,15 +1,29 @@
 import { registerPlugin, Capacitor } from "@capacitor/core";
 
 interface NativeGpsPlugin {
-  startTracking(options: { jobId: string; apiUrl: string }): Promise<void>;
+  startTracking(options: { jobId: string; apiUrl: string; gpsSessionToken?: string }): Promise<void>;
+  updateToken(options: { gpsSessionToken: string }): Promise<void>;
   stopTracking(): Promise<void>;
   addListener(eventName: "onLocationUpdate", listenerFunc: (data: any) => void): Promise<any>;
   isGpsEnabled(): Promise<{ enabled: boolean }>;
   openLocationSettings(): Promise<void>;
   speakText?(options: { text: string; lang: string }): Promise<void>;
+  getQueueStatus?(): Promise<{ pendingCount: number; totalCount: number }>;
+  triggerSync?(): Promise<void>;
 }
 
 const NativeGps = typeof window !== "undefined" ? registerPlugin<NativeGpsPlugin>("NativeGps") : null;
+
+// Forensic-only redaction hash (FNV-1a 32-bit) — NOT cryptographic; used solely
+// to avoid logging raw user/profile UUIDs in device logs.
+function forensicHash(id: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return "h" + h.toString(16).padStart(8, "0");
+}
 
 export type NativeGpsState = {
   status: "idle" | "loading" | "active" | "error";
@@ -33,7 +47,166 @@ class NativeGpsManagerClass {
   private activeJobId: string | null = null;
   private listener: any = null;
   private subscribers = new Set<StateSubscriber>();
+  private tokenRefreshTimer: any = null;
+  private tokenRefreshFailures: number = 0;
+  private currentSessionToken: string | null = null;
   
+  private async fetchGpsSessionToken(token: string): Promise<string | null> {
+    const reqTs = Date.now();
+    console.log(`[GPS_TOKEN_FORENSIC] request_start ts=${reqTs} job=${token.slice(0, 8)}`);
+    try {
+      // STEP 3: inspect WebView Supabase session state immediately before request
+      let bearerToken: string | null = null;
+      try {
+        const { supabase } = await import("@/lib/supabaseClient");
+        const { data: sessData } = await supabase.auth.getSession();
+        const sessionExists = !!sessData?.session;
+        const user = sessData?.session?.user ?? null;
+        const userId = user?.id ?? null;
+        const profileId = user?.user_metadata?.profile_id ?? null;
+        bearerToken = sessData?.session?.access_token ?? null;
+        console.log(`[GPS_TOKEN_FORENSIC] session_exists=${sessionExists} user_exists=${!!user} user_id=${userId ? forensicHash(userId) : "none"} profile_id=${profileId ? forensicHash(String(profileId)) : "none"} bearer_from_supabase=${!!bearerToken}`);
+      } catch {
+        console.log(`[GPS_TOKEN_FORENSIC] session_inspect_error`);
+      }
+      // STEP 7: cookie transport audit — enumerate cookie NAMES only (never values)
+      try {
+        if (typeof document !== "undefined" && document.cookie) {
+          const names = document.cookie.split(";").map((c) => c.trim().split("=")[0]).filter(Boolean);
+          const hasSb = names.some((n) => n.startsWith("sb-"));
+          console.log(`[GPS_TOKEN_FORENSIC] cookie_count=${names.length} has_sb_auth_cookie=${hasSb} cookie_names=${JSON.stringify(names.slice(0, 12))}`);
+        } else {
+          console.log(`[GPS_TOKEN_FORENSIC] cookie_read_skipped_or_empty`);
+        }
+      } catch {
+        console.log(`[GPS_TOKEN_FORENSIC] cookie_read_error`);
+      }
+      // Bearer fallback from the driver's localStorage session (set by /api/driver/login)
+      if (!bearerToken) {
+        try {
+          const stored = localStorage.getItem("sentralogis_driver_session");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            bearerToken = parsed?.access_token ?? null;
+            console.log(`[GPS_TOKEN_FORENSIC] bearer_from_driver_session=${!!bearerToken}`);
+          }
+        } catch {
+          console.log(`[GPS_TOKEN_FORENSIC] bearer_read_error`);
+        }
+      }
+      console.log(`[GPS_TOKEN_FORENSIC] bearer_available=${!!bearerToken}`);
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (bearerToken) headers["Authorization"] = `Bearer ${bearerToken}`;
+
+      const res = await fetch(`/api/jo/${token}/gps-session`, { method: "POST", headers });
+      const status = res.status;
+      console.log(`[GPS_TOKEN_FORENSIC] response_status=${status}`);
+      console.log(`[GPS_TOKEN_FORENSIC] response_ok=${res.ok}`);
+      if (status === 401) console.log(`[GPS_TOKEN_FORENSIC] SERVER_AUTH=401`);
+      else if (status === 403) console.log(`[GPS_TOKEN_FORENSIC] SERVER_AUTH=403`);
+      else console.log(`[GPS_TOKEN_FORENSIC] SERVER_AUTH=${status}`);
+      if (!res.ok) {
+        try {
+          const body = await res.json();
+          const err = typeof body?.error === "string" ? body.error.slice(0, 120) : String(body?.error ?? "");
+          console.log(`[GPS_TOKEN_FORENSIC] response_body_error=${err}`);
+        } catch {
+          console.log(`[GPS_TOKEN_FORENSIC] response_body_error=unparseable`);
+        }
+        return null;
+      }
+      const data = await res.json();
+      const hasToken = !!data.gps_session_token;
+      console.log(`[GPS_TOKEN_FORENSIC] token_received=${hasToken}`);
+      return data.gps_session_token || null;
+    } catch {
+      console.log(`[GPS_TOKEN_FORENSIC] fetch_exception`);
+      return null;
+    }
+  }
+
+  private parseJwtExpiry(token: string): number | null {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      const parsed = JSON.parse(jsonPayload);
+      return parsed.exp || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  private scheduleTokenRefresh(token: string, newSessionToken: string) {
+    if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+    
+    this.currentSessionToken = newSessionToken;
+    const exp = this.parseJwtExpiry(newSessionToken);
+    
+    let refreshDelayMs = 4 * 60 * 1000; // default 4 mins
+    if (exp) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const timeToExpirySec = exp - nowSec;
+      // Refresh 75 seconds before expiry
+      refreshDelayMs = Math.max(10000, (timeToExpirySec - 75) * 1000); 
+    }
+    
+    this.tokenRefreshFailures = 0; // reset failures on success
+    console.log(`[GPS_TOKEN_REFRESH] scheduled in ${Math.round(refreshDelayMs/1000)}s`);
+
+    this.tokenRefreshTimer = setTimeout(async () => {
+      this.attemptTokenRefresh(token);
+    }, refreshDelayMs);
+  }
+
+  private async attemptTokenRefresh(token: string) {
+    if (this.activeJobId !== token || !this.state.nativeServiceActive) return;
+    
+    const sessionToken = await this.fetchGpsSessionToken(token);
+    if (sessionToken) {
+      console.log(`[GPS_TOKEN_REFRESH] success`);
+      this.currentSessionToken = sessionToken;
+      if (NativeGps) {
+        await NativeGps.updateToken({ gpsSessionToken: sessionToken });
+      }
+      this.scheduleTokenRefresh(token, sessionToken);
+    } else {
+      this.tokenRefreshFailures++;
+      // Exponential backoff: 10s, 20s, 40s, max 60s
+      const backoffSec = Math.min(60, 10 * Math.pow(2, this.tokenRefreshFailures - 1));
+      console.log(`[GPS_TOKEN_REFRESH] retry in ${backoffSec}s (attempt ${this.tokenRefreshFailures})`);
+      this.tokenRefreshTimer = setTimeout(() => {
+        this.attemptTokenRefresh(token);
+      }, backoffSec * 1000);
+    }
+  }
+  
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (this.activeJobId && this.currentSessionToken && this.tokenRefreshFailures > 0) {
+          console.log(`[GPS_TOKEN_REFRESH] network recovered, retrying immediate refresh`);
+          if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+          this.attemptTokenRefresh(this.activeJobId);
+        }
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.activeJobId && this.currentSessionToken) {
+          const exp = this.parseJwtExpiry(this.currentSessionToken);
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (exp && (exp - nowSec < 90)) {
+            console.log(`[GPS_TOKEN_REFRESH] app resumed and token near expiry, forcing refresh`);
+            if (this.tokenRefreshTimer) clearTimeout(this.tokenRefreshTimer);
+            this.attemptTokenRefresh(this.activeJobId);
+          }
+        }
+      });
+    }
+  }
+
   private state: NativeGpsState = {
     status: "idle",
     permission: "unknown",
@@ -67,6 +240,27 @@ class NativeGpsManagerClass {
 
   public getState(): NativeGpsState {
     return this.state;
+  }
+
+  public async getQueueStatus(): Promise<{ pendingCount: number; totalCount: number }> {
+    try {
+      if (NativeGps?.getQueueStatus) {
+        return await NativeGps.getQueueStatus();
+      }
+    } catch (e) {
+      console.warn("[GPS Native Engine] Failed to getQueueStatus:", e);
+    }
+    return { pendingCount: 0, totalCount: 0 };
+  }
+
+  public async triggerSync(): Promise<void> {
+    try {
+      if (NativeGps?.triggerSync) {
+        await NativeGps.triggerSync();
+      }
+    } catch (e) {
+      console.warn("[GPS Native Engine] Failed to triggerSync:", e);
+    }
   }
 
   public async registerConsumer(consumerId: string, jobId: string) {
@@ -159,9 +353,19 @@ class NativeGpsManagerClass {
       forensicMethod = "startTracking";
       console.log(`[GPS_FORENSIC] BEFORE_PLUGIN_CALL\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nisNative=${isNativeApp}\ntimestamp=${new Date().toISOString()}`);
 
+      let sessionToken = undefined;
+      if (this.activeJobId && this.activeJobId !== "unknown") {
+        console.log(`[GPS_TOKEN_FORENSIC] start_tracking_fetch_begin ts=${Date.now()} job=${this.activeJobId.slice(0, 8)}`);
+        sessionToken = await this.fetchGpsSessionToken(this.activeJobId) || undefined;
+        if (sessionToken) {
+          this.scheduleTokenRefresh(this.activeJobId, sessionToken);
+        }
+      }
+
       await NativeGps!.startTracking({
         jobId: this.activeJobId || "unknown",
         apiUrl: window.location.origin,
+        gpsSessionToken: sessionToken,
       });
       console.log(`[GPS_FORENSIC] PLUGIN_CALL_SUCCESS\nplugin=${forensicPlugin}\nmethod=${forensicMethod}\nresult=void`);
 
@@ -211,6 +415,10 @@ class NativeGpsManagerClass {
 
   private async stopTracking() {
     console.log(`[GPS-MANAGER] stop requested`);
+    if (this.tokenRefreshTimer) {
+      clearTimeout(this.tokenRefreshTimer);
+      this.tokenRefreshTimer = null;
+    }
     try {
       this.activeJobId = null;
       if (NativeGps) {

@@ -126,8 +126,8 @@ export default function IntelligenceTower() {
         const processedJos = activeJos.map(jo => {
           const joDriver = driversRes.data?.find(d => d.id === jo.driver_id);
           const joFleet = fleetsRes.data?.find(f => f.id === jo.fleet_id);
-          const joRoutes = (routesRes.data || []).filter(r => r.job_order_id === jo.id);
-          const joTracking = trackingRes.data?.filter(t => t.job_order_id === jo.id) || [];
+          const joRoutes = ((routesRes.data as any[]) || []).filter((r: any) => r.job_order_id === jo.id);
+          const joTracking = ((trackingRes.data as any[]) || []).filter((t: any) => t.job_order_id === jo.id);
           const attachments = (docsRes?.data || []).filter((d: any) => d.job_order_id === jo.id);
           
           const isStarted = jo.started_at !== null;
@@ -136,7 +136,7 @@ export default function IntelligenceTower() {
 
           let category = 'assigned';
           if (isCompleted || DONE_STATUSES.includes(jo.status?.toUpperCase() || '')) category = 'completed';
-          else if (isStarted || jo.status === 'in_progress' || jo.status === 'DALAM PERJALANAN' || jo.status.startsWith('MENUJU') || jo.status.startsWith('TIBA')) category = 'active';
+          else if (isStarted || jo.status === 'in_progress' || jo.status === 'DALAM PERJALANAN' || (jo.status && (jo.status.startsWith('MENUJU') || jo.status.startsWith('TIBA')))) category = 'active';
           else if (isAccepted) category = 'active';
 
           let iconUrl = (joFleet as any)?.fleet_type?.icon_url || null;

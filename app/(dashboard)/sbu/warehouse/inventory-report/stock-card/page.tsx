@@ -118,7 +118,16 @@ export default function StockCardPage() {
 
   const [products, setProducts] = useState<any[]>([]);
   const [productSearch, setProductSearch] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<{ id: string; skuCode: string; name: string } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{ 
+    id: string; 
+    skuCode: string; 
+    name: string;
+    unit?: string;
+    base_uom?: string;
+    sku_level?: string;
+    conversion_to_base?: number;
+    uom_conversions?: any;
+  } | null>(null);
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateUntil, setDateUntil] = useState('');
@@ -152,7 +161,7 @@ export default function StockCardPage() {
     if (!selectedWarehouse || !selectedProduct) return;
     setLoading(true);
     try {
-      const tenantId = profile?.tenant_id;
+      const tenantId = profile?.tenant_id || '';
 
       const { data: invSnapshot } = await supabase
         .from('wh_inventory')
@@ -336,7 +345,8 @@ export default function StockCardPage() {
   async function searchProducts(query: string) {
     setProductSearch(query);
     if (!query || query.length < 2) return;
-    const tenantId = profile?.tenant_id;
+    const tenantId = profile?.tenant_id || '';
+    if (!tenantId) return;
     const { data } = await supabase
       .from('md_product_skus')
       .select('id, sku_code, name, base_uom, uom_conversions, sku_level, conversion_to_base, unit')

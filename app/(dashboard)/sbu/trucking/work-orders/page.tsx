@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -26,7 +26,7 @@ import WODetailSidebar from './components/WODetailSidebar';
 import HandoverSbuModal from '../components/HandoverSbuModal';
 import RejectedViewModal from '../../../../(dashboard)/hq/work-orders/components/RejectedViewModal';
 
-export const filterItemByTab = (item: any, tabId: string) => {
+const filterItemByTab = (item: any, tabId: string) => {
   const s = item.status?.toUpperCase() || '';
   
   // CRITICAL: Prevent PAID/INVOICED leakage
@@ -147,19 +147,19 @@ export default function WorkOrderPlanningPage() {
 
     // Resolve user region for filtering
     let userRegionId: string | null = null;
-    if (!isGlobalRole) {
+    if (!isGlobalRole && profile?.id) {
       // Check wo_organization_users first (for HQ/CS roles assigned via org), then fall back to tenant_users / profile
-      const { data: orgUser } = await supabase
-        .from("wo_organization_users")
+      const { data: orgUser } = await (supabase
+        .from("wo_organization_users" as any) as any)
         .select("assigned_region_id")
         .eq("user_id", profile.id)
         .maybeSingle();
-      userRegionId = orgUser?.assigned_region_id || profile?.region_id || null;
+      userRegionId = orgUser?.assigned_region_id || (profile as any)?.region_id || null;
 
       // If no region from wo_organization_users, check tenant_users (where SBU staff region is stored)
       if (!userRegionId) {
-        const { data: tenantUser } = await supabase
-          .from("tenant_users")
+        const { data: tenantUser } = await (supabase
+          .from("tenant_users" as any) as any)
           .select("region_id")
           .eq("user_id", profile.id)
           .maybeSingle();
@@ -209,7 +209,7 @@ let query = supabase
         item_data: typeof item.item_data === 'string' ? JSON.parse(item.item_data) : (item.item_data || {}),
         job_orders: (joData || []).filter(jo => jo.wo_item_id === item.id)
       }));
-      console.log('[SBU-TRUCK] enrichedItems:', enrichedItems.map(i => ({ id: i.id, item_code: i.item_code, status: i.status, wo_status: i.work_orders?.status, joCount: i.job_orders?.length })));
+      console.log('[SBU-TRUCK] enrichedItems:', enrichedItems.map((i: any) => ({ id: i.id, item_code: i.item_code, status: i.status, wo_status: i.work_orders?.status, joCount: i.job_orders?.length })));
       setItems(enrichedItems);
     } else {
       const parsedItems = itemsData.map(item => ({
@@ -794,7 +794,7 @@ const filteredItems = useMemo(() => {
                               
                               {isAssigned && (
                                 <Button 
-                                  variant="outline" 
+                                  variant="secondary" 
                                   size="sm"
                                   className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-8 text-xs font-semibold px-3"
                                   onClick={() => {
@@ -836,7 +836,7 @@ const filteredItems = useMemo(() => {
             setHandoverItem(selectedItemForAssignment);
             setShowHandoverModal(true);
           }}
-          onRejectReassign={(jo) => {
+          onRejectReassign={(jo: any) => {
             setShowAssignmentModal(false);
             setSelectedJoForReject(jo);
             setShowRejectModal(true);

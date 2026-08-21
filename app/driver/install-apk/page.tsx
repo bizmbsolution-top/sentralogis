@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Download, Smartphone, CheckCircle, ExternalLink } from "lucide-react";
 
 export default function InstallApkPage() {
@@ -24,8 +25,10 @@ export default function InstallApkPage() {
           <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Smartphone size={32} className="text-white" />
           </div>
-          <h1 className="text-xl font-black text-white">SENTRALOGIS DRIVER</h1>
-          <p className="text-blue-100 text-sm mt-1">Aplikasi Driver Android</p>
+          <h1 className="text-xl font-bold text-white mb-1">
+            SentraLogis Driver
+          </h1>
+          <p className="text-blue-100 text-xs">Aplikasi Resmi Pengemudi</p>
         </div>
 
         {/* Content */}
@@ -43,12 +46,12 @@ export default function InstallApkPage() {
                 Anda sudah menggunakan aplikasi SentraLogis Driver. Buka link
                 tugas dari WhatsApp untuk mulai bekerja.
               </p>
-              <a
+              <Link
                 href="/"
                 className="inline-block w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors"
               >
                 Kembali ke Beranda
-              </a>
+              </Link>
             </div>
           ) : (
             /* Not Installed */

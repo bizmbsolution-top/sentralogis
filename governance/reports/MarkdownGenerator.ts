@@ -45,7 +45,7 @@ ${new Date().toISOString()}
 - **TODOs:** ${metrics.todoCount}
 - **FIXMEs:** ${metrics.fixmeCount}
 - **HACKs:** ${metrics.hackCount}
-- **XXXs:** ${metrics.xxxCount}
+- **Deprecated APIs:** ${metrics.deprecatedApiCount}
 
 ## Code Smells
 - **Deep Nesting (>4 levels):** ${metrics.deepNestingCount} occurrences
@@ -72,15 +72,15 @@ ${new Date().toISOString()}
     let md = `# Priority Backlog\n\n`;
     for (let pLevel = 1; pLevel <= 4; pLevel++) {
       md += `## Priority ${pLevel}\n`;
-      const filtered = tsErrors.filter(e => e.priority === pLevel);
+      const filtered = tsErrors.filter((e: any) => e.priority === pLevel);
       if (filtered.length === 0) {
         md += `*No errors in this priority.*\n\n`;
         continue;
       }
       
       const sorted = filtered.sort((a,b) => a.file.localeCompare(b.file));
-      sorted.slice(0, 50).forEach(e => {
-        md += `- **[${e.file}:${e.line}]** ${e.category}: ${e.message}\n`;
+      sorted.slice(0, 50).forEach((e: any) => {
+        md += `- **[${e.file}:${e.line}]** ${e.category || 'Error'}: ${e.message}\n`;
       });
       if (sorted.length > 50) md += `*(Showing top 50 out of ${sorted.length})*\n`;
       md += '\n';

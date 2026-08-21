@@ -118,7 +118,7 @@ export default function InvoiceDetailPage() {
       const { data: inv, error } = await supabase
         .from("invoices")
         .select("*")
-        .eq("id", params.id)
+        .eq("id", params.id as string)
         .single();
 
       if (error) throw error;
@@ -511,7 +511,7 @@ export default function InvoiceDetailPage() {
 
       const { error } = await supabase
         .from("invoices")
-        .update(updates)
+        .update(updates as any)
         .eq("id", invoice.id);
       if (error) throw error;
 

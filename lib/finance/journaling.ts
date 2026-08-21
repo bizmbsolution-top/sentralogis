@@ -36,10 +36,11 @@ export async function createJournalEntry({
   metadata
 }: JournalParams) {
   try {
-    const { data: coa } = await supabase.from('finance_coa').select('*');
-    if (!coa) throw new Error('Chart of Accounts not found');
+    const { data: coaData } = await supabase.from('finance_coa').select('*');
+    if (!coaData) throw new Error('Chart of Accounts not found');
+    const coa = coaData as any[];
 
-    const getAccount = (code: string) => coa.find(a => a.account_number === code);
+    const getAccount = (code: string) => coa.find((a: any) => a.account_number === code);
 
     const accPiutang = getAccount('1-10100');
     const accPendapatan = getAccount('4-40010');
@@ -58,13 +59,14 @@ export async function createJournalEntry({
     if (jobOrderId) journalData.job_order_id = jobOrderId;
     if (woId) journalData.wo_id = woId;
 
-    const { data: journal, error: jError } = await supabase
+    const { data: journalDataRes, error: jError } = await supabase
       .from('finance_journals')
       .insert(journalData)
       .select()
       .single();
 
     if (jError) throw jError;
+    const journal = journalDataRes as any;
 
     const entries: Array<{
       journal_id: string;

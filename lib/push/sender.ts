@@ -20,8 +20,16 @@ export interface PushPayload {
   actions?: Array<{ action: string; title: string; icon?: string }>;
 }
 
+export interface PushSubscriptionData {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
 export async function sendPushNotification(
-  subscription: webPush.PushSubscription,
+  subscription: PushSubscriptionData | any,
   payload: PushPayload
 ): Promise<{ success: boolean; error?: string }> {
   try {

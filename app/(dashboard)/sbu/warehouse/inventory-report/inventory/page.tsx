@@ -623,14 +623,14 @@ export default function SBUInventoryPage() {
               <p className="font-bold text-slate-600">No stock locations found</p>
             </div>
           ) : (
-            locationGroups.map(([locCode, items]) => (
+            locationGroups.map(([locCode, items]: [string, any]) => (
               <div key={locCode} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
                 <div className="bg-emerald-50/70 border-b border-emerald-100 px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm">📍</span>
                     <div>
                       <h3 className="font-black text-slate-900 text-base uppercase tracking-wide">Rack / Location: <span className="font-mono text-emerald-800">{locCode}</span></h3>
-                      <p className="text-xs text-emerald-700 font-bold">{items.length} Batch items stored in this rack</p>
+                      <p className="text-xs text-emerald-700 font-bold">{(items as any[]).length} Batch items stored in this rack</p>
                     </div>
                   </div>
                 </div>
@@ -648,7 +648,7 @@ export default function SBUInventoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {items.map((item) => (
+                      {(items as any[]).map((item: any) => (
                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-3.5 font-mono font-black text-xs text-slate-900">{item.sku_code}</td>
                           <td className="px-6 py-3.5 font-bold text-slate-800">{item.product_name}</td>
@@ -690,8 +690,8 @@ export default function SBUInventoryPage() {
           ) : (
             fifoGroups
               .sort((a, b) => a[0].localeCompare(b[0]))
-              .map(([periodLabel, items]) => {
-                const sortedItems = [...items].sort((a, b) => {
+              .map(([periodLabel, items]: [string, any]) => {
+                const sortedItems = [...(items as any[])].sort((a: any, b: any) => {
                   const d1 = fifoSort === 'FIFO' ? (a.received_date || a.created_at || '') : (a.expiry_date || '');
                   const d2 = fifoSort === 'FIFO' ? (b.received_date || b.created_at || '') : (b.expiry_date || '');
                   return d1.localeCompare(d2);
@@ -704,7 +704,7 @@ export default function SBUInventoryPage() {
                         <span className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-black text-sm">⏳</span>
                         <div>
                           <h3 className="font-black text-slate-900 text-base uppercase tracking-wide">Periode: <span className="text-amber-900">{periodLabel}</span></h3>
-                          <p className="text-xs text-amber-700 font-bold">{items.length} Batch items in this timeline ({fifoSort} order)</p>
+                          <p className="text-xs text-amber-700 font-bold">{(items as any[]).length} Batch items in this timeline ({fifoSort} order)</p>
                         </div>
                       </div>
                     </div>
@@ -722,7 +722,7 @@ export default function SBUInventoryPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {sortedItems.map((item) => (
+                          {sortedItems.map((item: any) => (
                             <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-6 py-3.5 font-mono font-black text-xs text-slate-900">{item.sku_code}</td>
                               <td className="px-6 py-3.5 font-bold text-slate-800">{item.product_name}</td>

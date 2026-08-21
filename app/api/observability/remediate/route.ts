@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
       if (error) throw error;
       resolvedCount = data?.length || 0;
-      logger.info('observability', 'AUTO_FIX_STUCK_JO', { resolvedCount });
+      logger.info('observability', 'AUTO_FIX_STUCK_JO', { payload: { resolvedCount } });
     }
     
     // SCENARIO 2: Over-Reserved Stock in WMS
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
           )
         );
         resolvedCount = toUpdate.length;
-        logger.info('observability', 'AUTO_FIX_OVER_RESERVED', { resolvedCount });
+        logger.info('observability', 'AUTO_FIX_OVER_RESERVED', { payload: { resolvedCount } });
       }
     }
     
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
         
       if (error) throw error;
       resolvedCount = data?.length || 0;
-      logger.info('observability', 'ALERTS_CLEARED', { resolvedCount });
+      logger.info('observability', 'ALERTS_CLEARED', { payload: { resolvedCount } });
     }
     
     // Log the remediation action

@@ -18,24 +18,26 @@ export interface WorkflowExecutionContext {
 }
 
 export async function executeWorkflow(woId: string): Promise<void> {
-  const { data: wo, error: woErr } = await supabase
+  const { data, error: woErr } = await supabase
     .from('wo_work_orders')
     .select('*')
     .eq('id', woId)
     .single();
-  if (woErr || !wo) throw new Error(`Work order ${woId} not found`);
+  if (woErr || !data) throw new Error(`Work order ${woId} not found`);
+  const wo = data as unknown as WorkOrder;
 
   const definition = getWorkflowForWoType(wo.wo_type);
   if (!definition) throw new Error(`No workflow definition for type: ${wo.wo_type}`);
 
-  const { data: items } = await supabase
+  const { data: itemsData } = await supabase
     .from('wo_work_order_items')
     .select('*')
     .eq('work_order_id', woId);
+  const items = (itemsData as unknown as WorkOrderItem[]) || [];
 
   const ctx: WorkflowExecutionContext = {
     workOrder: wo,
-    items: items || [],
+    items: items,
     orgMapping: await resolveOrgMapping(wo),
     tenantId: wo.tenant_id,
   };
@@ -90,28 +92,28 @@ async function executeStep(ctx: WorkflowExecutionContext, step: WorkflowStep, wo
             work_order_item_id: item.id,
             originating_org_id: ctx.workOrder.originating_org_id,
             executing_org_id: orgMap.org_id,
-            assigned_warehouse_id: orgMap.warehouse_id || null,
+            assigned_warehouse_id: orgMap.warehouse_id || undefined,
             jo_number: joNum,
-            jo_type: step.jo_type,
+            jo_type: step.jo_type as string,
             sequence_order: getStepIndex(ctx.workOrder.wo_type, step.id),
             status: 'PENDING',
-            sla_minutes: step.sla_minutes || null,
+            sla_minutes: step.sla_minutes || undefined,
             requires_approval: step.requires_approval || false,
           });
 
         if (error) throw error;
 
-        await supabase
-    .from('wo_job_order_items')
+        await (supabase
+    .from('wo_job_order_items' as any) as any)
     .insert({
             job_order_id: undefined,
             tenant_id: ctx.tenantId,
-            product_sku_id: item.product_sku_id,
-            requested_quantity: item.requested_quantity,
-            from_bin_id: step.jo_type === 'PICKING' ? item.from_bin_id : null,
-            to_bin_id: step.jo_type === 'PUTAWAY' ? item.to_bin_id : null,
-            batch_number: item.batch_number,
-            expiry_date: item.expiry_date,
+            product_sku_id: item.product_sku_id || undefined,
+            requested_quantity: item.requested_quantity || undefined,
+            from_bin_id: step.jo_type === 'PICKING' ? (item.from_bin_id || undefined) : undefined,
+            to_bin_id: step.jo_type === 'PUTAWAY' ? (item.to_bin_id || undefined) : undefined,
+            batch_number: item.batch_number || undefined,
+            expiry_date: item.expiry_date || undefined,
           });
       }
       break;
@@ -168,7 +170,7 @@ async function startWorkflowInstance(wo: WorkOrder, def: WorkflowDefinition): Pr
       trigger_entity_type: 'WORK_ORDER',
       trigger_entity_id: wo.id,
       status: 'RUNNING',
-      current_step: def.steps[0]?.id || null,
+      current_step: def.steps[0]?.id || undefined,
       steps_total: def.steps.length,
       context: { wo_id: wo.id, wo_type: wo.wo_type },
     });

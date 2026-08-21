@@ -43,7 +43,7 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
   }
 
   try {
-    const { error } = await client.from('audit_logs').insert({
+    const { error } = await (client.from('audit_logs' as any) as any).insert({
       module: entry.module,
       action: entry.action,
       user_id: entry.user_id || null,

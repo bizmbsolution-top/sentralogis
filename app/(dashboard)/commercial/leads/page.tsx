@@ -214,7 +214,7 @@ function ConvertDealModal({
           stage: 'PROSPECTING',
           expected_revenue: Number(formData.expected_revenue) || 0,
           sbu_target: formData.sbu_target.join(','), // join as string
-          fee_type: formData.fee_type,
+          fee_type: formData.fee_type as "NOMINAL" | "PERCENTAGE" | null,
           fee_value: Number(formData.fee_value) || 0
         }]);
       
@@ -608,16 +608,15 @@ export default function LeadsPage() {
         // 2. Fetch guest chat messages in last 24h
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
         
-        const { data: channels } = await supabase
-          .from('chat_channels')
+        const { data: channels } = await (supabase
+          .from('chat_channels' as any)
           .select('id, channel_id')
           .eq('channel_type', 'lead')
-          .eq('tenant_id', profile.tenant_id)
-          .in('channel_id', leadIds);
+          .in('channel_id', leadIds) as any);
 
         let guestMessages: any[] = [];
         if (channels && channels.length > 0) {
-          const channelIds = channels.map(c => c.id);
+          const channelIds = (channels as any[]).map((c: any) => c.id);
           const { data: msgs } = await supabase
             .from('chat_messages')
             .select('channel_id')
@@ -628,9 +627,9 @@ export default function LeadsPage() {
         }
 
         setLeads(data.map(d => {
-          const meeting = upcomingMeetings?.find(m => m.entity_id === d.id);
-          const channel = channels?.find(c => c.channel_id === d.id);
-          const hasChat = channel && guestMessages.some(m => m.channel_id === channel.id);
+          const meeting = upcomingMeetings?.find((m: any) => m.entity_id === d.id);
+          const channel = (channels as any[])?.find((c: any) => c.channel_id === d.id);
+          const hasChat = channel && guestMessages.some((m: any) => m.channel_id === channel.id);
 
           return {
             ...d,
@@ -665,7 +664,7 @@ export default function LeadsPage() {
         .order('activity_date', { ascending: false });
 
       if (error) throw error;
-      setActivities(data || []);
+      setActivities((data as unknown as Activity[]) || []);
     } catch (err: any) {
       console.warn("CRM Activities DB Error:", err.message);
     } finally {
@@ -677,8 +676,8 @@ export default function LeadsPage() {
     if (!profile?.tenant_id) return;
     try {
       // Find channel
-      const { data: channel, error: channelErr } = await supabase
-        .from('chat_channels')
+      const { data: channel, error: channelErr } = await (supabase
+        .from('chat_channels' as any) as any)
         .select('id')
         .eq('channel_type', 'lead')
         .eq('channel_id', leadId)
@@ -728,7 +727,7 @@ export default function LeadsPage() {
       await supabase.from('crm_activities').insert([{
         tenant_id: profile.tenant_id,
         entity_id: selectedLead.id,
-        activity_type: 'CHAT',
+        activity_type: 'CHAT' as any,
         activity_date: new Date().toISOString(),
         description: `Sent chat message:\n\n"${msg}"`,
         performed_by: profile?.id

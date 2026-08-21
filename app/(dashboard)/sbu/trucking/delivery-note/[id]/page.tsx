@@ -25,7 +25,7 @@ export default function DeliveryNotePage() {
                         md_drivers (*),
                         transporter:md_entities!transporter_id (*)
                     `)
-                    .eq("id", params.id)
+                    .eq("id", params.id as string)
                     .single();
 
                 if (error) throw error;

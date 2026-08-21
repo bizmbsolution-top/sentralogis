@@ -268,7 +268,7 @@ export default function CreateMovementModal({ onClose, onSuccess }: Props) {
       created_by: user?.id || null,
     }));
 
-    const { error: insErr } = await supabase.from("wh_internal_movements").insert(payload);
+    const { error: insErr } = await supabase.from("wh_internal_movements").insert(payload as any);
     if (insErr) {
       setError(insErr.message);
       setSaving(false);

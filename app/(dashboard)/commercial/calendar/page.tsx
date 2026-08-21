@@ -24,6 +24,7 @@ export default function CalendarPage() {
   }, [user]);
 
   async function fetchMeetings() {
+    if (!user?.id) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -33,11 +34,11 @@ export default function CalendarPage() {
           md_entities(name, phone, billing_address)
         `)
         .eq('activity_type', 'MEETING')
-        .eq('performed_by', user?.id)
+        .eq('performed_by', user.id)
         .order('activity_date', { ascending: true });
 
       if (error) throw error;
-      setMeetings(data || []);
+      setMeetings((data as any[]) || []);
     } catch (err: any) {
       console.error("Failed to fetch meetings:", err.message);
     } finally {

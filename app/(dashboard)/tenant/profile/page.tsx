@@ -74,7 +74,7 @@ export default function TenantProfilePage() {
       const { error } = await supabase.from('profiles').update({
         full_name: name,
         whatsapp: whatsapp
-      }).eq('id', user?.id);
+      }).eq('id', user?.id || '');
       if (error) throw error;
       toast.success('Node Profile Synchronized');
     } catch (err: any) {

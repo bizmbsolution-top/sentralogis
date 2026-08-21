@@ -50,7 +50,7 @@ async function checkNegativeStock(): Promise<WmsIssue[]> {
 
       if (error) continue;
 
-      for (const item of data || []) {
+      for (const item of (data as any[]) || []) {
         issues.push({
           type: 'negative_stock',
           severity: 'high',

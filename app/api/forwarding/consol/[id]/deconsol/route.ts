@@ -47,8 +47,8 @@ export async function POST(
       }, { status: 400 });
     }
 
-    const { data: containerItems, error: itemsError } = await supabaseAdmin
-      .from('fw_container_items')
+    const { data: containerItems, error: itemsError } = await (supabaseAdmin
+      .from('fw_container_items' as any) as any)
       .select(`
         id, wo_item_id, delivery_type, delivery_address, delivery_contact, delivery_phone,
         volume_cbm, gross_weight_kg, packages, package_type, commodity, description,
@@ -65,7 +65,7 @@ export async function POST(
 
     const deliveryWOsCreated: string[] = [];
 
-    for (const item of containerItems || []) {
+    for (const item of (containerItems as any[]) || []) {
       if (item.is_deconsoled) continue;
 
       if (item.delivery_type === 'port_to_door' || item.delivery_type === 'door_to_door') {

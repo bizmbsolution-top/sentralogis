@@ -41,7 +41,7 @@ export default function StockOpnamePage() {
     setLoading(true);
 
     try {
-      let query = supabase
+      let query = (supabase as any)
         .from("wh_stock_opname")
         .select(`
           *,

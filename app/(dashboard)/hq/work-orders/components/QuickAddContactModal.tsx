@@ -31,7 +31,7 @@ export default function QuickAddContactModal({ onClose, onSuccess }: QuickAddCon
           is_customer: true,
           is_vendor: true,
           is_active: true
-        })
+        } as any)
         .select()
         .single();
 

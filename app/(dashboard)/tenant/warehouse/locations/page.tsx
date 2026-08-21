@@ -214,10 +214,10 @@ export default function MasterWarehousePage() {
 
       let error;
       if (editingWhId) {
-        const res = await supabase.from('md_warehouses').update(payload).eq('id', editingWhId);
+        const res = await (supabase.from('md_warehouses' as any) as any).update(payload).eq('id', editingWhId);
         error = res.error;
       } else {
-        const res = await supabase.from('md_warehouses').insert(payload);
+        const res = await (supabase.from('md_warehouses' as any) as any).insert(payload);
         error = res.error;
       }
 
@@ -331,8 +331,9 @@ export default function MasterWarehousePage() {
 
     setSubmitting(true);
     try {
+      const tenantId = profile.tenant_id;
       const payloads = bulkLocForm.map(row => ({
-        tenant_id: profile.tenant_id,
+        tenant_id: tenantId,
         warehouse_id: activeZoneForLoc.whId,
         area_id: activeZoneForLoc.zoneId, // area_id stores the zone ID mapping
         code: row.code.toUpperCase(),
@@ -348,7 +349,7 @@ export default function MasterWarehousePage() {
         max_weight_kg: row.max_weight_kg
       }));
       
-      const { error } = await supabase.from('md_warehouse_locations').insert(payloads);
+      const { error } = await supabase.from('md_warehouse_locations').insert(payloads as never);
       if (error) throw error;
       
       toast.success(`${payloads.length} Kode Penyimpanan berhasil ditambahkan.`);
@@ -401,7 +402,7 @@ export default function MasterWarehousePage() {
   const handleDelete = async (table: string, id: string, name: string) => {
     if (!confirm(`Hapus ${name}? (Data di bawahnya akan ikut terhapus)`)) return;
     try {
-      const { error } = await supabase.from(table).delete().eq('id', id);
+      const { error } = await (supabase.from(table as never) as any).delete().eq('id', id);
       if (error) throw error;
       toast.success(`Berhasil dihapus.`);
       fetchData();

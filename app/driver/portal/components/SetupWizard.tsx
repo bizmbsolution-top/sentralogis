@@ -43,7 +43,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     if (isNative) {
       try {
         const perm = await Geolocation.checkPermissions();
-        setGpsPermission(perm.location);
+        setGpsPermission(perm.location === 'granted' ? 'granted' : perm.location === 'denied' ? 'denied' : 'prompt');
       } catch (e) {
         setGpsPermission('prompt');
       }
@@ -61,7 +61,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const requestGpsPermission = async () => {
     try {
       const perm = await Geolocation.requestPermissions();
-      setGpsPermission(perm.location);
+      setGpsPermission(perm.location === 'granted' ? 'granted' : perm.location === 'denied' ? 'denied' : 'prompt');
     } catch (e) {
       alert('Gagal meminta izin lokasi. Pastikan Anda memberikan izin lokasi di Pengaturan HP Anda.');
     }

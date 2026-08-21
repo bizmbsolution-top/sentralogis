@@ -53,30 +53,32 @@ export default function CustomerWarehouseDashboardPage() {
       setLoading(true);
       try {
         // 0. Fetch Customer Entity Name
-        const { data: entData } = await supabase
+        const { data: rawEnt } = await supabase
           .from('md_entities')
           .select('name, legal_name, entity_code')
           .eq('id', customerId)
           .maybeSingle();
+        const entData = rawEnt as any;
         if (entData) {
           const displayName = [entData.name, entData.legal_name].filter(Boolean).join(' - ');
           setEntityName(displayName || entData.entity_code || '');
         }
 
         // 1. Fetch SKUs count & list
-        const { data: skusData } = await supabase
+        const { data: rawSkus } = await supabase
           .from('md_product_skus')
           .select('id, sku_code, name, uom')
           .eq('customer_id', customerId)
           .eq('is_active', true);
 
-        const skusList = skusData || [];
+        const skusList = (rawSkus as any[]) || [];
 
         // 2. Fetch inventory
-        const { data: invData } = await supabase
+        const { data: rawInv } = await supabase
           .from('wh_inventory')
           .select('product_sku_id, quantity, reserved_quantity, available_quantity')
           .eq('customer_id', customerId);
+        const invData = (rawInv as any[]) || [];
 
         let soh = 0;
         let rsv = 0;
@@ -110,33 +112,35 @@ export default function CustomerWarehouseDashboardPage() {
           .slice(0, 5);
 
         // 3. Fetch Recent Inbound
-        const { data: inboundRows } = await supabase
+        const { data: rawInbound } = await supabase
           .from('wh_inbound_receipts')
           .select('id, receipt_number, receipt_date, status, supplier_name')
           .eq('customer_id', customerId)
           .order('receipt_date', { ascending: false })
           .limit(5);
+        const inboundRows = (rawInbound as any[]) || [];
 
         // 4. Fetch Recent Outbound
-        const { data: outboundRows } = await supabase
+        const { data: rawOutbound } = await supabase
           .from('wh_outbound_shipments')
           .select('id, shipment_number, shipment_date, status, consignee_name')
           .eq('customer_id', customerId)
           .order('shipment_date', { ascending: false })
           .limit(5);
+        const outboundRows = (rawOutbound as any[]) || [];
 
         setStats({
           totalSkus: skusList.length,
           totalStockOnHand: soh,
           totalReserved: rsv,
           totalAvailable: avail,
-          inboundThisMonth: (inboundRows || []).length,
-          outboundThisMonth: (outboundRows || []).length,
+          inboundThisMonth: inboundRows.length,
+          outboundThisMonth: outboundRows.length,
         });
 
         setTopSkus(sortedSkus);
-        setRecentInbound(inboundRows || []);
-        setRecentOutbound(outboundRows || []);
+        setRecentInbound(inboundRows);
+        setRecentOutbound(outboundRows);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
       } finally {

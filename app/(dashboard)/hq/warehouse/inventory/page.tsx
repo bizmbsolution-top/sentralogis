@@ -21,10 +21,10 @@ interface InventoryItem {
   expiry_date: string;
   status: string;
   location_code: string;
-  warehouse_name: string;
-  area_name?: string;
-  area_code?: string;
-  zone_code?: string;
+   warehouse_name: string;
+   area_name: string;
+   area_code?: string;
+   zone_code?: string;
 }
 
 export default function HQWarehouseInventory() {
@@ -91,7 +91,7 @@ export default function HQWarehouseInventory() {
              i.product_name.toLowerCase().includes(q) ||
              i.batch_number.toLowerCase().includes(q) ||
              i.inventory_code.toLowerCase().includes(q) ||
-             i.area_name.toLowerCase().includes(q);
+             (i.area_name || "").toLowerCase().includes(q);
     }
     return true;
   });

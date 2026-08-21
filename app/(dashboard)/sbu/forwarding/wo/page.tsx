@@ -44,7 +44,7 @@ export default function ForwardingWOListPage() {
           )
         `)
         .eq('tenant_id', tenantId)
-        .eq('sbu_type', 'FORWARDING')
+        .eq('sbu_type' as any, 'FORWARDING')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -181,7 +181,7 @@ export default function ForwardingWOListPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link href={`/sbu/forwarding/wo/${item.id}`}>
-                        <Button variant="outline" size="sm" className="text-xs h-8">
+                        <Button variant="secondary" size="sm" className="text-xs h-8">
                           Detail <ArrowRight className="w-3 h-3 ml-1" />
                         </Button>
                       </Link>

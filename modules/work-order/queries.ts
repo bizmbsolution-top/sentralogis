@@ -23,8 +23,8 @@ export interface CreateWorkOrderInput {
 }
 
 export async function createWorkOrder(input: CreateWorkOrderInput): Promise<WorkOrder> {
-  const { data: wo, error: woErr } = await supabase
-    .rpc('wo_create_work_order', {
+  const { data: wo, error: woErr } = await (supabase
+    .rpc as any)('wo_create_work_order', {
       p_originating_org_id: input.originating_org_id,
       p_assigned_org_id: input.assigned_org_id || input.originating_org_id,
       p_wo_type: input.wo_type,
@@ -35,7 +35,7 @@ export async function createWorkOrder(input: CreateWorkOrderInput): Promise<Work
       p_target_date: input.target_date || null,
     });
   if (woErr) throw woErr;
-  return wo;
+  return wo as WorkOrder;
 }
 
 export async function getWorkOrders(orgId: string, limit = 50): Promise<WorkOrder[]> {
@@ -46,7 +46,7 @@ export async function getWorkOrders(orgId: string, limit = 50): Promise<WorkOrde
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data || [];
+  return (data as unknown as WorkOrder[]) || [];
 }
 
 export async function getWorkOrderById(id: string): Promise<WorkOrder | null> {
@@ -56,7 +56,7 @@ export async function getWorkOrderById(id: string): Promise<WorkOrder | null> {
     .eq('id', id)
     .single();
   if (error) return null;
-  return data;
+  return (data as unknown as WorkOrder) || null;
 }
 
 export async function getWorkOrderItems(woId: string): Promise<WorkOrderItem[]> {
@@ -66,7 +66,7 @@ export async function getWorkOrderItems(woId: string): Promise<WorkOrderItem[]> 
     .eq('work_order_id', woId)
     .order('line_number');
   if (error) throw error;
-  return data || [];
+  return (data as unknown as WorkOrderItem[]) || [];
 }
 
 export async function updateWorkOrderStatus(id: string, status: string): Promise<void> {

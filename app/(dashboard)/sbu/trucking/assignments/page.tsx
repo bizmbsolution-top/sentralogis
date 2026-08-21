@@ -292,9 +292,9 @@ export default function JobOrderManagementPage() {
       const baseJOs = Array.from(new Map(truckingJOs.map(jo => [jo.id, jo])).values());
 
       if (baseJOs.length > 0) {
-        const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))];
-        const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
-        const transporterIds = [...new Set(baseJOs.map(j => j.transporter_id || j.vendor_id).filter(Boolean))];
+        const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))] as string[];
+        const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))] as string[];
+        const transporterIds = [...new Set(baseJOs.map(j => j.transporter_id || j.vendor_id).filter(Boolean))] as string[];
 
         const [driversRes, fleetsRes, transportersRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone, md_entities(is_vendor)').in('id', driverIds) : { data: [] },

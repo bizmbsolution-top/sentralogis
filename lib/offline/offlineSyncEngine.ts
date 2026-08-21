@@ -213,13 +213,23 @@ export async function syncOutboxQueueToCloud(): Promise<{ syncedCount: number; f
           .eq('id', item.payload.jo_id);
         resultError = error;
       } else if (item.type === 'SCAN_ITEM') {
-        const { error } = await supabase
+        const { error } = await (supabase as unknown as {
+          from(table: 'wh_inventory_items'): {
+            update(values: { actual_qty?: number }): {
+              eq(column: string, value: string): PromiseLike<{ error: { message: string } | null }>;
+            };
+          };
+        })
           .from('wh_inventory_items')
           .update({ actual_qty: item.payload.actual_qty })
           .eq('id', item.payload.item_id);
         resultError = error;
       } else if (item.type === 'UPDATE_MILESTONE') {
-        const { error } = await supabase
+        const { error } = await (supabase as unknown as {
+          from(table: 'jo_milestones'): {
+            insert(values: Record<string, unknown>): PromiseLike<{ error: { message: string } | null }>;
+          };
+        })
           .from('jo_milestones')
           .insert({
             jo_id: item.payload.jo_id,
@@ -400,7 +410,7 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
         // Strictly close the update callback for SYNCING state
         await update(GPS_PING_QUEUE_KEY, (queue: GpsPing[] | undefined) => {
           if (!queue) return [];
-          return queue.map(p => pingIds.includes(p.id) ? { ...p, status: 'SYNCING' } : p);
+          return queue.map(p => pingIds.includes(p.id) ? { ...p, status: 'SYNCING' as const } : p);
         });
 
         let driverId = '';
@@ -435,13 +445,30 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
           background_running: true
         };
 
+        // Fetch short-lived GPS session token
+        let gpsSessionToken = "";
+        try {
+          const res = await fetch(`/api/jo/${joId}/gps-session`, { method: "POST" });
+          if (res.ok) {
+            const data = await res.json();
+            gpsSessionToken = data.gps_session_token || "";
+          }
+        } catch (err) {
+          console.warn("[SYNC_ENGINE] Failed to fetch gps session token", err);
+        }
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'x-driver-id': driverId
+        };
+        if (gpsSessionToken) {
+          headers['Authorization'] = `Bearer ${gpsSessionToken}`;
+        }
+
         const response = await fetch(`/api/jo/${joId}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-            'x-driver-id': driverId
-          },
+          headers,
           body: JSON.stringify(payload),
         });
 
@@ -515,7 +542,7 @@ export async function syncGpsPingsFirst(): Promise<{ syncedGps: number; syncedMu
           const pingIds = pings.map(p => p.id);
           return queue.map(p => 
             (pingIds.includes(p.id) && p.status === 'SYNCING') 
-              ? { ...p, status: 'PENDING' } 
+              ? { ...p, status: 'PENDING' as const } 
               : p
           );
         });

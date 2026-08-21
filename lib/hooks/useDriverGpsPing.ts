@@ -71,7 +71,7 @@ export interface GeofenceArrivalEvent {
 }
 
 export interface GpsPingState {
-  status: "active" | "inactive" | "error" | "loading" | "recovering";
+  status: "active" | "inactive" | "error" | "loading" | "recovering" | "idle";
   accuracy: number | null;
   speed: number | null;
   battery: number | null;
@@ -126,11 +126,22 @@ export function useDriverGpsPing(
     if (typeof window !== "undefined" && token) {
       if (isNativeApp === true && !heartbeatSentRef.current) {
         heartbeatSentRef.current = true;
-        fetch(`/api/jo/${token}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-          body: JSON.stringify({ action: "native_heartbeat", source: "native_android" }),
-        }).catch(err => console.warn("[Native Heartbeat] Error:", err));
+        fetch(`/api/jo/${token}/gps-session`, { method: "POST" })
+          .then(res => res.json())
+          .then(data => {
+            if (data.gps_session_token) {
+              return fetch(`/api/jo/${token}`, {
+                method: "PATCH",
+                headers: { 
+                  "Content-Type": "application/json", 
+                  "ngrok-skip-browser-warning": "true",
+                  "Authorization": `Bearer ${data.gps_session_token}`
+                },
+                body: JSON.stringify({ action: "native_heartbeat", source: "native_android" }),
+              });
+            }
+          })
+          .catch(err => console.warn("[Native Heartbeat] Error:", err));
       }
     }
   }, [token, isNativeApp]);

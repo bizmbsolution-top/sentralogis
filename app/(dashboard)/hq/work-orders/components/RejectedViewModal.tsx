@@ -41,7 +41,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
         }
 
         if (jos && jos.length > 0) {
-          const driverIds = jos.map(j => j.driver_id).filter(Boolean);
+          const driverIds = jos.map(j => j.driver_id).filter(Boolean) as string[];
           if (driverIds.length > 0) {
             const { data: driverData } = await supabase
               .from('md_drivers')
@@ -49,7 +49,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
               .in('id', driverIds);
             if (driverData) {
               const driverMap = Object.fromEntries(driverData.map(d => [d.id, d]));
-              setAllItemJOs(jos.map(j => ({ ...j, md_drivers: driverMap[j.driver_id] })));
+              setAllItemJOs(jos.map(j => ({ ...j, md_drivers: driverMap[j.driver_id as string] })));
               setLoading(false);
               return;
             }

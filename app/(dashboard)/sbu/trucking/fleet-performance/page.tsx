@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -132,7 +132,7 @@ export default function FleetPerformancePage() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setInspections(data || []);
+      setInspections((data || []) as unknown as Inspection[]);
     } catch (error: any) {
       toast.error('Gagal mengambil data inspeksi');
     } finally {
@@ -232,7 +232,7 @@ export default function FleetPerformancePage() {
   };
 
   const formatLastSeen = (iso: string | null) => {
-    if (!iso) return '—';
+    if (!iso) return 'â€”';
     const diff = (Date.now() - new Date(iso).getTime()) / 1000;
     if (diff < 60) return `${Math.floor(diff)}d lalu`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m lalu`;
@@ -464,7 +464,7 @@ export default function FleetPerformancePage() {
                       {fleet.is_vendor_fleet && (
                         <div className="md:w-24">
                           <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-purple-100 text-purple-700">
-                            Vendor{fleet.vendor_tenant_code ? ` · ${fleet.vendor_tenant_code}` : ""}
+                            Vendor{fleet.vendor_tenant_code ? ` Â· ${fleet.vendor_tenant_code}` : ""}
                           </span>
                         </div>
                       )}
@@ -476,7 +476,7 @@ export default function FleetPerformancePage() {
                             {fleet.active_jo_count} JO
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400">—</span>
+                          <span className="text-[10px] text-slate-400">â€”</span>
                         )}
                       </div>
 
@@ -614,7 +614,7 @@ export default function FleetPerformancePage() {
                           <ul className="space-y-1.5">
                             {brokenParts.map((part, idx) => (
                               <li key={idx} className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
-                                <span className="shrink-0 mt-0.5">•</span>
+                                <span className="shrink-0 mt-0.5">â€¢</span>
                                 <span>{part}</span>
                               </li>
                             ))}
@@ -700,7 +700,7 @@ export default function FleetPerformancePage() {
               <div className="mb-5 p-3 bg-rose-50 rounded-lg border border-rose-100">
                 <p className="text-xs text-rose-700 font-bold mb-1">Daftar Kerusakan:</p>
                 <ul className="text-xs text-rose-600 space-y-1">
-                  {getBrokenParts(selectedInspection).map((p, i) => <li key={i}>• {p}</li>)}
+                  {getBrokenParts(selectedInspection).map((p, i) => <li key={i}>â€¢ {p}</li>)}
                 </ul>
               </div>
 

@@ -67,8 +67,8 @@ export default function CustomerRatesPage() {
   async function fetchCustomers() {
     setLoadingCustomers(true);
     try {
-      const { data, error } = await supabase
-        .from('md_entities')
+      const { data, error } = await (supabase
+        .from('md_entities' as any) as any)
         .select('id, name, entity_type')
         .eq('is_active', true)
         .order('name', { ascending: true });
@@ -166,7 +166,7 @@ export default function CustomerRatesPage() {
         const { error } = await supabase
           .from('crm_sbu_customer_rates')
           .insert([{
-            tenant_id: profile?.tenant_id,
+            tenant_id: profile?.tenant_id as string,
             customer_id: selectedCustomerId,
             sbu_type: activeSbu,
             service_name: formState.service_name,

@@ -100,7 +100,7 @@ export default function ChatPanel({ entityId, channelType, channel: initialChann
       {/* Context Header */}
       {currentChannel && (
         <ChatContextHeader
-          contextType={currentChannel.channel_type}
+          contextType={currentChannel.channel_type as any}
           contextId={currentChannel.channel_id}
           title={currentChannel.title}
         />

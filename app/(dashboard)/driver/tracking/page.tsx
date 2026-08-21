@@ -39,7 +39,7 @@ interface JobOrder {
   jo_number: string;
   status: string;
   container_number?: string;
-  customer?: { name: string; address: string };
+  customer?: { name: string; address: string; phone?: string };
   driver?: { id: string; name: string; phone: string };
   fleet?: { id: string; plate_number: string; type_name: string };
   routes: RouteStop[];
@@ -56,7 +56,7 @@ export default function DriverTrackingPage() {
   const [gpsLng, setGpsLng] = useState<number | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<'active' | 'inactive' | 'error' | 'loading' | 'recovering'>('loading');
+  const [gpsStatus, setGpsStatus] = useState<'active' | 'inactive' | 'error' | 'loading' | 'recovering' | 'idle'>('loading');
 
   const status = jobOrder?.status;
 

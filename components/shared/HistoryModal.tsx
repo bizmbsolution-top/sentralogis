@@ -41,13 +41,14 @@ useEffect(() => {
         }
 
         // Query audit logs with tenant filter
-        const { data: logsData, error: logsError } = await supabase
-          .from('wo_audit_logs')
+        const { data: logsDataRaw, error: logsError } = await (supabase
+          .from('wo_audit_logs' as any) as any)
           .select('*')
           .eq('entity_id', entityId)
           .eq('entity_type', entityType)
           .eq('tenant_id', entityData.tenant_id)
           .order('performed_at', { ascending: false });
+        const logsData = (logsDataRaw as any[]) || [];
 
         if (logsError) {
           console.error("[HistoryModal] Error fetching logs:", logsError);
@@ -83,7 +84,7 @@ useEffect(() => {
         }
 
         // Get unique performed_by user IDs from audit logs
-        const performedByIds = [...new Set((logsData || []).map(l => l.performed_by).filter(Boolean))];
+        const performedByIds = [...new Set((logsData || []).map((l: any) => l.performed_by).filter(Boolean))];
         
         // Fetch profiles for those users
         let profilesMap: Record<string, any> = {};
@@ -101,8 +102,9 @@ useEffect(() => {
         }
 
         // Enrich audit logs with user info
-        const enrichedAuditLogs = (logsData || []).map(log => ({
+        const enrichedAuditLogs = (logsData || []).map((log: any) => ({
           ...log,
+          performed_at: log.performed_at,
           user: log.performed_by && profilesMap[log.performed_by] ? profilesMap[log.performed_by] : null
         }));
 
@@ -119,7 +121,7 @@ useEffect(() => {
 
         // Combine and sort
         const combinedLogs = [...enrichedAuditLogs, ...mappedTrackingLogs].sort(
-          (a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime()
+          (a: any, b: any) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime()
         );
 
         setLogs(combinedLogs);

@@ -18,13 +18,19 @@ interface Assignment {
     fleet_number?: string;
     physical_doc_received?: boolean;
     finance_status?: string;
+    driver_name?: string | null;
     cash_advances?: Array<{ status?: string }>;
 }
 
 interface WorkOrderItem {
     id?: string;
     quantity?: number;
-    work_orders?: { wo_number?: string; status?: string };
+    truck_type?: string | null;
+    deal_price?: number | null;
+    work_order_id?: string | null;
+    origin_location?: { name?: string; city?: string } | null;
+    destination_location?: { name?: string; city?: string } | null;
+    work_orders?: { wo_number?: string; status?: string; customers?: { company_name?: string } | null; created_at?: string | null; execution_date?: string | null };
     assignments?: Assignment[];
 }
 
@@ -147,7 +153,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                                     {isDone && <span className="text-emerald-600 text-[8px] font-black flex items-center gap-1 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-md">VERIFIED</span>}
                                 </div>
                                 <div className="space-y-2">
-                                    {item.assignments.slice(0, 5).map((a, idx) => (
+                                    {item.assignments?.slice(0, 5).map((a, idx) => (
                                             <div 
                                                 key={a.id} 
                                                 className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200/60 transition-all hover:border-emerald-500/30 group/jo relative"
@@ -184,7 +190,7 @@ export default function WorkOrderCard(props: WorkOrderCardProps) {
                                                 </div>
                                             </div>
                                     ))}
-                                    {item.assignments.length > 5 && (
+                                    {item.assignments && item.assignments.length > 5 && (
                                         <p className="text-[9px] font-black text-slate-400 uppercase text-center pt-1">+{item.assignments.length - 5} more units...</p>
                                     )}
                                 </div>

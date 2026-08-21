@@ -145,7 +145,7 @@ export default function HQFleetsPage() {
         : [{ id: 'NEW_INTERNAL', name: `(OWN) ${companyName}` }];
 
       setVendors([...ownEntity, ...(vendorData || [])]);
-      setFleets(fleetData || []);
+      setFleets((fleetData || []) as Fleet[]);
       setFleetTypes(typeData || []);
 
       // Fetch live GPS status for all fleets
@@ -157,7 +157,7 @@ export default function HQFleetsPage() {
           .in('fleet_id', fleetIds);
 
         const map: Record<string, FleetGpsStatus> = {};
-        for (const g of gpsData || []) {
+        for (const g of (gpsData || []) as FleetGpsStatus[]) {
           map[g.fleet_id] = g;
         }
         setGpsMap(map);
@@ -231,8 +231,8 @@ export default function HQFleetsPage() {
             model: formData.model,
             year: formData.year,
             stnk_number: formData.stnk_number,
-            stnk_expiry: formData.stnk_expiry || null,
-            kir_expiry: formData.kir_expiry || null,
+            stnk_expiry: formData.stnk_expiry || undefined,
+            kir_expiry: formData.kir_expiry || undefined,
             status: formData.status,
             is_active: formData.is_active,
             updated_at: new Date().toISOString()
@@ -255,8 +255,8 @@ export default function HQFleetsPage() {
             model: formData.model,
             year: formData.year,
             stnk_number: formData.stnk_number,
-            stnk_expiry: formData.stnk_expiry || null,
-            kir_expiry: formData.kir_expiry || null,
+            stnk_expiry: formData.stnk_expiry,
+            kir_expiry: formData.kir_expiry,
             status: formData.status,
             is_active: formData.is_active,
           });

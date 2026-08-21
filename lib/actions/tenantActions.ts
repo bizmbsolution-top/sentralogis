@@ -41,7 +41,7 @@ export async function getActiveTenants() {
       return [];
     }
 
-    const userIds = tenantsData.map(t => t.user_id).filter(Boolean);
+    const userIds = ((tenantsData as any[]) || []).map((t: any) => t.user_id).filter(Boolean);
     
     let profileMap = new Map();
     if (userIds.length > 0) {
@@ -54,12 +54,12 @@ export async function getActiveTenants() {
       if (profilesError) {
         console.error('[GET_ACTIVE_TENANTS] DB Error (profiles):', profilesError);
       } else if (profilesData) {
-        profileMap = new Map(profilesData.map(p => [p.id, p]));
+        profileMap = new Map(((profilesData as any[]) || []).map((p: any) => [p.id, p]));
       }
     }
 
     console.log('[GET_ACTIVE_TENANTS] Mapping data and returning');
-    return tenantsData.map((t: any) => ({
+    return ((tenantsData as any[]) || []).map((t: any) => ({
       tenant_code: t.tenant_code || 'N/A',
       name: t.name || 'Unknown Node',
       subscription_tier: t.subscription_tier || 'N/A',
@@ -104,8 +104,9 @@ export async function adminResetPassword(requestId: string, newPassword: any) {
       .single();
 
     if (fetchError || !reqData) throw new Error("Data permintaan tidak ditemukan");
+    const req = reqData as any;
 
-    console.log(`[ADMIN_RESET] Mencari identitas: ${reqData.admin_email}`);
+    console.log(`[ADMIN_RESET] Mencari identitas: ${req.admin_email}`);
     
     const { data: usersData, error: listError } = await admin.auth.admin.listUsers();
     
@@ -115,24 +116,24 @@ export async function adminResetPassword(requestId: string, newPassword: any) {
     }
 
     const targetUser = usersData.users.find(u => 
-      u.email?.trim().toLowerCase() === reqData.admin_email.trim().toLowerCase()
+      u.email?.trim().toLowerCase() === (req.admin_email || '').trim().toLowerCase()
     );
     
     if (!targetUser) {
       const { data: profData } = await admin
         .from('profiles')
         .select('id')
-        .eq('email', reqData.admin_email)
+        .eq('email', req.admin_email)
         .single();
       
-      if (profData?.id) {
-        const { data: userData } = await admin.auth.admin.getUserById(profData.id);
+      if ((profData as any)?.id) {
+        const { data: userData } = await admin.auth.admin.getUserById((profData as any).id);
         if (userData?.user) {
           return await executePasswordUpdate(admin, userData.user.id, requestId, newPassword);
         }
       }
 
-      throw new Error(`User ${reqData.admin_email} tidak ditemukan. Silakan hubungi tim IT.`);
+      throw new Error(`User ${req.admin_email} tidak ditemukan. Silakan hubungi tim IT.`);
     }
 
     return await executePasswordUpdate(admin, targetUser.id, requestId, newPassword);
@@ -147,8 +148,8 @@ async function executePasswordUpdate(admin: any, userId: string, requestId: stri
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, { password: newPassword });
   if (updateError) throw updateError;
 
-  const { error: statusError } = await admin
-    .from('reset_password_requests')
+  const { error: statusError } = await (admin
+    .from('reset_password_requests' as any) as any)
     .update({ 
       status: 'completed', 
       processed_at: new Date().toISOString(),
@@ -181,7 +182,7 @@ export async function registerNewTenant(formData: any) {
         .select('id')
         .eq('email', formData.admin_email)
         .single();
-      userId = existingProf?.id;
+      userId = (existingProf as any)?.id;
       
       // If user exists, FORCE update their password to the new tempPassword
       if (userId) {
@@ -196,7 +197,7 @@ export async function registerNewTenant(formData: any) {
     if (!userId) throw new Error("Could not identify user ID for registration");
 
     // 1. Sync Profile
-    const { error: profError } = await admin.from('profiles').upsert({
+    const { error: profError } = await (admin.from('profiles' as any) as any).upsert({
       id: userId,
       email: formData.admin_email,
       full_name: formData.admin_full_name,
@@ -209,7 +210,7 @@ export async function registerNewTenant(formData: any) {
     // Default warehouse_id from existing data if not provided
     const warehouseId = '9f82b2f9-d6ea-4eac-91d0-332b0fd07559'; 
 
-    const { error: tenantError } = await admin.from('tenants').insert({
+    const { error: tenantError } = await (admin.from('tenants' as any) as any).insert({
       name: formData.name,
       tenant_code: formData.tenant_code,
       user_id: userId,
@@ -253,12 +254,12 @@ export async function getPendingTopupRequests() {
 
     // Fetch profiles for WA join
     const { data: profiles } = await admin.from('profiles').select('id, whatsapp');
-    const waMap = (profiles || []).reduce((acc: any, p: any) => {
+    const waMap = ((profiles as any[]) || []).reduce((acc: any, p: any) => {
       acc[p.id] = p.whatsapp;
       return acc;
     }, {});
 
-    return (data || []).map(req => {
+    return ((data as any[]) || []).map((req: any) => {
       const rawWA = waMap[req.tenants?.user_id] || 'N/A';
       return {
         ...req,
@@ -296,7 +297,7 @@ export async function adminResetPasswordDirect(email: string, newPassword: any) 
         .select('id')
         .eq('email', email)
         .single();
-      userId = profData?.id;
+      userId = (profData as any)?.id;
     }
 
     if (!userId) throw new Error(`User with email ${email} not found in system.`);
@@ -337,7 +338,7 @@ export async function getAllProfilesAction() {
       return { error: 'Table is empty' };
     }
 
-    return (data || []).map(p => ({
+    return ((data as any[]) || []).map((p: any) => ({
       ...p,
       whatsapp: p.whatsapp || ''
     }));
@@ -364,8 +365,8 @@ export async function injectTokensAction(tenantCode: string, amount: number, not
     if (isReject) {
       // PROSES PENOLAKAN
       if (requestId) {
-        await admin
-          .from('topup_requests')
+        await (admin
+          .from('topup_requests' as any) as any)
           .update({ status: 'rejected', rejection_reason: reason || 'Manual rejection by owner' })
           .eq('id', requestId);
       }
@@ -374,7 +375,7 @@ export async function injectTokensAction(tenantCode: string, amount: number, not
 
     // PROSES PERSETUJUAN (INJECTION)
     // Gunakan fungsi RPC manual_topup_tokens untuk memastikan atomisitas
-    const { error: rpcError } = await admin.rpc('manual_topup_tokens', {
+    const { error: rpcError } = await (admin.rpc as any)('manual_topup_tokens', {
       p_tenant_code: tenantCode,
       p_amount_received: amount * 1000, // Multiply by 1000 because RPC divides by 1000
       p_note: note || 'Manual injection by owner'
@@ -384,8 +385,8 @@ export async function injectTokensAction(tenantCode: string, amount: number, not
 
     // 4. Update status request menjadi approved
     if (requestId) {
-      await admin
-        .from('topup_requests')
+      await (admin
+        .from('topup_requests' as any) as any)
         .update({ status: 'approved' })
         .eq('id', requestId);
     }
@@ -403,7 +404,7 @@ export async function grantTokenToTenant(tenantCode: string, amount: number, not
     const admin = getAdminClient();
     
     // Gunakan RPC manual_topup_tokens untuk memastikan atomisitas
-    const { error: rpcError } = await admin.rpc('manual_topup_tokens', {
+    const { error: rpcError } = await (admin.rpc as any)('manual_topup_tokens', {
       p_tenant_code: tenantCode,
       p_amount_received: amount * 1000,
       p_note: note || 'Manual grant by owner'

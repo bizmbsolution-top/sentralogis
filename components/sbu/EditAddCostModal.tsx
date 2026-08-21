@@ -46,14 +46,14 @@ export default function EditAddCostModal({ item, onClose, onSuccess }: EditAddCo
           description: description,
           is_billable: true,
           status: 'need_approval', // Editing will reset it to need_approval
-          updated_at: new Date()
+          updated_at: new Date().toISOString()
         })
         .eq('id', item.id);
 
       if (error) throw error;
 
       try {
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications" as any) as any).insert({
           tenant_id: item?.job_orders?.tenant_id || (await supabase.auth.getUser()).data.user?.user_metadata?.tenant_id,
           role: "hq_finance",
           title: "Need Approval Add Cost",

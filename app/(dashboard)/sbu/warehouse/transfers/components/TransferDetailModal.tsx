@@ -50,8 +50,8 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: shipData, error: shipError } = await supabase
-        .from('wh_transfer_orders')
+      const { data: shipData, error: shipError } = await (supabase
+        .from('wh_transfer_orders' as any) as any)
         .select(`
           *,
           from_warehouse:from_warehouse_id(code, name),
@@ -186,8 +186,8 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
       }
 
       if (['CHECKING', 'READY_FOR_LOADING', 'LOADING', 'READY_FOR_DOCUMENTS', 'COMPLETED'].includes(shipData.status)) {
-        const { data: damageData } = await supabase
-          .from('wh_transfer_damage_records')
+        const { data: damageData } = await (supabase
+          .from('wh_transfer_damage_records' as any) as any)
           .select('*')
           .eq('transfer_id', shipmentId);
         setDamageRecords(damageData || []);
@@ -319,22 +319,22 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
            // This handles transfers that were completed before the inbound creation fix
            if (shipment.to_warehouse_id && shipment.tenant_id) {
              // Create inbound WO item for destination warehouse
-             const { data: newInboundWoItem } = await supabase
-               .from('wo_items')
-               .insert({
-                 tenant_id: shipment.tenant_id,
-                 wo_id: parentWoId,
-                 sbu_type: 'WAREHOUSE',
-                 item_data: {
-                   transfer_id: shipment.id,
-                   direction: 'INBOUND',
-                   warehouse_id: shipment.to_warehouse_id,
-                   operation_type: 'STOCK_TRANSFER'
-                 },
-                 status: 'need_assignment',
-               })
-               .select('id')
-               .single();
+              const { data: newInboundWoItem } = await supabase
+                .from('wo_items')
+                .insert({
+                  tenant_id: shipment.tenant_id,
+                  wo_id: parentWoId,
+                  sbu_type: 'WAREHOUSE',
+                  item_data: {
+                    transfer_id: shipment.id,
+                    direction: 'INBOUND',
+                    warehouse_id: shipment.to_warehouse_id,
+                    operation_type: 'STOCK_TRANSFER'
+                  },
+                  status: 'need_assignment',
+                } as never)
+                .select('id')
+                .single();
 
              if (newInboundWoItem) {
                // Create inbound JO for destination warehouse
@@ -362,7 +362,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                    receipt_number: `RCV-${shipment.transfer_number || shipment.id}`,
                    status: 'EXPECTED',
                    notes: `Inbound receipt for Transfer ${shipment.transfer_number || shipment.id}`,
-                   created_by: profile?.id || null,
+                   created_by: profile?.id || undefined,
                  })
                  .select('id')
                  .single();
@@ -377,7 +377,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                    actual_good_qty: Number(itm.checked_qty || itm.picked_qty || 0),
                  }));
                  if (receiptItemPayloads.length > 0) {
-                   await supabase.from('wh_inbound_receipt_items').insert(receiptItemPayloads);
+                   await (supabase.from('wh_inbound_receipt_items' as any) as any).insert(receiptItemPayloads);
                  }
                }
 
@@ -394,7 +394,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                  status: 'PENDING',
                  priority: 'NORMAL',
                  notes: `Inbound receipt for Transfer ${shipment.transfer_number || shipment.id}`,
-                 created_by: profile?.id || null,
+                 created_by: profile?.id || undefined,
                });
              }
            }
@@ -599,7 +599,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                                 key={t.id}
                                 onMouseDown={async () => {
                                   setTransporterInput(t.transporter_name); setTransporterDropdownOpen(false); setSelectedTransporterId(t.id);
-                                  supabase.from('wh_transfer_orders').update({ transporter_id: t.id }).eq('id', shipment.id).then();
+                                  (supabase.from('wh_transfer_orders' as any) as any).update({ transporter_id: t.id }).eq('id', shipment.id).then();
                                 }}
                                 className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-l-2 border-transparent hover:border-blue-600"
                               >
@@ -625,7 +625,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                         {fleetSelectOpen && (
                           <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                             {fleets.map(f => (
-                              <div key={f.id} onClick={() => { setFleetSelectOpen(false); setShipment({...shipment, fleet: { plate_number: f.plate_number }, fleet_id: f.id }); supabase.from('wh_transfer_orders').update({ fleet_id: f.id }).eq('id', shipment.id).then(); }} className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">{f.plate_number}</div>
+                              <div key={f.id} onClick={() => { setFleetSelectOpen(false); setShipment({...shipment, fleet: { plate_number: f.plate_number }, fleet_id: f.id }); (supabase.from('wh_transfer_orders' as any) as any).update({ fleet_id: f.id }).eq('id', shipment.id).then(); }} className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">{f.plate_number}</div>
                             ))}
                           </div>
                         )}
@@ -646,7 +646,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                         {driverSelectOpen && (
                           <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                             {transporterDrivers.map(d => (
-                              <div key={d.id} onClick={() => { setDriverSelectOpen(false); setShipment({...shipment, driver: { name: d.name, whatsapp: d.whatsapp }, driver_id: d.id }); supabase.from('wh_transfer_orders').update({ driver_id: d.id }).eq('id', shipment.id).then(); }} className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">{d.name}</div>
+                              <div key={d.id} onClick={() => { setDriverSelectOpen(false); setShipment({...shipment, driver: { name: d.name, whatsapp: d.whatsapp }, driver_id: d.id }); (supabase.from('wh_transfer_orders' as any) as any).update({ driver_id: d.id }).eq('id', shipment.id).then(); }} className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">{d.name}</div>
                             ))}
                           </div>
                         )}
@@ -907,7 +907,7 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
                         }];
                         const newPickedQty = targetItem.picked_qty + showReplacementModal.qtyToPick;
                         
-                        const { error } = await supabase.from('wh_transfer_details').update({
+                        const { error } = await (supabase.from('wh_transfer_details' as any) as any).update({
                            picked_qty: newPickedQty,
                            picking_entries: newEntries
                         }).eq('id', targetItem.id);

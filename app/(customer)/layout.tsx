@@ -42,11 +42,12 @@ export default function CustomerPortalLayout({
       if (profile?.customer_id) {
         setFetchingName(true);
         try {
-          const { data } = await supabase
+          const { data: rawData } = await supabase
             .from('md_entities')
             .select('name, legal_name, entity_code')
             .eq('id', profile.customer_id)
             .maybeSingle();
+          const data = rawData as any;
           if (data) {
             const displayName = [data.name, data.legal_name].filter(Boolean).join(' - ');
             setCustomerName(displayName || data.entity_code || 'B2B Client');

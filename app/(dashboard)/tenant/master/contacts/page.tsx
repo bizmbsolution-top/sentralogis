@@ -117,7 +117,7 @@ export default function ContactsPage() {
     if (error) {
       toast.error('Gagal mengambil data kontak');
     } else {
-      setEntities(data || []);
+      setEntities((data as any[]) || []);
     }
     setLoading(false);
   }, [tenantId, activeTab]);
@@ -235,7 +235,7 @@ export default function ContactsPage() {
           .single();
 
         if (error) throw error;
-        entityId = data.id;
+        entityId = (data as any)?.id;
       }
 
       // Handle Other Addresses
@@ -299,7 +299,7 @@ export default function ContactsPage() {
 
   const fetchOtherAddresses = async (entityId: string) => {
     const { data } = await supabase.from('md_entity_addresses').select('*').eq('entity_id', entityId);
-    setOtherAddresses(data || []);
+    setOtherAddresses((data as any[]) || []);
   };
 
   const handleOpenModal = (entity: Entity | null = null) => {
@@ -448,8 +448,8 @@ export default function ContactsPage() {
                     <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{ent.entity_code}</td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        {ent.logo_url ? (
-                          <img src={ent.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
+                        {(ent as any).logo_url ? (
+                          <img src={(ent as any).logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
                         ) : (
                           <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
                             {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}

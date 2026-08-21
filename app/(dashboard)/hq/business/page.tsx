@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-const SBU_ICONS: Record<string, React.ElementType> = {
+const SBU_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   TRUCKING: Truck,
   WAREHOUSE: Warehouse,
   FORWARDING: Ship,

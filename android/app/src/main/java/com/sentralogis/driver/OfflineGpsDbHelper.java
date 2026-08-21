@@ -149,6 +149,32 @@ public class OfflineGpsDbHelper extends SQLiteOpenHelper {
         db.close();
     }
 
+    public int getTotalLocationsCount() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + TABLE_NAME, null);
+        int count = 0;
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0);
+            }
+            cursor.close();
+        }
+        return count;
+    }
+
+    public int getPendingLocationsCount() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE " + COL_SYNC_STATUS + " = 'PENDING' OR " + COL_SYNC_STATUS + " = 'SYNCING'", null);
+        int count = 0;
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0);
+            }
+            cursor.close();
+        }
+        return count;
+    }
+
     public static class OfflineLocation {
         public int id;
         public String clientPingId;

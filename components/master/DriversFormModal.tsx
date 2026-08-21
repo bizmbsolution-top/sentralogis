@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { X, Loader2, User } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
 
@@ -31,7 +31,6 @@ const isDuplicateDriverPhoneError = (error: any) => {
     )
   );
 };
-
 
 interface DriversFormModalProps {
   isOpen: boolean;
@@ -86,22 +85,22 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
       const payload = { ...formData, created_by: user?.id };
 
       if (initialData?.id) {
-        const { error } = await supabase
-          .from('md_drivers')
+        const { error } = await (supabase
+          .from('md_drivers' as any) as any)
           .update(payload)
           .eq('id', initialData.id);
         if (error) throw error;
         toast.success('Driver updated');
       } else {
         const codeToUse = formData.driver_code || await generateDriverCodeAction();
-        let { error } = await supabase
-          .from('md_drivers')
+        let { error } = await (supabase
+          .from('md_drivers' as any) as any)
           .insert([{ ...payload, driver_code: codeToUse }]);
 
         if (error && (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate'))) {
           const fallbackCode = `DRI/${Date.now().toString().slice(-4)}`;
-          const retryRes = await supabase
-            .from('md_drivers')
+          const retryRes = await (supabase
+            .from('md_drivers' as any) as any)
             .insert([{ ...payload, driver_code: fallbackCode }]);
           if (retryRes.error) throw retryRes.error;
           error = null;
@@ -114,12 +113,12 @@ export default function DriversFormModal({ isOpen, onClose, onSuccess, initialDa
       onSuccess();
       onClose();
     } catch (error: any) {
-        if (isDuplicateDriverPhoneError(error)) {
-          toast.error('Nomor WhatsApp sudah digunakan oleh driver lain di tenant ini.');
-        } else {
-          toast.error(error.message);
-        }
-      } finally {
+      if (isDuplicateDriverPhoneError(error)) {
+        toast.error('Nomor WhatsApp sudah digunakan oleh driver lain di tenant ini.');
+      } else {
+        toast.error(error.message);
+      }
+    } finally {
       setLoading(false);
     }
   };

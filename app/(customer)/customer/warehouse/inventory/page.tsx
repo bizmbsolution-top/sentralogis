@@ -58,7 +58,7 @@ export default function CustomerInventoryPage() {
         .eq('is_active', true);
 
       const skuMap: Record<string, InventoryItem> = {};
-      (skus || []).forEach((s) => {
+      ((skus as any[]) || []).forEach((s) => {
         skuMap[s.id] = {
           sku_id: s.id,
           sku_code: s.sku_code,
@@ -83,7 +83,7 @@ export default function CustomerInventoryPage() {
         `)
         .eq('customer_id', customerId);
 
-      (invRows || []).forEach((row) => {
+      ((invRows as any[]) || []).forEach((row) => {
         const sid = row.product_sku_id;
         if (sid && skuMap[sid]) {
           const qOnHand = Number(row.quantity || 0);
@@ -145,7 +145,7 @@ export default function CustomerInventoryPage() {
 
       const combined: any[] = [];
 
-      (inbItems || []).forEach((i) => {
+      ((inbItems as any[]) || []).forEach((i) => {
         const rec: any = i.wh_inbound_receipts;
         combined.push({
           id: `in-${rec?.receipt_number}-${i.created_at}`,
@@ -157,7 +157,7 @@ export default function CustomerInventoryPage() {
         });
       });
 
-      (outItems || []).forEach((o) => {
+      ((outItems as any[]) || []).forEach((o) => {
         const shp: any = o.wh_outbound_shipments;
         combined.push({
           id: `out-${shp?.shipment_number}-${o.created_at}`,

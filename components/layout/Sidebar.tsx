@@ -174,7 +174,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
       ]
     },
     MOD_COMMERCIAL,
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
     { label: 'Company Profile', icon: '⚙️', href: '/tenant/profile' },
   ],
 
@@ -187,7 +187,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     MOD_FINANCE_MATRIX,
     MOD_WAREHOUSE_HQ,
     MOD_MASTER_DATA_HQ,
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_ops: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -197,7 +197,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     MOD_FINANCE_MATRIX,
     MOD_WAREHOUSE_HQ,
     MOD_MASTER_DATA_HQ,
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_finance: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -207,23 +207,23 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     MOD_FINANCE_MATRIX,
     MOD_WAREHOUSE_HQ,
     MOD_MASTER_DATA_HQ,
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
 
   // Executive Directors - Specific Exception Dashboards
   hq_director_ops: [
     { label: 'Ops Exceptions', icon: '🚨', href: '/director/ops' },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_director_fin: [
     { label: 'Finance Exceptions', icon: '🚨', href: '/director/finance' },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_commercial_director: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
     MOD_COMMERCIAL,
     { label: 'Commercial Exceptions', icon: '🚨', href: '/director/commercial' },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_sales_manager: [
     { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
@@ -238,17 +238,26 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
   hq_director_comm: [
     MOD_COMMERCIAL,
     { label: 'Commercial Exceptions', icon: '🚨', href: '/director/commercial' },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_director_bizdev: [
     { label: 'BizDev Exceptions', icon: '🚨', href: '/director/bizdev' },
-    { label: 'Reporting', icon: '📊', href: '/hq/reporting' },
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   hq_director_hrd: [
     { label: 'HRD Exceptions', icon: '🚨', href: '/director/hrd' },
     { label: 'Organization', icon: '👥', href: '/tenant/staff' },
   ],
-  hq_director_cs: MOD_DIRECTOR_HQ, // Fallback for CS director as it's not defined in new plan
+  hq_director_cs: [
+    { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
+    { label: 'Executive Dashboard', icon: '💎', href: '/hq/business' },
+    { label: 'Ops Dashboard', icon: '🏠', href: '/hq/ops-dashboard' },
+    ...MOD_TRUCKING_HQ,
+    MOD_FINANCE_MATRIX,
+    MOD_WAREHOUSE_HQ,
+    MOD_MASTER_DATA_HQ,
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
+  ],
 
   // SBU Roles (Manager, Ops, Admin, Finances)
   sbu_manager_tr: [
@@ -263,12 +272,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
-    { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
-      { label: 'Time Analysis', icon: '⏱️', href: '/sbu/trucking/reporting/time-analysis' },
-    ]},
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   sbu_ops_tr: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -282,12 +286,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
-    { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
-      { label: 'Time Analysis', icon: '⏱️', href: '/sbu/trucking/reporting/time-analysis' },
-    ]},
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   sbu_admin_tr: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -301,12 +300,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
-    { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
-      { label: 'Time Analysis', icon: '⏱️', href: '/sbu/trucking/reporting/time-analysis' },
-    ]},
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   sbu_fin_tr: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -319,12 +313,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
-    { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
-      { label: 'Time Analysis', icon: '⏱️', href: '/sbu/trucking/reporting/time-analysis' },
-    ]},
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
   sbu_finance_tr: [
     { label: 'Sentralogis Copilot', icon: '🤖', href: '/copilot' },
@@ -337,12 +326,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: 'Driver Performance', icon: '📊', href: '/sbu/trucking/driver-performance' },
     { label: 'Fleet Performance', icon: '🔧', href: '/sbu/trucking/fleet-performance' },
     { label: 'Ground Staff', icon: '👥', href: '/sbu/trucking/staff' },
-    { label: 'Reporting', icon: '📊', href: '#', submenu: [
-      { label: 'JO Report', icon: '📊', href: '/sbu/trucking/reporting' },
-      { label: 'JO Timelog', icon: '🛰️', href: '/sbu/trucking/reporting/gps-tracking' },
-      { label: 'WO Report', icon: '📋', href: '/sbu/trucking/reporting/wo-level' },
-      { label: 'Time Analysis', icon: '⏱️', href: '/sbu/trucking/reporting/time-analysis' },
-    ]},
+    { label: 'Reporting', icon: '📊', href: '/reporting' },
   ],
 
   // SBU Warehouse (Manager, Ops, Admin)

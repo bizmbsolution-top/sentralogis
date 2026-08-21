@@ -196,7 +196,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       .single()
       .then(({ data }) => {
         if (data) {
-          setCurrentUserProfile({ id: data.id, full_name: data.full_name, role: data.role, avatar_url: null });
+          setCurrentUserProfile({ id: data.id, full_name: data.full_name || 'Unknown', role: data.role || 'staff', avatar_url: null });
         }
       });
   }, [userId]);
@@ -245,10 +245,12 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       .limit(1)
       .maybeSingle();
 
-    if (data && data.sender) {
-      return { ...data, sender: { ...data.sender, avatar_url: null } };
-    }
-    return data;
+    if (!data) return null;
+    const msg = data as any;
+    return {
+      ...msg,
+      sender: msg.sender ? { ...msg.sender, avatar_url: null } : null,
+    };
   }, []);
 
   const fetchParticipants = useCallback(async (channelId: string): Promise<Participant[]> => {
@@ -302,7 +304,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
             .select('status')
             .eq('id', chan.channel_id)
             .maybeSingle();
-          if (!wo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(wo.status)) {
+          if (!wo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(String(wo.status))) {
             isWOJOArchived = true;
           }
         } else if (chan.channel_type === 'job_order') {
@@ -311,7 +313,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
             .select('status')
             .eq('id', chan.channel_id)
             .maybeSingle();
-          if (!jo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(jo.status)) {
+          if (!jo || ['paid', 'invoiced', 'PAID', 'INVOICED'].includes(String(jo.status))) {
             isWOJOArchived = true;
           }
         }
@@ -358,15 +360,21 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${channelId}` },
         async (payload: RealtimePostgresChangesPayload<Message>) => {
           const newMsg = payload.new as Message;
+          if (!newMsg.sender_id) return;
+
           const { data: profile } = await supabase
             .from('profiles')
             .select('id, full_name, role')
             .eq('id', newMsg.sender_id)
             .single();
 
+          const senderProfile: Profile = profile
+            ? { id: profile.id, full_name: profile.full_name || 'Unknown', role: profile.role || 'staff', avatar_url: null }
+            : { id: newMsg.sender_id, full_name: 'Unknown', role: 'staff', avatar_url: null };
+
           const enriched: Message = {
             ...newMsg,
-            sender: profile ? { ...profile, avatar_url: null } : { id: newMsg.sender_id, full_name: 'Unknown', avatar_url: null, role: null },
+            sender: senderProfile,
           };
 
           dispatch({ type: 'ADD_MESSAGE', payload: enriched });
@@ -461,9 +469,9 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       channel_id: state.activeChannel.id,
       sender_id: userId,
       message: text.trim(),
-      parent_id: parentId || null,
+      parent_id: parentId || undefined,
       context_type: state.activeChannel.channel_type === 'direct' ? 'direct' : state.activeChannel.channel_type === 'group' ? 'group' : state.activeChannel.channel_type,
-      context_id: state.activeChannel.channel_type === 'direct' ? null : state.activeChannel.channel_id,
+      context_id: state.activeChannel.channel_type === 'direct' ? undefined : state.activeChannel.channel_id,
     });
 
     if (error) console.error('[Chat] Failed to send message:', error);
@@ -478,12 +486,13 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
   ): Promise<Channel | null> => {
     console.log('[GetOrCreateChannel] Called:', { type, channelId, title });
 
-    const { data: existing, error: existingError } = await supabase
-      .from('chat_channels')
+    const { data: existingData, error: existingError } = await (supabase
+      .from('chat_channels' as any) as any)
       .select('*')
       .eq('channel_type', type)
       .eq('channel_id', channelId)
       .maybeSingle();
+    const existing = existingData as any;
 
     if (existingError) {
       console.error('[GetOrCreateChannel] Query error:', existingError);
@@ -520,11 +529,12 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
 
     console.log('[GetOrCreateChannel] Inserting:', { channel_type: type, channel_id: channelId, title: finalTitle });
 
-    const { data: newChannel, error } = await supabase
-      .from('chat_channels')
+    const { data: newChannelData, error } = await (supabase
+      .from('chat_channels' as any) as any)
       .insert({ channel_type: type, channel_id: channelId, title: finalTitle })
       .select()
       .single();
+    const newChannel = newChannelData as any;
 
     if (error) {
       console.error('[GetOrCreateChannel] Insert error:', JSON.stringify(error, null, 2));
@@ -567,12 +577,13 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     const directChannelId = ids.join('-');
 
     // Try to find existing channel
-    const { data: existing, error: selectError } = await supabase
-      .from('chat_channels')
+    const { data: existingData, error: selectError } = await (supabase
+      .from('chat_channels' as any) as any)
       .select('*')
       .eq('channel_type', 'direct')
       .eq('channel_id', directChannelId)
       .maybeSingle();
+    const existing = existingData as any;
 
     if (selectError) {
       console.error('[Chat] Select error:', selectError);
@@ -610,8 +621,8 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
 
     console.log('[Chat] Creating new channel:', { channel_type: 'direct', channel_id: directChannelId, title: channelTitle });
 
-    const { data: newChannel, error } = await supabase
-      .from('chat_channels')
+    const { data: newChannelData, error } = await (supabase
+      .from('chat_channels' as any) as any)
       .insert({
         channel_type: 'direct',
         channel_id: directChannelId,
@@ -619,6 +630,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       })
       .select()
       .single();
+    const newChannel = newChannelData as any;
 
     if (error) {
       console.error('[Chat] Failed to create direct channel:', error);
@@ -659,11 +671,12 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       return null;
     }
 
-    const { data: newGroup, error: groupError } = await supabase
-      .from('chat_groups')
+    const { data: newGroupData, error: groupError } = await (supabase
+      .from('chat_groups' as any) as any)
       .insert({ tenant_id: tenantId, name, group_type: 'custom', description, created_by: userId })
       .select()
       .single();
+    const newGroup = newGroupData as any;
 
     if (groupError) {
       console.error('[CreateGroup] Failed to create group:', groupError);
@@ -676,11 +689,12 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     const { error: membersError } = await supabase.from('chat_group_members').insert(members);
     if (membersError) console.error('[CreateGroup] Failed to add group members:', membersError);
 
-    const { data: newChannel, error: channelError } = await supabase
-      .from('chat_channels')
+    const { data: newChannelData, error: channelError } = await (supabase
+      .from('chat_channels' as any) as any)
       .insert({ channel_type: 'group', channel_id: newGroup.id, title: name, group_id: newGroup.id })
       .select()
       .single();
+    const newChannel = newChannelData as any;
 
     if (channelError) {
       console.error('[CreateGroup] Failed to create group channel:', channelError);
@@ -721,7 +735,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     if (error || !tenantUsers) return [];
 
     return tenantUsers.map(tu => ({
-      id: tu.user_id,
+      id: tu.user_id || '',
       full_name: tu.full_name || 'Unknown',
       avatar_url: null,
       role: tu.role_code || 'staff',
@@ -743,17 +757,17 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
       .select('*')
       .eq('wo_id', woId);
 
-    const joIds = items?.flatMap((item) => item.id) || [];
+    const joIds = (items as any[])?.flatMap((item: any) => item.id) || [];
     const { data: jobs } = await supabase
       .from('job_orders')
       .select('*, driver:md_drivers(name), fleet:md_fleets(plate_number)')
-      .in('wo_item_id', joIds);
+      .in('wo_item_id' as any, joIds);
 
     return {
       work_order: wo,
-      items: items?.map((item) => ({
+      items: (items as any[])?.map((item: any) => ({
         ...item,
-        job_orders: jobs?.filter((j) => j.wo_item_id === item.id) || [],
+        job_orders: (jobs as any[])?.filter((j: any) => (j as any).wo_item_id === item.id) || [],
       })) || [],
     };
   }, []);
@@ -783,7 +797,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     if (!state.activeChannel) return;
     await supabase
       .from('chat_messages')
-      .update({ is_pinned: false, pinned_at: null, pinned_by: null })
+      .update({ is_pinned: false, pinned_at: undefined, pinned_by: undefined })
       .eq('id', messageId);
 
     const { data } = await supabase
@@ -872,18 +886,19 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
     if (!state.activeChannel) return;
     dispatch({ type: 'SET_SENDING_MESSAGE', payload: true });
 
-    const { data: message, error: msgError } = await supabase
+    const { data: messageData, error: msgError } = await supabase
       .from('chat_messages')
       .insert({
         channel_id: state.activeChannel.id,
         sender_id: userId,
         message: `📎 ${file.name}`,
-        parent_id: null,
+        parent_id: undefined,
         context_type: state.activeChannel.channel_type === 'direct' ? 'direct' : state.activeChannel.channel_type === 'group' ? 'group' : state.activeChannel.channel_type,
-        context_id: state.activeChannel.channel_type === 'direct' ? null : state.activeChannel.channel_id,
+        context_id: state.activeChannel.channel_type === 'direct' ? undefined : state.activeChannel.channel_id,
       })
       .select()
       .single();
+    const message = messageData as any;
 
     if (msgError || !message) {
       console.error('[Chat] Failed to send message:', msgError);
@@ -893,7 +908,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
 
     const attachment = await uploadAttachment(file, message.id);
     if (attachment) {
-      await supabase.from('chat_attachments').insert({
+      await (supabase.from('chat_attachments' as any) as any).insert({
         message_id: message.id,
         file_url: attachment.file_url,
         file_name: attachment.file_name,
@@ -1052,7 +1067,7 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
             .eq('user_id', userId)
             .maybeSingle();
 
-          if (!participant) return;
+          if (!participant || !newMsg.sender_id) return;
 
           const { data: profile } = await supabase
             .from('profiles')
@@ -1060,9 +1075,13 @@ export function ChatProvider({ children, userId, tenantId: propTenantId }: { chi
             .eq('id', newMsg.sender_id)
             .single();
 
+          const senderProfile: Profile = profile
+            ? { id: profile.id, full_name: profile.full_name || 'Unknown', role: profile.role || 'staff', avatar_url: null }
+            : { id: newMsg.sender_id, full_name: 'Unknown', role: 'staff', avatar_url: null };
+
           const enriched: Message = {
             ...newMsg,
-            sender: profile ? { ...profile, avatar_url: null } : { id: newMsg.sender_id, full_name: 'Unknown', avatar_url: null, role: null },
+            sender: senderProfile,
           };
 
           dispatch({ type: 'UPDATE_CHANNEL_LAST_MESSAGE', payload: { channelId, message: enriched } });

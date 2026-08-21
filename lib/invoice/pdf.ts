@@ -47,18 +47,19 @@ type PdfInvoiceData = {
 async function fetchInvoiceData(invoiceId: string): Promise<PdfInvoiceData> {
   const supabase = await createClient()
 
-  const { data: invoice, error: invError } = await supabase
+  const { data: invData, error: invError } = await supabase
     .from('invoices')
     .select('*')
     .eq('id', invoiceId)
     .single()
 
-  if (invError || !invoice) {
+  if (invError || !invData) {
     throw new Error(invError?.message || 'Invoice not found')
   }
+  const invoice = invData as any
 
-  const tenantIdRes = await supabase
-    .from('invoice_lines')
+  const tenantIdRes = await (supabase
+    .from('invoice_lines' as any) as any)
     .select('tenant_id')
     .eq('invoice_id', invoice.id)
     .limit(1)
@@ -70,8 +71,8 @@ async function fetchInvoiceData(invoiceId: string): Promise<PdfInvoiceData> {
   } else {
     const { data: authUser } = await supabase.auth.getUser().catch(() => ({ data: null }))
     if (authUser?.user?.id) {
-      const { data: profile } = await supabase
-        .from('profiles')
+      const { data: profile } = await (supabase
+        .from('profiles' as any) as any)
         .select('tenant_id')
         .eq('id', authUser.user.id)
         .maybeSingle()
@@ -79,7 +80,7 @@ async function fetchInvoiceData(invoiceId: string): Promise<PdfInvoiceData> {
     }
   }
 
-  const [{ data: wo }, { data: tenantData }] = await Promise.all([
+  const [{ data: wo }, { data: rawTenantData }] = await Promise.all([
     invoice.wo_id
       ? supabase
           .from('work_orders')
@@ -95,6 +96,7 @@ async function fetchInvoiceData(invoiceId: string): Promise<PdfInvoiceData> {
           .maybeSingle()
       : { data: null },
   ])
+  const tenantData = rawTenantData as any
 
   if (!tenantData) {
     throw new Error('Tenant not found for this invoice')
@@ -512,7 +514,7 @@ export async function generateInvoicePdf(
     const page = await browser.newPage()
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'load',
       timeout: 15000,
     })
 

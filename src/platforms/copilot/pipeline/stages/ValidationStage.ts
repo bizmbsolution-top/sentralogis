@@ -19,7 +19,13 @@ export class ValidationStage implements PipelineStage {
       context.finalResponse = {
         type: 'text',
         content: `Validation failed: ${context.validationResult.blockingErrors.join('. ')}`,
-        metrics: { totalMs: 0 },
+        metrics: {
+          intentResolutionMs: 0,
+          entityResolutionMs: 0,
+          validationMs: 0,
+          planningMs: 0,
+          totalResponseMs: 0,
+        },
         enrichedContext: context.enrichedContext
       };
       return { status: PipelineStatus.BLOCKED };

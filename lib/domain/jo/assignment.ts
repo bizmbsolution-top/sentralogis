@@ -1,4 +1,4 @@
-import { isJoBlockingAsset } from "./status";
+import { isJoBlockingAsset, isJoHardBlockingAsset, isJoReadyForNextAssignment } from "./status";
 
 export interface AssignmentSlot {
   id?: string;
@@ -200,6 +200,36 @@ export function getActiveAssetIdsFromJos(
   return {
     activeFleetIds: active.map((j) => j.fleet_id).filter(Boolean) as string[],
     activeDriverIds: active.map((j) => j.driver_id).filter(Boolean) as string[],
+  };
+}
+
+/** Existing JOs that are hard-blocking (on the road before unloading) */
+export function getHardBlockingAssetIdsFromJos(
+  jos: {
+    status?: string | null;
+    fleet_id?: string | null;
+    driver_id?: string | null;
+  }[],
+): { hardBlockingFleetIds: string[]; hardBlockingDriverIds: string[] } {
+  const hardBlocking = jos.filter((j) => isJoHardBlockingAsset(j.status));
+  return {
+    hardBlockingFleetIds: hardBlocking.map((j) => j.fleet_id).filter(Boolean) as string[],
+    hardBlockingDriverIds: hardBlocking.map((j) => j.driver_id).filter(Boolean) as string[],
+  };
+}
+
+/** Existing JOs that are at/leaving unloading location and ready for next queue assignment */
+export function getReadyForQueueAssetIdsFromJos(
+  jos: {
+    status?: string | null;
+    fleet_id?: string | null;
+    driver_id?: string | null;
+  }[],
+): { queueReadyFleetIds: string[]; queueReadyDriverIds: string[] } {
+  const ready = jos.filter((j) => isJoReadyForNextAssignment(j.status));
+  return {
+    queueReadyFleetIds: ready.map((j) => j.fleet_id).filter(Boolean) as string[],
+    queueReadyDriverIds: ready.map((j) => j.driver_id).filter(Boolean) as string[],
   };
 }
 

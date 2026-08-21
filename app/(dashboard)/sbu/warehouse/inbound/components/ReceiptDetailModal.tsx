@@ -154,8 +154,8 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
     setLoading(true);
     try {
       // Fetch Receipt
-      const { data: recData, error: recError } = await supabase
-        .from('wh_inbound_receipts')
+      const { data: rawRecData, error: recError } = await (supabase
+        .from('wh_inbound_receipts' as any) as any)
         .select(`
           *,
           transporter:transporter_id(name),
@@ -168,6 +168,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
         .single();
       
       if (recError) throw recError;
+      const recData: any = rawRecData;
 
       // Fetch warehouse name
       if (recData.warehouse_id) {
@@ -231,8 +232,8 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
       }
 
       if (['CHECKING_DONE', 'PUTAWAY_IN_PROGRESS', 'COMPLETED'].includes(recData.status)) {
-        const { data: damageData } = await supabase
-          .from('wh_inbound_damage_records')
+        const { data: damageData } = await (supabase
+          .from('wh_inbound_damage_records' as any) as any)
           .select('*')
           .eq('receipt_id', receiptId)
           .order('created_at', { ascending: true });
@@ -480,7 +481,7 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
             batch_number: item.batch_number || null,
             expiry_date: item.expiry_date || null,
           };
-          const { error: invErr } = await supabase.from('wh_inventory').insert(invPayload);
+          const { error: invErr } = await supabase.from('wh_inventory').insert(invPayload as any);
           if (invErr) throw invErr;
         }
       }

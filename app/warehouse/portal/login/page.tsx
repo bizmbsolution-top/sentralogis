@@ -36,19 +36,20 @@ export default function WarehouseLoginPage() {
       }
       
       // Setup session
+      const staff = data as any;
       const sessionData = {
-        staff_id: data.id,
-        tenant_id: data.tenant_id,
-        name: data.name,
-        whatsapp: data.whatsapp,
-        role: data.role,
-        roles: data.roles && data.roles.length > 0 ? data.roles : [data.role],
-        warehouse_id: data.warehouse_id
+        staff_id: staff.id,
+        tenant_id: staff.tenant_id,
+        name: staff.name,
+        whatsapp: staff.whatsapp,
+        role: staff.role,
+        roles: staff.roles && staff.roles.length > 0 ? staff.roles : [staff.role],
+        warehouse_id: staff.warehouse_id
       };
       
       localStorage.setItem('sentralogis_wh_session', JSON.stringify(sessionData));
       
-      toast.success(`Selamat datang, ${data.name}`);
+      toast.success(`Selamat datang, ${staff.name}`);
       router.push('/warehouse/portal');
     } catch (err: any) {
       toast.error(err.message || 'Login gagal');

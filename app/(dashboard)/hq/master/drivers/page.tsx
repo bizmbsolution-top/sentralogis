@@ -67,6 +67,9 @@ interface Driver {
   avg_review_score: number;
   pin: string;
   photo_url: string;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  bank_account_name?: string | null;
   md_entities: { name: string; is_vendor?: boolean; vendor_tenant_id?: string };
 }
 
@@ -205,12 +208,13 @@ export default function HQDriversPage() {
           .order('created_at', { ascending: false });
           
         jobs?.forEach(j => {
-          if (!jobMap[j.driver_id]) jobMap[j.driver_id] = j; // Take latest active job
+          const driverKey = j.driver_id as string;
+          if (!jobMap[driverKey]) jobMap[driverKey] = j; // Take latest active job
         });
       }
 
       setVendors(vendorData || []);
-      setDrivers(driverData || []);
+      setDrivers((driverData || []) as Driver[]);
       setActiveJobs(jobMap);
     } catch (error: any) {
       toast.error('Gagal mengambil data master');
@@ -1023,7 +1027,7 @@ export default function HQDriversPage() {
             {/* Actions */}
             <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 className="flex-1 h-12 bg-white border-slate-200 text-slate-900 font-bold"
                 onClick={() => {
                   setLinkDriver(selectedDriver); 

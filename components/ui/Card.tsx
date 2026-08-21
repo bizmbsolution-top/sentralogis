@@ -28,3 +28,7 @@ export function CardContent({ children, className = '' }: { children: React.Reac
 export function CardFooter({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <div className={`p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-xl ${className}`}>{children}</div>;
 }
+
+export function CardTitle({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <h3 className={`text-lg font-semibold text-slate-900 ${className}`}>{children}</h3>;
+}

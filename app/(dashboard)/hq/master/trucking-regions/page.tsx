@@ -55,7 +55,7 @@ export default function HQTruckingRegionsPage() {
     if (error) {
       toast.error('Gagal mengambil data wilayah');
     } else {
-      setRegions(data || []);
+      setRegions((data || []) as Region[]);
     }
     setLoading(false);
   }, [profile?.tenant_id]);
@@ -109,7 +109,7 @@ export default function HQTruckingRegionsPage() {
         const { error } = await supabase
           .from('md_trucking_regions')
           .insert({
-            tenant_id: profile?.tenant_id,
+            tenant_id: profile?.tenant_id || '',
             name: formData.name,
             level: formData.level,
             parent_id: formData.parent_id || null,
@@ -281,7 +281,7 @@ export default function HQTruckingRegionsPage() {
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   {submitting ? 'Menyimpan...' : 'Simpan'}
                 </Button>
-                <Button type="button" onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1 border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest">
+                <Button type="button" onClick={() => setIsModalOpen(false)} variant="secondary" className="flex-1 border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest">
                   <XCircle size={14} /> Batal
                 </Button>
               </div>
@@ -303,7 +303,7 @@ export default function HQTruckingRegionsPage() {
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 {submitting ? 'Menghapus...' : 'Hapus'}
               </Button>
-              <Button onClick={() => setIsDeleteModalOpen(false)} variant="outline" className="flex-1 border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest">
+              <Button onClick={() => setIsDeleteModalOpen(false)} variant="secondary" className="flex-1 border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest">
                 Batal
               </Button>
             </div>

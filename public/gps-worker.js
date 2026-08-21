@@ -62,12 +62,28 @@ function doPing() {
       };
 
       try {
+        let gpsSessionToken = "";
+        try {
+          const tokenRes = await fetch(`${apiUrl}/api/jo/${token}/gps-session`, { method: "POST" });
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            gpsSessionToken = tokenData.gps_session_token || "";
+          }
+        } catch (e) {
+          console.warn("[gps-worker] Failed to fetch session token", e);
+        }
+
+        const headers = {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        };
+        if (gpsSessionToken) {
+          headers["Authorization"] = `Bearer ${gpsSessionToken}`;
+        }
+
         const res = await fetch(`${apiUrl}/api/jo/${token}`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true",
-          },
+          headers,
           body: JSON.stringify(payload),
         });
 

@@ -73,8 +73,8 @@ export default function FleetsPage() {
 
     try {
       // Fetch Fleets
-      const { data: fleetData, error: fleetError } = await supabase
-        .from('md_fleets')
+      const { data: fleetData, error: fleetError } = await (supabase
+        .from('md_fleets' as any) as any)
         .select('*, md_entities(name), md_fleet_types(type_name)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
@@ -96,9 +96,9 @@ export default function FleetsPage() {
         .eq('tenant_id', tenantId)
         .eq('is_active', true);
 
-      setFleets(fleetData || []);
-      setVendors(vendorData || []);
-      setFleetTypes(typeData || []);
+      setFleets((fleetData as any[]) || []);
+      setVendors((vendorData as any[]) || []);
+      setFleetTypes((typeData as any[]) || []);
     } catch (error: any) {
       toast.error('Gagal mengambil data master');
     } finally {

@@ -41,7 +41,7 @@ export default function OwnerTenantStatementPage() {
       const { data: tData } = await supabase.from('tenants').select('*').eq('tenant_code', tenantCode).single();
       setTenant(tData);
       if (tData) {
-        await generateStatement(tData.tenant_code);
+        await generateStatement(tData.tenant_code as string);
       }
     } catch (err) {
       console.error(err);

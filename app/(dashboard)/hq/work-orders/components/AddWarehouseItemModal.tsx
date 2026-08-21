@@ -63,7 +63,7 @@ export default function AddWarehouseItemModal({
       const { data } = await supabase
         .from('md_locations')
         .select('id, code, name, type')
-        .eq('warehouse_id', formData.warehouseId)
+        .eq('warehouse_id' as any, formData.warehouseId)
         .eq('is_active', true)
         .order('code');
       if (data) setLocations(data);

@@ -40,7 +40,7 @@ async function checkMissingDocuments(): Promise<ForwardingIssue[]> {
 
     if (!tables?.length) return issues;
 
-    const tableName = tables[0].table_name as 'shipments' | 'forwarding_shipments';
+    const tableName = (tables as any[])[0].table_name as 'shipments' | 'forwarding_shipments';
     const { data, error } = await client
       .from(tableName)
       .select('id, shipment_number, status, created_at')
@@ -49,7 +49,7 @@ async function checkMissingDocuments(): Promise<ForwardingIssue[]> {
 
     if (error) throw error;
 
-    for (const shipment of data || []) {
+    for (const shipment of (data as any[]) || []) {
       issues.push({
         type: 'missing_documents',
         severity: 'medium',
