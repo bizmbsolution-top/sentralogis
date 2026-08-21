@@ -903,7 +903,7 @@ export default function HQWorkOrdersPage() {
                       return (
                         <Button
                           onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
-                          className="flex-1 h-10 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                          className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
                           <ExternalLink size={14} /> Lihat Alasan Tolak
                         </Button>
