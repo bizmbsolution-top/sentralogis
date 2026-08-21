@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
       woItemIds.length > 0
         ? supabaseAdmin
             .from("wo_items")
-            .select("id, item_code, item_data, wo_id, tenant_id")
+            .select("id, item_code, item_data, wo_id, tenant_id, status")
             .in("id", woItemIds)
         : Promise.resolve({ data: [], error: null }),
       allJoIds.length > 0
@@ -332,7 +332,11 @@ export async function GET(request: NextRequest) {
     // Rejected/cancelled JOs are terminal states handled by ops — they must NOT
     // appear on the driver dashboard (active/queue) nor in history.
     const isRejectedJob = (j: any) =>
-      isJoRejected(j.status) || j.driver_response === "rejected";
+      isJoRejected(j.status) ||
+      j.driver_response === "rejected" ||
+      // [Guard] Item-level handover rejection also kills the JO, even when the
+      // job_orders.status was left stale by a partial reject flow.
+      j.wo_items?.status === "handover_rejected";
 
     const completedList = enrichedJobs.filter(
       (j) =>

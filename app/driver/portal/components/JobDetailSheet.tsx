@@ -60,6 +60,8 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
   const { isLoaded: isMapsLoaded } = useGoogleMaps();
   const [loading, setLoading] = useState(false);
   const [photoUploadingRouteId, setPhotoUploadingRouteId] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
 
   const stops = job.job_routes || job.wo_items?.item_data?.stops || [];
   const originStop = stops[0]?.location_name || "Lokasi Muat";
@@ -202,6 +204,53 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
   };
 
   const isAllStopsCompleted = stops.length > 0 && stops.every((s: any) => s.status === "completed" || s.status === "departed");
+
+  // Save per-stop notes (catatan pengiriman)
+  const handleSaveNotes = async (stop: any) => {
+    const note = (notesDraft[stop.id] ?? stop.notes ?? "").trim();
+    setSavingNotesId(stop.id);
+    try {
+      const res = await fetch(`/api/jo/${job.id}`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: "route_notes",
+          route_id: stop.id,
+          route_notes: note,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Gagal menyimpan catatan");
+      }
+      toast.success("Catatan disimpan");
+      onRefreshFeed();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyimpan catatan");
+    } finally {
+      setSavingNotesId(null);
+    }
+  };
+
+  // Open Google Maps navigation guidance to the stop location
+  const openDirections = (stop: any) => {
+    let dest = "";
+    if (stop.latitude && stop.longitude) {
+      dest = `${stop.latitude},${stop.longitude}`;
+    } else if (stop.address) {
+      dest = encodeURIComponent(stop.address);
+    } else if (stop.location_name) {
+      dest = encodeURIComponent(stop.location_name);
+    }
+    if (!dest) {
+      toast.error("Koordinat/alamat lokasi tidak tersedia");
+      return;
+    }
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`,
+      "_blank"
+    );
+  };
 
   return (
     <div
@@ -390,49 +439,88 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
                       </button>
                     )}
 
-                    {isArrived && (
-                      <div className="space-y-2">
-                        {/* POD Photo Upload */}
-                        <div className="flex items-center gap-2">
-                          <label className="flex-1 py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-[11px] font-black uppercase tracking-wider text-center flex items-center justify-center gap-1.5 cursor-pointer text-indigo-300">
-                            {isUploading ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Camera size={14} />
-                            )}
-                            {stop.pod_photo_url ? "Ganti Foto POD" : "Ambil Foto POD"}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              className="hidden"
-                              onChange={(e) => handleUploadPod(stop.id, e)}
-                            />
-                          </label>
-                        </div>
+                    {/* Petunjuk Arah — Google Maps navigation */}
+                    <button
+                      type="button"
+                      onClick={() => openDirections(stop)}
+                      className="w-full py-2.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Navigation size={14} /> Petunjuk Arah{" "}
+                      {isPickup ? "Lokasi Muat" : "Lokasi Bongkar"}
+                    </button>
 
-                        {stop.pod_photo_url && (
-                          <div className="relative rounded-xl overflow-hidden h-24 border border-emerald-500/30">
-                            <img
-                              src={stop.pod_photo_url}
-                              alt="POD"
-                              className="w-full h-full object-cover"
-                            />
-                            <span className="absolute bottom-1 right-1 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded">
-                              ✓ POD TERVERIFIKASI
-                            </span>
-                          </div>
-                        )}
+                    {/* POD Photo Upload — always available */}
+                    <label className="w-full py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-[11px] font-black uppercase tracking-wider text-center flex items-center justify-center gap-1.5 cursor-pointer text-indigo-300">
+                      {isUploading ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Camera size={14} />
+                      )}
+                      {stop.pod_photo_url ? "Ganti Foto POD" : "Ambil Foto POD"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => handleUploadPod(stop.id, e)}
+                      />
+                    </label>
 
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => handleUpdateRouteStatus(stop.id, "completed")}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
-                        >
-                          <CheckCircle2 size={14} /> Selesai di Titik Ini
-                        </button>
+                    {stop.pod_photo_url && (
+                      <div className="relative rounded-xl overflow-hidden h-24 border border-emerald-500/30">
+                        <img
+                          src={stop.pod_photo_url}
+                          alt="POD"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-1 right-1 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded">
+                          ✓ POD TERVERIFIKASI
+                        </span>
                       </div>
+                    )}
+
+                    {/* Catatan per titik */}
+                    <div className="space-y-1.5">
+                      <textarea
+                        value={notesDraft[stop.id] ?? stop.notes ?? ""}
+                        onChange={(e) =>
+                          setNotesDraft((prev) => ({
+                            ...prev,
+                            [stop.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Catatan lokasi ini (misal: gerbang biru, hubungi PIC, dll)"
+                        rows={2}
+                        className={`w-full p-3 rounded-xl border text-xs font-semibold resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ${
+                          isDark
+                            ? "bg-slate-950/60 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                            : "bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        disabled={savingNotesId === stop.id}
+                        onClick={() => handleSaveNotes(stop)}
+                        className="w-full py-2 bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-300 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-60"
+                      >
+                        {savingNotesId === stop.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <FileText size={12} />
+                        )}
+                        Simpan Catatan
+                      </button>
+                    </div>
+
+                    {isArrived && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => handleUpdateRouteStatus(stop.id, "completed")}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                      >
+                        <CheckCircle2 size={14} /> Selesai di Titik Ini
+                      </button>
                     )}
                   </div>
                 </div>

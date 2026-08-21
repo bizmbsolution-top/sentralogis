@@ -394,6 +394,19 @@ export async function PATCH(
         return NextResponse.json({ success, completed: success });
       }
 
+      case "route_notes":
+        // [Driver Portal] Standalone note update per stop — does not touch stop status
+        if (!route_id)
+          return NextResponse.json(
+            { error: "Missing route info" },
+            { status: 400 },
+          );
+        await supabase
+          .from("job_routes")
+          .update({ notes: route_notes || null })
+          .eq("id", route_id);
+        break;
+
       case "route_status":
         if (!route_id || !route_status)
           return NextResponse.json(
