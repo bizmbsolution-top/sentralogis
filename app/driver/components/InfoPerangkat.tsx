@@ -152,6 +152,9 @@ export default function InfoPerangkat({
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [lastGpsUpdate, setLastGpsUpdate] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [gpsTesting, setGpsTesting] = useState(false);
+  const [gpsTestResult, setGpsTestResult] = useState<{ lat: number; lng: number; acc: number } | null>(null);
+  const [gpsTestError, setGpsTestError] = useState<string | null>(null);
 
   // Track the last moment real GPS data was received (from the page's GPS hook)
   useEffect(() => {
@@ -330,6 +333,75 @@ export default function InfoPerangkat({
     })();
   }, [open, checkServer, readGpsPermission, readSync]);
 
+  // ── GPS Activation & Test (restored from legacy SetupWizard) ──
+  const requestGpsPermission = useCallback(async () => {
+    const isNativeApp = isNative ?? detectNative();
+    try {
+      if (isNativeApp) {
+        const { Geolocation } = await import("@capacitor/geolocation");
+        const perm = await Geolocation.requestPermissions();
+        setGpsPermission(
+          perm.location === "granted" || perm.coarseLocation === "granted"
+            ? "granted"
+            : perm.location === "denied" || perm.coarseLocation === "denied"
+              ? "denied"
+              : "prompt"
+        );
+        return;
+      }
+      // Web/PWA: a one-shot position request triggers the browser permission prompt
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          () => readGpsPermission(),
+          () => readGpsPermission(),
+          { timeout: 8000 }
+        );
+      }
+    } catch {}
+  }, [isNative, readGpsPermission]);
+
+  const runGpsTest = useCallback(async () => {
+    const isNativeApp = isNative ?? detectNative();
+    setGpsTesting(true);
+    setGpsTestError(null);
+    setGpsTestResult(null);
+    try {
+      let lat: number, lng: number, acc: number;
+      if (isNativeApp) {
+        const { Geolocation } = await import("@capacitor/geolocation");
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        acc = Math.round(pos.coords.accuracy);
+      } else {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          throw new Error("Geolocation tidak didukung perangkat ini");
+        }
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        acc = Math.round(pos.coords.accuracy);
+      }
+      setGpsTestResult({ lat, lng, acc });
+      setLastGpsUpdate(formatTime(new Date()));
+    } catch (e: any) {
+      setGpsTestError(
+        e?.message || "Gagal mendapatkan lokasi. Pastikan GPS aktif dan berada di area terbuka."
+      );
+    } finally {
+      setGpsTesting(false);
+    }
+  }, [isNative]);
+
   if (!open) return null;
 
   // ── GPS status derivation (real values only) ──
@@ -506,6 +578,58 @@ export default function InfoPerangkat({
                 value={gpsSpeed != null ? `${Math.round(gpsSpeed!)} km/h` : "-"}
               />
             </div>
+
+            {/* Activation & Test controls */}
+            <div className="flex gap-2 pt-2">
+              {gpsPermission !== "granted" && (
+                <button
+                  onClick={requestGpsPermission}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Navigation size={13} /> Aktifkan Izin Lokasi
+                </button>
+              )}
+              <button
+                onClick={runGpsTest}
+                disabled={gpsTesting}
+                className={`py-2.5 px-3 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 ${
+                  gpsPermission !== "granted"
+                    ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                    : "flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white border-emerald-500 shadow-sm"
+                }`}
+              >
+                {gpsTesting ? (
+                  <RefreshCw size={13} className="animate-spin" />
+                ) : (
+                  <Navigation size={13} />
+                )}
+                Test GPS Sekarang
+              </button>
+            </div>
+
+            {gpsTesting && (
+              <p className="text-[9px] font-bold text-slate-500 italic">
+                Memeriksa lokasi... pastikan Anda berada di area terbuka.
+              </p>
+            )}
+            {gpsTestResult && (
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">
+                  ✓ GPS Berhasil Terdeteksi
+                </p>
+                <Row label="Latitude" value={gpsTestResult.lat.toFixed(6)} />
+                <Row label="Longitude" value={gpsTestResult.lng.toFixed(6)} />
+                <Row label="Akurasi" value={`${gpsTestResult.acc} m`} />
+              </div>
+            )}
+            {gpsTestError && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-rose-600">
+                  ✕ Test Gagal
+                </p>
+                <p className="text-[10px] font-bold text-rose-500 mt-0.5">{gpsTestError}</p>
+              </div>
+            )}
           </section>
 
           {/* SINKRONISASI */}
