@@ -77,22 +77,24 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // If no canonical profile yet, search by phone
+        // If no canonical profile yet, search by phone — [Multi-Tenant] collect ALL
+        // profiles sharing the phone (duplicates) and union their links.
         if (!canonicalProfile && canonicalDriverInfo?.whatsapp) {
           const norm = normalizePhone(canonicalDriverInfo.whatsapp);
-          const { data: profByPhone } = await supabaseAdmin
+          const { data: profsByPhone } = await supabaseAdmin
             .from("driver_profiles")
             .select("id, phone, full_name, trust_score, total_jobs_completed, total_km_driven")
             .eq("phone", norm)
-            .maybeSingle();
+            .order("created_at", { ascending: true });
 
-          if (profByPhone) {
-            canonicalProfile = profByPhone;
-            // Also find any other linked drivers for this profile
+          if (profsByPhone && profsByPhone.length > 0) {
+            canonicalProfile = profsByPhone[0];
+            const profIds = profsByPhone.map((p: any) => p.id);
+            // Union links across every duplicate profile
             const { data: moreLinks } = await supabaseAdmin
               .from("driver_tenant_links")
               .select("driver_id, tenant_id")
-              .eq("profile_id", profByPhone.id)
+              .in("profile_id", profIds)
               .eq("is_active", true);
 
             if (moreLinks && moreLinks.length > 0) {
@@ -104,6 +106,32 @@ export async function GET(request: NextRequest) {
           }
         }
       }
+    }
+
+    // [Multi-Tenant Safety Net] Include ANY active md_drivers record sharing the
+    // same normalized WhatsApp number, even if its tenant link row is missing or
+    // points at a duplicate profile. Guarantees no tenant's JOs are invisible.
+    try {
+      const normPhone =
+        canonicalProfile?.phone ||
+        (canonicalDriverInfo?.whatsapp ? normalizePhone(canonicalDriverInfo.whatsapp) : null);
+      if (normPhone) {
+        const clean = normPhone.replace(/^62/, "");
+        const { data: phoneDrivers } = await supabaseAdmin
+          .from("md_drivers")
+          .select("id, tenant_id")
+          .eq("is_active", true)
+          .or(
+            `whatsapp.eq.${normPhone},whatsapp.eq.0${clean},whatsapp.eq.${clean}`
+          )
+          .limit(50);
+        (phoneDrivers || []).forEach((pd: any) => {
+          if (pd.id && !driverIds.includes(pd.id)) driverIds.push(pd.id);
+          if (pd.tenant_id && !tenantIds.includes(pd.tenant_id)) tenantIds.push(pd.tenant_id);
+        });
+      }
+    } catch (e) {
+      console.warn("[DRIVER_FEED] Phone safety-net warning:", e);
     }
 
     if (driverIds.length === 0) {

@@ -45,18 +45,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Find or create profile by canonical phone
+    // 1. Find or create profile by canonical phone — [Multi-Tenant] pick the OLDEST
+    // profile as canonical and re-point links from any duplicates to it.
     let profileId: string;
-    const { data: existingProfile, error: profFindErr } = await supabase
+    const { data: existingProfiles, error: profFindErr } = await supabase
       .from("driver_profiles")
-      .select("id, full_name")
+      .select("id, full_name, created_at")
       .eq("phone", phone)
-      .maybeSingle();
+      .order("created_at", { ascending: true });
 
     if (profFindErr) throw profFindErr;
 
+    const existingProfile = (existingProfiles || [])[0] || null;
+
     if (existingProfile) {
       profileId = existingProfile.id;
+
+      const dupProfileIds = (existingProfiles || []).slice(1).map((p: any) => p.id);
+      if (dupProfileIds.length > 0) {
+        await supabase
+          .from("driver_tenant_links")
+          .update({ profile_id: profileId })
+          .in("profile_id", dupProfileIds);
+      }
     } else {
       const { data: newProfile, error: profCreateErr } = await supabase
         .from("driver_profiles")

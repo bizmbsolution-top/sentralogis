@@ -55,14 +55,32 @@ export async function POST(request: NextRequest) {
     let resolvedProfileId: string | null = null;
 
     try {
+      // [Multi-Tenant] Fetch ALL canonical profiles for this phone (duplicates can
+      // exist across tenants). The oldest becomes canonical; links from duplicates
+      // are re-pointed to it so every tenant resolves under one identity.
       const { data: profileRows, error: profileErr } = await supabaseAdmin
         .from("driver_profiles")
-        .select("id, phone, pin_hash, full_name")
+        .select("id, phone, pin_hash, full_name, created_at")
         .eq("phone", normalizedInput)
-        .limit(1);
+        .order("created_at", { ascending: true })
+        .limit(10);
 
       if (!profileErr && profileRows && profileRows.length > 0) {
         resolvedProfileId = profileRows[0].id;
+
+        const dupProfileIds = profileRows.slice(1).map((p) => p.id);
+        if (dupProfileIds.length > 0) {
+          const { error: healErr } = await supabaseAdmin
+            .from("driver_tenant_links")
+            .update({ profile_id: resolvedProfileId })
+            .in("profile_id", dupProfileIds);
+          if (!healErr) {
+            console.log(
+              `[DRIVER_LOGIN] Merged ${dupProfileIds.length} duplicate profile(s) into ${resolvedProfileId}`
+            );
+          }
+        }
+
         const { data: linkRows, error: linkErr } = await supabaseAdmin
           .from("driver_tenant_links")
           .select("tenant_id, driver_id, is_active")
