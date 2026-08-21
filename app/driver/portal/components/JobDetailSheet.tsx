@@ -166,18 +166,44 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
   };
 
   // Upload POD Photo
+  // [Size Fix] Downscale + compress camera photos client-side — full-res base64
+  // exceeds the ~4.5MB serverless request body limit and silently fails.
+  const compressImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new window.Image();
+        img.onload = () => {
+          const MAX = 1280;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX || height > MAX) {
+            const ratio = Math.min(MAX / width, MAX / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas tidak didukung"));
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.8));
+        };
+        img.onerror = () => reject(new Error("Gagal membaca gambar"));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error("Gagal membaca file"));
+      reader.readAsDataURL(file);
+    });
+
   const handleUploadPod = async (routeId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setPhotoUploadingRouteId(routeId);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await compressImage(file);
 
       const res = await fetch(`/api/jo/${job.id}`, {
         method: "PATCH",

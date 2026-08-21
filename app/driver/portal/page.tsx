@@ -123,6 +123,18 @@ function DriverPortalContent() {
           setCompletedJobsMonth(data.total_completed_month || 0);
           setTotalCompletedJobsCount(data.completed_jobs?.length || 0);
 
+          // [Sync Fix] Re-hydrate the open detail sheet with fresh feed data so
+          // saved notes/photos/status appear immediately without closing it.
+          setSelectedJob((prevSel) => {
+            if (!prevSel) return prevSel;
+            const allFresh = [
+              ...(data.active_job ? [data.active_job] : []),
+              ...(data.queued_jobs || []),
+              ...(data.completed_jobs || []),
+            ];
+            return allFresh.find((j: any) => j.id === prevSel.id) ?? prevSel;
+          });
+
           // Deep-link auto-select job if ?job=[token] is present
           const targetJobId = searchParams.get("job");
           if (targetJobId) {
