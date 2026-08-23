@@ -247,7 +247,7 @@ export async function syncOutboxQueueToCloud(): Promise<{ syncedCount: number; f
             payload: item.payload.data,
             recorded_at: item.created_at,
             tenant_id: item.tenant_id,
-            staff_id: item.driver_id // staffId is stored in driver_id field for unified sync
+            staff_id: item.user_id 
           })
         });
         if (!res.ok) {
