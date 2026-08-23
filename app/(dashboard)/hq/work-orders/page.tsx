@@ -903,15 +903,16 @@ export default function HQWorkOrdersPage() {
                       return (
                         <>
                           <Button
+                            variant="secondary"
                             onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
-                            className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                            className="flex-1 h-10 bg-white hover:bg-slate-50 !text-slate-700 border border-slate-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
                           >
                             <ExternalLink size={14} /> Lihat Alasan Tolak
                           </Button>
                           <Button
                             onClick={() => handleEdit(wo.id)}
                             variant="secondary"
-                            className="w-10 h-10 p-0 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0"
+                            className="w-10 h-10 p-0 bg-white !text-slate-700 border-slate-200 hover:bg-slate-50 hover:!text-blue-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0"
                             title="Edit WO Details"
                           >
                             <FileText size={16} />
@@ -946,7 +947,7 @@ export default function HQWorkOrdersPage() {
                         <Button
                           onClick={() => handleEdit(wo.id)}
                           variant="secondary"
-                          className="flex-1 h-10 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                          className="flex-1 h-10 bg-white !text-slate-700 border-slate-200 hover:bg-slate-50 hover:!text-blue-600 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
                           Detail WO <ArrowRight size={14} className="opacity-70 group-hover:translate-x-1 transition-transform" />
                         </Button>
@@ -956,7 +957,8 @@ export default function HQWorkOrdersPage() {
                   {wo.hasPendingCosts && (
                     <Link href="/hq/finance/cost-audit" className="shrink-0">
                       <Button
-                        className="w-10 h-10 p-0 bg-white text-amber-600 hover:bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-center transition-all shadow-sm"
+                        variant="secondary"
+                        className="w-10 h-10 p-0 bg-white !text-amber-600 hover:bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-center transition-all shadow-sm"
                         title="Audit Biaya"
                       >
                         <AlertCircle size={16} />
