@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 // Refreshed at: 2026-05-20T10:35:00Z
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -901,12 +901,22 @@ export default function HQWorkOrdersPage() {
 
                     if (isRejected) {
                       return (
-                        <Button
-                          onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
-                          className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
-                        >
-                          <ExternalLink size={14} /> Lihat Alasan Tolak
-                        </Button>
+                        <>
+                          <Button
+                            onClick={() => { setSelectedWOForRejected(wo); setShowRejectedModal(true); }}
+                            className="flex-1 h-10 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold text-[11px] transition-all flex items-center justify-center gap-2 shadow-sm"
+                          >
+                            <ExternalLink size={14} /> Lihat Alasan Tolak
+                          </Button>
+                          <Button
+                            onClick={() => handleEdit(wo.id)}
+                            variant="secondary"
+                            className="w-10 h-10 p-0 bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0"
+                            title="Edit WO Details"
+                          >
+                            <FileText size={16} />
+                          </Button>
+                        </>
                       );
                     }
 

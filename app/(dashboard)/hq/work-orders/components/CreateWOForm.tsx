@@ -769,7 +769,7 @@ for (const [index, item] of woItems.entries()) {
                           setCustomerSearch('');
                         }
                       }}
-                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all cursor-pointer flex items-center justify-between disabled:opacity-70"
+                      className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all cursor-pointer flex items-center justify-between disabled:opacity-70 text-slate-900"
                     >
                       <span className={selectedCustomer ? 'text-black' : 'text-slate-400'}>
                         {selectedCustomer
@@ -792,7 +792,7 @@ for (const [index, item] of woItems.entries()) {
                               placeholder="Search name, code, or legal name..."
                               value={customerSearch}
                               onChange={(e) => setCustomerSearch(e.target.value)}
-                              className="w-full h-10 pl-9 pr-8 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:bg-white transition-all"
+                              className="w-full h-10 pl-9 pr-8 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:bg-white transition-all text-slate-900"
                             />
                             {customerSearch && (
                               <button
@@ -874,14 +874,14 @@ for (const [index, item] of woItems.entries()) {
                         disabled={isReadOnly}
                         value={formData.order_date}
                         onChange={(e) => setFormData({...formData, order_date: e.target.value})}
-                        className="flex-1 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                        className="flex-1 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70 text-slate-900"
                       />
                       <input
                         type="time"
                         disabled={isReadOnly}
                         value={formData.order_time}
                         onChange={(e) => setFormData({...formData, order_time: e.target.value})}
-                        className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                        className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70 text-slate-900"
                       />
                     </div>
                   </div>
@@ -895,14 +895,14 @@ for (const [index, item] of woItems.entries()) {
                         disabled={isReadOnly}
                         value={formData.execution_date}
                         onChange={(e) => setFormData({...formData, execution_date: e.target.value})}
-                        className="flex-1 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                        className="flex-1 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70 text-slate-900"
                       />
                       <input 
                         type="time"
                         disabled={isReadOnly}
                         value={formData.execution_time}
                         onChange={(e) => setFormData({...formData, execution_time: e.target.value})}
-                        className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                        className="w-32 px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70 text-slate-900"
                       />
                     </div>
                     {(() => {
@@ -930,7 +930,7 @@ for (const [index, item] of woItems.entries()) {
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   placeholder="Operational notes, fragile handlings, or specific instructions..."
-                  className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-medium focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70"
+                  className="w-full px-6 py-5 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-medium focus:ring-4 focus:ring-slate-900/5 outline-none transition-all disabled:opacity-70 text-slate-900"
                 />
               </div>
             </Card>
@@ -990,7 +990,7 @@ for (const [index, item] of woItems.entries()) {
 
               {woItems.length === 0 ? (
                 <Card className="py-20 text-center border-dashed border-2 border-slate-200 shadow-none !rounded-[2.5rem]">
-                  <div className="p-4 bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="p-4 bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-900">
                      <Plus size={24} className="text-slate-300" />
                   </div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select an SBU module above to add items</p>
@@ -1083,7 +1083,7 @@ for (const [index, item] of woItems.entries()) {
                     <button onClick={() => handleSubmit('need_assignment')} disabled={submitting !== null} className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-500 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
                        {submitting === 'submit' ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} SUBMIT TO SBU
                     </button>
-                    <button onClick={() => handleSubmit('draft')} disabled={submitting !== null} className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button onClick={() => handleSubmit('draft')} disabled={submitting !== null} className="w-full py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900">
                        {submitting === 'draft' ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} SAVE AS DRAFT
                     </button>
                   </>

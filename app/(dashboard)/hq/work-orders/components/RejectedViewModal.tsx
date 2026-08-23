@@ -120,7 +120,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
         <div className="max-h-[80vh] overflow-y-auto bg-slate-50/30">
 
           {/* Document Body */}
-          <div className="px-12 py-10 bg-white border border-slate-100/80 rounded-[2rem] m-6 shadow-sm">
+          <div className="px-12 py-10 bg-white text-slate-900 border border-slate-100/80 rounded-[2rem] m-6 shadow-sm">
 
             {/* Document Header */}
             <div className="text-center mb-10 pb-8 border-b-2 border-slate-100">
@@ -284,7 +284,7 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
         </div>
 
         {/* Action Bar */}
-        <div className="px-8 py-4 border-t border-slate-100 flex items-center justify-end bg-white">
+        <div className="px-8 py-4 border-t border-slate-100 flex items-center justify-end bg-white text-slate-900">
           <button
             onClick={onClose}
             className="px-8 py-3 bg-slate-50 hover:bg-slate-100 text-black rounded-xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95 border border-slate-200"
