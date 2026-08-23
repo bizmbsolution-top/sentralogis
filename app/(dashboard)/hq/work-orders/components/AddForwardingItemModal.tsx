@@ -394,8 +394,8 @@ export default function AddForwardingItemModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto shadow-2xl border-none !rounded-[2.5rem] p-0">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 shadow-2xl border-slate-100 !rounded-[2.5rem] p-0 custom-scrollbar">
         <div className="p-8 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-600 text-white rounded-[1.25rem] flex items-center justify-center shadow-lg shadow-indigo-600/20">

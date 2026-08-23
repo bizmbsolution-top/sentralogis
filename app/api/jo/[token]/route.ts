@@ -405,7 +405,7 @@ export async function PATCH(
           .from("job_routes")
           .update({ notes: route_notes || null })
           .eq("id", route_id);
-        break;
+        return NextResponse.json({ success: true });
 
       case "route_status":
         if (!route_id || !route_status)

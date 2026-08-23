@@ -48,7 +48,7 @@ export default function QuickAddContactModal({ onClose, onSuccess }: QuickAddCon
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in zoom-in duration-200">
-      <Card className="w-full max-w-md p-8 shadow-2xl border-none !rounded-[2.5rem]">
+      <Card className="w-full max-w-md p-8 shadow-2xl border-none text-slate-900 !rounded-[2.5rem]">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">

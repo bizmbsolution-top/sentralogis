@@ -67,7 +67,7 @@ export default function WarehousePortalLayout({
   // If on login page, don't show the header shell
   if (pathname === '/warehouse/portal/login') {
     return (
-      <div className="min-h-screen bg-slate-900 font-sans text-slate-900 pt-safe-area-top pb-safe-area-bottom">
+      <div className="min-h-screen bg-slate-900 font-sans text-slate-100 pt-safe-area-top pb-safe-area-bottom">
         <Toaster position="top-center" />
         {children}
       </div>

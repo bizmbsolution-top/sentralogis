@@ -278,10 +278,10 @@ export default function HandoverApprovalModal({ wo, onClose, onSuccess }: Handov
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
   };  return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-      <Card className="w-full max-w-4xl overflow-hidden shadow-2xl border border-slate-100 bg-white !rounded-[2.5rem] p-0">
+      <Card className="w-full max-w-4xl overflow-hidden shadow-2xl border border-slate-100 bg-white text-slate-900 !rounded-[2.5rem] p-0">
         
         {/* Header */}
-        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white">
+        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white text-slate-900">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-orange-50 text-orange-600 border border-orange-100 rounded-[1.5rem] flex items-center justify-center shadow-sm">
               <Shield size={28} />

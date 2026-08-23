@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { Clock, MapPin, ScanLine, ShieldAlert, Warehouse, ChevronRight, CheckCircle2, Loader2, Package, Inbox, LogOut, ArrowLeftRight, Scissors, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 import { Card } from '@/components/ui/Card';
 import { notifyUser } from '@/lib/notificationSound';
 
@@ -215,26 +216,26 @@ export default function WarehousePortalDashboard() {
     if (!session) return;
     setCheckingInOut(true);
     try {
+      await executeWarehouseAction(
+        'STAFF_ATTENDANCE',
+        { type, attendanceId: attendance?.id },
+        session.tenant_id,
+        session.staff_id
+      );
+
       if (type === 'CHECK_IN') {
-        const { error } = await supabase.from('wh_staff_attendance').insert({
-          tenant_id: session.tenant_id,
-          staff_id: session.staff_id,
-          status: 'CHECK_IN'
-        });
-        if (error) throw error;
-        toast.success('Berhasil Check-In Hari Ini!');
+        toast.success('Check-In disubmit (Syncing...)!');
       } else {
-        const { error } = await supabase
-          .from('wh_staff_attendance')
-          .update({
-            check_out_time: new Date().toISOString(),
-            status: 'CHECK_OUT'
-          })
-          .eq('id', attendance.id);
-        if (error) throw error;
-        toast.success('Berhasil Check-Out!');
+        toast.success('Check-Out disubmit (Syncing...)!');
       }
-      fetchDashboardData(session);
+      
+      // We optimistically update locally to avoid waiting for sync
+      if (type === 'CHECK_IN') {
+        setAttendance({ id: 'pending-sync', status: 'CHECK_IN', created_at: new Date().toISOString() });
+      } else if (attendance) {
+        setAttendance({ ...attendance, status: 'CHECK_OUT', check_out_time: new Date().toISOString() });
+      }
+      
     } catch (err: any) {
       toast.error('Gagal memproses absensi');
     } finally {

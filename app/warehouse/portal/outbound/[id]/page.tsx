@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
 import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, ChevronDown, Clock, Play, Pause, Square, FileUp, ScanLine, Camera, Trash2, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
@@ -444,34 +445,19 @@ export default function OutboundTaskExecutionPage() {
 
     setSubmitting(true);
     try {
-      // Validate location codes
-      const locCodes = [...new Set(pickingEntries.map(pe => pe.location_code.trim().toUpperCase()))];
-      const { data: locs, error: locErr } = await supabase.from('md_warehouse_locations').select('id, code').in('code', locCodes);
-      if (locErr) throw locErr;
-      const locMap = Object.fromEntries((locs || []).map(l => [l.code.toUpperCase(), l.id]));
-      
-      const groupedBySku: Record<string, any[]> = {};
-      pickingEntries.forEach(pe => {
-         if (!groupedBySku[pe.sku_id]) groupedBySku[pe.sku_id] = [];
-         groupedBySku[pe.sku_id].push({
-            location_id: locMap[pe.location_code.trim().toUpperCase()],
-            location_code: pe.location_code.trim().toUpperCase(),
-            qty: Number(pe.qty)
-         });
-      });
+      await executeWarehouseAction(
+        'OUTBOUND_SUBMIT_PICKING',
+        {
+          shipmentId,
+          pickingEntries,
+          shipmentItems: shipment.items || []
+        },
+        shipment.tenant_id,
+        session.staff_id
+      );
 
-      // Update wh_outbound_shipment_items with picking evidence
-      for (const item of shipment.items || []) {
-         const entries = groupedBySku[item.product_sku_id] || [];
-         const totalPicked = entries.reduce((sum, e) => sum + e.qty, 0);
-         const { error: itmErr } = await supabase.from('wh_outbound_shipment_items').update({
-            picked_qty: totalPicked,
-            picking_entries: entries
-         }).eq('id', item.id);
-         if (itmErr) throw itmErr;
-      }
-
-      await handleUpdateStatus('READY_FOR_CHECKING');
+      toast.success('Picking disubmit (Syncing...)');
+      fetchShipmentDetails(session);
     } catch (err) {
       toast.error('Gagal memproses picking');
       setSubmitting(false);
@@ -496,7 +482,7 @@ export default function OutboundTaskExecutionPage() {
       if (fileErr) throw fileErr;
       const fileUrl = supabase.storage.from('warehouse_documents').getPublicUrl(fileData.path).data.publicUrl;
 
-      // 2. Update DB
+      // 2. Queue Update
       const updates = { 
         transporter_id: selectedTransporterId, 
         driver_id: selectedDriverId, 
@@ -505,10 +491,14 @@ export default function OutboundTaskExecutionPage() {
         status: 'READY_FOR_LOADING'
       };
       
-      const { error } = await supabase.from('wh_outbound_shipments').update(updates).eq('id', shipmentId);
-      if (error) throw error;
+      await executeWarehouseAction(
+        'OUTBOUND_SECURITY_SUBMIT',
+        { shipmentId, updates },
+        shipment.tenant_id,
+        session.staff_id
+      );
       
-      toast.success('Kedatangan truk tercatat, siap untuk Loading!');
+      toast.success('Kedatangan truk disubmit (Syncing...)');
       fetchShipmentDetails(session);
     } catch (err) {
       toast.error('Gagal mencatat kedatangan truk');
@@ -568,31 +558,24 @@ export default function OutboundTaskExecutionPage() {
       const { data: staff } = await supabase.from('md_warehouse_staff').select('pin').eq('id', session.staff_id).single();
       if (!staff || staff.pin !== pinConfirm) { toast.error('PIN salah'); return; }
       
-      // Update wh_outbound_shipment_items checked_qty & damage_qty
-      for (const item of checkingItems) {
-         const dmgs = damageEntries.filter(d => d.shipment_item_id === item.id);
-         const dmgQty = dmgs.reduce((acc, d) => acc + Number(d.qty), 0);
-         const { error: updErr } = await supabase.from('wh_outbound_shipment_items')
-            .update({ checked_qty: item.checked_qty, damage_qty: dmgQty })
-            .eq('id', item.id);
-         if (updErr) throw updErr;
-      }
-      
-      // Insert damage records
-      const damageToInsert = damageEntries.map(d => ({
-         shipment_item_id: d.shipment_item_id,
-         damage_qty: Number(d.qty),
-         damage_source: d.damage_source || 'OTHER',
-         damage_condition: d.damage_condition || 'TOTAL_DAMAGE',
-         damage_notes: d.damage_notes || '',
-         photo_url: d.photo_url || ''
-      }));
-      if (damageToInsert.length > 0) {
-         const { error: insDmgErr } = await supabase.from('wh_outbound_damage_records').insert(damageToInsert);
-         if (insDmgErr) throw insDmgErr;
-      }
+      const nextStatus = shipment.transfer_id ? 'COMPLETED' : 'READY_FOR_LOADING';
 
-      await handleUpdateStatus('READY_FOR_LOADING');
+      await executeWarehouseAction(
+        'OUTBOUND_SUBMIT_CHECKING',
+        {
+          shipmentId,
+          checkingItems,
+          damageEntries,
+          nextStatus
+        },
+        shipment.tenant_id,
+        session.staff_id
+      );
+
+      toast.success('Hasil pengecekan disubmit (Syncing...)');
+      fetchShipmentDetails(session);
+      setShowPinModal(false);
+      setPinConfirm('');
     } catch (err: any) {
       toast.error('Gagal menyimpan hasil checking: ' + err.message);
     } finally {
@@ -604,56 +587,76 @@ export default function OutboundTaskExecutionPage() {
     setSubmitting(true);
     try {
       const nextNum = loadingSessions.length + 1;
-      const { error: insertErr } = await supabase.from('wh_loading_sessions').insert({ shipment_id: shipmentId, session_number: nextNum, start_time: new Date().toISOString() });
-      if (insertErr) throw insertErr;
+      await executeWarehouseAction(
+        'OUTBOUND_START_LOADING',
+        { shipmentId, nextNumber: nextNum },
+        shipment.tenant_id,
+        session.staff_id
+      );
       
-      const { error: updateErr } = await supabase.from('wh_outbound_shipments').update({ status: 'LOADING' }).eq('id', shipmentId);
-      if (updateErr) throw updateErr;
-      
-      toast.success('Loading dimulai');
+      toast.success('Loading dimulai (Syncing...)');
       await fetchLoadingSessions(shipmentId);
       await fetchShipmentDetails(session);
-    } catch (err) { toast.error('Gagal memulai loading'); } finally { setSubmitting(false); }
+    } catch (err) {
+      toast.error('Gagal memulai loading');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleStopLoading = async () => {
     if (!stopReason.trim()) { toast.error('Isi alasan berhenti'); return; }
     setSubmitting(true);
     try {
-      const { data: activeRaw } = await (supabase.from('wh_loading_sessions' as any) as any).select('*').eq('shipment_id', shipmentId).is('end_time', null).single();
-      const active = activeRaw as any;
+      const active = loadingSessions.find((s: any) => !s.end_time);
       const finalReason = stopReason === 'Lainnya' ? customStopReason : stopReason;
-      if (active) {
-         const { error } = await (supabase.from('wh_loading_sessions' as any) as any).update({ end_time: new Date().toISOString(), pause_reason: finalReason }).eq('id', active.id);
-         if (error) throw error;
-      }
+      
+      await executeWarehouseAction(
+        'OUTBOUND_STOP_LOADING',
+        {
+          shipmentId,
+          activeSessionId: active ? active.id : null,
+          stopReason: finalReason
+        },
+        shipment.tenant_id,
+        session.staff_id
+      );
       
       await fetchLoadingSessions(shipmentId);
       setShowStopModal(false);
       setStopReason('');
       setCustomStopReason('');
-      toast.success('Loading dihentikan sementara');
-    } catch (err) { toast.error('Gagal menjeda'); } finally { setSubmitting(false); }
+      toast.success('Loading dihentikan sementara (Syncing...)');
+    } catch (err) {
+      toast.error('Gagal menjeda');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleFinishLoading = async () => {
     setSubmitting(true);
     try {
       const active = loadingSessions.find((s: any) => !s.end_time);
-      if (active) {
-         const { error } = await (supabase.from('wh_loading_sessions' as any) as any).update({ end_time: new Date().toISOString() }).eq('id', active.id);
-         if (error) throw error;
-      }
       
-      await fetchLoadingSessions(shipmentId);
-      
-      const { data: all } = await (supabase.from('wh_loading_sessions' as any) as any).select('*').eq('shipment_id', shipmentId);
-      const mins = ((all as any[]) || []).reduce((sum: number, s: any) => s.end_time ? sum + (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 60000 : sum, 0);
-      
-      await supabase.from('wh_outbound_shipments').update({ status: 'READY_FOR_DOCUMENTS', total_loading_minutes: Math.round(mins * 100) / 100 }).eq('id', shipmentId);
-      toast.success('Loading selesai');
+      await executeWarehouseAction(
+        'OUTBOUND_FINISH_LOADING',
+        {
+          shipmentId,
+          activeSessionId: active ? active.id : null,
+          tenantId: shipment.tenant_id
+        },
+        shipment.tenant_id,
+        session.staff_id
+      );
+
+      toast.success('Loading diselesaikan (Syncing...)');
       fetchShipmentDetails(session);
-    } catch (err) { toast.error('Gagal selesai loading'); } finally { setSubmitting(false); }
+    } catch (err) {
+      toast.error('Gagal selesai loading');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleUploadDocsAndFinish = async () => {
@@ -666,11 +669,25 @@ export default function OutboundTaskExecutionPage() {
          if (error) throw error;
          bastUrl = supabase.storage.from('warehouse_documents').getPublicUrl(data.path).data.publicUrl;
       }
-      if (bastUrl || sjUrl) {
-         await supabase.from('wh_outbound_shipments').update({ bast_url: bastUrl, surat_jalan_url: sjUrl }).eq('id', shipmentId);
-      }
-      handleUpdateStatus('COMPLETED');
-    } catch (err) { toast.error('Gagal upload'); } finally { setUploadingDoc(false); }
+      
+      await executeWarehouseAction(
+        'OUTBOUND_UPLOAD_DOCS',
+        {
+          shipmentId,
+          bastUrl,
+          sjUrl
+        },
+        shipment.tenant_id,
+        session.staff_id
+      );
+
+      toast.success('Dokumen disubmit (Syncing...)');
+      fetchShipmentDetails(session);
+    } catch (err) {
+      toast.error('Gagal upload atau proses dokumen');
+    } finally {
+      setUploadingDoc(false);
+    }
   };
 
   if (loading || !shipment) {

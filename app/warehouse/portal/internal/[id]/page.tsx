@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Warehouse, CheckCircle2, ArrowRight, XCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 
 export default function InternalMovementTaskPage() {
   const params = useParams();
@@ -37,11 +38,18 @@ export default function InternalMovementTaskPage() {
   const finish = async () => {
     setExecuting(true);
     try {
-      const { error } = await supabase.rpc('execute_internal_movement', {
-        p_movement_id: movementId,
-      });
-      if (error) throw error;
-      toast.success('Movement berhasil dieksekusi!');
+      // Need session for tenant_id and staff_id
+      const storedSession = localStorage.getItem('sentralogis_wh_session');
+      const session = storedSession ? JSON.parse(storedSession) : null;
+      
+      await executeWarehouseAction(
+        'INTERNAL_MOVEMENT_EXECUTE',
+        { movementId },
+        session?.tenant_id, // we don't fetch tenant_id in this page, so use from session
+        session?.staff_id
+      );
+
+      toast.success('Movement disubmit (Syncing...)!');
       router.push('/warehouse/portal');
     } catch (err: any) {
       toast.error(err.message || 'Gagal mengeksekusi movement');

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { fetchReceiptAdmin, updateReceiptAdmin } from './actions';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft, Loader2, Truck, PackageCheck, AlertTriangle, CheckCircle2, Clock, Play, Pause, Square, Warehouse, Camera, CloudDownload, ChevronDown, Scan, ArrowLeftRight, MapPin } from 'lucide-react';
+import { QrCode, ArrowLeftRight, PackageCheck, ListChecks, CheckCircle2, AlertCircle, Camera, Truck, LogOut, Clock, Play, Pause, Square, Loader2, Info, Navigation, ChevronLeft, ChevronDown, Scan, MapPin, Warehouse, AlertTriangle } from 'lucide-react';
+import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -445,120 +446,25 @@ export default function WarehouseTaskExecutionPage() {
 
     setSubmitting(true);
     try {
-      // 1. Gather all unique location codes scanned
-      const allCodes = new Set<string>();
-      for (const item of goodItems) {
-        (putawayEntries[item.id] || []).forEach(e => allCodes.add(e.locationCode.trim().toUpperCase()));
-      }
-      for (const rec of quarantineRecords) {
-        (quarantineEntries[rec.id] || []).forEach(e => allCodes.add(e.locationCode.trim().toUpperCase()));
-      }
+      await executeWarehouseAction(
+        'INBOUND_FINISH_PUTAWAY',
+        {
+          receiptId: receipt.id,
+          goodItems,
+          quarantineRecords,
+          putawayEntries,
+          quarantineEntries,
+          items,
+          tenantId: receipt.tenant_id,
+          warehouseId: receipt.warehouse_id,
+          transferId: receipt.transfer_id,
+          woItemId: receipt.wo_item_id
+        },
+        receipt.tenant_id,
+        session.staff_id
+      );
 
-      // 2. Fetch their UUIDs
-      const { data: locs, error: locErr } = await supabase
-        .from('md_warehouse_locations')
-        .select('id, code')
-        .eq('warehouse_id', receipt.warehouse_id)
-        .in('code', Array.from(allCodes));
-
-      if (locErr) throw locErr;
-      
-      const locMap: Record<string, string> = {};
-      locs?.forEach(l => locMap[l.code.toUpperCase()] = l.id);
-
-      // Verify all codes were found
-      for (const code of Array.from(allCodes)) {
-        if (!locMap[code]) {
-          toast.error(`Rak ${code} tidak ditemukan di database! Pastikan kode rak benar.`);
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      const itemLogs: Record<string, any[]> = {};
-      const firstLocations: Record<string, string> = {};
-
-      // Save good item locations & update inventory
-      for (const item of goodItems) {
-        const entries = putawayEntries[item.id] || [];
-        if (!itemLogs[item.id]) itemLogs[item.id] = [];
-        
-        for (const entry of entries) {
-          const locId = locMap[entry.locationCode.trim().toUpperCase()];
-          await upsertInventory(item, locId, Number(entry.qty), 'AVAILABLE');
-          itemLogs[item.id].push({ location_id: entry.locationCode, quantity: Number(entry.qty), status: 'AVAILABLE' });
-        }
-        // Save first location ID just for tracking reference
-        if (entries.length > 0) {
-          firstLocations[item.id] = locMap[entries[0].locationCode.trim().toUpperCase()];
-        }
-      }
-
-      // Save quarantine locations & update inventory
-      for (const rec of quarantineRecords) {
-        const entries = quarantineEntries[rec.id] || [];
-        const item = items.find(i => i.id === rec.receipt_item_id);
-        if (item) {
-          if (!itemLogs[item.id]) itemLogs[item.id] = [];
-          for (const entry of entries) {
-            const locId = locMap[entry.locationCode.trim().toUpperCase()];
-            await upsertInventory(item, locId, Number(entry.qty), 'QUARANTINE');
-            itemLogs[item.id].push({ location_id: entry.locationCode, quantity: Number(entry.qty), status: 'QUARANTINE' });
-          }
-          if (entries.length > 0 && !firstLocations[item.id]) {
-            firstLocations[item.id] = locMap[entries[0].locationCode.trim().toUpperCase()];
-          }
-          if (entries.length > 0) {
-            const locId = locMap[entries[0].locationCode.trim().toUpperCase()];
-            const { error: dmgErr } = await supabase
-              .from('wh_inbound_damage_records')
-              .update({ quarantine_location_id: locId })
-              .eq('id', rec.id);
-            if (dmgErr) throw dmgErr;
-          }
-        }
-      }
-
-      // Update all receipt items with their combined logs
-      for (const itemId of Object.keys(itemLogs)) {
-        const { error: itmErr } = await supabase
-          .from('wh_inbound_receipt_items')
-          .update({ 
-            putaway_location_id: firstLocations[itemId] || undefined, 
-            putaway_entries: itemLogs[itemId],
-            putaway_at: new Date().toISOString() 
-          })
-          .eq('id', itemId);
-        if (itmErr) throw itmErr;
-      }
-
-      // Update receipt status to COMPLETED
-      const { error: recUpdErr } = await supabase
-        .from('wh_inbound_receipts')
-        .update({ status: 'COMPLETED' })
-        .eq('id', receipt.id);
-      if (recUpdErr) throw recUpdErr;
-
-      // Update related JO to completed
-      if (receipt.wo_item_id) {
-         await supabase.from('job_orders').update({ status: 'completed' }).eq('wo_item_id', receipt.wo_item_id);
-      }
-
-      if (receipt.transfer_id) {
-         const { error: trfErr } = await supabase
-           .from('wh_transfer_orders')
-           .update({ status: 'RECEIVED' })
-           .eq('id', receipt.transfer_id);
-         if (trfErr) throw trfErr;
-
-         const { error: dtlErr } = await supabase
-           .from('wh_transfer_details')
-           .update({ status: 'RECEIVED' })
-           .eq('transfer_id', receipt.transfer_id);
-         if (dtlErr) throw dtlErr;
-      }
-
-      toast.success('Putaway selesai! Semua barang tersimpan.');
+      toast.success('Putaway disubmit (Syncing...). Semua barang tersimpan.');
       router.push('/warehouse/portal');
     } catch (err) {
       toast.error('Gagal menyimpan data putaway');
@@ -602,14 +508,14 @@ export default function WarehouseTaskExecutionPage() {
     setSubmitting(true);
     try {
       const nextNumber = unloadingSessions.length + 1;
-      const { error } = await supabase.from('wh_unloading_sessions').insert({
-        receipt_id: receipt.id,
-        session_number: nextNumber,
-        start_time: new Date().toISOString(),
-      });
-      if (error) throw error;
+      await executeWarehouseAction(
+        'INBOUND_UNLOADING_START',
+        { receiptId: receipt.id, nextNumber },
+        receipt.tenant_id,
+        session.staff_id
+      );
 
-      toast.success('Unloading dimulai');
+      toast.success('Unloading dimulai (Syncing...)');
       await fetchUnloadingSessions(receipt.id);
     } catch (err) {
       toast.error('Gagal memulai unloading');
@@ -627,11 +533,13 @@ export default function WarehouseTaskExecutionPage() {
     try {
       const active = unloadingSessions.find(s => !s.end_time);
       if (!active) throw new Error('No active session');
-      const { error } = await supabase
-        .from('wh_unloading_sessions')
-        .update({ end_time: new Date().toISOString(), pause_reason: stopReason })
-        .eq('id', active.id);
-      if (error) throw error;
+      
+      await executeWarehouseAction(
+        'INBOUND_UNLOADING_STOP',
+        { sessionId: active.id, stopReason },
+        receipt.tenant_id,
+        session.staff_id
+      );
 
       setShowStopModal(false);
       setStopReason('');
@@ -648,35 +556,19 @@ export default function WarehouseTaskExecutionPage() {
     setSubmitting(true);
     try {
       const active = unloadingSessions.find(s => !s.end_time);
-      if (active) {
-        await supabase
-          .from('wh_unloading_sessions')
-          .update({ end_time: new Date().toISOString() })
-          .eq('id', active.id);
-      }
+      
+      await executeWarehouseAction(
+        'INBOUND_UNLOADING_FINISH',
+        { 
+          receiptId: receipt.id, 
+          activeSessionId: active ? active.id : null,
+          tenantId: receipt.tenant_id
+        },
+        receipt.tenant_id,
+        session.staff_id
+      );
 
-      const { data: allSessions } = await supabase
-        .from('wh_unloading_sessions')
-        .select('start_time, end_time')
-        .eq('receipt_id', receipt.id);
-
-      const totalMinutes = (allSessions || []).reduce((sum, s) => {
-        if (s.end_time) return sum + (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 60000;
-        return sum;
-      }, 0);
-
-      await supabase.from('wh_inbound_receipts')
-        .update({ status: 'CHECKING', total_unloading_minutes: Math.round(totalMinutes * 100) / 100 })
-        .eq('id', receipt.id);
-
-      await supabase.from('wh_milestone_logs').insert({
-        tenant_id: receipt.tenant_id,
-        reference_type: 'INBOUND_RECEIPT',
-        reference_id: receipt.id,
-        milestone_event: `Unloading selesai - ${Math.round(totalMinutes)} menit`
-      });
-
-      toast.success(`Unloading selesai (${Math.round(totalMinutes)} menit)`);
+      toast.success(`Unloading diselesaikan (Syncing...)`);
       fetchTaskDetails(session);
     } catch (err) {
       toast.error('Gagal menyelesaikan unloading');
@@ -773,64 +665,27 @@ export default function WarehouseTaskExecutionPage() {
 
     setSubmitting(true);
     try {
-      for (const item of items) {
-        const { error } = await supabase
-          .from('wh_inbound_receipt_items')
-          .update({ actual_good_qty: item.actual_good_qty || 0 })
-          .eq('id', item.id);
-        if (error) throw error;
-      }
-
-      const itemDamageMap: Record<string, { totalQty: number }> = {};
-      for (const d of damageEntries) {
-        if (Number(d.qty) <= 0) continue;
-
-        if (!d.source_photo_url) { toast.error(`Foto "Why Damage?" wajib diisi`); setSubmitting(false); return; }
-        if (!d.condition_photo_url) { toast.error(`Foto "What is Damage?" wajib diisi`); setSubmitting(false); return; }
-
-        const { error } = await supabase.from('wh_inbound_damage_records').insert({
-          receipt_id: receipt.id,
-          receipt_item_id: d.receipt_item_id,
-          qty: d.qty,
-          damage_source: d.damage_source,
-          source_notes: d.source_notes,
-          source_photo_url: d.source_photo_url,
-          damage_condition: d.damage_condition,
-          condition_notes: d.condition_notes,
-          condition_photo_url: d.condition_photo_url,
-          reported_by: session.staff_id,
-        });
-        if (error) throw error;
-
-        if (!itemDamageMap[d.receipt_item_id]) itemDamageMap[d.receipt_item_id] = { totalQty: 0 };
-        itemDamageMap[d.receipt_item_id].totalQty += Number(d.qty);
-      }
-
-      for (const [itemId, info] of Object.entries(itemDamageMap)) {
-        await supabase.from('wh_inbound_receipt_items')
-          .update({ rejected_qty: info.totalQty })
-          .eq('id', itemId);
-      }
-
-
       const currentUserRoles: string[] = task?.assigned_roles || (task?.assigned_role ? [task.assigned_role] : ['GUEST']);
       const isMultiRoleUser = currentUserRoles.includes('TALLY') && currentUserRoles.includes('PUTAWAY');
       const nextStatus = (isMultiRoleUser && mergedPutawayNext) ? 'PUTAWAY_IN_PROGRESS' : 'CHECKING_DONE';
 
-      await updateReceiptAdmin(receipt.id, { status: nextStatus });
+      await executeWarehouseAction(
+        'INBOUND_SUBMIT_CHECKING',
+        {
+          receiptId: receipt.id,
+          items,
+          damageEntries,
+          staffId: session.staff_id,
+          tenantId: receipt.tenant_id,
+          nextStatus,
+          isMultiRoleUser,
+          mergedPutawayNext
+        },
+        receipt.tenant_id,
+        session.staff_id
+      );
 
-      await supabase.from('wh_milestone_logs').insert({
-        tenant_id: receipt.tenant_id,
-        reference_type: 'INBOUND_RECEIPT',
-        reference_id: receipt.id,
-        milestone_event: `Tally checking done - ${damageEntries.length} damage records`
-      });
-
-      if (damageEntries.length > 0) {
-        console.log('[WA PLACEHOLDER] Push damage notification for receipt:', receipt.id);
-      }
-
-      toast.success('Pengecekan selesai. Menunggu review Admin.');
+      toast.success('Pengecekan disubmit (Syncing...). Menunggu review Admin.');
       setShowPinModal(false);
       setPinConfirm('');
       fetchTaskDetails(session);

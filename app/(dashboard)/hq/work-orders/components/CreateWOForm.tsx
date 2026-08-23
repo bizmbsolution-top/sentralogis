@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -729,7 +729,7 @@ for (const [index, item] of woItems.entries()) {
   const totalRevenue = woItems.reduce((acc, curr) => acc + (Number(curr.total_revenue) || Number(curr.item_data?.est_revenue) || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] text-slate-900 overflow-y-auto">
       {isLoadingEdit && (
         <div className="fixed inset-0 z-[110] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />

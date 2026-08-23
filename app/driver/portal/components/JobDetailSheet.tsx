@@ -469,14 +469,22 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
                     <button
                       type="button"
                       onClick={() => openDirections(stop)}
-                      className="w-full py-2.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className={`w-full py-2.5 border rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        isDark
+                          ? "bg-blue-600/10 hover:bg-blue-600/20 border-blue-500/30 text-blue-400"
+                          : "bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      }`}
                     >
                       <Navigation size={14} /> Petunjuk Arah{" "}
                       {isPickup ? "Lokasi Muat" : "Lokasi Bongkar"}
                     </button>
 
                     {/* POD Photo Upload — always available */}
-                    <label className="w-full py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-[11px] font-black uppercase tracking-wider text-center flex items-center justify-center gap-1.5 cursor-pointer text-indigo-300">
+                    <label className={`w-full py-2.5 px-3 border rounded-xl text-[11px] font-black uppercase tracking-wider text-center flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      isDark
+                        ? "bg-white/10 hover:bg-white/15 border-white/20 text-indigo-300"
+                        : "bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700"
+                    }`}>
                       {isUploading ? (
                         <Loader2 size={14} className="animate-spin" />
                       ) : (
@@ -527,7 +535,11 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
                         type="button"
                         disabled={savingNotesId === stop.id}
                         onClick={() => handleSaveNotes(stop)}
-                        className="w-full py-2 bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-300 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-60"
+                        className={`w-full py-2 border rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-60 ${
+                          isDark 
+                            ? "bg-slate-700/40 hover:bg-slate-700/60 border-slate-600/50 text-slate-300" 
+                            : "bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700"
+                        }`}
                       >
                         {savingNotesId === stop.id ? (
                           <Loader2 size={12} className="animate-spin" />

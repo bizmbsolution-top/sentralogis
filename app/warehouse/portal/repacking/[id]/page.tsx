@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { fetchRepackingDetailsAdmin, completeRepackingOrderAdmin, updateRepackingStageAdmin } from './actions';
 import { supabase } from '@/lib/supabaseClient';
+import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 
 export default function RepackingTaskExecutionPage() {
@@ -205,18 +206,28 @@ export default function RepackingTaskExecutionPage() {
         return toast.error('Silakan pilih Lokasi Kerja Repacking terlebih dahulu');
       }
       try {
-        await updateRepackingStageAdmin(repackingId, 2);
+        await executeWarehouseAction(
+          'REPACKING_NEXT_STAGE',
+          { repackingId, nextStage: 2 },
+          repacking?.tenant_id,
+          session?.staff_id
+        );
         setCurrentStage(2);
-        toast.success('Fase Picking selesai! Masuk ke proses repacking.');
+        toast.success('Fase Picking disubmit (Syncing...)! Masuk ke proses repacking.');
       } catch (err: any) {
         toast.error('Gagal memperbarui fase: ' + err.message);
       }
     } else if (currentStage === 2) {
       if (!allChecked) return toast.error('Semua material hasil harus diverifikasi (checked)');
       try {
-        await updateRepackingStageAdmin(repackingId, 3);
+        await executeWarehouseAction(
+          'REPACKING_NEXT_STAGE',
+          { repackingId, nextStage: 3 },
+          repacking?.tenant_id,
+          session?.staff_id
+        );
         setCurrentStage(3);
-        toast.success('Proses repacking selesai! Masuk ke fase putaway.');
+        toast.success('Proses repacking disubmit (Syncing...)! Masuk ke fase putaway.');
       } catch (err: any) {
         toast.error('Gagal memperbarui fase: ' + err.message);
       }
@@ -258,59 +269,20 @@ export default function RepackingTaskExecutionPage() {
 
     setSubmitting(true);
     try {
-      // 2. Fetch UUIDs for all location codes
-      const { data: locs, error: locErr } = await supabase
-        .from('md_warehouse_locations')
-        .select('id, code')
-        .eq('warehouse_id', repacking.warehouse_id)
-        .in('code', Array.from(allCodes));
-
-      if (locErr) throw locErr;
-      
-      const locMap: Record<string, string> = {};
-      locs?.forEach(l => locMap[l.code.toUpperCase()] = l.id);
-
-      // Verify all codes were found
-      for (const code of Array.from(allCodes)) {
-        if (!locMap[code]) {
-          throw new Error(`Rak "${code}" tidak ditemukan di database!`);
-        }
-      }
-
-      // 3. Build splitPayload using the resolved UUIDs
-      const splitPayload: Record<string, { locationId: string; qty: number }[]> = {};
-      for (const item of resultItems) {
-        const entries = putawayEntries[item.id] || [];
-        let totalQty = 0;
-        const itemEntries: { locationId: string; qty: number }[] = [];
-        
-        for (const entry of entries) {
-          const qtyNum = Number(entry.qty);
-          if (isNaN(qtyNum) || qtyNum <= 0) {
-            throw new Error(`Quantity tidak valid untuk produk ${item.product?.name}`);
-          }
-          totalQty += qtyNum;
-          itemEntries.push({
-            locationId: locMap[entry.locationCode.trim().toUpperCase()],
-            qty: qtyNum
-          });
-        }
-        
-        if (Math.abs(totalQty - item.quantity) > 0.01) {
-          throw new Error(`Total quantity putaway (${totalQty}) harus sama dengan quantity target (${item.quantity}) untuk produk ${item.product?.name}`);
-        }
-        
-        splitPayload[item.id] = itemEntries;
-      }
-
-      await completeRepackingOrderAdmin(
-        repackingId,
-        session?.name || 'Staf Portal',
-        splitPayload,
-        session?.staff_id,
-        repackingLocationId || undefined
+      await executeWarehouseAction(
+        'REPACKING_COMPLETE',
+        {
+          repackingId,
+          resultItems,
+          putawayEntries,
+          warehouseId: repacking.warehouse_id,
+          repackingLocationId: repackingLocationId || undefined
+        },
+        repacking?.tenant_id,
+        session?.staff_id
       );
-      toast.success('Pekerjaan Repacking berhasil diselesaikan!');
+
+      toast.success('Pekerjaan Repacking disubmit (Syncing...)!');
       router.push('/warehouse/portal');
     } catch (err: any) {
       toast.error('Gagal menyelesaikan: ' + err.message);

@@ -45,7 +45,7 @@ export interface CachedMission {
 
 export interface MutationAction {
   id: string; // UUID of mutation
-  type: 'SCAN_ITEM' | 'UPDATE_JO_STATUS' | 'UPLOAD_POD' | 'STOCK_OPNAME_COUNT' | 'UPDATE_MILESTONE' | 'GPS_PING';
+  type: 'SCAN_ITEM' | 'UPDATE_JO_STATUS' | 'UPLOAD_POD' | 'STOCK_OPNAME_COUNT' | 'UPDATE_MILESTONE' | 'GPS_PING' | 'WAREHOUSE_ACTION';
   payload: Record<string, any>;
   tenant_id: string;
   user_id?: string;
@@ -238,6 +238,22 @@ export async function syncOutboxQueueToCloud(): Promise<{ syncedCount: number; f
             created_at: item.created_at
           });
         resultError = error;
+      } else if (item.type === 'WAREHOUSE_ACTION') {
+        const res = await fetch('/api/warehouse/offline-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: item.payload.action,
+            payload: item.payload.data,
+            recorded_at: item.created_at,
+            tenant_id: item.tenant_id,
+            staff_id: item.driver_id // staffId is stored in driver_id field for unified sync
+          })
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          resultError = new Error(`Warehouse Sync API Failed: ${res.status} ${errText}`);
+        }
       }
 
       if (resultError) {

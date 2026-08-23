@@ -131,6 +131,7 @@ export default function InfoPerangkat({
   gpsErrorMessage,
   tenantName,
   isNative,
+  isDark = false,
 }: InfoPerangkatProps) {
   const { session } = useDriverAuth();
 
@@ -457,14 +458,14 @@ export default function InfoPerangkat({
   const nativeKnown = isNative ?? detectNative();
 
   const t = {
-    sheet: "bg-white border-slate-200 text-slate-900",
-    card: "bg-slate-50 border-slate-200",
-    title: "text-slate-800",
-    label: "text-slate-500",
-    value: "text-slate-900",
-    sub: "text-slate-500",
-    btn: "bg-slate-200 hover:bg-slate-300 text-slate-900 border-slate-300",
-    chip: "bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200",
+    sheet: isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900",
+    card: isDark ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-50 border-slate-200",
+    title: isDark ? "text-slate-100" : "text-slate-800",
+    label: isDark ? "text-slate-400" : "text-slate-500",
+    value: isDark ? "text-slate-100" : "text-slate-900",
+    sub: isDark ? "text-slate-300" : "text-slate-500",
+    btn: isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700" : "bg-slate-200 hover:bg-slate-300 text-slate-900 border-slate-300",
+    chip: isDark ? "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700" : "bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200",
     chipActive: "bg-indigo-600 text-white border-indigo-500",
   };
 
@@ -479,7 +480,7 @@ export default function InfoPerangkat({
         className={`w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border ${t.sheet} shadow-2xl`}
       >
         {/* Header */}
-        <div className={`sticky top-0 z-10 p-4 border-b bg-white border-slate-200`}>
+        <div className={`sticky top-0 z-10 p-4 border-b ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-indigo-600/15 border border-indigo-500/30 text-indigo-500 flex items-center justify-center">
@@ -613,7 +614,7 @@ export default function InfoPerangkat({
               </p>
             )}
             {gpsTestResult && (
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-1">
+              <div className={`rounded-xl border p-3 space-y-1 ${isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">
                   ✓ GPS Berhasil Terdeteksi
                 </p>
@@ -623,7 +624,7 @@ export default function InfoPerangkat({
               </div>
             )}
             {gpsTestError && (
-              <div className="rounded-xl bg-rose-50 border border-rose-200 p-3">
+              <div className={`rounded-xl border p-3 ${isDark ? 'bg-rose-500/10 border-rose-500/30' : 'bg-rose-50 border-rose-200'}`}>
                 <p className="text-[9px] font-black uppercase tracking-widest text-rose-600">
                   ✕ Test Gagal
                 </p>

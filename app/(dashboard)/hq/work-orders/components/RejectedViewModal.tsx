@@ -107,10 +107,10 @@ export default function RejectedViewModal({ wo, onClose }: RejectedViewModalProp
   const totalOrdered = itemDetails.reduce((a: number, b: any) => a + b.unitCount, 0);
   const totalAssigned = itemDetails.reduce((a: number, b: any) => a + b.assignedCount, 0);  return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="w-full max-w-3xl overflow-hidden bg-white rounded-[2.5rem] shadow-2xl border border-slate-100">
+      <div className="w-full max-w-3xl overflow-hidden bg-white text-slate-900 rounded-[2.5rem] shadow-2xl border border-slate-100">
 
         {/* Top Bar */}
-        <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-slate-100">
+        <div className="flex items-center justify-between px-8 py-4 bg-white text-slate-900 border-b border-slate-100">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Dokumen Penolakan Handover</p>
           <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-lg transition-colors">
             <X size={18} className="text-slate-400" />
