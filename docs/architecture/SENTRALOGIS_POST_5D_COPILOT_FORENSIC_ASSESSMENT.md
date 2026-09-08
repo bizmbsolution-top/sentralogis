@@ -218,3 +218,27 @@ NONE — no production deployment
 **YELLOW — ARCHITECTURAL / BUSINESS DECISION REQUIRED**
 
 Evidence is sufficient to identify the gap (`routeToDomainService` mock boundary, hardcoded identity in `ContextEnricher`, prototype adapters), but a human decision and explicit implementation authorization are required before any wiring work can proceed. ADR-090 and ADR-091 are ratified and sufficient for the authority model; a new ADR or phase authorization is required for the implementation boundary.
+
+---
+
+## 15. ADR Decision Package
+
+**Status:** PROPOSED — AWAITING HUMAN RATIFICATION
+
+ADR-092 (`docs/architecture/ADR-092-copilot-execute-canonical-domain-wiring.md`) and the Decision Package (`docs/architecture/SENTRALOGIS_POST_5D_AI_COPILOT_ADR_DECISION_PACKAGE.md`) have been prepared.
+
+ADR-092 defines:
+- Exact action → canonical domain service mapping
+- Two-layer authorization model (Copilot execution + domain mutation)
+- Identity/tenant authority (server-derived only)
+- State contracts per action
+- Three-layer idempotency model
+- Transaction boundaries
+- External adapter containment
+- Integration acceptance suite
+- Incremental rollout with feature flags
+- Explicit prohibited actions
+
+Decision Package identifies 4 human decisions (D-01 through D-04) requiring ratification.
+
+**Next required step:** Human ratification of ADR-092 + explicit implementation authorization.
