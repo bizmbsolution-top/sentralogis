@@ -811,8 +811,6 @@ export class DriverReplacementService {
       const newToken = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       const updatePayload: Record<string, unknown> = {
-        transporter_id: input.newTransporterId || null,
-        fleet_id: input.newFleetId || null,
         driver_id: input.newDriverId,
         driver_link_token: newToken,
         driver_response: 'accepted',
@@ -822,6 +820,13 @@ export class DriverReplacementService {
         rejection_note: input.reason ? `[REPLACE] ${input.reason}` : (jo.rejectionNote || '[REPLACE] Driver replaced'),
         updated_at: now,
       };
+
+      if (input.newFleetId) {
+        updatePayload.fleet_id = input.newFleetId;
+      }
+      if (input.newTransporterId) {
+        updatePayload.transporter_id = input.newTransporterId;
+      }
 
       const { data, error } = await db()
         .from('job_orders')

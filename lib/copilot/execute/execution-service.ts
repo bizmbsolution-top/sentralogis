@@ -34,6 +34,8 @@ import { audit } from '@/lib/audit';
 import type { IdentityContext } from '@/lib/application/identity/types';
 import { ProposalAuthorityService, type AuthoritativeProposal } from '@/lib/copilot/propose/proposal-authority-service';
 import { ActionBridge } from '@/src/platforms/copilot/execution/ActionBridge';
+import { JobOrderAssignmentService, JobOrderCancellationService, DriverReplacementService, type AssignDriverInput, type ReplaceDriverInput, type JobOrderResult } from '@/lib/domain/jo/job-order-domain-service';
+import { isCopilotActionEnabled, COPILOT_FEATURE_FLAGS } from '@/lib/copilot/feature-flags';
 
 export class ExecutionService {
   /**
@@ -252,7 +254,7 @@ export class ExecutionService {
     const startTime = Date.now();
 
     try {
-      const domainResult = await this.routeToDomainService(identity, executionProposal);
+      const domainResult = await this.routeToDomainService(identity, executionProposal, request.confirmation);
 
       await ProposalAuthorityService.recordExecutionResult(
         identity,
@@ -358,17 +360,54 @@ export class ExecutionService {
   private static async routeToDomainService(
     identity: IdentityContext,
     proposal: AuthoritativeProposal,
+    confirmation: ExecutionRequest['confirmation'],
   ): Promise<Omit<ExecutionResult, 'durationMs'>> {
     const executionId = `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     switch (proposal.intent) {
       case 'ASSIGN_DRIVER': {
+        if (!isCopilotActionEnabled('ASSIGN_DRIVER')) {
+          throw new Error(`Copilot action ASSIGN_DRIVER is not enabled. Set ${COPILOT_FEATURE_FLAGS.ASSIGN_DRIVER.envVar}=true to enable.`);
+        }
         const jobOrder = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'JobOrder') : null;
         const driver = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'Driver') : null;
         const vehicle = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'Vehicle') : null;
 
         if (!jobOrder || !driver) {
           throw new Error('ASSIGN_DRIVER requires JobOrder and Driver entities');
+        }
+
+        const assignmentService = new JobOrderAssignmentService();
+        const input: AssignDriverInput = {
+          jobOrderId: jobOrder.entityId,
+          driverId: driver.entityId,
+          fleetId: vehicle?.entityId || null,
+          transporterId: null,
+          driverPhone: null,
+          notes: null,
+        };
+
+        const result: JobOrderResult = await assignmentService.assignDriver(identity, input);
+
+        if (!result.success) {
+          return {
+            executionId,
+            status: 'FAILED',
+            intent: proposal.intent,
+            message: result.error || 'Assignment failed',
+            affectedEntities: Array.isArray(proposal.entities) ? proposal.entities.map((e: any) => ({
+              entityType: e.entityType,
+              entityId: e.entityId,
+              displayName: e.displayName,
+            })) : [],
+            timestamp: new Date().toISOString(),
+            audit: {
+              correlationId: executionId,
+              actorUserId: identity.userId,
+              actorTenantId: identity.tenantId,
+              proposalId: proposal.proposal_number,
+            },
+          };
         }
 
         return {
@@ -392,10 +431,40 @@ export class ExecutionService {
       }
 
       case 'CANCEL_JOB': {
+        if (!isCopilotActionEnabled('CANCEL_JOB')) {
+          throw new Error(`Copilot action CANCEL_JOB is not enabled. Set ${COPILOT_FEATURE_FLAGS.CANCEL_JOB.envVar}=true to enable.`);
+        }
         const jobOrder = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'JobOrder') : null;
 
         if (!jobOrder) {
           throw new Error('CANCEL_JOB requires JobOrder entity');
+        }
+
+        const cancellationService = new JobOrderCancellationService();
+        const result: JobOrderResult = await cancellationService.cancelJobOrder(identity, {
+          jobOrderId: jobOrder.entityId,
+          reason: confirmation.confirmationNote || 'Cancelled via Copilot',
+        });
+
+        if (!result.success) {
+          return {
+            executionId,
+            status: 'FAILED',
+            intent: proposal.intent,
+            message: result.error || 'Cancellation failed',
+            affectedEntities: Array.isArray(proposal.entities) ? proposal.entities.map((e: any) => ({
+              entityType: e.entityType,
+              entityId: e.entityId,
+              displayName: e.displayName,
+            })) : [],
+            timestamp: new Date().toISOString(),
+            audit: {
+              correlationId: executionId,
+              actorUserId: identity.userId,
+              actorTenantId: identity.tenantId,
+              proposalId: proposal.proposal_number,
+            },
+          };
         }
 
         return {
@@ -403,6 +472,70 @@ export class ExecutionService {
           status: 'SUCCESS',
           intent: proposal.intent,
           message: `Cancelled job order ${jobOrder.displayName}.`,
+          affectedEntities: Array.isArray(proposal.entities) ? proposal.entities.map((e: any) => ({
+            entityType: e.entityType,
+            entityId: e.entityId,
+            displayName: e.displayName,
+          })) : [],
+          timestamp: new Date().toISOString(),
+          audit: {
+            correlationId: executionId,
+            actorUserId: identity.userId,
+            actorTenantId: identity.tenantId,
+            proposalId: proposal.proposal_number,
+          },
+        };
+      }
+
+      case 'REPLACE_DRIVER': {
+        if (!isCopilotActionEnabled('REPLACE_DRIVER')) {
+          throw new Error(`Copilot action REPLACE_DRIVER is not enabled. Set ${COPILOT_FEATURE_FLAGS.REPLACE_DRIVER.envVar}=true to enable.`);
+        }
+        const jobOrder = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'JobOrder') : null;
+        const driver = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'Driver') : null;
+        const vehicle = Array.isArray(proposal.entities) ? proposal.entities.find((e: any) => e.entityType === 'Vehicle') : null;
+
+        if (!jobOrder || !driver) {
+          throw new Error('REPLACE_DRIVER requires JobOrder and Driver entities');
+        }
+
+        const replacementService = new DriverReplacementService();
+        const input: ReplaceDriverInput = {
+          jobOrderId: jobOrder.entityId,
+          newDriverId: driver.entityId,
+          newFleetId: vehicle?.entityId || null,
+          newTransporterId: null,
+          reason: confirmation.confirmationNote || 'Driver replaced via Copilot',
+        };
+
+        const result: JobOrderResult = await replacementService.replaceDriver(identity, input);
+
+        if (!result.success) {
+          return {
+            executionId,
+            status: 'FAILED',
+            intent: proposal.intent,
+            message: result.error || 'Driver replacement failed',
+            affectedEntities: Array.isArray(proposal.entities) ? proposal.entities.map((e: any) => ({
+              entityType: e.entityType,
+              entityId: e.entityId,
+              displayName: e.displayName,
+            })) : [],
+            timestamp: new Date().toISOString(),
+            audit: {
+              correlationId: executionId,
+              actorUserId: identity.userId,
+              actorTenantId: identity.tenantId,
+              proposalId: proposal.proposal_number,
+            },
+          };
+        }
+
+        return {
+          executionId,
+          status: 'SUCCESS',
+          intent: proposal.intent,
+          message: `Replaced driver for ${jobOrder.displayName} with ${driver.displayName}${vehicle ? ` and vehicle ${vehicle.displayName}` : ''}.`,
           affectedEntities: Array.isArray(proposal.entities) ? proposal.entities.map((e: any) => ({
             entityType: e.entityType,
             entityId: e.entityId,
