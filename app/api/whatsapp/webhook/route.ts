@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { WhatsAppCopilotGateway } from "@/src/application/whatsapp/WhatsAppCopilotGateway";
 import { sendWhatsAppMessage } from "@/lib/twilio/clients";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req: NextRequest) {
   try {

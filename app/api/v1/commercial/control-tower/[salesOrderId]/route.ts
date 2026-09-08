@@ -18,14 +18,10 @@ import {
 } from '@/lib/control-tower/service';
 import { toErrorResponse } from '@/lib/sales-order/http';
 
-interface RouteContext {
-  params: { salesOrderId: string };
-}
-
-export async function GET(req: NextRequest, ctx: RouteContext) {
+export async function GET(req: NextRequest, { params }: { params: { salesOrderId: string } }) {
   try {
     const session = await resolveSessionIdentity();
-    const { salesOrderId } = ctx.params;
+    const { salesOrderId } = params;
     const { searchParams } = new URL(req.url);
     const view = searchParams.get('view');
 
