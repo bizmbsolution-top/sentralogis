@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import ContractWizard from '../../new/ContractWizard';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 import { Loader2 } from 'lucide-react';
 
 export default function EditContractPage({ params }: { params: Promise<{ id: string }> }) {
@@ -46,7 +47,7 @@ export default function EditContractPage({ params }: { params: Promise<{ id: str
     async function fetchData() {
       try {
         const [custRes, whRes, srvRes, uomRes, contractRes] = await Promise.all([
-          supabase.from('md_entities').select('id, name, entity_code, legal_name').eq('tenant_id', tenantId as string).eq('is_customer', true),
+          getEntitiesByRole('CUSTOMER'),
           supabase.from('md_warehouses').select('id, name, code').eq('tenant_id', tenantId as string),
           supabase.from('md_services').select('*').eq('tenant_id', tenantId as string),
           supabase.from('md_uoms').select('id, name').eq('tenant_id', tenantId as string),
@@ -60,7 +61,7 @@ export default function EditContractPage({ params }: { params: Promise<{ id: str
         if (contractRes.error) {
           setError(contractRes.error.message);
         } else {
-          setCustomers(custRes.data || []);
+          setCustomers(custRes.ok ? (custRes.data || []) : []);
           setWarehouses(whRes.data || []);
           setServices(srvRes.data || []);
           setUoms(uomRes.data || []);

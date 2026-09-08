@@ -220,14 +220,14 @@ export const helpTopics: HelpTopic[] = [
   },
   {
     id: "hq-warehouse-monitoring",
-    title: "Monitoring Inbound & Outbound Gudang dari HQ",
-    description: "Memantau jadwal barang masuk (Inbound) dan barang keluar (Outbound) di seluruh gudang SBU.",
-    tags: ["warehouse monitoring", "inbound hq", "outbound hq", "gudang hq", "monitoring wms", "cs", "hq"],
+    title: "Monitoring Operasional Gudang dari HQ",
+    description: "Memantau seluruh aktivitas gudang (Inbound, Outbound, Add Service, Transfer) dalam satu konsol real-time.",
+    tags: ["warehouse monitoring", "inbound hq", "outbound hq", "gudang hq", "monitoring wms", "operations monitor", "cs", "hq"],
     answer:
-      "Sebagai tim CS/HQ, Anda dapat mengawasi aktivitas gudang melalui menu HQ > Warehouse > Inbound (/hq/warehouse/inbound) atau Outbound (/hq/warehouse/outbound) untuk memastikan ketepatan waktu bongkar muat dan kesiapan dokumen BAST.",
-    href: "/hq/warehouse/inbound",
-    hrefLabel: "🚀 Buka Monitoring Inbound HQ",
-    pagePaths: ["/hq/warehouse/inbound", "/hq/warehouse/outbound", "/hq/warehouse"],
+      "Sebagai tim CS/HQ, Anda dapat mengawasi seluruh aktivitas gudang (barang masuk, keluar, add service/repacking, dan transfer) melalui menu HQ > Warehouse > Operations Monitor (/hq/warehouse/operations). Gunakan tab per layanan dan kartu 'Perlu Atensi' untuk menemukan task yang stalled >24 jam.",
+    href: "/hq/warehouse/operations",
+    hrefLabel: "🚀 Buka Operations Monitor",
+    pagePaths: ["/hq/warehouse/operations", "/hq/warehouse/inbound", "/hq/warehouse/outbound", "/hq/warehouse"],
     roles: ["CS", "HQ", "WAREHOUSE", "ADMIN"],
   },
   {

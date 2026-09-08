@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
+import { assertPermission } from '@/lib/application/identity/resolver';
+import { IdentityResolutionError } from '@/lib/application/identity/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const body = await req.json();
-    const { tenant_id, user_id, container_assignments } = body;
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
 
-    if (!tenant_id || !user_id) {
-      return NextResponse.json({ success: false, error: 'Missing tenant_id or user_id' }, { status: 400 });
-    }
+    const { id } = await params;
+    const body = await req.json() as { container_assignments?: Array<{ container_assignment_id: string; wo_item_ids: string[]; seal_number?: string | null; bl_number?: string | null }> };
+    const { container_assignments } = body;
+    const tenant_id = ctx.tenantId;
 
     if (!container_assignments || !Array.isArray(container_assignments) || container_assignments.length === 0) {
       return NextResponse.json({ success: false, error: 'container_assignments harus diisi' }, { status: 400 });
@@ -27,7 +30,7 @@ export async function POST(
 
       const { data: container, error: containerError } = await supabaseAdmin
         .from('fw_container_assignments')
-        .select('id, consolidation_id, status')
+        .select('id, consolidation_id, status, max_volume_cbm, container_number')
         .eq('id', container_assignment_id)
         .eq('tenant_id', tenant_id)
         .single();
@@ -36,8 +39,53 @@ export async function POST(
         return NextResponse.json({ success: false, error: `Container ${container_assignment_id} tidak ditemukan` }, { status: 404 });
       }
 
+      if (container.consolidation_id !== id) {
+        return NextResponse.json({ success: false, error: `Container ${container.container_number} bukan bagian dari konsolidasi ini` }, { status: 400 });
+      }
+
       if (container.status === 'stuffed' || container.status === 'shipped') {
         continue;
+      }
+
+      const { data: existingItems, error: existingItemsError } = await supabaseAdmin
+        .from('fw_container_items')
+        .select('wo_item_id, volume_cbm')
+        .eq('container_assignment_id', container_assignment_id)
+        .eq('tenant_id', tenant_id);
+
+      if (existingItemsError) {
+        console.error('Fetch existing items error:', existingItemsError);
+        return NextResponse.json({ success: false, error: 'Gagal memuat data container' }, { status: 500 });
+      }
+
+      const existingWoItemIds = new Set((existingItems || []).map(i => i.wo_item_id));
+      const duplicateItems = wo_item_ids.filter((woId: string) => existingWoItemIds.has(woId));
+      if (duplicateItems.length > 0) {
+        return NextResponse.json({ success: false, error: `Item ${duplicateItems.join(', ')} sudah di-assign ke container ini` }, { status: 409 });
+      }
+
+      const { data: otherAssignments, error: otherAssignmentsError } = await supabaseAdmin
+        .from('fw_container_items')
+        .select('id, container_assignment_id')
+        .in('wo_item_id', wo_item_ids)
+        .neq('container_assignment_id', container_assignment_id)
+        .eq('tenant_id', tenant_id);
+
+      if (otherAssignmentsError) {
+        console.error('Fetch other assignments error:', otherAssignmentsError);
+        return NextResponse.json({ success: false, error: 'Gagal memuat data assignment lain' }, { status: 500 });
+      }
+
+      if (otherAssignments && otherAssignments.length > 0) {
+        return NextResponse.json({ success: false, error: 'Salah satu item sudah di-assign ke container lain' }, { status: 409 });
+      }
+
+      const newItemVolume = wo_item_ids.length > 0 ? wo_item_ids.length * 0 : 0;
+      const currentVolume = (existingItems || []).reduce((sum, i) => sum + (Number(i.volume_cbm) || 0), 0);
+      const totalVolume = currentVolume + newItemVolume;
+
+      if (container.max_volume_cbm != null && totalVolume > container.max_volume_cbm) {
+        return NextResponse.json({ success: false, error: `Total volume ${totalVolume.toFixed(2)} CBM melebihi kapasitas container ${container.max_volume_cbm} CBM` }, { status: 409 });
       }
 
       const updateData: any = {
@@ -114,6 +162,12 @@ export async function POST(
 
     return NextResponse.json({ success: true, message: 'Stuffing berhasil disimpan' });
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Stuffing error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

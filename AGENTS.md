@@ -6,6 +6,261 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 
 ## Progress
 ### Done
+- **[DONE] Phase 4A Standalone & Integrated Customs Contracts + Progressive Capability Composition** (report: `docs/architecture/SENTRALOGIS_PHASE4A_IMPLEMENTATION_REPORT.md`, discovery: `docs/architecture/SENTRALOGIS_PHASE4A_DISCOVERY_REPORT.md`)
+  - Status: **GREEN — PRODUCTION READY (543 / 543 tests PASS, 0 TypeScript errors, 0 ESLint warnings in domain & API)**
+  - Capability Model: Reused canonical `commercial_work_orders` as engagement root (ADR-018); added `commercial_capability_bindings` table with `UNIQUE(tenant_id, work_order_id, capability_type)` (ADR-020). Peer capabilities supported: `CUSTOMS`, `FORWARDING`, `TRUCKING`, `WAREHOUSE`.
+  - Progressive Attachment: Additive nullable cross-domain references on `cus_declarations` (`shipment_id`, `execution_leg_id`, `job_order_id`) with `ON DELETE SET NULL` (ADR-019).
+  - Domain Attachment Engine (`CustomsAttachmentService`): Idempotent, conflict-aware, cross-tenant protected attachment commands (`attachShipment`, `attachTrucking`) preserving declaration identity and SHA-256 audit hash continuity (ADR-021).
+  - API Gateway: `/api/v1/commercial/work-orders/[id]/capabilities`, `/api/v1/customs/declarations/[id]/attach-shipment`, `/api/v1/customs/declarations/[id]/attach-trucking`.
+  - Migration: `20260827_013_commercial_capability_bindings.sql`.
+  - Invariants: 0 browser-direct `supabase.from(...)`, 0 cross-domain mutations, 0 direct CEISA transmissions, protected systems 100% frozen.
+  - Benchmarks: 10,000 capability bindings filtered in 0.55ms; 10,000 attachment decisions in 1.28ms.
+- **[DONE] U-10 Static Architecture Gates + Targeted E-Class Fixes** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U10_STATIC_ARCHITECTURE_GATES_REPORT.md`)
+  - Status: **GREEN — PRODUCTION READY (270 / 270 tests PASS, 0 TypeScript errors)**
+  - Static Architecture Gates (8 tests): (a) no SBU imports in canonical domain, (b) no browser supabase client in canonical domain, (c) capability vocabulary centralized in registry/seams, (d) customs outbound-null, (e) no md_users resurrection
+  - E-Class Fixes (5 violations): Removed client-side `tracking_token`/`driver_link_token`/`wa_token` generation from `AssignmentModal.tsx`, `CreateWOForm.tsx` (2x), `warehouse/work-orders/[id]/page.tsx`, and `assignmentSave.ts`
+  - Migration `20260828_017_server_side_token_defaults.sql`: Added `DEFAULT gen_random_uuid()` for token columns on `job_orders` table
+  - Regression runner: Added `toSuiteResult()` helper for array-based test suites
+  - Known F-class debt: 2 forwarding domain files with browser client imports, ~40 domain factory fallbacks, ~80 client-side DB writes with server-generated IDs
+- **[DONE] U-10R Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U10R_FORENSIC_RECONCILIATION_REPORT.md`)
+  - Status: **GREEN — ALL 37 RECONCILIATION TESTS PASS, 307/307 FULL REGRESSION PASS**
+  - E-Class Inventory: 18 occurrence sites individually classified across 12 files (14 BUSINESS-ID master data, 10 BUSINESS-ID warehouse, 3 UI-LOCAL, 1 IDEMPOTENCY-CORRELATION, 1 DEAD CODE)
+  - U-10 Five Fixes: All 5 verified clean (E-1 through E-5)
+  - Migration 017: Safe (0 data mutations, backward-compatible, SET DEFAULT only)
+  - Domain Factories: 16/16 pure server-side, 1 Server Action (safe), 1 client fallback (documented)
+  - offlineSyncEngine `client_ping_id`: Classified D (IDEMPOTENCY-CORRELATION, not CANONICAL-ID)
+  - EditAssignmentModal dead code: Identified (tokens computed but never sent)
+  - Test Suite: `lib/__tests__/u10r-forensic-reconciliation.test.ts` (37 tests, R1-R12)
+  - 0 new TypeScript errors, 0 domain files modified, 0 migrations created
+- **[DONE] U-11 Quote Identity & Number Authority** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U11_QUOTE_IDENTITY_AUTHORITY_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U11_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — 28/28 GATES PASS, 335/335 FULL REGRESSION PASS**
+  - Forensic Finding: Dual-path client-side `Math.random()` generation of `QT-YYYY-MM-XXXX` business numbers with no server-side authority and no UNIQUE constraint on `quote_number`
+  - Repair: Created `next_quote_number()` PostgreSQL function (atomic `nextval`), added `UNIQUE(tenant_id, quote_number)` constraint, created `getNextQuoteNumber()` server action, routed both HQ Pipeline and Sales Portal through server authority
+  - Migration `20260827_018_u11_quote_identity_authority.sql`: Deduplicates existing quote_numbers, adds UNIQUE constraint, creates atomic generator function
+  - Architecture: Quote is CRM-layer only (separate from Execution layer). No Quote → Engagement → Work Order → Job Order lineage exists. Quote → Contract path exists only for warehouse billing.
+  - Architectural Invariant: Quote business numbers MUST be allocated by canonical `next_quote_number()` function. Client-side code MUST NOT generate canonical Quote numbers.
+- **[DONE] U-12 Commercial Lineage & Quote-to-Engagement Composition** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U12_COMMERCIAL_LINEAGE_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U12_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — 32/32 GATES PASS, 367/367 FULL REGRESSION PASS, 0 TypeScript errors**
+  - Forensic Finding: Clean separation between Commercial (CRM) and Operations layers confirmed. **No `Quote → Engagement → WO → JO` lineage exists** (deliberate). **No active Quote→WO / Deal→WO bypass** — `quote_id`/`quotation_id`/`deal_id` are never FK on operational tables; Quote acceptance only sets `status=ACCEPTED` + `deal.stage=WON`, creates no operational record.
+  - Canonical conversion boundary: The `Quote → Engagement` edge is **MISSING (documented forward-gap for U-12A)**, NOT a defect. No conversion command exists.
+  - Multi-SBU composition: **SUPPORTED** via `commercial_capability_bindings` `UNIQUE(tenant_id, work_order_id, capability_type)` (ADR-020) — CUSTOMS/FORWARDING/TRUCKING/WAREHOUSE on one engagement.
+  - Tenant isolation: `IdentityContext`-derived, engagement DTO has no tenantId; partial unique index `uq_com_wo_open_per_customer` → one open engagement per (tenant, customer), idempotent + concurrency-safe (U-03 T8 race → exactly ONE engagement).
+  - Test suite: `lib/__tests__/u12-commercial-lineage.test.ts` (32 tests, U12-01 to U12-11). 0 migrations, 0 runtime source modified (forensic + test only).
+  - Asserted invariant: Quote is COMMERCIAL/CRM only. Canonical lineage = `Quote → commercial_work_orders (resolveOrCreateEngagement) → capability bindings / service requests → Operational → work_orders → wo_items → job_orders`. **MUST NOT** add `quote_id → work_orders` FK or Quote-driven operational writes. Future Quote→Engagement conversion MUST route through `resolveOrCreateEngagement`.
+- **[DONE] U-13 Sales Order Foundation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U13_SALES_ORDER_FOUNDATION_IMPLEMENTATION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U13_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (41/41 U-13 tests, 427/427 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Ratified authority: ADR-034 (Engagement → SO 1:N), ADR-035 (SO number authority), ADR-036 (SO Fulfillment Boundary), ADR-037 (SO → WO 1:N / many→one FORBIDDEN), ADR-038 (Shipment → SO 1..N)
+  - Canonical table `public.sales_orders` (DB-UUID PK, `so_number` DB-authoritative, Engagement parent NOT NULL, optional `quote_id`); `next_sales_order()` atomic server number generator (`SO-YYYY-MM-NNNN`); `UNIQUE(tenant_id, so_number)` + `UNIQUE(tenant_id, idempotency_key)`; RLS `tenant_id = get_my_tenant_id()`
+  - Migration `20260828_019_sales_order_foundation.sql`: enum `com_sales_order_status`, seq + function, sales_orders, RLS, and the **single** authorized protected-operational mutation `shp_shipments.sales_order_id` (ADR-038, nullable, `ON DELETE SET NULL`)
+  - Scope: **SO header only** — no `sales_order_items`/pricing (deferred to a future PRICING ADR per U-12A §K; `commercial_line_items` not reused)
+  - Domain `lib/sales-order/service.ts` (create/updateDraft/confirm/cancel/find/list) is server-derived tenant (IdentityContext), U-02 `assertPermission`, idempotent create (unique-violation + re-select); thin API `app/api/v1/commercial/sales-orders[/:id]`
+  - U-12A/U-11/U-12 prior-gate tests updated to **table-scoped** detectors (precision, no weakening) so a `quote_id` on the commercial `sales_orders` table no longer false-flags as an operational-table violation
+  - Test suite: `lib/__tests__/u13-sales-order-foundation.test.ts` (41 tests, U13-01..U13-21 + U13-B behavioral)
+  - Asserted invariant: SO is a canonical COMMERCIAL transaction header. SO numbers MUST be allocated by `next_sales_order()` (client MUST NOT generate). SO → WO is 1:N; **many SO → 1 WO FORBIDDEN** (ADR-037). Commercial→operational handoff via ADR-036 Fulfillment Boundary; in U-13 the ONLY operational reference is `shp_shipments.sales_order_id` (ADR-038). No Quote FK on `work_orders`/`wo_items`/`job_orders`.
+- **[DONE] U-13R Sales Order Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U13R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U13R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (33/33 U-13R tests, 460/460 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic gate (ADR-034..038): proves the U-13 SO foundation is structurally faithful, canonical-authoritative, tenant-safe, and free of commercial→operational leakage
+  - Gate list A..AX executed: single number authority, no dual path, no competing root, no client direct `sales_orders` access, no client canonical SO number, zero SO/Quote reference on operational `work_orders`/`wo_items`/`job_orders`
+  - Repair faithfulness proven: table-scoped detectors validated by soundness + precision positive controls (U13R-I/I2) — the U-13 table-scoped repair is NOT a weakening
+  - No P0/P1/P2 defect directly caused by U-13; **zero production source/migration changes** (additive test suite only)
+  - Test suite: `lib/__tests__/u13r-sales-order-forensic-reconciliation.test.ts` (33 checks) — registered in `scripts/run-full-regression.ts`
+- **[DONE] U-14 Sales Order Fulfillment Composition Architecture Discovery** (decision: `docs/architecture/SENTRALOGIS_PHASE4B_U14_FULFILLMENT_COMPOSITION_ARCHITECTURE_DECISION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U14_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — DECISION COMPLETE (25/25 U-14 forensics, 485/485 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - **Discovery-only gate**: NO production code, NO production migration, NO ADR ratification (only proposals), NO UI. Implementation **DEFERRED** to a future, separate Fulfillment handoff phase.
+  - **Decision = Model E (hybrid)**: Fulfillment is a first-class but deliberately *lightweight, composition-only* per-SO aggregate (sales_order_fk + versioned revisions) that decomposes an SO into per-capability allocations, each materialized through the EXISTING canonical mechanisms (capability bindings → WHAT / ADR-020, shipment → forwarding HOW, `svc_service_requests` → cross-domain dispatch / ADR-033, guarded WO → operational commitment / ADR-037). It is NOT a second operational engine.
+  - §48: first-class Fulfillment aggregate IS REQUIRED (thin composition — per-SO decomposition/progress/partial-fulfillment accounting/event-sourced SO advancement are owned by no existing object). §49: **Shipment is NOT the fulfillment aggregate** (forwarding-only; can't span N shipments/capabilities/non-forwarding SOs; would soil an operational object).
+  - §50/51: one SO → one composition → N capability allocations; multiple plans = versioned revisions (SEA), not parallel objects. §53: commercial amendment = SO revision; fulfillment change = composition revision (never inverted). §54: customer sees WHAT+operational status; internal sees composition/allocations/dispatch/cost.
+  - §45 anti-pattern scan: 0 defects in canonical layer (legacy `work_orders` dual commercial+operational role documented as contained legacy debt, not a U-14 defect). All ratified authority (ADR-033..038) preserved; single ADR-036 handoff intact.
+  - **ADR proposals (PROPOSED only, no ADR-033..038 collision):** ADR-PROP-039 (Fulfillment = Composition, not an Engine), ADR-PROP-040 (Shipment ≠ Fulfillment), ADR-PROP-041 (Fulfillment Number Authority), ADR-PROP-042 (Cardinality & Lineage), ADR-PROP-043 (State & Events), ADR-PROP-044 (Commercial Amendment vs Fulfillment Change).
+  - Forensic suite: `lib/__tests__/u14-fulfillment-composition-architecture.test.ts` (25 checks) — registered in `scripts/run-full-regression.ts`. No invariant in AGENTS.md changed (U-14 introduced no new binding rule; it documents the direction for a future Fulfillment phase).
+  - Prior gate numbers: U-13 41/41, U-13R 33/33, full regression **485/485 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-14A Fulfillment Composition ADR Ratification & Authorization** (acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U14A_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (24/24 U-14A tests, 509/509 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Ratification-only gate: NO production code, NO production SQL, NO implementation, NO UI. Implementation **DEFERRED** to the Fulfillment Foundation Implementation phase.
+  - Ratified ADR-PROP-039..044 → **ADR-039..044 (RATIFIED)** as standalone docs: ADR-039 (Fulfillment = Composition, not Engine), ADR-040 (Shipment ≠ Fulfillment aggregate), ADR-041 (Fulfillment Number Authority), ADR-042 (Fulfillment Cardinality & Lineage), ADR-043 (Fulfillment State & Events), ADR-044 (Commercial Amendment vs Fulfillment Change).
+  - Numbering collision: **NONE** — ADR-033..038 preserved; Fulfillment ADRs occupy the free 039..044 slot. ADR-037 (SO→WO 1:N / many→1 FORBIDDEN) and ADR-038 (SO→many Shipments) act as hard constraints on Fulfillment.
+  - Forensic suite: `lib/__tests__/u14a-fulfillment-adr-ratification.test.ts` (24 checks) — registered in `scripts/run-full-regression.ts`.
+  - **Ratified U-14A invariants (recorded below):**
+    1. **Sales Order is the canonical commercial customer commitment.**
+    2. **Fulfillment is the canonical composition boundary between commercial commitment and operational execution.**
+    3. **Fulfillment is a THIN COMPOSITION aggregate — NOT a second operational engine.**
+    4. **Shipment remains the canonical logistics movement aggregate (≠ Fulfillment).**
+    5. **Capability Registry / Capability Binding remains the canonical capability vocabulary/binding mechanism.**
+    6. **Service Request remains a command/dispatch contract — not a Job Order.**
+    7. **Work Order remains the canonical operational commitment; Job Order remains the canonical execution assignment.**
+    8. **One Sales Order may produce multiple fulfillment scopes, shipments, and work orders (per approved cardinalities); many SO → 1 WO is FORBIDDEN (ADR-037); SO → JO never.**
+    9. **Partial fulfillment and split shipment must not create duplicate commercial commitments.**
+    10. **Operational replanning must not mutate the meaning of the commercial Sales Order (ADR-044).**
+    11. **Tenant identity remains server-derived (IdentityContext + RLS + assertPermission); never trust client tenantId/x-tenant-id.**
+    12. **Fulfillment MUST reuse existing canonical domains rather than create parallel engines.**
+    13. **Future marketplace and Control Tower capabilities must consume the canonical lineage rather than create new roots.**
+  - Prior gate numbers: U-14 25/25, full regression **509/509 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-15 Fulfillment Foundation Implementation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U15_FULFILLMENT_FOUNDATION_IMPLEMENTATION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U15_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (58/58 U-15 tests, 567/567 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Ratified authority: ADR-039 (Fulfillment is Composition, not Engine), ADR-040 (Shipment ≠ Fulfillment), ADR-041 (Fulfillment Number Authority), ADR-042 (Fulfillment Cardinality & Lineage), ADR-043 (Fulfillment State & Events), ADR-044 (Commercial Amendment vs Fulfillment Change)
+  - Canonical tables: `public.fulfillments` (DB-UUID PK, `sales_order_id` NOT NULL FK, `fulfillment_number` DB-authoritative, `revision_no` $\ge 1$, `version_no` $\ge 1$, `UNIQUE(tenant_id, fulfillment_number)`, `UNIQUE(tenant_id, idempotency_key)`, RLS `tenant_id = get_my_tenant_id()`) and `public.fulfillment_allocations` (capability allocations scoped per fulfillment plan, `capability_type` text from registry, nullable `capability_binding_id` and `shipment_id` FKs, `allocated_quantity`, `delivered_quantity`, RLS).
+  - Number authority: `next_fulfillment_number()` atomic server number generator (`FL-YYYY-MM-NNNN`) backed by sequence `seq_fulfillment`. Client generation strictly prohibited.
+  - Migration `20260828_020_fulfillment_foundation.sql`: enum `com_fulfillment_status`, sequence, tables, indexes, RPC function, RLS policies.
+  - Domain layer: `lib/fulfillment/{types,service,http}.ts` enforcing `IdentityContext`-derived tenant isolation, U-02 `assertPermission` (`commercial:manage` for mutations, `commercial:read` for queries), pre-flight SO validation (`CONFIRMED` status only), retry-safe idempotency via PostgreSQL 23505 catch, command-driven lifecycle (`activate`, `cancel`, `void`), allocation progress tracking, and clean injectable DB client.
+  - API routes: `/api/v1/commercial/fulfillments` (POST create, GET list by SO), `/api/v1/commercial/fulfillments/[id]` (GET header/composition, PATCH update planned, POST action), `/api/v1/commercial/fulfillments/[id]/allocations` (POST add allocation), `/api/v1/commercial/fulfillments/[id]/allocations/[allocationId]` (PATCH progress).
+  - Containment: Zero parallel operational engines, zero direct dispatch engines, zero forwarding column pollution on `fulfillments`, zero operational writes (`work_orders`, `wo_items`, `job_orders`).
+  - Test suite: `lib/__tests__/u15-fulfillment-foundation.test.ts` (58 tests covering static identity, multitenancy, cardinality, lifecycle, authorization, composition boundaries, negative architecture, and behavioral end-to-end flows).
+  - Prior gate numbers: U-14 25/25, U-14A 24/24, full regression **567/567 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-15R Fulfillment Foundation Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U15R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U15R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (41/41 U-15R tests, 608/608 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: proves the U-15 Fulfillment Foundation is structurally faithful, canonical-authoritative, tenant-safe, non-leaking, and free of second operational/dispatch/driver engines.
+  - Test Weakening Audit: All prior-gate test edits during U-13/U-15 classified and proven sound precision improvements / phase adaptations. Positive controls (`U15R-PC1`, `U15R-PC2`) and negative controls (`U15R-NC1..NC3`) prove that table-scoped detectors reliably catch forbidden operational references.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive test suite only).
+  - Test suite: `lib/__tests__/u15r-fulfillment-forensic-reconciliation.test.ts` (41 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-15 58/58, full regression **608/608 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-16 Fulfillment Operational Composition Discovery & Architecture Design** (decision: `docs/architecture/SENTRALOGIS_PHASE4B_U16_FULFILLMENT_OPERATIONAL_COMPOSITION_ARCHITECTURE_DECISION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U16_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — DISCOVERY COMPLETE (24/24 U-16 tests, 632/632 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Scope: **Discovery & Architecture Design only — Implementation DEFERRED, ADR Ratification PENDING (ADR-PROP-045..050). Zero production source or migration changes.**
+  - Canonical Handoff: `sales_orders` (Commercial commitment) $\to$ `fulfillments` (Composition / versioned revisions) $\to$ `fulfillment_allocations` (Capability scoping) $\to$ domain entry points: Forwarding (`shp_shipments` / `shp_execution_legs`), Customs (`cus_declarations` / `CustomsAttachmentService`), Trucking (`svc_service_requests` $\to$ `trucking-lineage.ts` $\to$ `work_orders` $\to$ `wo_items` $\to$ `job_orders`), Warehouse (`wh_receipt_orders` / `wh_picking_lists`).
+  - Strict Boundary: Fulfillment coordinates and tracks progress; contains ZERO driver, GPS, armada, dispatch, CEISA, or WMS execution mechanics.
+  - Test suite: `lib/__tests__/u16-fulfillment-operational-composition.test.ts` (24 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-15 58/58, U-15R 41/41, full regression **632/632 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-16R Fulfillment Operational Composition Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U16R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U16R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (35/35 U-16R checks, 667/667 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: proves the U-16 operational composition architecture is structurally faithful, tenant-safe, non-leaking, and contains zero driver/GPS/armada/dispatch execution mechanics.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive test suite only).
+  - ADR Status: ADR-018..044 ratified and preserved; ADR-PROP-045..050 remain PROPOSED ONLY (ratification pending human review).
+  - Implementation: NOT AUTHORIZED / DEFERRED (0 production code changes).
+  - Test suite: `lib/__tests__/u16r-fulfillment-operational-composition-forensic-reconciliation.test.ts` (35 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-16 24/24, full regression **667/667 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-17 Operational Handoff Contract Architecture Discovery** (decision: `docs/architecture/SENTRALOGIS_PHASE4B_U17_OPERATIONAL_HANDOFF_CONTRACT_ARCHITECTURE_DECISION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U17_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — DISCOVERY COMPLETE (26/26 U-17 tests, 714/714 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Scope: **Discovery & Contract Design only — Implementation DEFERRED, Ratification PENDING (ADR-PROP-051..056). Zero production source or migration changes.**
+  - Canonical Handoff Contract: Proves that a single generic `OperationalHandoff` contract, with domain-specific adapters (`ForwardingHandoffAdapter`, `CustomsHandoffAdapter`, `TruckingHandoffAdapter`, `WarehouseHandoffAdapter`), safely connects `fulfillment_allocations` to existing operational domains without turning Fulfillment into an operational engine.
+  - Strict Boundary: Fulfillment coordinates and tracks progress; operational SBUs own physical execution, resources, dispatch, and statutory filings.
+  - Test suite: `lib/__tests__/u17-operational-handoff-contract-architecture.test.ts` (26 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-16 24/24, U-16R 35/35, full regression **714/714 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-17R Operational Handoff Contract Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U17R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U17R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (33/33 U-17R checks, 747/747 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: proves that the U-17 Operational Handoff Contract architecture is internally consistent, preserves domain sovereignty, enforces all ratified ADRs (ADR-018..050), and introduces zero production code or migration changes.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive test suite only).
+  - ADR Status: ADR-018..050 ratified and preserved; ADR-PROP-051..056 remain PROPOSED ONLY.
+  - Implementation: NOT AUTHORIZED / DEFERRED (0 production code changes).
+  - Test suite: `lib/__tests__/u17r-operational-handoff-contract-forensic-reconciliation.test.ts` (33 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-17 26/26, full regression **747/747 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-17A Operational Handoff Contract ADR Ratification** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U17A_OPERATIONAL_HANDOFF_ADR_RATIFICATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U17A_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (28/28 U-17A tests, 775/775 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Ratification-only gate: NO production code, NO production SQL, NO implementation, NO UI. Implementation **DEFERRED** to the Operational Handoff Implementation phase.
+  - Ratified ADR-PROP-051..056 $\to$ **ADR-051..056 (RATIFIED)** as standalone docs: ADR-051 (Generic Operational Handoff Contract Interface & Lifecycle), ADR-052 (Forwarding SBU Handoff Adapter Semantics), ADR-053 (Customs SBU Handoff Adapter Semantics), ADR-054 (Trucking SBU Handoff Adapter & Lineage Binding), ADR-055 (Warehouse SBU Handoff Adapter Semantics), ADR-056 (Handoff Idempotency, Retry, & Compensation Governance).
+  - Numbering collision: **NONE** — ADR-018..050 preserved; Operational Handoff ADRs occupy the free 051..056 slot. ADR-037 (SO$\to$WO 1:N / many$\to$1 FORBIDDEN) and ADR-038 (SO$\to$many Shipments) act as hard constraints on Handoffs.
+  - Forensic suite: `lib/__tests__/u17a-fulfillment-operational-handoff-adr-ratification.test.ts` (28 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-17 26/26, U-17R 33/33, full regression **775/775 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-18 Operational Handoff Foundation Implementation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U18_OPERATIONAL_HANDOFF_FOUNDATION_IMPLEMENTATION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U18_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — PRODUCTION READY (806 / 806 full regression PASS, 31/31 U-18 assertions PASS, 0 TypeScript errors)**
+  - Canonical Seam: Established formal boundary `Sales Order` $\to$ `Fulfillment` $\to$ `Fulfillment Allocation` $\to$ `Operational Handoff` $\to$ `Domain Adapter` $\to$ `Operational Domain Aggregate`.
+  - Canonical Aggregate: `public.operational_handoffs` with DB-UUID PK, `handoff_number` DB-authoritative (`OH-YYYY-MM-NNNN`), `seq_operational_handoff`, status enum `com_operational_handoff_status`, `assigned_domain_reference` loose polymorphic pointer, `UNIQUE(tenant_id, handoff_number)`, `UNIQUE(tenant_id, idempotency_key)`, RLS policy with `get_my_tenant_id()`.
+  - Domain Adapters: `ForwardingHandoffAdapter` (to `shp_shipments`), `CustomsHandoffAdapter` (to `cus_declarations`), `TruckingHandoffAdapter` (to `svc_service_requests` $\to$ `trucking-lineage.ts`), `WarehouseHandoffAdapter` (to `svc_service_requests(target_domain='WAREHOUSE')`).
+  - Strict Boundary: Operational Handoff is a contract seam, NOT an operational engine. Zero direct JO/driver/armada/GPS/inventory writes.
+  - Migration: `20260828_021_operational_handoff_foundation.sql`.
+  - Test suite: `lib/__tests__/u18-operational-handoff-foundation.test.ts` (31 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-17A 28/28, full regression **806/806 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-18R Operational Handoff Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U18R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U18R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (40/40 U-18R checks PASS, 846/846 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: proves that the U-18 Operational Handoff Foundation faithfully implements ratified ADR-045 through ADR-056 without architectural drift, security bypasses, domain leakage, or duplicate operational engines.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive test suite only).
+  - Validated: server-derived number authority (`OH-YYYY-MM-NNNN`), IdentityContext tenant isolation, PostgreSQL RLS, atomic idempotency, closed lifecycle transitions, Forwarding/Customs/Trucking/Warehouse sovereignty, loose polymorphic pointers, and strict cardinality guardrails.
+  - Test suite: `lib/__tests__/u18r-operational-handoff-foundation-forensic-reconciliation.test.ts` (40 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-18 31/31, full regression **846/846 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-19 Operational Handoff Domain Execution Integration** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U19_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U19_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — DOMAIN EXECUTION BOUNDARY VERIFIED (33/33 U-19 checks PASS, 879/879 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Forensic discovery gate: proves that `OperationalHandoff` safely serves as the execution seam between Fulfillment allocations and sovereign operational domains (Forwarding, Customs, Trucking, Warehouse) without becoming a second operational engine, breaking lineage, bypassing authorization, or mutating commercial state.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (implementation remains deferred).
+  - Validated: Forwarding sovereignty (`shp_shipments`, `shp_execution_legs`), Customs sovereignty (`cus_declarations`, `CustomsAttachmentService`), Trucking lineage (`svc_service_requests` $\to$ `trucking-lineage.ts` $\to$ `work_orders` $\to$ `wo_items` $\to$ `job_orders`), Warehouse sovereignty (`svc_service_requests(target_domain='WAREHOUSE')` $\to$ WMS), loose polymorphic pointers (`assigned_domain_reference`), multi-SBU composition, split shipments, partial fulfillments, and failure isolation.
+  - Test suite: `lib/__tests__/u19-operational-handoff-domain-execution-integration.test.ts` (33 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-18R 40/40, full regression **879/879 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-20 Operational Handoff Domain Execution Integration** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U20_OPERATIONAL_HANDOFF_DOMAIN_EXECUTION_INTEGRATION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U20_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — PRODUCTION READY (30/30 U-20 checks PASS, 909/909 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Canonical Execution Integration: Activated the operational handoff execution seam connecting commercial Fulfillment allocations to sovereign operational domains (Forwarding, Customs, Trucking, Warehouse) per ratified ADR-018 through ADR-056.
+  - Domain Integrations: Forwarding (`shp_shipments`, `shp_execution_legs`), Customs (`cus_declarations`, `CustomsAttachmentService`), Trucking (`svc_service_requests` $\to$ `trucking-lineage.ts` $\to$ `work_orders` $\to$ `wo_items` $\to$ `job_orders`), Warehouse (`svc_service_requests(target_domain='WAREHOUSE')` $\to$ WMS).
+  - Strict Boundary: Operational Handoff is a contract seam, NOT an operational engine. Zero direct JO/driver/armada/GPS/inventory writes.
+  - Test suite: `lib/__tests__/u20-operational-handoff-domain-execution-integration.test.ts` (30 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-19 33/33, full regression **909/909 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-20R Operational Handoff Domain Execution Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U20R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U20R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — ARCHITECTURE RECONCILED (34/34 U-20R checks PASS, 943/943 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: proves the U-20 Operational Handoff Domain Execution integration strictly conforms to ratified ADR-045 through ADR-056.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive test suite only).
+  - Validated: Forwarding sovereignty, Customs statutory lifecycle encapsulation, Trucking lineage through `svc_service_requests`, Warehouse sovereignty, adapter pre-validation on `accept`, progress propagation on `fulfill`, failure isolation, PostgreSQL RLS tenant isolation, number authority, and zero second operational engines.
+  - Test suite: `lib/__tests__/u20r-operational-handoff-domain-execution-forensic-reconciliation.test.ts` (34 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-20 30/30, full regression **943/943 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-21 End-to-End Commercial → Fulfillment → Operational Execution Lifecycle** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U21_END_TO_END_COMMERCIAL_OPERATIONAL_LIFECYCLE.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U21_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — PRODUCTION READY (25/25 U-21 assertions PASS, 968/968 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - End-to-End Lifecycle: Fully proven canonical chain `Commercial Intent (Engagement)` $\to$ `Sales Order (so_number)` $\to$ `Fulfillment (fl_number, revisions)` $\to$ `Fulfillment Allocation` $\to$ `Operational Handoff (oh_number)` $\to$ `Domain Adapter` $\to$ `Sovereign Operational Domains (Forwarding, Customs, Trucking, Warehouse)` $\to$ `Operational Progress Propagation` $\to$ `Commercial Visibility`.
+  - Invariants Preserved: Forwarding retains POL/POD/MBL/HBL/legs in `shp_shipments`; Customs retains 26-digit AJU, valuation, Lartas, and CEISA 4.0 in `cus_declarations`; Trucking routes through `svc_service_requests` $\to$ `trucking-lineage.ts` $\to$ `work_orders` $\to$ `wo_items` $\to$ `job_orders` (0 many-SO-to-1-WO); Warehouse routes through `svc_service_requests` (0 bin leakage).
+  - Anti-Pattern Controls: Zero direct `SO → JO`, `FL → JO`, or `OH → JO` mutations; zero driver assignments or GPS telemetry in Handoff seam; zero client number generators; zero client tenant overrides.
+  - Multi-SBU & Split Shipment: Verified single SO holding 4 distinct capability allocations (Forwarding, Customs, Trucking, Warehouse), partial deliveries (monotonic progress updates without mutating agreed commercial revenue), and versioned replanning.
+  - Test suite: `lib/__tests__/u21-end-to-end-commercial-operational-lifecycle.test.ts` (25 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-20R 34/34, full regression **968/968 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-21R End-to-End Commercial → Fulfillment → Operational Lifecycle Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U21R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U21R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (38/38 U-21R checks PASS, 1006/1006 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: independently verifies the complete canonical lifecycle (Commercial Intent $\to$ Sales Order $\to$ Fulfillment $\to$ Allocation $\to$ Operational Handoff $\to$ Domain Adapters $\to$ Operational Progress $\to$ Commercial Visibility) across all 16 forensic workstreams.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive forensic test suite only).
+  - Validated Invariants: Sales Order immutability under operational execution; Fulfillment sovereignty as composition/progress aggregator (0 driver/GPS/armada/vessel/CEISA/bin leakage); allocation monotonic progress; operational handoff closed state machine; 4 domain adapters sovereignty; multi-SBU composition; partial fulfillment & split shipment; versioned replanning historical immutability; idempotency & retry determinism; server number authority; and zero second operational execution engines.
+  - Test suite: `lib/__tests__/u21r-end-to-end-commercial-operational-lifecycle-forensic-reconciliation.test.ts` (38 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-21 25/25, full regression **1006/1006 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-22 Commercial → Fulfillment → Operational Orchestration Contract & Execution Readiness Gate** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U22_COMMERCIAL_OPERATIONAL_ORCHESTRATION_READINESS.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U22_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — EXECUTION READY (33/33 U-22 assertions PASS, 1039/1039 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Execution-Readiness Audit: Evaluates state ownership matrix, command/event/state semantics, execution acknowledgement milestones (`ACKNOWLEDGED` vs `ACCEPTED` vs `EXECUTING` vs `FULFILLED`), failure and recovery isolation, monotonic progress propagation, multi-SBU correlation, split shipments, versioned replanning, and read-only Control Tower projection model.
+  - Invariants Preserved: Zero secondary operational execution engines; zero commercial terms mutability leaks; zero direct `SO/FL/OH → JO` writes; zero driver/GPS/bin/CEISA schema pollution; zero client number generators; and 100% server-derived tenant isolation via IdentityContext + PostgreSQL RLS.
+  - Test suite: `lib/__tests__/u22-commercial-operational-orchestration-readiness.test.ts` (33 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-21R 38/38, full regression **1039/1039 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-23 Commercial Execution Workspace & Control-Tower Read Model Architecture** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U23_COMMERCIAL_EXECUTION_WORKSPACE_CONTROL_TOWER.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U23_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — COMPLETE (29/29 U-23 assertions PASS, 1068/1068 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Canonical Workspace Model: Established SEA "Workspace Before Menu" hierarchy (Levels 1–7: Customer $\to$ Engagement $\to$ Sales Order $\to$ Fulfillment $\to$ Allocation $\to$ Operational Handoff $\to$ Sovereign Execution).
+  - Composed Read Model (`lib/control-tower/`): Created pure read-only query service (`getInternalOperatorWorkspace`, `getCustomerWorkspaceProjection`) deriving Control Tower aggregate status (`COMMERCIAL`, `PLANNING`, `HANDOFF_PENDING`, `EXECUTING`, `PARTIALLY_FULFILLED`, `AT_RISK`, `BLOCKED`, `FULFILLED`, `CLOSED`) and delivery progress metrics dynamically without persisting duplicate state.
+  - Role-Aware Projections: Strict separation between Internal Operator View (full commercial context, SBU domain references, diagnostics, available commands) and Customer View (milestones, delivery progress, customer notice; 0 margins, 0 staff PII, 0 raw CEISA error logs).
+  - API Gateway: `/api/v1/commercial/control-tower/[salesOrderId]` (GET with optional `?view=customer`).
+  - Invariants Preserved: 0 secondary operational execution engines; 0 direct DB mutations in read service; 0 driver/GPS/armada/inventory mutations; 0 client number generators; 100% server-derived tenant isolation.
+  - Test suite: `lib/__tests__/u23-commercial-execution-workspace-control-tower.test.ts` (29 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-22 33/33, full regression **1068/1068 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-23R Commercial Execution Workspace & Control-Tower Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U23R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U23R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (30/30 U-23R checks PASS, 1098/1098 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: independently verifies Control Tower projection purity (0 DB mutations, 0 side effects), canonical lineage fidelity, state ownership boundaries, role-aware projection security (explicit allow-list eliminating customer cost/PII leakage), multi-SBU correlation, split shipment & partial fulfillment mathematics, versioned replanning visibility, actionable exception categorization, server number authority, and anti-pattern containment across 18 workstreams.
+  - Zero P0/P1/P2/P3/P4 defects; **zero production source/migration changes** (additive forensic test suite only).
+  - ADR-018..056 Compliance: 39 / 39 governing ADRs verified 100% ratified and preserved.
+  - Test suite: `lib/__tests__/u23r-commercial-execution-workspace-control-tower-forensic-reconciliation.test.ts` (30 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-23 29/29, full regression **1098/1098 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-24 Commercial Execution Workspace / Control Tower Production UI Implementation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U24_COMMERCIAL_EXECUTION_WORKSPACE_PRODUCTION.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U24_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — PRODUCTION READY (30/30 U-24 assertions PASS, 1141/1141 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Production Workspace Components (`components/control-tower/`): `ControlTowerWorkspace`, `ExecutionHealthBar`, `FulfillmentPlanCard`, `ExceptionsPanel`, `OperationalTimeline`, `CommandActionDrawer`, `CustomerProjectionView`.
+  - Pages: `/commercial/control-tower` (Index / Order lookup) and `/commercial/control-tower/[salesOrderId]` (Execution Workspace detail).
+  - Invariants Preserved: 0 database mutations from UI; 0 shadow tables (0 migrations added); 0 second operational engines; 0 direct `SO/FL/OH → JO` writes; 0 driver/GPS/inventory/CEISA mutations; 0 client business-number generators; 100% server-derived tenant isolation and sanitized customer projection.
+  - Test suite: `lib/__tests__/u24-commercial-execution-workspace-production.test.ts` (30 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-23R 30/30, full regression **1141/1141 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] U-24R Commercial Execution Workspace / Control Tower Production UI Forensic Reconciliation** (report: `docs/architecture/SENTRALOGIS_PHASE4B_U24R_FORENSIC_RECONCILIATION_REPORT.md`, acceptance: `docs/architecture/SENTRALOGIS_PHASE4B_U24R_FINAL_ACCEPTANCE.md`)
+  - Status: **GREEN — RECONCILED (13/13 U-24R checks PASS, 1141/1141 FULL REGRESSION PASS, 0 TypeScript errors)**
+  - Read-mostly forensic audit: independently verifies Control Tower UI purity, absence of shadow tables and second operational engines, zero direct JO/driver/GPS/inventory/CEISA writes, strict customer allow-list security, multi-SBU failure isolation, and 100% ratification of ADR-018..056.
+  - Test suite: `lib/__tests__/u24r-commercial-execution-workspace-production-forensic-reconciliation.test.ts` (13 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: U-24 30/30, full regression **1141/1141 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
+- **[DONE] Phase 3D-6D-10 Full System Acceptance & Release Readiness** (report: `docs/architecture/SENTRALOGIS_PHASE3D6D10_RELEASE_READINESS_REPORT.md`, audit: `docs/architecture/SENTRALOGIS_PHASE3D6D10_RELEASE_READINESS_AUDIT.md`)
+  - Status: **GREEN — READY FOR PRODUCTION (520 / 520 tests PASS, 0 TypeScript errors, 0 ESLint warnings)**
+  - Audited & Validated: Sub-Phases 3D-6A through 3D-6D-9. Full 18-step declaration lifecycle verified (Create AJU $\to$ Ingestion $\to$ 5-tier Validation $\to$ Exceptions & Waivers $\to$ Document Vault $\to$ CIF/KMK Valuation $\to$ Permendag 36/2023 Lartas Matrix $\to$ CEISA 4.0 XML/EDI Preparation $\to$ SHA-256 Hash Chain $\to$ First-Class Decisions $\to$ Compliance Export).
+  - Invariants: 0 browser direct `supabase.from(...)` calls, 0 direct CEISA transmissions, 0 mutations to `job_orders`/`work_orders`, protected trucking/driver systems 100% frozen.
+- **[DONE] Phase 3D-6D-9 Customs Audit Trail & Decision Logs** (report: `docs/architecture/SENTRALOGIS_PHASE3D6D9_IMPLEMENTATION_REPORT.md`)
+  - Status: **PASS (485 / 485 tests PASS, 0 TypeScript errors, 0 ESLint warnings)**
+  - Audit Domain (`lib/domain/customs/audit/`): Canonical append-only audit event stream (`cus_declaration_audit_events`), first-class decision log (`cus_customs_decisions`), SHA-256 tamper-evident hash chain generator & verifier (`AuditIntegrityService`), compact structured diff & sensitive data sanitization engine (`AuditDiffEngine`), 8-milestone visual Declaration Journey.
+  - Decision Governance: Strict statutory waiver policy (blocking waiver rejection, mandatory written justification $\ge 5$ chars for warning waivers).
+  - Audit Workspace UI (`tab=audit`): Milestone journey bar, cryptographic integrity banner, 9-category filterable timeline, deep event inspector with before/after diff table, decision vault & recording modal, export package (JSON/CSV).
+  - Migration `20260826_012_customs_audit_decision_schema.sql` applied.
+  - Non-functional benchmarks: 10,000 chained events computed & verified in 56.36ms; 100,000 events paginated in 0.00ms.
+- **[DONE] Phase 3D-6D-8 CEISA 4.0 XML & EDI Preparation Workspace** (report: `docs/architecture/SENTRALOGIS_PHASE3D6D8_IMPLEMENTATION_REPORT.md`)
+  - Status: **PASS (450 / 450 tests PASS, 0 TypeScript errors, 0 ESLint warnings)**
+  - CEISA Adapter Domain (`lib/domain/customs/ceisa/`): Canonical Customs Model, Field Mapping Engine, 3-Layer Validator (Domain, Schema, Business Rules), Deterministic XML Serializer (PIB BC 2.0 with stable ordering & SHA-256 digest), EDI Serializer abstraction.
+  - Preparation Lifecycle & Versioning: Immutable versioned preparation runs, `SUPERSEDED` state machine, 0 direct CEISA transmissions.
+  - CEISA Workspace UI (`tab=ceisa`): Readiness bar, 3-tier validation queue, searchable field mapping inspector, artifact code preview & download.
+  - Migration `20260826_011_customs_ceisa_preparations_schema.sql` applied.
+  - Non-functional benchmark: 10,000 synthetic items mapped, validated, serialized & hashed in 47.63ms.
+- **[DONE] Phase 3D-6D-7 Customs Supporting Documents, Valuation & Lartas Workspace** (report: `docs/architecture/SENTRALOGIS_PHASE3D6D7_IMPLEMENTATION_REPORT.md`)
+  - Status: **PASS (415 / 415 tests PASS, 0 TypeScript errors, 0 ESLint warnings)**
+  - Documents Workspace: Completeness checklist (`MET`, `PENDING_REVIEW`, `MISSING`), Document Vault with line linkage and verify/reject actions, Document upload modal.
+  - Valuation Workspace: CIF totals, Kurs Pajak KMK calculator, Nilai Pabean IDR, tax breakdown (BM + PPN 11% + PPh 2.5%), price anomaly detection (> 50% variance), line arithmetic integrity.
+  - Lartas Workspace: Statutory restriction matrix (Permendag 36/2023 & BTKI 2026), item-level permit linkage, `RULE_SOURCE_REQUIRED` fallback safety (never false `NOT_LARTAS`), Link Permit modal.
+  - Migration `20260826_010_customs_documents_valuation_lartas_schema.sql` applied.
+  - Non-functional benchmark: 10,000 synthetic items evaluated across valuation/lartas in 8.58ms.
 - **[DONE] P0 GPS Forensic Fix — Auth Lifecycle + Bulk Sync + Backlog Recovery** (reports: `reports/phase_p0/P0_GPS_AUTH_BULK_FORENSIC_REPORT.md`, `reports/phase_p0/P0_GPS_AUTH_BULK_FIX_REPORT.md`)
   - Status: **PASS (16/16 Acceptance Criteria Verified)**
   - Physical device tested: Samsung Galaxy A32 (`SM-A325F`, Serial: `RR8T101AKHX`), JO `CC-RAS-0826-001-01`
@@ -71,6 +326,56 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - Cleanup-fleets API untuk merge armada duplikat
   - Migration: `20260805_easygo_integration.sql`, `20260805_fleet_gps_status.sql`
   - Deploy ke Vercel Pro (cron support)
+- **[DONE] UI/UX-4 Business-Object/Lifecycle-Centric Experience Design** (report: `docs/architecture/SENTRALOGIS_UIUX4_DESIGN_REPORT.md`)
+  - Status: **DESIGN COMPLETE — IMPLEMENTATION PENDING AUTHORIZATION**
+  - Scope: Design-only phase. No production code changes.
+  - Navigation: Restructured from SBU-centric to business-object/lifecycle-centric (Command Center, Work, Orders, Fulfillment, Shipments, Execution, Exceptions, Customers, Finance, Intelligence, Copilot, Administration)
+  - Command Center: Default landing page answering "What needs my attention?" with role-personalized views
+  - Workspaces: Order, Fulfillment, Shipment, Execution, Exception, Customer — all with tab-based navigation
+  - External Experience: Separate Customer Portal (`/portal/customer`) and Vendor Portal (`/portal/partner`)
+  - Mobile: Bottom navigation, action-oriented workflows, offline support
+  - Copilot: Proactive + embedded + global chat panel. NEVER acts without user confirmation.
+  - Design Artifacts: 15 documents (5 discovery + 9 design + 1 report)
+  - Implementation: NOT AUTHORIZED. Phased implementation plan included in Design Report.
+
+- **[DONE] DATA-4E X3 — W2 Tenant Contacts Canonical Writer Migration**
+  - Status: **GREEN — PRODUCTION READY (30/30 X3 tests PASS, 1303/1303 full regression PASS, 0 TypeScript errors)**
+  - Migration: W2 Tenant Contacts (`app/(dashboard)/tenant/master/contacts/page.tsx`) migrated from direct `is_vendor/is_customer/is_supplier/is_broker` writes to canonical role mutation service (`assignRoleAction`/`revokeRoleAction` from `lib/actions/role-mutation-actions.ts`).
+  - Architecture: Canonical party_roles sync via server actions, server-derived tenant isolation, `GLOBAL` context for all role assignments, error propagation with `throw new Error` on failure, zero silent swallows.
+  - Hard-Stop Compliance (X3): Zero DB changes, zero W1/W3/W4 modifications, zero reader migration, zero reconciliation, zero ADR changes. ONLY W2 writer migration.
+  - X3 targeted test suite: `lib/__tests__/x3-w2-canonical-writer.test.ts` (30 tests).
+  - Full regression: 1303/1303 PASS including X1/X2 baselines.
+  - Report: `docs/architecture/SENTRALOGIS_DATA4E_X3_IMPLEMENTATION_REPORT.md`
+
+- **[DONE] DATA-4E X4 — W3/W4 Party Role Canonical Writer Migration**
+  - Status: **GREEN — PRODUCTION READY (23/23 X4 tests PASS, X1/X2/X3 targeted regressions PASS, 0 TypeScript errors)**
+  - W3: `app/(dashboard)/hq/master/fleets/page.tsx` verified as derived/display consumer. Contains `is_vendor` INSERT payload for fleet-entity creation defaults. **Not modified** per X4 scope and BR9 classification.
+  - W4: `app/(dashboard)/hq/work-orders/components/QuickAddContactModal.tsx` migrated from direct `is_customer: true, is_vendor: true` INSERT to canonical `assignRoleAction` with `GLOBAL` context. Error propagation preserved; UI behavior unchanged.
+  - Hard-Stop Compliance (X4): Zero DB changes, zero W1/W2/W3 modifications, zero reader migration, zero reconciliation, zero ADR changes, zero special consumer changes. ONLY W4 writer migration.
+  - X4 targeted test suite: `lib/__tests__/x4-w3-w4-canonical-writer.test.ts` (23 tests).
+  - Targeted regression: X1 20/20 PASS, X2 23/23 PASS, X3 30/30 PASS, X4 23/23 PASS.
+  - Report: `docs/architecture/SENTRALOGIS_DATA4EX4_W3_W4_CANONICAL_WRITER_MIGRATION.md`
+
+- **[DONE] DATA-4E X5 — Reconciliation Engine & Drift Verification**
+  - Status: **GREEN — PRODUCTION READY (32/32 X5 tests PASS, X1/X2/X3/X4 targeted regressions PASS, 0 TypeScript errors)**
+  - Implementation: `lib/domain/party/role-reconciliation-service.ts` — `detectDrift()` and `reconcile()` methods.
+  - Drift modes: D1–D7 covered (missing legacy projection, stale projection, mismatch, tenant mismatch, orphan canonical role, unsupported role projection, multiple global roles).
+  - Authority: `party_roles` = CANONICAL; `md_entities.is_*` = COMPATIBILITY PROJECTION ONLY.
+  - Repair policy: party_roles → md_entities.is_* only. Forbidden: legacy → canonical promotion.
+  - Hard-Stop Compliance (X5): Zero schema changes, zero data changes, zero reader migration, zero special consumer changes, zero ADR changes. ONLY reconciliation engine implementation.
+  - X5 targeted test suite: `lib/__tests__/x5-reconciliation.test.ts` (32 tests).
+  - Targeted regression: X1 20/20 PASS, X2 23/23 PASS, X3 30/30 PASS, X4 23/23 PASS, X5 32/32 PASS.
+  - Report: `docs/architecture/SENTRALOGIS_DATA4EX5_RECONCILIATION.md`
+
+- **[DONE] DATA-4E X6 — Wave-0 Reader Readiness & Instrumentation**
+  - Status: **GREEN — WAVE 0 COMPLETE / WAVE 1 READY (33/33 X6 tests PASS, 0 TypeScript errors)**
+  - Scope: Discovery-only gate. NO reader migration, NO production code changes, NO migrations, NO ADR changes.
+  - Inventory: Classified all executable legacy role readers (R0–R5). BR9 baseline reconciled; additional readers documented. P1 semantic review completed for `assignment.ts`/`assignmentSave.ts` (R2 — DERIVED_BUSINESS_LOGIC, requires separate semantic design before migration). Special consumers protected (cost-audit, fleet-status, assignment.ts).
+  - Canonical read contract defined: `party_roles` = CANONICAL; `md_entities.is_*` = COMPATIBILITY PROJECTION ONLY. Server-derived tenant isolation mandatory.
+  - Wave plan: Wave 1 (P2 direct role readers after P1 design), Wave 2 (P3 + R2 adapters), Wave 3 (P4 reporting), Wave 4 (P5 UI), Wave 5 (zero-consumer proof).
+  - Existing abstraction reused: `PartyRoleService` (`hasRole`/`getRolesByParty`); gap documented for Wave 1 (`hasGlobalRole` enforcement).
+  - Test suite: `lib/__tests__/x6-wave0-reader-readiness.test.ts` (33 checks) — registered in `scripts/run-full-regression.ts`.
+  - Prior gate numbers: X5 32/32, full regression **1331/1331 PASS 0 FAIL**, `npx tsc --noEmit` **0 errors**.
 
 ### In Progress
 - (none)
@@ -102,6 +407,23 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
   - APK hosted di Vercel: `/sentralogis-driver.apk` (8.1 MB)
   - Tracking: `has_native_app`, `last_app_version`, `last_app_open_at` di `md_drivers`
   - Migration: `20260807_add_native_app_tracking.sql`
+- **[DONE] Phase 5B Customs-Forwarding Operational Orchestration** (test suite: `lib/__tests__/phase5b-customs-forwarding-orchestration.test.ts`)
+  - Status: **GREEN — 17/17 PHASE 5B TESTS PASS, 1548/1548 FULL REGRESSION PASS**
+  - Verified existing canonical infrastructure: `createCustomsDeclarationForForwardingHandoff` is fully wired into `performOperationalHandoffAction` accept case
+  - International shipping detection: `hasInternationalShippingCharacteristics` checks vessel/voyage/shipping_line/BL/MBL/HBL fields
+  - Auto-creation: Forwarding handoff with international characteristics triggers `CustomsService.createDeclaration()` + `CustomsAttachmentService.attachShipment()` on accept
+  - Control Tower: read-only projection consumes handoff status; zero direct `cus_declarations` mutations
+  - Invariants: 0 direct CEISA transmissions, 0 HS/duty/tax mutations in handoff domain, 0 client-generated declaration numbers, 0 second operational engines
+  - Governing ADRs: ADR-019, ADR-047, ADR-053 (no new ADR required)
+  - Zero production source/migration changes (additive test suite only)
+- **[NEW] U-25 ADR-088 Multi-Mode Pricing Migration Readiness (Wave 1)** (report: `docs/architecture/SENTRALOGIS_U25_ADR088_MULTI_MODE_PRICING_MIGRATION_READINESS.md`)
+  - Status: **GREEN — WAVE 1 COMPLETE (14/14 tests PASS, 0 TypeScript errors, 0 ESLint warnings)**
+  - Migration Repository: Extended `lib/pricing/migration-repository.ts` with `dryRunFwPriceMaster()` and `migrateFwPriceMaster()`
+  - Semantic Mapping: `sell_price` → `PER_CONTAINER`, `sell_per_cbm` → `PER_CBM`, `sell_min_cbm` → `min_charge` (not new charge basis)
+  - COGS Exclusion: No COGS fields mapped (ADR-088 invariant preserved)
+  - Test Suite: `lib/__tests__/u25-adr088-multi-mode-pricing-migration.test.ts` (14 tests)
+  - Registered in full regression runner
+  - Zero migrations, zero production code changes, zero ADR changes (read-only preparation)
 
 ### Blocked
 - (none)
@@ -124,19 +446,11 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - Cross-tenant vendor: `vendor_tenant_id` on entities/JOs/fleets (PRD ready)
 
 ## Next Steps
-- **SBU Forwarding**: Implementasi sesuai `190726.md` (7 task, estimasi ~8.5 jam)
-  - Migration 3 tabel forwarding
-  - WO Create/List/Detail untuk FCL & LCL
-  - Consol Detail + Stuffing Manager
-  - Deconsol + auto-create delivery JO
-  - Cargo owner tracking public page
-- **Driver Coin Reward + WA Inquiry** (lihat section di `190726.md`):
-  - Migration `driver_coins` table
-  - Award coin di `/api/jo/[token]` saat completed
-  - Update webhook WA untuk keyword "KOIN"
-  - Animasi coin di `/jo/[token]` page
-  - Tampilkan saldo di driver portal
-  - Set Twilio credentials di Vercel env
+- **Phase 5B Customs-Forwarding Operational Orchestration**: COMPLETE (17/17 tests PASS). See `docs/architecture/SENTRALOGIS_POST_5D_ROADMAP_DECISION.md` for authoritative post-5D roadmap.
+- **Phase 5C Pricing / Customer Success**: CLOSED. All pricing architecture complete; canonical pricing authoritative.
+- **Phase 5D Financial Integration**: PARTIALLY OPEN. 5D-2/5D-3/5D-5 complete; 5D-1/5D-4 discovery items deferred. AI Copilot production integration NOT authorized.
+- **AI Copilot**: Existing prototype/code exists but production integration requires separate explicit authorization.
+- **Deferred Debt**: Phase 5E references in remediation register are NOT authorized implementation phases.
 
 ## Critical Context
 - P0.3.2 GPS audit **DONE — ALL PASS** (report: `reports/phase_p0/P0_3_2_GPS_REGRESSION_REPORT.md`)
@@ -184,3 +498,8 @@ Build SBU Forwarding Domestik (Antar Pulau) — FCL/LCL, konsolidasi, hybrid del
 - `app/driver/install-apk/page.tsx`: Download page APK
 - `lib/domain/phone.ts`: WA message templates (conditional APK link)
 - `vercel.json`: Cron job for EasyGo GPS sync (every 5 minutes)
+- `lib/operational-handoff/service.ts`: Phase 5B trigger `createCustomsDeclarationForForwardingHandoff` wired into accept case
+- `lib/domain/customs/customs-service.ts`: Canonical Customs declaration authority
+- `lib/domain/customs/attachment-service.ts`: ADR-021 idempotent attachment
+- `lib/control-tower/service.ts`: Read-only Control Tower projection
+- `lib/__tests__/phase5b-customs-forwarding-orchestration.test.ts`: Phase 5B acceptance suite (17 tests)

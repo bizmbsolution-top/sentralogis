@@ -70,7 +70,7 @@ interface Driver {
   bank_name?: string | null;
   bank_account?: string | null;
   bank_account_name?: string | null;
-  md_entities: { name: string; is_vendor?: boolean; vendor_tenant_id?: string };
+  md_entities: { name: string; is_vendor?: boolean; is_own?: boolean | null; vendor_tenant_id?: string };
 }
 
 export default function HQDriversPage() {
@@ -151,7 +151,7 @@ export default function HQDriversPage() {
       // 1. Fetch Drivers
       const { data: driverData, error: driverError } = await supabase
         .from('md_drivers')
-        .select('*, md_entities(name, is_vendor, vendor_tenant_id)')
+        .select('*, md_entities(name, is_vendor, is_own, vendor_tenant_id)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
@@ -178,7 +178,7 @@ export default function HQDriversPage() {
         .from('md_entities')
         .select('id, name')
         .eq('tenant_id', tenantId)
-        .eq('is_vendor', true)
+        .eq('is_own', false)
         .eq('vendor_type', 'TRANSPORTER')
         .eq('is_active', true);
 
@@ -187,7 +187,7 @@ export default function HQDriversPage() {
         .from('md_entities')
         .select('id, name')
         .eq('tenant_id', tenantId)
-        .eq('is_vendor', false)
+        .eq('is_own', true)
         .is('vendor_type', null)
         .limit(1)
         .maybeSingle();
@@ -247,7 +247,7 @@ export default function HQDriversPage() {
     const today = new Date();
 
     drivers.forEach(d => {
-      const isVendor = d.md_entities?.is_vendor === true;
+      const isVendor = d.md_entities?.is_own !== true;
       if (isVendor) vendor++; else own++;
       
       if (d.status === 'on_duty' || d.status === 'on_road') onDuty++;
@@ -274,7 +274,7 @@ export default function HQDriversPage() {
       if (!searchMatch) return false;
 
       // Type match
-      const isVendor = d.md_entities?.is_vendor === true;
+      const isVendor = d.md_entities?.is_own !== true;
       if (filterType === 'OWN' && isVendor) return false;
       if (filterType === 'VENDOR' && !isVendor) return false;
 
@@ -344,7 +344,7 @@ export default function HQDriversPage() {
   const handleOpenModal = (driver: Driver | null = null) => {
     if (driver) {
       setSelectedDriver(driver);
-      const isVendor = driver.md_entities?.is_vendor === true;
+      const isVendor = driver.md_entities?.is_own !== true;
       setDriverTypeForm(isVendor ? 'VENDOR' : 'INTERNAL');
       
       setFormData({
@@ -433,6 +433,11 @@ export default function HQDriversPage() {
       // Handle OWN selection creation if internal entity missing
       if (driverTypeForm === 'INTERNAL') {
         if (!internalEntityId) {
+          // [AI] DATA-4E-W5-Repair: The 'INTERNAL' selector is the explicit
+          // internal/own semantic input. The writer persists is_own=true
+          // atomically in the same INSERT (no post-insert UPDATE, no
+          // EntityOwnershipService write — that service is read-only per
+          // ADR-078). External/vendor paths are not touched.
           const companyName = profile?.tenants?.name || 'INTERNAL HQ';
           const entityCode = `INT-${companyName.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
           const { data: newEntity, error: createError } = await supabase
@@ -441,13 +446,13 @@ export default function HQDriversPage() {
               tenant_id: tenantId,
               entity_code: entityCode,
               name: companyName,
-              is_vendor: false,
               vendor_type: null,
+              is_own: true,
               is_active: true
             })
             .select()
             .single();
-          
+
           if (createError) throw createError;
           targetEntityId = newEntity.id;
           setInternalEntityId(newEntity.id);
@@ -737,7 +742,7 @@ export default function HQDriversPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredDrivers.map(d => {
-                    const isVendor = d.md_entities?.is_vendor;
+                    const isVendor = d.md_entities?.is_own !== true;
                     const issues = getDriverIssues(d);
                     const job = activeJobs[d.id];
                       return (
@@ -835,7 +840,7 @@ export default function HQDriversPage() {
             {/* Mobile Cards */}
             <div className="md:hidden space-y-4">
               {filteredDrivers.map(d => {
-                const isVendor = d.md_entities?.is_vendor;
+                const isVendor = d.md_entities?.is_own !== true;
                 const issues = getDriverIssues(d);
                 const job = activeJobs[d.id];
                       return (
@@ -940,9 +945,9 @@ export default function HQDriversPage() {
                 <div className="p-4 bg-slate-50 rounded-xl">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">TYPE</p>
                   <p className="text-sm font-black text-slate-900 uppercase">
-                    {selectedDriver.md_entities?.is_vendor ? 'VENDOR' : 'OWN'}
+                    {selectedDriver.md_entities?.is_own !== true ? 'VENDOR' : 'OWN'}
                   </p>
-                  {selectedDriver.md_entities?.is_vendor && (
+                  {selectedDriver.md_entities?.is_own !== true && (
                     <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase">{selectedDriver.md_entities.name}</p>
                   )}
                 </div>

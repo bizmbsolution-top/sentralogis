@@ -1,40 +1,61 @@
-import { config } from "dotenv";
+﻿const fs = require('fs');
+let content = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8');
 
-config({ path: ".env.local" });
+// Replace MOD_MASTER_DATA_HQ
+const oldMasterData = `const MOD_MASTER_DATA_HQ: MenuItem = {
+  label: 'Master Data', icon: '🗂️', href: '#',
+  submenu: [
+    { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
+    { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
+    { label: 'Wilayah Kerja', icon: '📍', href: '/hq/master/trucking-regions' },
+    { label: 'Services & Charges', icon: '🏷️', href: '/hq/master/services' },
+    { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types', requiresSbu: 'tr' },
+    { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets', requiresSbu: 'tr' },
+    { label: 'Drivers', icon: '👤', href: '/hq/master/drivers', requiresSbu: 'tr' },
+  ]
+};`;
 
-const tenantId = 'd6f27bee-7ea7-4f99-88f7-bba8b19326c3';
-const joNumber = 'JALU-TMT-0826-001-01';
-const token = 'f539f823-b458-421c-bcfd-1be0a5d75532';
-const driverId = "02966ca7-8fc4-4039-bf34-77e6e960e6e8";
+const newMasterData = `const MOD_MASTER_DATA_HQ: MenuItem = {
+  label: 'Master Data', icon: '🗂️', href: '#',
+  submenu: [
+    { label: 'Contacts', icon: '📇', href: '/hq/master/contacts' },
+    { label: 'Locations', icon: '📍', href: '/hq/master/locations' },
+    { label: 'Services & Charges', icon: '🏷️', href: '/hq/master/services' },
+  ]
+};`;
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+content = content.replace(oldMasterData, newMasterData);
 
-async function api(table, query = '') {
-  const res = await fetch(`${url}/rest/v1/${table}?${query}`, {
-    cache: 'no-store',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache'
-    }
-  });
-  return res.json();
-}
+// Replace MOD_TRUCKING_HQ
+const oldTrucking = `const MOD_TRUCKING_HQ: MenuItem[] = [
+  { label: 'Work Order', icon: '📋', href: '/hq/work-orders', requiresSbu: 'tr' },
+  { label: 'Job Order', icon: '🚛', href: '/hq/job-orders', requiresSbu: 'tr' },
+  { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities', requiresSbu: 'tr' },
+  { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance', requiresSbu: 'tr' },
+  { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance', requiresSbu: 'tr' },
+];`;
 
-async function run() {
-  console.log('--- 1. DRIVER ---');
-  const drvList = await api('md_drivers', `tenant_id=eq.${tenantId}&id=eq.${driverId}`);
-  console.log(JSON.stringify(drvList[0] || null, null, 2));
+const newTrucking = `const MOD_GLOBAL_OPS_HQ: MenuItem[] = [
+  { label: 'Work Order', icon: '📋', href: '/hq/work-orders' },
+  { label: 'Job Order', icon: '🚛', href: '/hq/job-orders' },
+];
 
-  console.log('\n--- 2. LATEST GPS FOR JO ---');
-  const pings = await api('job_tracking', `job_order_id=eq.${token}&order=created_at.desc&limit=10`);
-  console.log(JSON.stringify(pings, null, 2));
+const MOD_TRUCKING_HQ: MenuItem = {
+  label: 'Trucking', icon: '🚚', href: '#', requiresSbu: 'tr',
+  submenu: [
+    { label: 'Intelligence Tower', icon: '📍', href: '/hq/sbu-activities' },
+    { label: 'Driver Performance', icon: '📊', href: '/hq/driver-performance' },
+    { label: 'Fleet Performance', icon: '🔧', href: '/hq/fleet-performance' },
+    { label: 'Wilayah Kerja', icon: '📍', href: '/hq/master/trucking-regions' },
+    { label: 'Fleet Types', icon: '🚛', href: '/hq/master/fleet-types' },
+    { label: 'Transporters', icon: '🚚', href: '/hq/master/fleets' },
+    { label: 'Drivers', icon: '👤', href: '/hq/master/drivers' },
+  ]
+};`;
 
-  console.log('\n--- 3. LATEST GPS GLOBALLY ---');
-  const allPings = await api('job_tracking', `order=created_at.desc&limit=5`);
-  console.log(JSON.stringify(allPings, null, 2));
-}
+content = content.replace(oldTrucking, newTrucking);
 
-run();
+// Replace spread `...MOD_TRUCKING_HQ,` with `...MOD_GLOBAL_OPS_HQ, MOD_TRUCKING_HQ,`
+content = content.replaceAll('...MOD_TRUCKING_HQ,', '...MOD_GLOBAL_OPS_HQ, MOD_TRUCKING_HQ,');
+
+fs.writeFileSync('components/layout/Sidebar.tsx', content);

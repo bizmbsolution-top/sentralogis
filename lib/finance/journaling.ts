@@ -16,6 +16,7 @@ interface JournalParams {
   description: string;
   sourceType: JournalSource;
   metadata?: Record<string, unknown>;
+  tenantId?: string;
 }
 
 async function getCoaByCode(code: string) {
@@ -33,9 +34,19 @@ export async function createJournalEntry({
   amount,
   description,
   sourceType,
-  metadata
+  metadata,
+  tenantId,
 }: JournalParams) {
   try {
+    if (!tenantId && jobOrderId) {
+      const { data: jo } = await supabase
+        .from('job_orders')
+        .select('tenant_id')
+        .eq('id', jobOrderId)
+        .maybeSingle();
+      if (jo?.tenant_id) tenantId = jo.tenant_id;
+    }
+
     const { data: coaData } = await supabase.from('finance_coa').select('*');
     if (!coaData) throw new Error('Chart of Accounts not found');
     const coa = coaData as any[];
@@ -54,7 +65,8 @@ export async function createJournalEntry({
     const journalData: Record<string, unknown> = {
       journal_date: new Date().toISOString().split('T')[0],
       description,
-      status: 'posted'
+      status: 'posted',
+      tenant_id: tenantId,
     };
     if (jobOrderId) journalData.job_order_id = jobOrderId;
     if (woId) journalData.wo_id = woId;
@@ -74,6 +86,7 @@ export async function createJournalEntry({
       description?: string;
       debit: number;
       credit: number;
+      tenant_id: string;
     }> = [];
 
     if (sourceType === 'surcharge') {
@@ -81,71 +94,68 @@ export async function createJournalEntry({
       const driverAmount = (amount * driverSharePct) / 100;
 
       if (accPiutang && accPendapatan) {
-        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
       if (driverAmount > 0) {
         const driverDebitAccount = metadata?.costAccountId
           ? coa.find(a => a.id === metadata.costAccountId) || accBebanBagiHasil
           : accBebanBagiHasil;
         if (driverDebitAccount && accHutangDriver) {
-          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0 });
-          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount });
+          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0, tenant_id: tenantId! });
+          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount, tenant_id: tenantId! });
         }
       }
     } else if (sourceType === 'reimbursement') {
       if (accPiutang && accHutangDriver) {
-        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
     } else if (sourceType === 'job_order_revenue') {
       const driverSharePct = Number(metadata?.driver_share_percentage ?? 0);
       const driverAmount = (amount * driverSharePct) / 100;
 
       if (accPiutang && accPendapatan) {
-        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: accPiutang.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accPendapatan.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
       if (driverAmount > 0) {
         const driverDebitAccount = metadata?.costAccountId
           ? coa.find(a => a.id === metadata.costAccountId) || accBebanBagiHasil
           : accBebanBagiHasil;
         if (driverDebitAccount && accHutangDriver) {
-          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0 });
-          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount });
+          entries.push({ journal_id: journal.id, account_id: driverDebitAccount.id, debit: driverAmount, credit: 0, tenant_id: tenantId! });
+          entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: driverAmount, tenant_id: tenantId! });
         }
       }
     } else if (sourceType === 'cogs_adjustment') {
       const targetAccount = accBebanBagiHasil || accPendapatan;
       if (targetAccount && accHutangDriver) {
-        entries.push({ journal_id: journal.id, account_id: targetAccount.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: targetAccount.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
     } else if (sourceType === 'vendor_cost') {
-      // (D) HPP Jasa Vendor (or custom costAccountId) / (K) Hutang Usaha Vendor
       const vendorDebitAccount = metadata?.costAccountId
         ? coa.find(a => a.id === metadata.costAccountId) || accHppVendor
         : accHppVendor;
       if (vendorDebitAccount && accHutangVendor) {
-        entries.push({ journal_id: journal.id, account_id: vendorDebitAccount.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: vendorDebitAccount.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
     } else if (sourceType === 'driver_payment') {
-      // (D) Hutang Bagi Hasil Driver / (K) Kas Bank
       if (accHutangDriver && accKasBank) {
-        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: accHutangDriver.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
     } else if (sourceType === 'vendor_payment') {
-      // (D) Hutang Usaha Vendor / (K) Kas Bank
       if (accHutangVendor && accKasBank) {
-        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: amount, credit: 0 });
-        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount });
+        entries.push({ journal_id: journal.id, account_id: accHutangVendor.id, debit: amount, credit: 0, tenant_id: tenantId! });
+        entries.push({ journal_id: journal.id, account_id: accKasBank.id, debit: 0, credit: amount, tenant_id: tenantId! });
       }
     }
 
     if (entries.length > 0) {
-      const { error: eError } = await supabase.from('finance_journal_entries').insert(entries);
+      const { error: eError } = await supabase.from('finance_journal_entries').insert(entries as any);
       if (eError) throw eError;
     }
 

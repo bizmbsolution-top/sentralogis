@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
+import { assertPermission } from '@/lib/application/identity/resolver';
+import { IdentityResolutionError } from '@/lib/application/identity/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ boxId: string }> }
 ) {
   try {
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
+
     const { boxId } = await params;
     const body = await req.json();
-    const { tenant_id, user_id, wo_item_id, quantity, description, commodity, volume_cbm, gross_weight_kg } = body;
-
-    if (!tenant_id || !user_id) {
-      return NextResponse.json({ success: false, error: 'Missing tenant_id or user_id' }, { status: 400 });
-    }
+    const { wo_item_id, quantity, description, commodity, volume_cbm, gross_weight_kg } = body;
+    const tenant_id = ctx.tenantId;
 
     if (!wo_item_id) {
       return NextResponse.json({ success: false, error: 'wo_item_id harus diisi' }, { status: 400 });
@@ -74,6 +77,12 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: newItem });
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Add box item error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -84,13 +93,13 @@ export async function DELETE(
   { params }: { params: Promise<{ boxId: string }> }
 ) {
   try {
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
+
     const { boxId } = await params;
     const body = await req.json();
-    const { tenant_id, wo_item_id } = body;
-
-    if (!tenant_id) {
-      return NextResponse.json({ success: false, error: 'Missing tenant_id' }, { status: 400 });
-    }
+    const { wo_item_id } = body;
+    const tenant_id = ctx.tenantId;
 
     let query = supabaseAdmin
       .from('fw_box_items')
@@ -111,6 +120,12 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Delete box item error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

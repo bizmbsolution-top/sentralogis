@@ -2,9 +2,8 @@
 // Modal component for adding forwarding items to HQ CreateWOForm
 
 import React, { useState, useEffect } from 'react';
-import { fetchLocations } from '@/lib/domain/forwarding/repository';
+import { fetchForwardingLocations, calculateForwardingPricing } from '@/lib/actions/forwardingActions';
 import { serviceTemplates } from '@/lib/domain/forwarding/serviceTemplates';
-import { autoPopulatePricing } from '@/lib/domain/forwarding/pricing';
 
 interface AddForwardingItemModalProps {
   isOpen: boolean;
@@ -40,7 +39,7 @@ export const AddForwardingItemModal: React.FC<AddForwardingItemModalProps> = ({
   useEffect(() => {
     const loadLocations = async () => {
       try {
-        const fetchedLocations = await fetchLocations();
+        const fetchedLocations = await fetchForwardingLocations();
         setLocations(fetchedLocations);
         setModalReady(true);
       } catch (error) {
@@ -60,10 +59,10 @@ export const AddForwardingItemModal: React.FC<AddForwardingItemModalProps> = ({
 
     if (startLoc && endLoc) {
       try {
-        const pricingData = await autoPopulatePricing(
+        const pricingData = await calculateForwardingPricing(
           formData.containerType,
-          startLoc.location_id,
-          endLoc.location_id,
+          startLoc.name,
+          endLoc.name,
           formData.executionMode as 'OWN' | 'VENDOR'
         );
         setCalculatedPricing(pricingData);

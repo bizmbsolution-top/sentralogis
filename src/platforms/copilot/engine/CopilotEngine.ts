@@ -10,6 +10,8 @@ import { ValidationStage } from '../pipeline/stages/ValidationStage';
 import { PlanningStage } from '../pipeline/stages/PlanningStage';
 import { ExplainabilityStage } from '../pipeline/stages/ExplainabilityStage';
 import { ResponseStage } from '../pipeline/stages/ResponseStage';
+import { createFoundationContext } from '@/lib/copilot/foundation/integration';
+import { OperationalSummaryProvider } from '@/lib/copilot/read/summary-provider';
 
 export interface CopilotResponse {
   type: 'action_proposal' | 'text' | 'timeline' | 'clarification';
@@ -58,20 +60,43 @@ export class CopilotEngine {
   }
 
   static async generateDashboardGreeting(tenantId: string, userId: string): Promise<string> {
-    const summary = await this.generateOperationalSummary(tenantId);
-    
+    const summary = await this.generateOperationalSummary(tenantId, userId);
+
     return `Good morning. Today there are ${summary.totalActiveJobs} active Job Orders, ${summary.delayedJobs} delayed jobs, ${summary.missingPod} missing PODs, and ${summary.criticalJobs} critical jobs requiring immediate attention. Would you like me to prioritise them?`;
   }
 
-  static async generateOperationalSummary(tenantId: string) {
-    // In production, this would query active jobs from DB and process them
-    // For now, we return mock data based on our mock tests
-    return {
-      totalActiveJobs: 28,
-      delayedJobs: 3,
-      criticalJobs: 1,
-      missingPod: 2,
-      jobsAwaitingAttention: 4
-    };
+  static async generateOperationalSummary(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ totalActiveJobs: number; delayedJobs: number; criticalJobs: number; missingPod: number; jobsAwaitingAttention: number }> {
+    const foundationContext = createFoundationContext({
+      tenantId,
+      userId,
+      role: 'USER',
+      permissions: ['commercial:read'],
+      isTenantOwner: false,
+      membershipId: null,
+      sbuScope: null,
+    } as any);
+
+    try {
+      const summary = await OperationalSummaryProvider.getSummary(foundationContext);
+      return {
+        totalActiveJobs: summary.totalActiveJobs,
+        delayedJobs: summary.delayedJobs,
+        criticalJobs: summary.criticalJobs,
+        missingPod: summary.missingPod,
+        jobsAwaitingAttention: summary.jobsAwaitingAttention,
+      };
+    } catch (error) {
+      console.error('[CopilotEngine] Operational summary failed:', error);
+      return {
+        totalActiveJobs: 0,
+        delayedJobs: 0,
+        criticalJobs: 0,
+        missingPod: 0,
+        jobsAwaitingAttention: 0,
+      };
+    }
   }
 }

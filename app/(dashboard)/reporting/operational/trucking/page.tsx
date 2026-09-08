@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { flattenWorkOrderReport } from "@/lib/reporting/transform";
+import { getEntitiesByRole } from "@/lib/actions/entity-role-actions";
 
 const TRUCKING_SBU_ROLES = [
   "sbu_manager_tr",
@@ -95,22 +96,12 @@ export default function TruckingReportingPage() {
   const fetchMasterData = async () => {
     if (!tenantId) return;
     try {
-      const [{ data: ct }, { data: vd }] = await Promise.all([
-        supabase
-          .from("md_entities")
-          .select("id, name, legal_name")
-          .eq("is_customer", true)
-          .eq("tenant_id", tenantId)
-          .order("name"),
-        supabase
-          .from("md_entities")
-          .select("id, name")
-          .eq("is_vendor", true)
-          .eq("vendor_type", "TRANSPORTER")
-          .eq("tenant_id", tenantId)
-          .eq("is_active", true)
-          .order("name"),
+      const [ctRes, vdRes] = await Promise.all([
+        getEntitiesByRole('CUSTOMER'),
+        getEntitiesByRole('VENDOR'),
       ]);
+      const ct = ctRes.ok ? ctRes.data : [];
+      const vd = vdRes.ok && vdRes.data ? vdRes.data.filter((v: any) => v.vendor_type === 'TRANSPORTER') : [];
 
       setCustomers(ct || []);
       setVendors(vd || []);

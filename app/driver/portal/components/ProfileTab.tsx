@@ -14,6 +14,7 @@ import {
   LogOut,
   Clock,
   Wrench,
+  Coins,
 } from "lucide-react";
 import { DriverProfileData, TenantInfoData, DeviceTelemetryState } from "./types";
 
@@ -159,6 +160,18 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             </span>
             <span className="font-black text-slate-800 dark:text-slate-200">
               {driver.sim_expiry}
+            </span>
+          </div>
+        )}
+
+        {/* Coin Balance */}
+        {(driver?.total_coins !== undefined || driver?.total_coin_value !== undefined) && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-2 text-slate-400">
+              <Coins size={15} /> Saldo Koin
+            </span>
+            <span className="font-black text-amber-600 dark:text-amber-400">
+              {driver.total_coins ?? 0} koin ({new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(driver.total_coin_value ?? 0)})
             </span>
           </div>
         )}

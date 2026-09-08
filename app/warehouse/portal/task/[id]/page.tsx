@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
 import { Plus, Trash2 } from 'lucide-react';
+import { getEntitiesByRole, getEntitiesWithoutRole } from '@/lib/actions/entity-role-actions';
 
 export type PutawayEntry = {
   id: string;
@@ -274,19 +275,12 @@ export default function WarehouseTaskExecutionPage() {
         }
 
         if (userRoles.includes('SECURITY') || taskData.assigned_role === 'SECURITY') {
-          const { data: vendorData } = await supabase.from('md_entities')
-            .select('id, name')
-            .eq('tenant_id', recData.tenant_id)
-            .eq('is_vendor', true)
-            .eq('is_active', true)
-            .order('name', { ascending: true });
-
-          const { data: internalData } = await supabase.from('md_entities')
-            .select('id, name')
-            .eq('tenant_id', recData.tenant_id)
-            .eq('is_vendor', false)
-            .eq('is_active', true)
-            .limit(1);
+          const [vendorResult, internalResult] = await Promise.all([
+            getEntitiesByRole('VENDOR'),
+            getEntitiesWithoutRole('VENDOR'),
+          ]);
+          const vendorData = vendorResult.ok ? vendorResult.data : [];
+          const internalData = internalResult.ok && internalResult.data ? internalResult.data.slice(0, 1) : [];
 
           const combined = [...(internalData || []), ...(vendorData || [])];
           const mappedList = combined.map(e => ({ id: e.id, transporter_name: e.name, transporter_code: '' }));

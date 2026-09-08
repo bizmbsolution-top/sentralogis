@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { X, Loader2, Plus, Trash2, Search, Settings } from 'lucide-react';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 interface BOMFormModalProps {
   editId: string | null;
@@ -57,14 +58,12 @@ export default function BOMFormModal({ editId, onClose, onSuccess }: BOMFormModa
   const fetchCustomers = async () => {
     if (!profile?.tenant_id) return;
     try {
-      const { data, error } = await supabase
-        .from('md_entities')
-        .select('id, name, entity_code')
-        .eq('tenant_id', profile.tenant_id)
-        .eq('is_customer', true)
-        .order('name');
-      if (error) throw error;
-      setCustomers(data || []);
+      const result = await getEntitiesByRole('CUSTOMER');
+      if (result.ok) {
+        setCustomers(result.data || []);
+      } else {
+        console.error('Failed to load customers:', result.error);
+      }
     } catch (err: any) {
       console.error('Failed to load customers:', err);
     }

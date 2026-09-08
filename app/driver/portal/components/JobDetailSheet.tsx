@@ -18,12 +18,13 @@ import {
 import { toast } from "react-hot-toast";
 import { GoogleMap, MarkerF, PolylineF, DirectionsRenderer } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/lib/google-maps-context";
-import { JobOrderData, RouteStop } from "./types";
+import { JobOrderData, RouteStop, DeviceTelemetryState } from "./types";
 import { formatDateUTC } from "@/lib/utils/dateUtils";
 
 interface JobDetailSheetProps {
   job: JobOrderData;
   isDark: boolean;
+  telemetry: DeviceTelemetryState;
   getAuthHeaders: () => Record<string, string>;
   onClose: () => void;
   onRefreshFeed: () => void;
@@ -53,6 +54,7 @@ class MapErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
   job,
   isDark,
+  telemetry,
   getAuthHeaders,
   onClose,
   onRefreshFeed,
@@ -62,6 +64,24 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
   const [photoUploadingRouteId, setPhotoUploadingRouteId] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
+  const [myPosition, setMyPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const mapRef = useRef<any>(null);
+
+  // Live driver position — watch GPS so the main map shows current position
+  React.useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setMyPosition({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   const stops = job.job_routes || job.wo_items?.item_data?.stops || [];
   const originStop = stops[0]?.location_name || "Lokasi Muat";
@@ -79,8 +99,28 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
     if (validStop && validStop.latitude && validStop.longitude) {
       return { lat: Number(validStop.latitude), lng: Number(validStop.longitude) };
     }
+    if (myPosition) return myPosition;
     return { lat: -6.2088, lng: 106.8456 }; // Default Jakarta
-  }, [stops]);
+  }, [stops, myPosition]);
+
+  // Keep driver position visible: fit bounds around stops + driver once position known
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !myPosition) return;
+    const points = [
+      myPosition,
+      ...stops
+        .filter((s: any) => s.latitude && s.longitude)
+        .map((s: any) => ({ lat: Number(s.latitude), lng: Number(s.longitude) })),
+    ];
+    if (points.length === 1) {
+      map.panTo(points[0]);
+      return;
+    }
+    const bounds = new window.google.maps.LatLngBounds();
+    points.forEach((p) => bounds.extend(p));
+    map.fitBounds(bounds, 60);
+  }, [myPosition, stops]);
 
   // Update JO Status (e.g. In Progress, Completed)
   const handleUpdateJobStatus = async (newStatus: string) => {
@@ -340,12 +380,58 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
 
         {/* Interactive Google Map */}
         {isMapsLoaded && (
-          <div className="rounded-3xl overflow-hidden border border-slate-800 shadow-xl">
+          <div className="rounded-3xl overflow-hidden border border-slate-800 shadow-xl relative">
+            {/* GPS Active Strip — confirms tracking is live for this JO */}
+            {(() => {
+              const isGpsActive = telemetry.gpsStatus === "active";
+              const isGpsError = telemetry.gpsStatus === "error";
+              return (
+                <div
+                  className={`absolute top-2 left-2 right-2 z-10 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border ${
+                    isGpsActive
+                      ? "bg-emerald-600/85 border-emerald-400/40 text-white"
+                      : isGpsError
+                      ? "bg-red-600/85 border-red-400/40 text-white"
+                      : "bg-slate-900/80 border-slate-600/40 text-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        isGpsActive
+                          ? "bg-emerald-300 animate-pulse"
+                          : isGpsError
+                          ? "bg-red-300"
+                          : "bg-slate-400"
+                      }`}
+                    />
+                    <span className="text-[10px] font-black uppercase tracking-wider truncate">
+                      {isGpsActive
+                        ? "GPS Tracking Aktif"
+                        : isGpsError
+                        ? "GPS Error"
+                        : "GPS Standby"}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wide shrink-0 opacity-90">
+                    {isGpsActive && telemetry.gpsAccuracy !== null
+                      ? `±${Math.round(telemetry.gpsAccuracy)}m`
+                      : ""}
+                    {telemetry.gpsPingCount > 0
+                      ? `${isGpsActive && telemetry.gpsAccuracy !== null ? " · " : ""}${telemetry.gpsPingCount} ping`
+                      : ""}
+                  </span>
+                </div>
+              );
+            })()}
             <MapErrorBoundary>
               <GoogleMap
                 mapContainerStyle={{ width: "100%", height: "200px" }}
                 center={mapCenter}
                 zoom={12}
+                onLoad={(map) => {
+                  mapRef.current = map;
+                }}
                 options={{
                   disableDefaultUI: true,
                   zoomControl: false,
@@ -372,6 +458,23 @@ export const JobDetailSheet: React.FC<JobDetailSheetProps> = ({
                     />
                   );
                 })}
+
+                {/* Driver live position marker */}
+                {myPosition && (
+                  <MarkerF
+                    position={myPosition}
+                    title="Posisi Saya"
+                    icon={{
+                      path: window.google?.maps?.SymbolPath?.CIRCLE ?? 0,
+                      scale: 8,
+                      fillColor: "#2563eb",
+                      fillOpacity: 1,
+                      strokeColor: "#ffffff",
+                      strokeWeight: 2.5,
+                    }}
+                    zIndex={999}
+                  />
+                )}
               </GoogleMap>
             </MapErrorBoundary>
           </div>

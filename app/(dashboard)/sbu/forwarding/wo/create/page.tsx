@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import {
@@ -11,6 +10,8 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
+import { fetchForwardingMasterPrices, type ForwardingMasterPrice } from '@/lib/actions/forwardingActions';
 
 export default function CreateForwardingWOPage() {
   const { profile } = useAuth();
@@ -22,7 +23,7 @@ export default function CreateForwardingWOPage() {
   
   // Lookups
   const [customers, setCustomers] = useState<any[]>([]);
-  const [masterPrices, setMasterPrices] = useState<any[]>([]);
+  const [masterPrices, setMasterPrices] = useState<ForwardingMasterPrice[]>([]);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -51,12 +52,13 @@ export default function CreateForwardingWOPage() {
 
   const fetchLookups = async (tId: string) => {
     try {
-      const [cusRes, priceRes] = await Promise.all([
-        supabase.from('md_entities').select('id, name').eq('tenant_id', tId).eq('is_customer', true).order('name'),
-        supabase.from('fw_price_master').select('*').eq('tenant_id', tId).eq('is_active', true)
+      const [cusRes, prices] = await Promise.all([
+        getEntitiesByRole('CUSTOMER'),
+        fetchForwardingMasterPrices(tId)
       ]);
-      if (cusRes.data) setCustomers(cusRes.data);
-      if (priceRes.data) setMasterPrices(priceRes.data);
+      const customers = cusRes.ok ? cusRes.data : [];
+      if (customers) setCustomers(customers);
+      setMasterPrices(prices);
     } catch (e) {
       console.error(e);
     }

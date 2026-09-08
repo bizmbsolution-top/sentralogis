@@ -15,6 +15,7 @@ import {
   X, Loader2, ArrowRight, Truck, Package, PackageX, PackageCheck, AlertTriangle, User, Calendar, Edit2, CloudDownload, CheckCircle2, Search, ChevronDown, MessageCircle, Plus, MapPin, XCircle
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { getAllEntitiesWithOwnership } from '@/lib/actions/entity-ownership-actions';
 import ProductFormModal from '@/app/(dashboard)/hq/master-data/products/components/ProductFormModal';
 import ContactFormModal from '@/components/master/ContactFormModal';
 import BATBGenerator from './BATBGenerator';
@@ -606,27 +607,15 @@ export default function ReceiptDetailModal({ receiptId, onClose }: ReceiptDetail
   const fetchTransporters = useCallback(async () => {
     if (!receipt?.tenant_id) return [];
     
-    // Get external vendors
-    const { data: vendorData, error: vendorError } = await supabase.from('md_entities')
-      .select('id, name')
-      .eq('tenant_id', receipt.tenant_id)
-      .eq('is_vendor', true)
-      .eq('is_active', true)
-      .order('name', { ascending: true });
-      
-    // Get internal HQ (OWN)
-    const { data: internalData } = await supabase.from('md_entities')
-      .select('id, name')
-      .eq('tenant_id', receipt.tenant_id)
-      .eq('is_vendor', false)
-      .eq('is_active', true)
-      .limit(1);
+    // [AI] R-READER R-A: Migrated from direct is_vendor reads to canonical
+    // EntityOwnershipService via getAllEntitiesWithOwnership (ADR-078).
+    const ownershipResult = await getAllEntitiesWithOwnership();
+    if (!ownershipResult.ok) return;
+    const allEntities = ownershipResult.data || [];
 
-    if (vendorError) {
-      console.error('[fetchTransporters] Error:', vendorError.message, '| Code:', vendorError.code, '| Details:', vendorError.details, '| Hint:', vendorError.hint);
-      return [];
-    }
-    
+    const internalData = allEntities.filter(e => e.is_own === true).slice(0, 1);
+    const vendorData = allEntities.filter(e => e.is_own === false);
+
     const combined = [...(internalData || []), ...(vendorData || [])];
     const list = combined.map(e => ({ id: e.id, transporter_name: e.name }));
     setTransporters(list);

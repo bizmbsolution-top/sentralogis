@@ -8,6 +8,7 @@ import {
   X, Save, Loader2, Image as ImageIcon, Trash2, 
   Upload, CheckCircle2, Box, Info, Truck, ShieldCheck, ThermometerSnowflake
 } from 'lucide-react';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 interface ProductFormModalProps {
   editId?: string | null;
@@ -99,8 +100,16 @@ export default function ProductFormModal({ editId, onClose, onSuccess }: Product
 
   const fetchCustomers = async () => {
     if (!profile?.tenant_id) return;
-    const { data } = await supabase.from('md_entities').select('id, name, entity_code').eq('tenant_id', profile.tenant_id).eq('is_customer', true);
-    setCustomers(data || []);
+    try {
+      const result = await getEntitiesByRole('CUSTOMER');
+      if (result.ok) {
+        setCustomers(result.data || []);
+      } else {
+        console.error('Failed to load customers:', result.error);
+      }
+    } catch (err: any) {
+      console.error('Failed to load customers:', err);
+    }
   };
 
   const buildCategoryOptions = (cats: any[], parentId: string | null = null, prefix = ''): any[] => {

@@ -93,7 +93,7 @@ export default function HQFleetsPage() {
     try {
       const { data: fleetData, error: fleetError } = await supabase
         .from('md_fleets')
-        .select('*, md_entities(name, is_vendor, vendor_tenant_id), md_fleet_types(type_name, icon_url)')
+        .select('*, md_entities(name, is_vendor, is_own, vendor_tenant_id), md_fleet_types(type_name, icon_url)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       
@@ -118,7 +118,7 @@ export default function HQFleetsPage() {
         .from('md_entities')
         .select('id, name')
         .eq('tenant_id', tenantId)
-        .eq('is_vendor', true)
+        .eq('is_own', false)
         .eq('vendor_type', 'TRANSPORTER')
         .eq('is_active', true);
       
@@ -135,7 +135,7 @@ export default function HQFleetsPage() {
         .from('md_entities')
         .select('id, name')
         .eq('tenant_id', tenantId)
-        .eq('is_vendor', false)
+        .eq('is_own', true)
         .is('vendor_type', null)
         .limit(1)
         .maybeSingle();
@@ -200,6 +200,11 @@ export default function HQFleetsPage() {
 
       // Handle OWN selection
       if (formData.entity_id === 'NEW_INTERNAL') {
+          // [AI] DATA-4E-W3-Repair: The NEW_INTERNAL selector is the explicit
+          // internal/own semantic input. The writer persists is_own=true
+          // atomically in the same INSERT (no post-insert UPDATE, no
+          // EntityOwnershipService write — that service is read-only per
+          // ADR-078). External/vendor paths are not touched.
           // Create a dedicated internal entity
           const companyName = profile?.tenants?.name || 'INTERNAL HQ';
           const entityCode = `INT-${companyName.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
@@ -209,13 +214,13 @@ export default function HQFleetsPage() {
               tenant_id: tenantId,
               entity_code: entityCode,
               name: companyName,
-              is_vendor: false,
               vendor_type: null,
+              is_own: true,
               is_active: true
             })
             .select()
             .single();
-          
+
           if (createError) throw createError;
           targetEntityId = newEntity.id;
       }
@@ -391,7 +396,7 @@ export default function HQFleetsPage() {
     let matchesVendor = true;
     if (filterVendor !== 'all') {
       if (filterVendor === 'OWN') {
-        matchesVendor = (f.md_entities as any)?.is_vendor === false;
+        matchesVendor = (f.md_entities as any)?.is_own === true;
       } else {
         matchesVendor = f.entity_id === filterVendor;
       }

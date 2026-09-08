@@ -82,7 +82,7 @@ export default function SbuWarehouseClientsPage() {
       // 2. Fetch customer entities from md_entities
       let entQuery = supabase
         .from('md_entities')
-        .select('id, name, entity_code, is_customer')
+        .select('id, name, entity_code')
         .eq('is_active', true)
         .order('name');
 

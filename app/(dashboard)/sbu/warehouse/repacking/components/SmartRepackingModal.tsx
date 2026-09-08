@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { X, Loader2, Package, Box, Scissors, CheckCircle2, Save } from 'lucide-react';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 interface SmartRepackingModalProps {
   onClose: () => void;
@@ -129,7 +130,8 @@ export default function SmartRepackingModal({ onClose, onSuccess, warehouseId }:
 
   const fetchCustomers = async () => {
     try {
-      const { data } = await supabase.from('md_entities').select('id, name').eq('is_customer', true).eq('tenant_id', profile?.tenant_id || '');
+      const result = await getEntitiesByRole('CUSTOMER');
+      const data = result.ok ? result.data : [];
       if (data) setCustomers((data as any[]) || []);
     } catch (err) {}
   };

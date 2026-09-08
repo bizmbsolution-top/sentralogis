@@ -9,6 +9,7 @@ import {
   Calendar, AlertCircle, CheckCircle2, MoreVertical
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { getAllEntitiesWithOwnership } from '@/lib/actions/entity-ownership-actions';
 
 interface Fleet {
   id: string;
@@ -33,7 +34,7 @@ export default function FleetsPage() {
   const { profile, loading: loadingAuth } = useAuth();
   
   const [fleets, setFleets] = useState<Fleet[]>([]);
-  const [vendors, setVendors] = useState<{id: string, name: string, is_vendor?: boolean}[]>([]);
+  const [vendors, setVendors] = useState<{id: string, name: string, is_own: boolean | null}[]>([]);
   const [fleetTypes, setFleetTypes] = useState<{id: string, type_name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -82,12 +83,8 @@ export default function FleetsPage() {
       if (fleetError) throw fleetError;
 
       // Fetch Transporters (Including Internal/Own)
-      const { data: vendorData } = await supabase
-        .from('md_entities')
-        .select('id, name, is_vendor')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .or('is_vendor.eq.true,is_vendor.eq.false'); // Get both
+      const vendorResult = await getAllEntitiesWithOwnership();
+      const vendorData = vendorResult.ok ? vendorResult.data : [];
       
       // Fetch Fleet Types
       const { data: typeData } = await supabase
@@ -330,7 +327,7 @@ export default function FleetsPage() {
             >
               <option value="all">All Transporters</option>
               {vendors.map(v => (
-                <option key={v.id} value={v.id}>{v.name} {!v.is_vendor && '(Internal)'}</option>
+                <option key={v.id} value={v.id}>{v.name} {v.is_own === true ? '(Internal)' : ''}</option>
               ))}
             </select>
           </div>
@@ -443,7 +440,7 @@ export default function FleetsPage() {
                   >
                     <option value="">Select Transporter</option>
                     {vendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name} {!v.is_vendor && '(Internal)'}</option>
+                      <option key={v.id} value={v.id}>{v.name} {v.is_own === true ? '(Internal)' : ''}</option>
                     ))}
                   </select>
                 </div>

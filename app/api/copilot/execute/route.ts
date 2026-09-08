@@ -1,33 +1,51 @@
 import { NextResponse } from 'next/server';
+import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
+import { assertPermission } from '@/lib/application/identity/resolver';
+import { createFoundationContext } from '@/lib/copilot/foundation/integration';
+import { ExecutionService } from '@/lib/copilot/execute/execution-service';
 
 export async function POST(req: Request) {
   try {
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
+
+    const foundationContext = createFoundationContext(ctx);
+
     const body = await req.json();
-    const { proposal, activeContext } = body;
+    const { proposalId, confirmation, proposal } = body;
 
-    // Simulate backend execution for MVP Pilot
-    // In a full implementation, this would call JobOrderService.assignDriver() or similar
-    
-    // Create a mock ExecutionResult
-    const executionResult = {
-      status: 'SUCCESS',
-      message: `${proposal.intent} executed successfully.`,
-      affectedEntities: proposal.entities,
-      timestamp: Date.now()
+    if (!proposalId && !proposal?.proposalId) {
+      return NextResponse.json({ success: false, error: 'Invalid request: proposalId is required' }, { status: 400 });
+    }
+
+    const resolvedProposalId = proposalId || proposal?.proposalId;
+
+    if (!confirmation || !confirmation.confirmed) {
+      return NextResponse.json({
+        success: false,
+        error: 'Execution requires explicit human confirmation',
+        proposalId: resolvedProposalId,
+        confirmationRequired: true,
+      }, { status: 400 });
+    }
+
+    const executionRequest = {
+      proposalId: resolvedProposalId,
+      proposal,
+      confirmation: {
+        confirmed: true,
+        confirmedBy: ctx.userId,
+        confirmedAt: new Date().toISOString(),
+        confirmationNote: confirmation.confirmationNote || '',
+      },
     };
 
-    // Create a mock Timeline update
-    const timelineUpdate = {
-      title: `${proposal.intent} Completed`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'DONE',
-      details: executionResult.message
-    };
+    const result = await ExecutionService.execute(ctx, executionRequest);
 
     return NextResponse.json({
-      success: true,
-      result: executionResult,
-      timeline: timelineUpdate
+      success: result.status === 'SUCCESS',
+      result,
+      foundationVersion: foundationContext.version,
     });
 
   } catch (error: any) {

@@ -1112,7 +1112,7 @@ function AllocationEditorModal({
                               }
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
                             >
-                              <option value="">-- Pilih Produk JO --</option>
+                              <option value="">-- Pilih Produk Task --</option>
                               {manifestItems.map((m: any) => (
                                 <option key={m.id} value={m.id}>
                                   {m.md_product_skus?.sku_code || "-"} — {m.md_product_skus?.name || "-"}
@@ -1465,7 +1465,7 @@ function JOCard({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
           <div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
-              Job Order
+              Warehouse Task
             </p>
             <h3 className="text-lg font-black text-slate-900 italic tracking-tighter">
               {jo.jo_number || "N/A"}
@@ -1750,7 +1750,6 @@ export default function WarehouseExecutionPage() {
             warehouse_id: itemData.item_data?.warehouse_id || null,
             status: itemData.status || 'pending',
             sbu_type: 'WAREHOUSE',
-            tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
           });
         }
         

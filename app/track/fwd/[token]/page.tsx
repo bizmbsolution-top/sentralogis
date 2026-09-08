@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import {
   Loader2, Package, Ship, MapPin, Phone, Truck, Anchor,
-  CheckCircle2, Clock, AlertCircle, ExternalLink, ArrowRight
+  CheckCircle2, Clock, AlertCircle, ArrowRight
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
@@ -38,80 +37,16 @@ export default function CargoOwnerTrackingPage() {
     setError(null);
 
     try {
-      const { data, error } = await (supabase
-        .from('fw_container_items' as any) as any)
-        .select(`
-          id, tracking_token, volume_cbm, gross_weight_kg, packages, package_type,
-          commodity, description, delivery_type, delivery_address, delivery_contact, delivery_phone,
-          goods_received_at, is_deconsoled, deconsoled_at,
-          container_assignment:fw_container_assignments (
-            id, container_number, container_type, seal_number, bl_number, status,
-            consolidation:fw_consolidations (
-              id, consol_number, vessel_name, voyage_number, origin_port, destination_port,
-              etd, eta, actual_etd, actual_eta, shipping_line_name, status
-            )
-          ),
-          wo_item:wo_items (
-            id, item_code, status,
-            work_order:work_orders (
-              id, wo_number, status, order_date,
-              customer:md_entities!customer_id (id, name, phone, address)
-            )
-          ),
-          last_mile_wo:work_orders!last_mile_wo_id (
-            id, wo_number, status
-          )
-        `)
-        .eq('tracking_token', token)
-        .eq('is_deconsoled', false)
-        .maybeSingle();
+      const res = await fetch(`/api/track/fwd/${encodeURIComponent(token)}`);
+      const data = await res.json();
 
-      if (error) {
-        console.error('Tracking fetch error:', error);
-        setError('Data tracking tidak ditemukan atau token tidak valid.');
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Data tracking tidak ditemukan atau token tidak valid.');
         setLoading(false);
         return;
       }
 
-      if (!data) {
-        const { data: deconsoledData } = await (supabase
-          .from('fw_container_items' as any) as any)
-          .select(`
-            id, tracking_token, volume_cbm, gross_weight_kg, packages, package_type,
-            commodity, description, delivery_type, delivery_address, delivery_contact, delivery_phone,
-            goods_received_at, is_deconsoled, deconsoled_at,
-            container_assignment:fw_container_assignments (
-              id, container_number, container_type, seal_number, bl_number, status,
-              consolidation:fw_consolidations (
-                id, consol_number, vessel_name, voyage_number, origin_port, destination_port,
-                etd, eta, actual_etd, actual_eta, shipping_line_name, status
-              )
-            ),
-            wo_item:wo_items (
-              id, item_code, status,
-              work_order:work_orders (
-                id, wo_number, status, order_date,
-                customer:md_entities!customer_id (id, name, phone, address)
-              )
-            ),
-            last_mile_wo:work_orders!last_mile_wo_id (
-              id, wo_number, status
-            )
-          `)
-          .eq('tracking_token', token)
-          .eq('is_deconsoled', true)
-          .maybeSingle();
-
-        if (deconsoledData) {
-          setCargo(deconsoledData);
-        } else {
-          setError('Data tracking tidak ditemukan atau token tidak valid.');
-        }
-        setLoading(false);
-        return;
-      }
-
-      setCargo(data);
+      setCargo(data.data);
     } catch (err: any) {
       console.error(err);
       setError('Terjadi kesalahan saat memuat data tracking.');
@@ -127,8 +62,8 @@ export default function CargoOwnerTrackingPage() {
   const getCurrentStatus = (): TrackingStatus => {
     if (!cargo) return 'pending';
     if (cargo.is_deconsoled) return 'deconsoled';
-    const woStatus = cargo.wo_item?.work_order?.status?.toUpperCase();
-    const containerStatus = cargo.container_assignment?.status;
+    const woStatus = cargo.work_order?.status?.toUpperCase();
+    const containerStatus = cargo.container?.status;
     if (woStatus === 'COMPLETED' || woStatus === 'DONE') return 'delivered';
     if (containerStatus === 'arrived' || containerStatus === 'shipped') return containerStatus as TrackingStatus;
     if (cargo.goods_received_at) return 'received';
@@ -139,7 +74,7 @@ export default function CargoOwnerTrackingPage() {
 
   const currentStatus = getCurrentStatus();
   const currentStatusIndex = STATUS_FLOW.findIndex(s => s.status === currentStatus);
-  const consol = cargo?.container_assignment?.consolidation;
+  const consol = cargo?.container?.consolidation;
 
   if (loading) {
     return (
@@ -180,7 +115,7 @@ export default function CargoOwnerTrackingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Cargo Owner</div>
-                <div className="text-lg font-bold text-slate-900 mt-1">{cargo.wo_item?.work_order?.customer?.name || '-'}</div>
+                <div className="text-lg font-bold text-slate-900 mt-1">{cargo.work_order?.customer_name || '-'}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-slate-500 font-medium">Tracking Token</div>
@@ -321,7 +256,7 @@ export default function CargoOwnerTrackingPage() {
           </Card>
         </div>
 
-        {(cargo.delivery_type === 'port_to_door' || cargo.delivery_type === 'door_to_door') && (
+        {(cargo.delivery_type === 'P2D' || cargo.delivery_type === 'D2D') && (
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="p-6 space-y-4">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">

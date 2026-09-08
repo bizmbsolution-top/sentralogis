@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import GoogleMapsInput from '@/components/master/GoogleMapsInput';
+import { assignRoleAction, revokeRoleAction } from '@/lib/actions/role-mutation-actions';
 
 interface EntityAddress {
   id?: string;
@@ -172,67 +173,59 @@ export default function ContactsPage() {
     try {
       let entityId = selectedEntity?.id;
 
-      if (selectedEntity) {
-        // Update
-        const { error } = await supabase
-          .from('md_entities')
-          .update({
-            name: formData.name,
-            legal_name: formData.legal_name,
-            tax_id: formData.tax_id,
-            email: formData.email,
-            phone: formData.phone,
-            mobile: formData.mobile,
-            whatsapp: formData.whatsapp,
-            is_customer: formData.is_customer,
-            is_supplier: formData.is_supplier,
-            is_vendor: formData.is_vendor,
-            is_broker: formData.is_broker,
-            vendor_type: formData.vendor_type,
-            billing_address: formData.billing_address,
-            billing_city: formData.billing_city,
-            billing_province: formData.billing_province,
-            billing_postal_code: formData.billing_postal_code,
-            billing_latitude: formData.billing_latitude,
-            billing_longitude: formData.billing_longitude,
-            notes: formData.notes,
-            is_active: formData.is_active,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', selectedEntity.id);
+if (selectedEntity) {
+         // Update
+         const { error } = await supabase
+           .from('md_entities')
+           .update({
+             name: formData.name,
+             legal_name: formData.legal_name,
+             tax_id: formData.tax_id,
+             email: formData.email,
+             phone: formData.phone,
+             mobile: formData.mobile,
+             whatsapp: formData.whatsapp,
+             vendor_type: formData.vendor_type,
+             billing_address: formData.billing_address,
+             billing_city: formData.billing_city,
+             billing_province: formData.billing_province,
+             billing_postal_code: formData.billing_postal_code,
+             billing_latitude: formData.billing_latitude,
+             billing_longitude: formData.billing_longitude,
+             notes: formData.notes,
+             is_active: formData.is_active,
+             updated_at: new Date().toISOString()
+           })
+           .eq('id', selectedEntity.id);
 
         if (error) throw error;
       } else {
         // Insert
         const code = await generateEntityCode();
-        const { data, error } = await supabase
-          .from('md_entities')
-          .insert({
-            tenant_id: tenantId,
-            entity_code: code,
-            name: formData.name,
-            legal_name: formData.legal_name,
-            tax_id: formData.tax_id,
-            email: formData.email,
-            phone: formData.phone,
-            mobile: formData.mobile,
-            whatsapp: formData.whatsapp,
-            is_customer: formData.is_customer,
-            is_supplier: formData.is_supplier,
-            is_vendor: formData.is_vendor,
-            is_broker: formData.is_broker,
-            vendor_type: formData.vendor_type,
-            billing_address: formData.billing_address,
-            billing_city: formData.billing_city,
-            billing_province: formData.billing_province,
-            billing_postal_code: formData.billing_postal_code,
-            billing_latitude: formData.billing_latitude,
-            billing_longitude: formData.billing_longitude,
-            notes: formData.notes,
-            is_active: formData.is_active,
-          })
-          .select()
-          .single();
+const { data, error } = await supabase
+           .from('md_entities')
+           .insert({
+             tenant_id: tenantId,
+             entity_code: code,
+             name: formData.name,
+             legal_name: formData.legal_name,
+             tax_id: formData.tax_id,
+             email: formData.email,
+             phone: formData.phone,
+             mobile: formData.mobile,
+             whatsapp: formData.whatsapp,
+             vendor_type: formData.vendor_type,
+             billing_address: formData.billing_address,
+             billing_city: formData.billing_city,
+             billing_province: formData.billing_province,
+             billing_postal_code: formData.billing_postal_code,
+             billing_latitude: formData.billing_latitude,
+             billing_longitude: formData.billing_longitude,
+             notes: formData.notes,
+             is_active: formData.is_active,
+           })
+           .select()
+           .single();
 
         if (error) throw error;
         entityId = (data as any)?.id;
@@ -245,27 +238,55 @@ export default function ContactsPage() {
           await supabase.from('md_entity_addresses').delete().eq('entity_id', entityId);
         }
         
-        if (otherAddresses.length > 0) {
-          const addressesToInsert = otherAddresses.map(addr => ({
-            entity_id: entityId,
-            address_name: addr.address_name,
-            address_type: addr.address_type,
-            address: addr.address,
-            city: addr.city,
-            province: addr.province,
-            postal_code: addr.postal_code,
-            latitude: addr.latitude,
-            longitude: addr.longitude,
-            contact_person: addr.contact_person,
-            contact_phone: addr.contact_phone
-          }));
-          
-          const { error: addrError } = await supabase.from('md_entity_addresses').insert(addressesToInsert);
-          if (addrError) throw addrError;
-        }
-      }
+if (otherAddresses.length > 0) {
+           const addressesToInsert = otherAddresses.map(addr => ({
+             entity_id: entityId,
+             address_name: addr.address_name,
+             address_type: addr.address_type,
+             address: addr.address,
+             city: addr.city,
+             province: addr.province,
+             postal_code: addr.postal_code,
+             latitude: addr.latitude,
+             longitude: addr.longitude,
+             contact_person: addr.contact_person,
+             contact_phone: addr.contact_phone
+           }));
+           
+           const { error: addrError } = await supabase.from('md_entity_addresses').insert(addressesToInsert);
+           if (addrError) throw addrError;
+         }
+       }
 
-      toast.success('Data kontak berhasil disimpan');
+       // [AI] DATA-4E-X3: Sync canonical party_roles via server actions.
+       // Direct mutation of md_entities.is_* is FORBIDDEN in W2 (BR10 §5).
+       // The server action performs canonical write + compatibility projection.
+       if (entityId) {
+         const roleTypes: Array<{ key: 'is_vendor' | 'is_customer' | 'is_supplier' | 'is_broker'; canonical: 'VENDOR' | 'CUSTOMER' | 'SUPPLIER' | 'BROKER' }> = [
+           { key: 'is_customer', canonical: 'CUSTOMER' },
+           { key: 'is_supplier', canonical: 'SUPPLIER' },
+           { key: 'is_vendor', canonical: 'VENDOR' },
+           { key: 'is_broker', canonical: 'BROKER' },
+         ];
+         const previousFlags = selectedEntity ? {
+           is_vendor: selectedEntity.is_vendor,
+           is_customer: selectedEntity.is_customer,
+           is_supplier: selectedEntity.is_supplier,
+           is_broker: selectedEntity.is_broker,
+         } : { is_vendor: false, is_customer: false, is_supplier: false, is_broker: false };
+         for (const r of roleTypes) {
+           const desired = !!formData[r.key];
+           const previous = previousFlags[r.key];
+           if (desired === previous) continue;
+           const action = desired ? assignRoleAction : revokeRoleAction;
+           const result = await action(entityId, r.canonical, 'GLOBAL', null);
+           if (!result.ok) {
+             throw new Error(`Role sync failed for ${r.canonical}: ${result.error}`);
+           }
+         }
+       }
+
+       toast.success('Data kontak berhasil disimpan');
       setIsModalOpen(false);
       fetchEntities();
     } catch (error: any) {

@@ -13,7 +13,6 @@ import { useTheme } from "@/lib/hooks/useTheme";
 // Modular Child Components
 import { DriverPortalTab, DriverProfileData, TenantInfoData, JobOrderData, DeviceTelemetryState } from "./components/types";
 import { DriverHeader } from "./components/DriverHeader";
-import { DeviceSummary } from "./components/DeviceSummary";
 import { ActiveJobCard } from "./components/ActiveJobCard";
 import { QueuedJobsCard } from "./components/QueuedJobsCard";
 import { EmptyJobState } from "./components/EmptyJobState";
@@ -275,13 +274,6 @@ function DriverPortalContent() {
       <main className="p-4 sm:p-5 max-w-lg mx-auto space-y-5 -mt-3 relative z-20">
         {activeTab === "home" && (
           <>
-            {/* Device Quick Status */}
-            <DeviceSummary
-              telemetry={telemetry}
-              isDark={isDark}
-              onOpenDetail={() => setIsInfoPerangkatOpen(true)}
-            />
-
             {/* Active Job Card */}
             {activeJob && (
               <ActiveJobCard
@@ -334,6 +326,7 @@ function DriverPortalContent() {
         <JobDetailSheet
           job={selectedJob}
           isDark={isDark}
+          telemetry={telemetry}
           getAuthHeaders={getAuthHeaders}
           onClose={() => setSelectedJob(null)}
           onRefreshFeed={fetchDriverFeed}

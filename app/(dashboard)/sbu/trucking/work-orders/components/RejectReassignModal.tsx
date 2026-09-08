@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import { X, AlertTriangle, Truck, User, ArrowRight } from 'lucide-react';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 interface RejectReassignModalProps {
   show: boolean;
@@ -33,12 +34,8 @@ export default function RejectReassignModal({ show, jobOrder, onClose, onSuccess
   }, [selectedTransporterId]);
 
   const fetchTransporters = async () => {
-    const { data } = await supabase
-      .from('md_entities')
-      .select('id, name')
-      .eq('is_vendor', true)
-      .eq('is_active', true)
-      .order('name');
+    const result = await getEntitiesByRole('VENDOR');
+    const data = result.ok ? result.data : [];
     setTransporters(data || []);
   };
 

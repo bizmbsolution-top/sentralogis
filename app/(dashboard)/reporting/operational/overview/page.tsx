@@ -20,6 +20,7 @@ import {
 } from "@/lib/reporting/status";
 import { flattenWorkOrderReport } from "@/lib/reporting/transform";
 import { fmtCurrency } from "@/lib/reporting/financials";
+import { getEntitiesByRole } from "@/lib/actions/entity-role-actions";
 
 const SBU_TABS = [
   { id: "all",        label: "All SBU",     icon: Layers,     color: "slate" },
@@ -113,19 +114,20 @@ export default function OperationalOverviewPage() {
   const fetchMasterData = async () => {
     if (!tenantId || !canAccess) return;
     try {
-      const [{ data: allCt }, { data: tt }, { data: wh }, { data: tr }] = await Promise.all([
-        supabase.from("md_entities").select("id, name, legal_name, parent_id").eq("is_customer", true).eq("is_active", true).eq("tenant_id", tenantId).order("name"),
+      const [ctRes, tt, wh, tr] = await Promise.all([
+        getEntitiesByRole('CUSTOMER'),
         supabase.from("wo_items").select("item_data").eq("sbu_type", "TRUCKING").eq("tenant_id", tenantId),
         supabase.from("md_warehouses").select("id, name").eq("tenant_id", tenantId).order("name"),
-        supabase.from("md_entities").select("id, name, vendor_type").eq("is_vendor", true).eq("tenant_id", tenantId).eq("is_active", true).order("name"),
+        getEntitiesByRole('VENDOR'),
       ]);
+      const allCt = ctRes.ok ? ctRes.data : [];
       const parentCustomers = (allCt || []).filter((c: any) => !c.parent_id);
       const childCustomers = (allCt || []).filter((c: any) => c.parent_id);
       setCustomers(parentCustomers);
       setCustomerChildren(childCustomers);
-      setWarehouses(wh || []);
-      setTransporters(tr || []);
-      const types = (tt || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
+      setWarehouses(wh?.data || []);
+      setTransporters(tr.ok ? (tr.data || []) : []);
+      const types = (tt?.data || []).map((t: any) => t.item_data?.vehicle_type_name).filter(Boolean);
       setTruckTypes(Array.from(new Set(types)) as string[]);
     } catch (_) { /* silent */ }
   };

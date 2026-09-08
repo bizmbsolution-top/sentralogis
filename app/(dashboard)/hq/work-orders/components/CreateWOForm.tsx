@@ -14,6 +14,7 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { generateWONumber } from '@/lib/utils/woNumber';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 import AddTruckingItemModal from './AddTruckingItemModal';
 import AddWarehouseItemModal from './AddWarehouseItemModal';
 import AddForwardingItemModal from './AddForwardingItemModal';
@@ -271,15 +272,12 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     const fetchCustomers = async () => {
       if (!profile?.tenant_id) return;
       try {
-        const { data, error } = await supabase
-          .from('md_entities')
-          .select('id, entity_code, name, legal_name, is_customer, is_vendor')
-          .eq('tenant_id', profile.tenant_id)
-          .eq('is_customer', true)
-          .order('name', { ascending: true });
-        
-        if (error) throw error;
-        setCustomers(data || []);
+        const result = await getEntitiesByRole('CUSTOMER');
+        if (result.ok) {
+          setCustomers(result.data || []);
+        } else {
+          console.error('Customer Fetch Error:', result.error);
+        }
       } catch (err) {
         console.error('Customer Fetch Error:', err);
       }
@@ -531,7 +529,6 @@ for (const [index, item] of woItems.entries()) {
                   total_stops: item.item_data.stops.length,
                   status: status === 'draft' ? 'draft' : 'pending',
                   sbu_type: 'TRUCKING',
-                  tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
                 })
                 .select('id')
                 .single();
@@ -624,7 +621,6 @@ for (const [index, item] of woItems.entries()) {
                   assigned_warehouse_id: item.item_data?.warehouse_id || null,
                   status: status === 'draft' ? 'draft' : (isHybridReady ? 'menunggu_wh_eksekusi' : 'pending'),
                   sbu_type: 'WAREHOUSE',
-                  tracking_token: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
                 })
                 .select('id')
                 .single();

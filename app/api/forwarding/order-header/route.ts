@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
+import { assertPermission } from '@/lib/application/identity/resolver';
+import { IdentityResolutionError } from '@/lib/application/identity/errors';
 
 export async function POST(req: NextRequest) {
   try {
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
+
     const body = await req.json();
     const {
-      tenant_id,
-      user_id,
       wo_id,
       sub_type,
       moda,
@@ -23,11 +27,13 @@ export async function POST(req: NextRequest) {
       notes
     } = body;
 
-    if (!tenant_id || !wo_id || !sub_type || !moda || !service_type || !delivery_type) {
+    if (!wo_id || !sub_type || !moda || !service_type || !delivery_type) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Insert fw_order_headers
+    const tenant_id = ctx.tenantId;
+    const user_id = ctx.userId;
+
     const { data: headerData, error: headerError } = await supabaseAdmin
       .from('fw_order_headers')
       .insert([{
@@ -50,8 +56,13 @@ export async function POST(req: NextRequest) {
 
     if (headerError) throw headerError;
 
-    // Generate legs from template
-    const templateKey = `${moda}_${service_type}_${delivery_type}`.toLowerCase();
+    const deliveryTypeMap: Record<string, string> = {
+      'D2D': 'door_to_door',
+      'P2P': 'port_to_port',
+      'D2P': 'door_to_port',
+      'P2D': 'port_to_door',
+    };
+    const templateKey = `${moda}_${service_type}_${deliveryTypeMap[delivery_type] || delivery_type}`.toLowerCase();
     const templates: Record<string, any> = {
       'sea_fcl_door_to_door': [
         { leg_type: 'pickup', leg_number: 1, vendor_type: 'trucking_origin', uom: 'container' },
@@ -113,6 +124,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, header_id: headerData.id });
 
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Create forwarding order header error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

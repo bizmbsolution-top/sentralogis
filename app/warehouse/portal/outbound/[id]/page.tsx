@@ -9,6 +9,7 @@ import { executeWarehouseAction } from '@/lib/offline/warehouseSync';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import BarcodeScanner from '@/components/scanner/BarcodeScanner';
+import { getEntitiesByRole, getEntitiesWithoutRole } from '@/lib/actions/entity-role-actions';
 
 export default function OutboundTaskExecutionPage() {
   const router = useRouter();
@@ -146,10 +147,12 @@ export default function OutboundTaskExecutionPage() {
       }
 
       if ((role === 'SECURITY' || role === 'ADMIN') && shipmentData.tenant_id) {
-        const { data: vendorData } = await supabase.from('md_entities')
-          .select('id, name').eq('tenant_id', shipmentData.tenant_id).eq('is_vendor', true).eq('is_active', true);
-        const { data: internalData } = await supabase.from('md_entities')
-          .select('id, name').eq('tenant_id', shipmentData.tenant_id).eq('is_vendor', false).eq('is_active', true).limit(1);
+        const [vendorResult, internalResult] = await Promise.all([
+          getEntitiesByRole('VENDOR'),
+          getEntitiesWithoutRole('VENDOR'),
+        ]);
+        const vendorData = vendorResult.ok ? vendorResult.data : [];
+        const internalData = internalResult.ok && internalResult.data ? internalResult.data.slice(0, 1) : [];
         
         setTransporters([...(internalData || []), ...(vendorData || [])]);
         setTransporterName((shipmentData.transporter as any)?.name || '');

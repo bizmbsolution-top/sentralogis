@@ -4,8 +4,6 @@ import {
   type WoItemContext,
   type TransporterOption,
   buildJoNumber,
-  generateDriverLinkToken,
-  generateTrackingToken,
   getRouteOriginDest,
   isEmptySlot,
   isFilledAssignment,
@@ -154,10 +152,7 @@ async function upsertJobOrder(
   if (assign.id && !isInsert) {
     const { data, error } = await supabase
       .from('job_orders')
-      .update({
-        ...payload,
-        driver_link_token: assign.driver_link_token || generateDriverLinkToken(),
-      })
+      .update({ ...payload })
       .eq('id', assign.id)
       .select('id');
     if (error) throw error;
@@ -175,10 +170,7 @@ async function upsertJobOrder(
 
   const { data, error } = await supabase
     .from('job_orders')
-    .insert({
-      ...insertPayload,
-      driver_link_token: assign.driver_link_token || generateDriverLinkToken(),
-    })
+    .insert(insertPayload)
     .select('id')
     .single();
 
@@ -229,8 +221,6 @@ export async function saveAssignments(
           estimated_margin:
             (Number(assign.base_price) || dealPrice) -
             (Number(assign.purchase_price) || 0),
-          wa_token: assign.wa_token || generateTrackingToken(),
-          tracking_token: assign.tracking_token || generateTrackingToken(),
           total_stops: itemData.stops?.length || 0,
           container_number: assign.container_number || null,
           notes: assign.notes || null,
@@ -332,8 +322,6 @@ export async function saveAssignments(
         estimated_margin:
           (Number(assign.base_price) || dealPrice) -
           (Number(assign.purchase_price) || 0),
-        wa_token: assign.wa_token || generateTrackingToken(),
-        tracking_token: assign.tracking_token || generateTrackingToken(),
         total_stops: itemData.stops?.length || 0,
         container_number: assign.container_number || null,
         notes: assign.notes || null,

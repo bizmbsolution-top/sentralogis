@@ -8,6 +8,7 @@ import {
   X, Loader2, ArrowRight, Truck, Package, CheckCircle2, AlertTriangle, User, Calendar, Edit2, Upload, Search, ChevronDown, Plus, MapPin
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { getAllEntitiesWithOwnership } from '@/lib/actions/entity-ownership-actions';
 
 interface TransferDetailModalProps {
   shipmentId: string;
@@ -206,19 +207,14 @@ export default function TransferDetailModal({ shipmentId, onClose }: TransferDet
 
   const fetchTransporters = useCallback(async () => {
     if (!shipment?.tenant_id) return [];
-    const { data: vendorData } = await supabase.from('md_entities')
-      .select('id, name')
-      .eq('tenant_id', shipment.tenant_id)
-      .eq('is_vendor', true)
-      .eq('is_active', true)
-      .order('name', { ascending: true });
-      
-    const { data: internalData } = await supabase.from('md_entities')
-      .select('id, name')
-      .eq('tenant_id', shipment.tenant_id)
-      .eq('is_vendor', false)
-      .eq('is_active', true)
-      .limit(1);
+    // [AI] R-READER R-A: Migrated from direct is_vendor reads to canonical
+    // EntityOwnershipService via getAllEntitiesWithOwnership (ADR-078).
+    const result = await getAllEntitiesWithOwnership();
+    if (!result.ok) return [];
+    const allEntities = result.data || [];
+
+    const vendorData = allEntities.filter(e => e.is_own === false);
+    const internalData = allEntities.filter(e => e.is_own === true).slice(0, 1);
 
     const combined = [...(internalData || []), ...(vendorData || [])];
     const list = combined.map(e => ({ id: e.id, transporter_name: e.name }));

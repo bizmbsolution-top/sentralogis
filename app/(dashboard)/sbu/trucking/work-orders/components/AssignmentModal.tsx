@@ -243,11 +243,16 @@ export default function AssignmentModal({
             return query;
           })(),
 
+          // [AI] R-READER R-A NOTE (ADR-078): Entity Ownership sites migrated to is_own
+          // (transporter selection, vendor filter). The `is_vendor` field is intentionally
+          // retained in the md_drivers / md_entities selects below because it is consumed
+          // by the R-6 derived `resolveIsVendor()` function in lib/domain/jo/assignment.ts.
+          // R-6 derived semantics are OUT OF R-A SCOPE (R-C wave).
           // Only show drivers who are available or on_duty (checked in but not yet assigned)
           (async () => {
             let query = (supabase
               .from("md_drivers" as any) as any)
-              .select("*, md_entities(is_vendor, vendor_tenant_id)")
+              .select("*, md_entities(is_vendor, is_own, vendor_tenant_id)")
               .eq("is_active", true)
               .eq("tenant_id", tenantId)
               .in("status", ["available", "on_duty"]);
@@ -293,7 +298,7 @@ export default function AssignmentModal({
           targetDriverIdsToFetch.length > 0
             ? (supabase
                 .from("md_drivers" as any) as any)
-                .select("*, md_entities(is_vendor, vendor_tenant_id)")
+                .select("*, md_entities(is_vendor, is_own, vendor_tenant_id)")
                 .in("id", targetDriverIdsToFetch)
             : Promise.resolve({ data: [], error: null }),
         ]);
@@ -750,7 +755,7 @@ export default function AssignmentModal({
     (a) => !a.id && !a.transporter_id && !a.fleet_id && !a.driver_id,
   );
 
-  const vendorOptions = transporters.filter((t) => t.is_vendor);
+  const vendorOptions = transporters.filter((t) => t.is_own !== true);
 
   const handleVendorReplyAssign = async () => {
     if (replySaving) return;
@@ -1802,7 +1807,7 @@ export default function AssignmentModal({
                                     return;
                                   }
                                   const isInternal =
-                                    driver?.md_entities?.is_vendor === false;
+                                    driver?.md_entities?.is_own === true;
                                   const joNumber =
                                     assign.jo_number ||
                                     `${item.item_code}-${String(idx + 1).padStart(2, "0")}`;

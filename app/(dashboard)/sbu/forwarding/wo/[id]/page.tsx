@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
   ArrowLeft, Loader2, PackageOpen, Truck, MapPin, Anchor, CheckCircle2, Clock
@@ -10,38 +10,20 @@ import {
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
+import { getForwardingWorkOrderDetail, type ForwardingWorkOrderDetail } from '@/lib/actions/forwardingActions';
 
 export default function ForwardingWODetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   
-  const [wo, setWo] = useState<any>(null);
+  const [wo, setWo] = useState<ForwardingWorkOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchWO = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('work_orders')
-        .select(`
-          *,
-          customer:md_entities!customer_id (id, name, phone, address),
-          wo_items (
-            id, item_code, status, unit_price,
-            fw_container_items (
-              id, delivery_type, pickup_address, delivery_address, commodity, 
-              volume_cbm, gross_weight_kg, is_deconsoled, deconsoled_at, sell_price_snapshot,
-              pickup_wo:work_orders!pickup_wo_id (id, wo_number, status),
-              last_mile_wo:work_orders!last_mile_wo_id (id, wo_number, status),
-              container_assignment:fw_container_assignments (id, container_number, container_type, consol:fw_consolidations(consol_number, vessel_name, voyage_number, origin_port, destination_port))
-            )
-          )
-        `)
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const data = await getForwardingWorkOrderDetail(id);
       setWo(data);
     } catch (err: any) {
       console.error(err);
@@ -81,7 +63,7 @@ export default function ForwardingWODetailPage() {
       case 'IN_PROGRESS': return <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">ON PROGRESS</span>;
       case 'DONE':
       case 'COMPLETED': return <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">COMPLETED</span>;
-      default: return <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold">{status}</span>;
+      default: return <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold">{status || 'UNKNOWN'}</span>;
     }
   };
 
@@ -106,7 +88,7 @@ export default function ForwardingWODetailPage() {
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{wo.wo_number}</h1>
             <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
               <Clock className="w-3.5 h-3.5" />
-              <span>Dibuat: {new Date(wo.created_at).toLocaleDateString('id-ID')}</span>
+               <span>Dibuat: {new Date(wo.order_date || '').toLocaleDateString('id-ID')}</span>
             </div>
           </div>
         </div>

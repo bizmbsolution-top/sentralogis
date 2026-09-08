@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Truck, Activity, ShieldCheck, TrendingUp,
   ArrowRight, Users, Layers, ExternalLink, X,
-  Warehouse, Ship, LayoutGrid, AlertCircle
+  Warehouse, Ship, LayoutGrid, AlertCircle,
+  ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Wrench
 } from 'lucide-react';
 import { SBU_MAP, sbuToWoType, type SBUType } from '@/lib/utils/sbuMapping';
 import Link from 'next/link';
@@ -60,6 +61,51 @@ const SBU_BADGE_CONFIG: Record<string, {
   FORWARDING: { label: 'Forwarding', icon: Ship,        bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200' },
 };
 
+// [AI] Warehouse task type config — maps wo_items.item_data.operation_type → 4 display groups
+// Operation sources (AddWarehouseItemModal): INBOUND, OUTBOUND, STOCK_TRANSFER,
+// INTERNAL_MOVEMENT, CROSS_DOCKING, VAS (Value Added Service: repacking/kitting/bundling)
+const WAREHOUSE_TASK_CONFIG: Record<string, {
+  label: string; icon: React.ComponentType<{ size?: number; className?: string }>;
+  bg: string; text: string; border: string;
+}> = {
+  INBOUND:     { label: 'Inbound',     icon: ArrowDownToLine, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  OUTBOUND:    { label: 'Outbound',    icon: ArrowUpFromLine, bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
+  TRANSFER:    { label: 'Transfer',    icon: ArrowLeftRight,  bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200' },
+  ADD_SERVICE: { label: 'Add Service', icon: Wrench,          bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200' },
+};
+
+// [AI] operation_type → task group mapping
+// Verified against live DB: add-service items created from SBU Warehouse store
+// operation_type as 'REPACKING'/'KITTING'/'BUNDLING' (with order_id ref), HQ modal stores 'VAS'
+const WAREHOUSE_TASK_TYPE_MAP: Record<string, string> = {
+  INBOUND: 'INBOUND',
+  OUTBOUND: 'OUTBOUND',
+  STOCK_TRANSFER: 'TRANSFER',
+  INTERNAL_MOVEMENT: 'TRANSFER',
+  CROSS_DOCKING: 'ADD_SERVICE',
+  VAS: 'ADD_SERVICE',
+  REPACKING: 'ADD_SERVICE',
+  KITTING: 'ADD_SERVICE',
+  BUNDLING: 'ADD_SERVICE',
+};
+
+const WAREHOUSE_TASK_TYPES = Object.keys(WAREHOUSE_TASK_CONFIG);
+
+// [AI] Add Service sub-groups (operation-level) — drill-down shown on the Add Service stat card
+const ADD_SERVICE_SUB_LABELS: Record<string, string> = {
+  REPACKING: 'Repacking',
+  KITTING: 'Kitting',
+  BUNDLING: 'Bundling',
+  CROSS_DOCKING: 'Cross-Docking',
+  VAS: 'VAS Lainnya',
+};
+
+const getTaskFilterLabel = (value: string): string => {
+  if (value === 'ALL') return 'ALL';
+  if (WAREHOUSE_TASK_CONFIG[value]) return WAREHOUSE_TASK_CONFIG[value].label;
+  return ADD_SERVICE_SUB_LABELS[value] || value;
+};
+
 export default function HQWorkOrdersPage() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get('status') || 'all';
@@ -79,9 +125,14 @@ export default function HQWorkOrdersPage() {
   const [selectedEntityForHistory, setSelectedEntityForHistory] = useState<{id: string, type: 'work_order'|'job_order', title: string} | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  // [AI] SBU filter state â€” synced with URL ?sbu= param
-  const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
+  // [AI] SBU filter state â€” synced with URL ?sbu= param (normalized to UPPERCASE)
+  const [sbuFilter, setSbuFilter] = useState((searchParams.get('sbu') || 'all').toUpperCase());
   const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
+  // [AI] Warehouse task filter — supports group keys (INBOUND/OUTBOUND/TRANSFER/ADD_SERVICE)
+  // and Add Service sub-groups (REPACKING/KITTING/BUNDLING/CROSS_DOCKING/VAS). Synced with URL ?task=
+  const [warehouseTaskFilter, setWarehouseTaskFilter] = useState(
+    (searchParams.get('task') || 'ALL').toUpperCase()
+  );
 
   useEffect(() => {
     if (!profile?.tenant_id) return;
@@ -115,7 +166,11 @@ export default function HQWorkOrdersPage() {
 
     // [AI] reading sbu filter from URL
     const sbu = searchParams.get('sbu');
-    if (sbu) setSbuFilter(sbu);
+    if (sbu) setSbuFilter(sbu.toUpperCase());
+
+    // [AI] reading warehouse task filter from URL
+    const task = searchParams.get('task');
+    setWarehouseTaskFilter(task ? task.toUpperCase() : 'ALL');
 
     // [AI] Check if Robot AI or URL requested opening form modal directly
     const action = searchParams.get('action');
@@ -132,8 +187,22 @@ export default function HQWorkOrdersPage() {
     const url = new URL(window.location.href);
     if (value === 'all') {
       url.searchParams.delete('sbu');
+      url.searchParams.delete('task');
+      setWarehouseTaskFilter('ALL');
     } else {
       url.searchParams.set('sbu', value);
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
+
+  // [AI] Sync warehouse task filter to URL (?task=) — deep-linkable detail view
+  const handleTaskFilterChange = (value: string) => {
+    setWarehouseTaskFilter(value);
+    const url = new URL(window.location.href);
+    if (value === 'ALL') {
+      url.searchParams.delete('task');
+    } else {
+      url.searchParams.set('task', value);
     }
     window.history.replaceState({}, '', url.toString());
   };
@@ -272,17 +341,78 @@ export default function HQWorkOrdersPage() {
     return Array.from(types);
   };
 
+  // [AI] Pure SBU matching — WO only belongs to a single SBU scope if ALL its items are that SBU type
+  const matchesSbuFilter = useCallback((wo: WorkOrder, filter: string): boolean => {
+    if (filter === 'all') return true;
+    const woSbuTypes = getWoSbuTypes(wo);
+    return woSbuTypes.length > 0 && woSbuTypes.every(t => t === filter);
+  }, []);
+
+  // [AI] Extract warehouse task groups (INBOUND/OUTBOUND/TRANSFER/ADD_SERVICE) from a WO's warehouse items
+  const getWoWarehouseTasks = useCallback((wo: WorkOrder): string[] => {
+    const types = new Set<string>();
+    wo.wo_items?.forEach((item: any) => {
+      if ((item.sbu_type || '').toUpperCase() !== 'WAREHOUSE') return;
+      // item_data may be stored as JSON string in DB — parse safely
+      let data: any = item.item_data || {};
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { data = {}; }
+      }
+      const opType = (data.operation_type || '').toUpperCase();
+      const group = WAREHOUSE_TASK_TYPE_MAP[opType];
+      if (group) types.add(group);
+    });
+    return Array.from(types);
+  }, []);
+
+  // [AI] Extract raw warehouse operation types (REPACKING, KITTING, INBOUND, ...) for sub-group drill-down
+  const getWoWarehouseOps = useCallback((wo: WorkOrder): string[] => {
+    const ops = new Set<string>();
+    wo.wo_items?.forEach((item: any) => {
+      if ((item.sbu_type || '').toUpperCase() !== 'WAREHOUSE') return;
+      let data: any = item.item_data || {};
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { data = {}; }
+      }
+      const opType = (data.operation_type || '').toUpperCase();
+      if (WAREHOUSE_TASK_TYPE_MAP[opType]) ops.add(opType);
+    });
+    return Array.from(ops);
+  }, []);
+
+  // [AI] Extract per-item warehouse service details (label, warehouse, units) for card display
+  const getWoWarehouseServices = useCallback((wo: WorkOrder): Array<{
+    op: string; label: string; group: string;
+    warehouseName: string | null; unitCount: number;
+  }> => {
+    const list: Array<{ op: string; label: string; group: string; warehouseName: string | null; unitCount: number }> = [];
+    wo.wo_items?.forEach((item: any) => {
+      if ((item.sbu_type || '').toUpperCase() !== 'WAREHOUSE') return;
+      let data: any = item.item_data || {};
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { data = {}; }
+      }
+      const opType = (data.operation_type || '').toUpperCase();
+      const group = WAREHOUSE_TASK_TYPE_MAP[opType];
+      if (!group) return;
+      list.push({
+        op: opType,
+        label: ADD_SERVICE_SUB_LABELS[opType] || WAREHOUSE_TASK_CONFIG[group].label,
+        group,
+        warehouseName: data.warehouse_name || null,
+        unitCount: Number(data.unit_count) || Number(item.quantity) || 1,
+      });
+    });
+    return list;
+  }, []);
+
   const filteredWorkOrders = useMemo(() => {
     return workOrders.filter(wo => {
       const matchesSearch = wo.wo_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         wo.md_entities?.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-      // [AI] SBU type filter
-      let matchesSbu = true;
-      if (sbuFilter !== 'all') {
-        const woSbuTypes = getWoSbuTypes(wo);
-        matchesSbu = woSbuTypes.includes(sbuFilter);
-      }
+      // [AI] SBU type filter (pure — all items must match)
+      const matchesSbu = matchesSbuFilter(wo, sbuFilter);
 
       let matchesStatus = true;
       if (statusFilter !== 'all') {
@@ -291,7 +421,9 @@ export default function HQWorkOrdersPage() {
         const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
 
         const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => i.status === 'handover_pending');
-        const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => i.status === 'handover_rejected');
+        // [AI] Trust only the WO header for handover_rejected — item-level flag can be stale
+        // (mass corruption 2026-07-28). Legit rejects always set the header too.
+        const hasHandoverRejected = s === 'HANDOVER_REJECTED';
 
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j =>
           ['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(j.status?.toUpperCase())
@@ -332,13 +464,22 @@ export default function HQWorkOrdersPage() {
         }
       }
 
-      return matchesSearch && matchesStatus && matchesSbu;
+      let matchesWarehouseTask = true;
+      if (sbuFilter === 'WAREHOUSE' && warehouseTaskFilter !== 'ALL') {
+        const isGroup = !!WAREHOUSE_TASK_CONFIG[warehouseTaskFilter];
+        matchesWarehouseTask = isGroup
+          ? getWoWarehouseTasks(wo).includes(warehouseTaskFilter)
+          : getWoWarehouseOps(wo).includes(warehouseTaskFilter);
+      }
+
+      return matchesSearch && matchesStatus && matchesSbu && matchesWarehouseTask;
     });
-  }, [workOrders, searchTerm, statusFilter, sbuFilter]);
+  }, [workOrders, searchTerm, statusFilter, sbuFilter, warehouseTaskFilter, matchesSbuFilter, getWoWarehouseTasks, getWoWarehouseOps]);
 
   const stats = useMemo(() => {
-    const total = workOrders.length;
-    const active = workOrders.filter(wo => {
+    // [AI] Stats respect active SBU filter — computed from filteredWorkOrders
+    const total = filteredWorkOrders.length;
+    const active = filteredWorkOrders.filter(wo => {
       const s = wo.status?.toUpperCase() || '';
       const allJobs = wo.wo_items?.flatMap((i: any) => i.job_orders || []).filter((j: any) => j.status !== 'cancelled') || [];
       const anyMoving = allJobs.some((j: any) =>
@@ -349,10 +490,36 @@ export default function HQWorkOrdersPage() {
       const anyAssigned = allJobs.some((j: any) => j.fleet_id && j.driver_id);
       return !['COMPLETED', 'DONE', 'PEKERJAAN SELESAI', 'READY_FOR_BILLING', 'VERIFIED', 'AWAITING_AUDIT'].includes(s) && (anyMoving || anyAssigned);
     }).length;
-    const handover = workOrders.filter(w => w.status === 'handover_pending' || w.wo_items?.some((i: any) => i.status === 'handover_pending')).length;
-    const completed = workOrders.filter(w => ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(w.status)).length;
+    const handover = filteredWorkOrders.filter(w => w.status === 'handover_pending' || w.wo_items?.some((i: any) => i.status === 'handover_pending')).length;
+    const completed = filteredWorkOrders.filter(w => ['completed', 'verified', 'ready_for_billing', 'awaiting_audit'].includes(w.status)).length;
     return { total, active, handover, completed };
-  }, [workOrders]);
+  }, [filteredWorkOrders]);
+
+  // [AI] Warehouse task breakdown (Inbound/Outbound/Transfer/Add Service) — counts WOs containing each task type
+  const warehouseTaskCounts = useMemo(() => {
+    const counts: Record<string, number> = { INBOUND: 0, OUTBOUND: 0, TRANSFER: 0, ADD_SERVICE: 0 };
+    if (sbuFilter !== 'WAREHOUSE') return counts;
+    filteredWorkOrders.forEach(wo => {
+      getWoWarehouseTasks(wo).forEach(t => {
+        if (counts[t] !== undefined) counts[t]++;
+      });
+    });
+    return counts;
+  }, [filteredWorkOrders, sbuFilter, getWoWarehouseTasks]);
+
+  // [AI] Add Service sub-group breakdown (Repacking/Kitting/Bundling/Cross-Docking/VAS)
+  const addServiceSubCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (sbuFilter !== 'WAREHOUSE') return counts;
+    filteredWorkOrders.forEach(wo => {
+      getWoWarehouseOps(wo).forEach(op => {
+        if (WAREHOUSE_TASK_TYPE_MAP[op] === 'ADD_SERVICE') {
+          counts[op] = (counts[op] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [filteredWorkOrders, sbuFilter, getWoWarehouseOps]);
 
   const getStatusBadge = (wo: WorkOrder) => {
     const s = wo.status?.toUpperCase() || '';
@@ -360,7 +527,8 @@ export default function HQWorkOrdersPage() {
     const allJobs = allItems.flatMap(i => i.job_orders || []).filter(j => j.status !== 'cancelled');
 
     const hasHandoverPending = s === 'HANDOVER_PENDING' || allItems.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
-    const hasHandoverRejected = s === 'HANDOVER_REJECTED' || allItems.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
+    // [AI] Trust only the WO header for handover_rejected — item-level flag can be stale (see 2026-07-28 incident)
+    const hasHandoverRejected = s === 'HANDOVER_REJECTED';
 
     if (hasHandoverRejected) return <Badge className="!bg-rose-100 !text-rose-700 !border-rose-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">HANDOVER REJECTED</Badge>;
     if (hasHandoverPending) return <Badge className="!bg-orange-100 !text-orange-700 !border-orange-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">HANDOVER PENDING</Badge>;
@@ -444,12 +612,14 @@ export default function HQWorkOrdersPage() {
   };
 
   const getTabCount = (tabId: string) => {
+    // [AI] Tab counts respect active SBU filter
+    const scoped = workOrders.filter(w => matchesSbuFilter(w, sbuFilter));
     const DONE_WO = ['COMPLETED', 'PEKERJAAN SELESAI', 'VERIFIED', 'READY_FOR_BILLING', 'AWAITING_AUDIT', 'DONE'];
     const HANDOVER_WO = ['HANDOVER_PENDING', 'HANDOVER_REJECTED'];
     switch (tabId) {
-      case 'all': return workOrders.length;
-      case 'draft': return workOrders.filter(w => (w.status || '').toUpperCase() === 'DRAFT').length;
-      case 'pending': return workOrders.filter(wo => {
+      case 'all': return scoped.length;
+      case 'draft': return scoped.filter(w => (w.status || '').toUpperCase() === 'DRAFT').length;
+      case 'pending': return scoped.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
         const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
@@ -461,7 +631,7 @@ export default function HQWorkOrdersPage() {
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
         return !anyAssigned && !anyMoving && !allJobsCompleted;
       }).length;
-      case 'assigned_units': return workOrders.filter(wo => {
+      case 'assigned_units': return scoped.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
         const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
@@ -473,7 +643,7 @@ export default function HQWorkOrdersPage() {
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
         return anyAssigned && !anyMoving && !allJobsCompleted;
       }).length;
-      case 'on_road': return workOrders.filter(wo => {
+      case 'on_road': return scoped.filter(wo => {
         const s = wo.status?.toUpperCase() || '';
         const allItems = wo.wo_items || [];
         const hasHandover = HANDOVER_WO.includes(s) || allItems.some((i: any) => HANDOVER_WO.includes((i.status || '').toUpperCase()));
@@ -484,15 +654,16 @@ export default function HQWorkOrdersPage() {
         const allJobsCompleted = allJobs.length > 0 && allJobs.every(j => ['COMPLETED', 'PEKERJAAN SELESAI', 'DONE', 'READY_FOR_BILLING'].includes(j.status?.toUpperCase()));
         return anyMoving && !allJobsCompleted;
       }).length;
-      case 'handover_pending': return workOrders.filter(w => {
+      case 'handover_pending': return scoped.filter(w => {
         const ws = (w.status || '').toUpperCase();
         return ws === 'HANDOVER_PENDING' || w.wo_items?.some(i => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
       }).length;
-      case 'handover_rejected': return workOrders.filter(w => {
+      case 'handover_rejected': return scoped.filter(w => {
         const ws = (w.status || '').toUpperCase();
-        return ws === 'HANDOVER_REJECTED' || w.wo_items?.some(i => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
+        // [AI] Header-only check — item-level flag can be stale (see 2026-07-28 incident)
+        return ws === 'HANDOVER_REJECTED';
       }).length;
-      case 'completed': return workOrders.filter(w => DONE_WO.includes((w.status || '').toUpperCase())).length;
+      case 'completed': return scoped.filter(w => DONE_WO.includes((w.status || '').toUpperCase())).length;
       default: return 0;
     }
   };
@@ -509,7 +680,7 @@ export default function HQWorkOrdersPage() {
               </div>
               <div>
                 <h1 className="text-base font-bold text-slate-900 leading-tight">Work Orders</h1>
-                <p className="text-[10px] text-slate-500 font-medium">{workOrders.length} total</p>
+                <p className="text-[10px] text-slate-500 font-medium">{filteredWorkOrders.length} total</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -614,6 +785,30 @@ export default function HQWorkOrdersPage() {
             })}
           </div>
         </div>
+        
+        {/* [AI] Mobile SBU Sub-Filter (Warehouse Tasks) */}
+        {sbuFilter === 'WAREHOUSE' && (
+          <div className="px-4 pb-3">
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              {[...['ALL', ...WAREHOUSE_TASK_TYPES], ...(warehouseTaskFilter === 'ADD_SERVICE' || ADD_SERVICE_SUB_LABELS[warehouseTaskFilter] ? Object.keys(ADD_SERVICE_SUB_LABELS) : [])].map(type => {
+                const isSub = !!ADD_SERVICE_SUB_LABELS[type] && type !== 'ALL';
+                return (
+                <button
+                  key={type}
+                  onClick={() => handleTaskFilterChange(type)}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-bold whitespace-nowrap transition-all flex-shrink-0 ${
+                    warehouseTaskFilter === type
+                      ? isSub ? 'bg-orange-600 text-white shadow-sm border border-orange-600' : 'bg-amber-100 text-amber-800 shadow-sm border border-amber-200'
+                      : 'bg-white text-slate-400 border border-slate-200'
+                  }`}
+                >
+                  {isSub ? `› ${getTaskFilterLabel(type)}` : getTaskFilterLabel(type)}
+                </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ===== DESKTOP HEADER ===== */}
@@ -700,6 +895,29 @@ export default function HQWorkOrdersPage() {
             );
           })}
         </div>
+        
+        {/* [AI] Desktop SBU Sub-Filter (Warehouse Tasks) */}
+        {sbuFilter === 'WAREHOUSE' && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">Tugas WMS</span>
+            {[...['ALL', ...WAREHOUSE_TASK_TYPES], ...(warehouseTaskFilter === 'ADD_SERVICE' || ADD_SERVICE_SUB_LABELS[warehouseTaskFilter] ? Object.keys(ADD_SERVICE_SUB_LABELS) : [])].map(type => {
+              const isSub = !!ADD_SERVICE_SUB_LABELS[type] && type !== 'ALL';
+              return (
+              <button
+                key={type}
+                onClick={() => handleTaskFilterChange(type)}
+                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                  warehouseTaskFilter === type
+                    ? isSub ? 'bg-orange-600 text-white shadow-sm border border-orange-600' : 'bg-amber-100 text-amber-800 shadow-sm border border-amber-200'
+                    : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                {isSub ? `› ${getTaskFilterLabel(type)}` : getTaskFilterLabel(type)}
+              </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ===== MAIN CONTENT ===== */}
@@ -750,6 +968,89 @@ export default function HQWorkOrdersPage() {
             <p className="text-[10px] text-slate-500 font-bold mt-1">Ready for invoicing</p>
           </div>
         </div>
+
+        {/* [AI] Warehouse Task Stats — service breakdown (Inbound/Outbound/Transfer/Add Service), clickable to filter */}
+        {sbuFilter === 'WAREHOUSE' && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 -mt-4">
+            {Object.entries(WAREHOUSE_TASK_CONFIG).map(([type, cfg]) => {
+              const Icon = cfg.icon;
+              const isActive = warehouseTaskFilter === type;
+              const isAddService = type === 'ADD_SERVICE';
+              const subEntries = isAddService
+                ? Object.entries(ADD_SERVICE_SUB_LABELS)
+                : [];
+              return (
+                <div
+                  key={type}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleTaskFilterChange(isActive && !isAddService ? 'ALL' : type)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleTaskFilterChange(isActive && !isAddService ? 'ALL' : type); }}
+                  className={`p-5 rounded-2xl border text-left cursor-pointer transition-all duration-300 hover:shadow-md ${cfg.bg} ${isActive ? `${cfg.border} ring-2 ring-offset-1 ring-amber-400 shadow-sm` : 'border-slate-200/80'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-black uppercase tracking-wider ${cfg.text}`}>{cfg.label}</span>
+                    <div className={`p-2 rounded-xl bg-white/70 border ${cfg.border} ${cfg.text}`}>
+                      <Icon size={18} />
+                    </div>
+                  </div>
+                  <h2 className={`text-3xl font-black mt-2 ${cfg.text}`}>{warehouseTaskCounts[type] ?? 0}</h2>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1">Work Orders</p>
+
+                  {/* [AI] Add Service sub-groups — drill-down chips with per-service counts */}
+                  {isAddService && (
+                    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/80">
+                      {subEntries.map(([sub, subLabel]) => {
+                        const count = addServiceSubCounts[sub] || 0;
+                        const isSubActive = warehouseTaskFilter === sub;
+                        return (
+                          <button
+                            key={sub}
+                            onClick={(e) => { e.stopPropagation(); handleTaskFilterChange(isSubActive ? 'ALL' : sub); }}
+                            title={`${subLabel}: ${count} Work Orders`}
+                            className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${
+                              isSubActive
+                                ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                                : count > 0
+                                  ? 'bg-white/90 text-orange-700 border-orange-200 hover:bg-orange-100'
+                                  : 'bg-white/40 text-slate-400 border-slate-200'
+                            }`}
+                          >
+                            {subLabel} · {count}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* [AI] Active task detail bar — breadcrumb + result count for current drill-down */}
+        {sbuFilter === 'WAREHOUSE' && warehouseTaskFilter !== 'ALL' && (
+          <div className="flex items-center justify-between bg-white border border-amber-200 rounded-2xl px-5 py-3 mb-4 shadow-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Wrench size={14} className="text-amber-600" />
+              <span className="text-xs font-black uppercase tracking-widest text-slate-900">Detail Tugas</span>
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5 uppercase tracking-wider">
+                {WAREHOUSE_TASK_CONFIG[warehouseTaskFilter]
+                  ? getTaskFilterLabel(warehouseTaskFilter)
+                  : `Add Service › ${getTaskFilterLabel(warehouseTaskFilter)}`}
+              </span>
+              <span className="text-xs font-bold text-slate-500">
+                {filteredWorkOrders.length} Work Order{filteredWorkOrders.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <button
+              onClick={() => handleTaskFilterChange('ALL')}
+              className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600 transition-colors flex items-center gap-1"
+            >
+              Clear <X size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Mobile: Active filter label */}
         <div className="lg:hidden flex items-center justify-between mb-4">
@@ -812,18 +1113,44 @@ export default function HQWorkOrdersPage() {
                       <div className="flex flex-col gap-1">
                         {(() => {
                           const sbuTypes = getWoSbuTypes(wo);
+                          const whOps = getWoWarehouseOps(wo);
                           if (sbuTypes.length === 0) return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">NO SBU</span>;
                           return (
-                            <div className="flex items-center gap-1.5">
-                              {sbuTypes.map(type => {
-                                const config = SBU_BADGE_CONFIG[type];
-                                if (!config) return null;
-                                return (
-                                  <span key={type} className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                                    {config.label}
-                                  </span>
-                                );
-                              })}
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5">
+                                {sbuTypes.map(type => {
+                                  const config = SBU_BADGE_CONFIG[type];
+                                  if (!config) return null;
+                                  return (
+                                    <span key={type} className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                      {config.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {/* [AI] Warehouse task chips — precise service name (Repacking/Kitting/Inbound/...) colored by group */}
+                              {whOps.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {whOps.map(op => {
+                                    const group = WAREHOUSE_TASK_TYPE_MAP[op] || op;
+                                    const tc = WAREHOUSE_TASK_CONFIG[group];
+                                    if (!tc) return null;
+                                    const label = ADD_SERVICE_SUB_LABELS[op] || tc.label;
+                                    return (
+                                      <button
+                                        key={op}
+                                        onClick={() => handleTaskFilterChange(warehouseTaskFilter === op ? 'ALL' : op)}
+                                        title={`Filter: ${label}`}
+                                        className={`px-1.5 py-0.5 rounded-md border text-[8px] font-black uppercase tracking-widest transition-all hover:scale-105 ${tc.bg} ${tc.text} ${
+                                          warehouseTaskFilter === op ? 'ring-2 ring-offset-0 ring-orange-400' : ''
+                                        } ${tc.border}`}
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
@@ -854,6 +1181,45 @@ export default function HQWorkOrdersPage() {
                     </div>
                   </div>
 
+                  {/* [AI] Warehouse Services detail — per-item service label + warehouse + units; highlights active task filter */}
+                  {(() => {
+                    const services = getWoWarehouseServices(wo);
+                    if (services.length === 0) return null;
+                    return (
+                      <div className="mb-4 space-y-1.5">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Layanan</span>
+                        {services.map((s, i) => {
+                          const tc = WAREHOUSE_TASK_CONFIG[s.group];
+                          const isMatched = warehouseTaskFilter === s.op || warehouseTaskFilter === s.group;
+                          const SubIcon = tc?.icon;
+                          return (
+                            <div
+                              key={`${s.op}-${i}`}
+                              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 transition-all ${
+                                isMatched
+                                  ? 'bg-orange-50/80 border-orange-300 ring-1 ring-orange-200'
+                                  : 'bg-slate-50/60 border-slate-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {SubIcon && <SubIcon size={13} className={tc?.text} />}
+                                <span className={`text-[10px] font-black uppercase tracking-wider rounded-md px-1.5 py-0.5 border ${tc?.bg} ${tc?.text} ${tc?.border}`}>
+                                  {s.label}
+                                </span>
+                                {s.warehouseName && (
+                                  <span className="text-xs font-bold text-slate-700 truncate">{s.warehouseName}</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">
+                                {s.unitCount} Unit{s.unitCount > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
                   {/* Details Grid */}
                   <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-100">
                     <div className="flex flex-col">
@@ -869,7 +1235,7 @@ export default function HQWorkOrdersPage() {
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Missions</span>
                       <div className="flex items-center gap-1.5 text-black font-bold text-sm">
                         <Layers size={14} className="text-amber-600" />
-                        {wo.wo_items?.length || 0} JO
+                        {wo.wo_items?.length || 0} {primarySbu === 'WAREHOUSE' ? 'Tasks' : primarySbu === 'FORWARDING' ? 'Items' : 'JO'}
                       </div>
                     </div>
                     <div className="w-[1px] h-8 bg-slate-200"></div>
@@ -897,7 +1263,8 @@ export default function HQWorkOrdersPage() {
                 <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
                   {(() => {
                     const hasHandoverPending = (wo.status || '').toUpperCase() === 'HANDOVER_PENDING' || wo.wo_items?.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_PENDING');
-                    const isRejected = (wo.status || '').toUpperCase() === 'HANDOVER_REJECTED' || wo.wo_items?.some((i: any) => (i.status || '').toUpperCase() === 'HANDOVER_REJECTED');
+                    // [AI] Header-only check — item-level flag can be stale (see 2026-07-28 incident)
+                    const isRejected = (wo.status || '').toUpperCase() === 'HANDOVER_REJECTED';
 
                     if (isRejected) {
                       return (

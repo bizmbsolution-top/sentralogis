@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import GoogleMapsInput from '@/components/master/GoogleMapsInput';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 interface EntityAddress {
   id?: string;
@@ -63,12 +64,8 @@ export default function ContactFormModal({ onClose, onSuccess, tenantId, initial
 
   useEffect(() => {
     const fetchParents = async () => {
-      const { data } = await supabase
-        .from('md_entities')
-        .select('id, name, entity_code')
-        .eq('tenant_id', tenantId)
-        .eq('is_customer', true)
-        .order('name');
+      const result = await getEntitiesByRole('CUSTOMER');
+      const data = result.ok ? result.data : [];
       setParents(data || []);
     };
     fetchParents();

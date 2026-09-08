@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/Button";
 import AssignmentModal from "../components/AssignmentModal";
 import VendorSendBox from "@/components/sbu/VendorSendBox";
 import GroundStaffSendBox from "@/components/sbu/GroundStaffSendBox";
+import { getEntitiesByRole } from "@/lib/actions/entity-role-actions";
 
 interface WorkOrder {
   id: string;
@@ -251,14 +252,8 @@ export default function WorkOrderDetailPage() {
   const fetchAvailableVendors = useCallback(async () => {
     if (!profile?.tenant_id) return;
     try {
-      const { data } = await supabase
-        .from("md_entities")
-        .select("id, name, vendor_type")
-        .eq("tenant_id", profile.tenant_id)
-        .eq("is_vendor", true)
-        .eq("is_active", true)
-        .order("name", { ascending: true });
-
+      const result = await getEntitiesByRole('VENDOR');
+      const data = result.ok ? result.data : [];
       setAvailableVendors(data || []);
     } catch (err: any) {
       console.error("Fetch vendors error:", err);

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -35,7 +35,7 @@ const TABS: Array<{ id: string; label: string; icon: React.ComponentType<{ size?
   { id: 'completed', label: 'Done', icon: CheckCircle2 },
 ];
 
-// [AI] SBU visual indicators for JO cards â€” colors aligned with SBU_MAP
+// [AI] SBU visual indicators for JO cards — colors aligned with SBU_MAP
 const SBU_BADGE_CONFIG: Record<string, {
   label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   bg: string; text: string; border: string;
@@ -61,15 +61,15 @@ export default function HQJobOrdersPage() {
   const [showSearch, setShowSearch] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
-  // [AI] SBU filter state synced with URL
-  const [sbuFilter, setSbuFilter] = useState(searchParams.get('sbu') || 'all');
+  // [AI] SBU filter state synced with URL (normalized to UPPERCASE)
+  const [sbuFilter, setSbuFilter] = useState((searchParams.get('sbu') || 'all').toUpperCase());
 
   useEffect(() => {
     const q = searchParams.get('q');
     if (q) setSearchTerm(q);
     
     const sbu = searchParams.get('sbu');
-    if (sbu) setSbuFilter(sbu);
+    if (sbu) setSbuFilter(sbu.toUpperCase());
   }, [searchParams]);
 
   const handleSbuFilterChange = (value: string) => {
@@ -118,12 +118,15 @@ export default function HQJobOrdersPage() {
       if (baseJOs.length > 0) {
         const driverIds = [...new Set(baseJOs.map(j => j.driver_id).filter(Boolean))];
         const fleetIds = [...new Set(baseJOs.map(j => j.fleet_id).filter(Boolean))];
-        const warehouseJoIds = baseJOs.filter(j => j.wo_item?.sbu_type === 'WAREHOUSE').map(j => j.id);
+        // [AI] Receipts are keyed by wo_items.id — collect the WO item ids, NOT job order ids
+        const warehouseWoItemIds = [...new Set(
+          baseJOs.filter(j => j.wo_item?.sbu_type === 'WAREHOUSE').map(j => j.wo_item_id).filter(Boolean)
+        )];
 
         const [driversRes, fleetsRes, warehouseReceiptsRes] = await Promise.all([
           driverIds.length > 0 ? supabase.from('md_drivers').select('id, name, phone').in('id', driverIds as string[]) : { data: [] as any[] },
           fleetIds.length > 0 ? supabase.from('md_fleets').select('id, plate_number, fleet_type:md_fleet_types!fleet_type_id(type_name)').in('id', fleetIds as string[]) : { data: [] as any[] },
-          warehouseJoIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseJoIds) : { data: [] as any[] }
+          warehouseWoItemIds.length > 0 ? supabase.from('wh_inbound_receipts').select('wo_item_id, driver_name_manual, driver_phone, driver:driver_id(id, name, phone), fleet:fleet_id(id, plate_number, fleet_type:md_fleet_types(type_name))').in('wo_item_id', warehouseWoItemIds) : { data: [] as any[] }
         ]);
 
         const warehouseReceipts = warehouseReceiptsRes.data || [];
@@ -134,7 +137,8 @@ export default function HQJobOrdersPage() {
           const extraPhone = null;
 
           if (jo.wo_item?.sbu_type === 'WAREHOUSE') {
-            const receipt = warehouseReceipts.find(r => r.wo_item_id === jo.id);
+            // [AI] Match receipt via wo_item_id (receipts reference wo_items, not job_orders)
+            const receipt = warehouseReceipts.find(r => r.wo_item_id === jo.wo_item_id);
             if (receipt) {
               if (receipt.driver) driverObj = receipt.driver;
               else if (receipt.driver_name_manual) {
@@ -205,23 +209,30 @@ export default function HQJobOrdersPage() {
     fetchJobOrders();
   }, [fetchJobOrders]);
 
+  // [AI] Warehouse-aware category � WMS execution statuses count as active without driver/fleet
+  const getCategory = useCallback((jo: any) =>
+    getJobCategory(jo, { sbuType: jo.wo_item?.sbu_type }), []);
+
   // [AI] getJobCategory is now imported from @/lib/domain/jo/status
 
   const stats = useMemo(() => {
-    const categories = jobOrders.map(jo => getJobCategory(jo));
+    const scoped = sbuFilter === 'all'
+      ? jobOrders
+      : jobOrders.filter(jo => (jo.wo_item?.sbu_type || '').toUpperCase() === sbuFilter);
+    const categories = scoped.map(jo => getCategory(jo));
     return {
-      total: jobOrders.filter(jo => getJobCategory(jo) !== 'rejected').length,
+      total: scoped.filter(jo => getCategory(jo) !== 'rejected').length,
       needsAssign: categories.filter(c => c === 'awaiting').length,
       assignedCount: categories.filter(c => c === 'assigned').length,
       onJourney: categories.filter(c => c === 'active').length,
       jobDone: categories.filter(c => c === 'completed').length,
       rejected: categories.filter(c => c === 'rejected').length
     };
-  }, [jobOrders]);
+  }, [jobOrders, sbuFilter, getCategory]);
 
   const filteredJobs = useMemo(() => {
     return jobOrders.filter(jo => {
-      const category = getJobCategory(jo);
+      const category = getCategory(jo);
 
       const matchesSearch =
         jo.jo_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -244,7 +255,7 @@ export default function HQJobOrdersPage() {
   }, [jobOrders, searchTerm, selectedStatus, sbuFilter]);
 
   const getStatusBadge = (jo: any) => {
-    const category = getJobCategory(jo);
+    const category = getCategory(jo);
     const s = jo.status?.toUpperCase();
     const isWarehouse = jo.wo_item?.sbu_type === 'WAREHOUSE';
 
@@ -347,7 +358,7 @@ export default function HQJobOrdersPage() {
           )}
         </div>
 
-        {/* Mobile Tab Bar â€” horizontal scroll */}
+        {/* Mobile Tab Bar — horizontal scroll */}
         <div className="px-4 pb-3">
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {TABS.map(tab => {
@@ -534,7 +545,7 @@ export default function HQJobOrdersPage() {
                         const sbu = jo.wo_item?.sbu_type?.toUpperCase() || 'TRUCKING';
                         const config = SBU_BADGE_CONFIG[sbu] || SBU_BADGE_CONFIG.TRUCKING;
                         const Icon = config.icon;
-                        const category = getJobCategory(jo);
+                        const category = getCategory(jo);
                         const isCompleted = category === 'completed';
                         
                         return (
@@ -612,7 +623,12 @@ export default function HQJobOrdersPage() {
                       <span className="text-[10px] text-black font-black uppercase tracking-wider mb-0.5">Scope</span>
                       <div className="flex items-center gap-1.5 text-black font-black text-sm">
                         <MapPin size={14} className="text-orange-600" />
-                        <span className="truncate max-w-[100px]">{jo.wo_item?.item_data?.destination_name || 'Destination'}</span>
+                        {/* [AI] Warehouse JOs show the target warehouse, trucking shows destination */}
+                        <span className="truncate max-w-[100px]">
+                          {jo.wo_item?.sbu_type === 'WAREHOUSE'
+                            ? (jo.wo_item?.item_data?.warehouse_name || 'Gudang')
+                            : (jo.wo_item?.item_data?.destination_name || 'Destination')}
+                        </span>
                       </div>
                     </div>
                     <div className="w-[1px] h-8 bg-slate-200 shrink-0"></div>
@@ -639,7 +655,7 @@ export default function HQJobOrdersPage() {
                 {/* Bottom Actions Area */}
                 <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
                   {(() => {
-                    const category = getJobCategory(jo);
+                    const category = getCategory(jo);
 
                     if (category === 'rejected') {
                       return (

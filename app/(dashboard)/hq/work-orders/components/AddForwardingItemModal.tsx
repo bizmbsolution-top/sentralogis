@@ -104,7 +104,7 @@ export default function AddForwardingItemModal({
           .from('md_entity_addresses')
           .select(`
             *,
-            md_entities!inner(id, name, phone, tenant_id, is_customer, parent_id)
+            md_entities!inner(id, name, phone, tenant_id, parent_id)
           `)
           .eq('md_entities.tenant_id', profile.tenant_id);
 

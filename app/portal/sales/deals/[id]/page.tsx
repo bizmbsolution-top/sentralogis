@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { ChevronLeft, Building, Target, Banknote, Calendar, FileText, Plus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { getNextQuoteNumber } from '@/app/quote/number-actions';
 
 export default function MobileDealDetail({ params }: { params: Promise<{ id: string }> }) {
   const { user, profile } = useAuth();
@@ -57,8 +58,8 @@ export default function MobileDealDetail({ params }: { params: Promise<{ id: str
     if (!deal) return;
     setCreatingQuote(true);
     try {
-      // Auto-generate quote number e.g. QT-2026-06-XXXX
-      const quoteNumber = `QT-${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2, '0')}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
+      // U-11: Server-side quote number authority (replaces client-side Math.random)
+      const quoteNumber = await getNextQuoteNumber(profile?.tenant_id as string);
       
       const { data, error } = await supabase.from('crm_quotations').insert([{
         tenant_id: profile?.tenant_id as string,

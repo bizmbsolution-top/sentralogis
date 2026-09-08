@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
@@ -11,55 +10,28 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
+import { fetchForwardingWorkOrders, type ForwardingWorkOrderListItem } from '@/lib/actions/forwardingActions';
 
 export default function ForwardingWOListPage() {
   const { profile } = useAuth();
   const router = useRouter();
   
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ForwardingWorkOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tenantId, setTenantId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Sync tenant info
-  useEffect(() => {
-    if (profile?.tenant_id) {
-      setTenantId(profile.tenant_id);
-    }
-  }, [profile]);
-
   const fetchData = useCallback(async () => {
-    if (!tenantId) return;
     setLoading(true);
-
     try {
-      const { data, error } = await supabase
-        .from('work_orders')
-        .select(`
-          id, wo_number, status, order_date, execution_date,
-          customer:md_entities!customer_id (id, name, is_vendor),
-          wo_items (
-            id, item_code, status, unit_price, total_revenue,
-            fw_container_items (id, volume_cbm, gross_weight_kg, container_assignment_id, fw_container_assignments(container_number))
-          )
-        `)
-        .eq('tenant_id', tenantId)
-        .eq('sbu_type' as any, 'FORWARDING')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Fetch error details:', JSON.stringify(error, null, 2));
-        toast.error(error?.message || 'Gagal memuat data Work Order Forwarding');
-        return;
-      }
-      setItems(data || []);
+      const data = await fetchForwardingWorkOrders();
+      setItems(data);
     } catch (error: any) {
-      console.error('Fetch error:', error);
+      console.error(error);
       toast.error(error?.message || 'Gagal memuat data Work Order Forwarding');
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, []);
 
   useEffect(() => {
     fetchData();

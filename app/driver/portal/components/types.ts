@@ -21,6 +21,8 @@ export interface DriverProfileData {
   has_native_app?: boolean;
   last_app_version?: string;
   linked_driver_ids?: string[];
+  total_coins?: number;
+  total_coin_value?: number;
   [key: string]: any;
 }
 

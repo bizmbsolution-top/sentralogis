@@ -6,9 +6,15 @@ export class ContextStage implements PipelineStage {
 
   async execute(context: PipelineContext): Promise<PipelineResult> {
     const jobOrderEntity = context.resolvedEntities?.resolve('JobOrder');
-    
+
     if (jobOrderEntity && jobOrderEntity.resolvedId) {
-      context.enrichedContext = await ContextEnricher.enrichFromDatabase(jobOrderEntity.resolvedId);
+      context.enrichedContext = await ContextEnricher.enrichFromDatabase(
+        jobOrderEntity.resolvedId,
+        {
+          tenantId: context.context.tenant.getId(),
+          userId: context.context.user.getId(),
+        },
+      );
     }
 
     return { status: PipelineStatus.CONTINUE };

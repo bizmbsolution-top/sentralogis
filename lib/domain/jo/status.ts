@@ -49,6 +49,16 @@ export const JO_PENDING_ASSIGNMENT_STATUSES = ['PENDING', 'NEED_ASSIGNMENT', 'NE
 
 export type JoStatusCategory = 'done' | 'rejected' | 'active' | 'draft' | 'pending' | 'other';
 
+// [AI] Warehouse WMS execution statuses — these mean actual work is happening in the warehouse,
+// even though warehouse JOs typically have no driver/fleet assigned
+export const JO_WMS_ACTIVE_STATUSES = [
+  'IN_PROGRESS',
+  'TRUCK_ARRIVED',
+  'UNLOADING',
+  'CHECKING',
+  'PUTAWAY_IN_PROGRESS',
+] as const;
+
 function normalizeStatus(status: string | null | undefined): string {
   return (status || '').toUpperCase().trim();
 }
@@ -81,8 +91,9 @@ export function getAdvancedJobCategory(jo: {
   transporter_id?: string;
   vendor_id?: string;
   driver_phone?: string;
-}): 'rejected' | 'completed' | 'active' | 'assigned' | 'awaiting' {
+}, opts?: { sbuType?: string }): 'rejected' | 'completed' | 'active' | 'assigned' | 'awaiting' {
   const s = (jo.status || '').toUpperCase();
+  const isWarehouse = (opts?.sbuType || '').toUpperCase() === 'WAREHOUSE';
 
   // Rejected must come first so they aren't masked by assigned logic
   if ((JO_REJECTED_STATUSES as readonly string[]).includes(s)) return 'rejected';
@@ -97,6 +108,9 @@ export function getAdvancedJobCategory(jo: {
   // "On Journey" is determined by the actual transit status only (JO_ACTIVE_STATUSES
   // / TIBA DI … / MENUJU …), matching the status-based logic on the SBU work-orders page.
   if (hasAsset && ((JO_ACTIVE_STATUSES as readonly string[]).includes(s) || s.startsWith('TIBA DI') || s.startsWith('MENUJU'))) return 'active';
+
+  // [AI] Warehouse WMS work is active without any driver/fleet asset — don't require hasAsset here
+  if (isWarehouse && (JO_WMS_ACTIVE_STATUSES as readonly string[]).includes(s)) return 'active';
   
   if ((jo.driver_id || jo.fleet_id || jo.transporter_id || jo.vendor_id || jo.driver_phone || s === 'ASSIGNED') && !(JO_DONE_STATUSES as readonly string[]).includes(s) && !(JO_ACTIVE_STATUSES as readonly string[]).includes(s) && !s.startsWith('TIBA DI') && !s.startsWith('MENUJU')) return 'assigned';
   

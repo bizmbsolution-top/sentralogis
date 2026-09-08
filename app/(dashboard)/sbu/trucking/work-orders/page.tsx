@@ -200,7 +200,7 @@ let query = supabase
           fleet_id, driver_id, transporter_id, driver_link_token,
           is_doc_finished, is_cost_finished,
           transporter:md_entities!transporter_id(name),
-          driver:md_drivers(name, phone, md_entities(is_vendor))
+          driver:md_drivers(name, phone, md_entities(is_own))
         `)
         .in('wo_item_id', itemIds);
       

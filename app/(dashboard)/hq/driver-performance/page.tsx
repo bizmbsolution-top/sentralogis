@@ -11,6 +11,7 @@ import {
   Clock, CheckCircle, XCircle
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { getInternalDrivers } from '@/lib/actions/entity-role-actions';
 
 interface Driver {
   id: string;
@@ -142,15 +143,12 @@ export default function DriverPerformancePage() {
     setAttendanceLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const { data: internalDrivers, error: drvErr } = await supabase
-        .from('md_drivers')
-        .select('id, name, phone, status, entity_id, is_working, md_entities!inner(name, is_vendor)')
-        .eq('tenant_id', profile.tenant_id)
-        .eq('is_active', true)
-        .eq('md_entities.is_vendor', false)
-        .not('entity_id', 'is', null);
-      if (drvErr) throw drvErr;
-      const driverIds = (internalDrivers || []).map(d => d.id);
+      const result = await getInternalDrivers();
+      const internalDrivers = result.ok ? (result.data || []) : [];
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to fetch internal drivers');
+      }
+      const driverIds = internalDrivers.map(d => d.id);
       if (driverIds.length === 0) { setAttendanceData([]); setAttendanceLoading(false); return; }
       const [attRes, inspRes] = await Promise.all([
         supabase.from('driver_attendance')
@@ -167,8 +165,8 @@ export default function DriverPerformancePage() {
       const attMap: Record<string, any> = {};
       (attRes.data || []).forEach(a => { if (!a.driver_id) return; attMap[a.driver_id] = a; });
       const inspMap: Record<string, any> = {};
-      (inspRes.data || []).forEach(i => { if (!inspMap[i.driver_id]) inspMap[i.driver_id] = i; });
-      const merged = (internalDrivers || []).map(d => ({
+      (inspRes.data || []).forEach(i => { if (!i.driver_id) return; inspMap[i.driver_id] = i; });
+      const merged = internalDrivers.map(d => ({
         ...d,
         attendance: attMap[d.id] || null,
         inspection: inspMap[d.id] || null,

@@ -14,6 +14,7 @@ import {
   Activity, ExternalLink, Settings, Shield, Map, ArrowRight
 } from "lucide-react";
 import Link from "next/link";
+import { getEntitiesByOwnership } from "@/lib/actions/entity-ownership-actions";
 
 /**
  * FLEET & PILOT HUB: ATLAS OPERATIONAL ASSET CONTROL
@@ -81,26 +82,24 @@ export default function FleetHubPage() {
 
       const fleetQuery = supabase.from('md_fleets').select('*, md_entities:entity_id(name), md_fleet_types(type_name)').order('plate_number');
       const driverQuery = supabase.from('md_drivers').select('*, md_entities:entity_id(name)').order('name');
-      const companyQuery = supabase.from('md_entities').select('*').eq('is_vendor', true).order('name');
       const truckTypeQuery = supabase.from('md_fleet_types').select('*').order('type_name');
 
       if (tenantId) {
           fleetQuery.eq('tenant_id', tenantId);
           driverQuery.eq('tenant_id', tenantId);
-          companyQuery.eq('tenant_id', tenantId);
           truckTypeQuery.eq('tenant_id', tenantId);
       }
 
-      const [fRes, dRes, cRes, tRes]: any[] = await Promise.all([
+      const companiesResult = await getEntitiesByOwnership(false);
+      const [fRes, dRes, tRes]: any[] = await Promise.all([
         fleetQuery,
         driverQuery,
-        companyQuery,
         truckTypeQuery
       ]);
 
       setFleets(fRes.data || []);
       setDrivers(dRes.data || []);
-      setCompanies(cRes.data || []);
+      setCompanies(companiesResult.ok ? (companiesResult.data || []) : []);
       setTruckTypes(tRes.data || []);
     } catch (error: any) {
       toast.error("Gagal sinkron data aset");
@@ -389,10 +388,10 @@ export default function FleetHubPage() {
                       </div>
                       <div className="space-y-3">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Ownership / Provider</label>
-                         <select className="w-full h-18 px-8 bg-slate-50 border border-slate-200 rounded-[1.8rem] text-sm font-black text-[#1E293B] outline-none" value={formData.entity_id || ''} onChange={(e) => setFormData({ ...formData, entity_id: e.target.value })}>
-                            <option value="">Internal Asset (Own)</option>
-                            {companies.filter(c => c.is_vendor).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                         </select>
+                          <select className="w-full h-18 px-8 bg-slate-50 border border-slate-200 rounded-[1.8rem] text-sm font-black text-[#1E293B] outline-none" value={formData.entity_id || ''} onChange={(e) => setFormData({ ...formData, entity_id: e.target.value })}>
+                             <option value="">Internal Asset (Own)</option>
+                             {companies.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                          </select>
                       </div>
                       <div className="space-y-3">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Truck Type</label>
@@ -438,10 +437,10 @@ export default function FleetHubPage() {
                       </div>
                       <div className="space-y-3">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Organization / Provider</label>
-                         <select className="w-full h-18 px-8 bg-slate-50 border border-slate-200 rounded-[1.8rem] text-sm font-black text-[#1E293B] outline-none" value={formData.entity_id || ''} onChange={(e) => setFormData({ ...formData, entity_id: e.target.value })}>
-                            <option value="">Internal Staff</option>
-                            {companies.filter(c => c.is_vendor).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                         </select>
+                          <select className="w-full h-18 px-8 bg-slate-50 border border-slate-200 rounded-[1.8rem] text-sm font-black text-[#1E293B] outline-none" value={formData.entity_id || ''} onChange={(e) => setFormData({ ...formData, entity_id: e.target.value })}>
+                             <option value="">Internal Staff</option>
+                             {companies.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                          </select>
                       </div>
                       <div className="space-y-3">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Pilot Phone / WhatsApp</label>

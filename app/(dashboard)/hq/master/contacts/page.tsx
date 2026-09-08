@@ -5,7 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { 
+import { assignRoleAction, revokeRoleAction } from '@/lib/actions/role-mutation-actions';
+import { setEntityOwnershipAction } from '@/lib/actions/entity-ownership-actions';
+import { classifyOwnership } from '@/lib/actions/entity-ownership-actions';
+import {
   Plus, Search, Edit2, Trash2, X, Loader2, Users, Filter, 
   MapPin, Phone, Mail, Globe, CheckCircle2, Building2, 
   ChevronDown, Map as MapIcon, Info
@@ -46,6 +49,7 @@ interface Entity {
   is_supplier: boolean;
   is_vendor: boolean;
   is_broker: boolean;
+  is_own: boolean | null;
   vendor_type: string;
   billing_address: string;
   billing_city: string;
@@ -81,6 +85,12 @@ export default function HQContactsPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+  const [ownershipSubmitting, setOwnershipSubmitting] = useState(false);
+  const [ownershipConfirmOpen, setOwnershipConfirmOpen] = useState(false);
+  const [ownershipReason, setOwnershipReason] = useState('');
+  const [ownershipSelected, setOwnershipSelected] = useState<boolean | null>(null);
+  const [expectedCurrentValue, setExpectedCurrentValue] = useState<boolean | null>(null);
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
   
   // Addresses State (within Modal)
   const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
@@ -256,10 +266,6 @@ export default function HQContactsPage() {
         phone: formData.phone,
         mobile: formData.mobile,
         whatsapp: formData.whatsapp,
-        is_customer: formData.is_customer,
-        is_supplier: formData.is_supplier,
-        is_vendor: formData.is_vendor,
-        is_broker: formData.is_broker,
         vendor_type: formData.vendor_type,
         billing_address: formData.billing_address,
         billing_city: formData.billing_city,
@@ -356,6 +362,34 @@ export default function HQContactsPage() {
         }
       }
 
+      // [AI] DATA-4E-X2.1: Sync canonical party_roles via server actions.
+      // Direct mutation of md_entities.is_* is FORBIDDEN in W1 (BR10 §5).
+      // The server action performs canonical write + compatibility projection.
+      if (entityId) {
+        const roleTypes: Array<{ key: 'is_vendor' | 'is_customer' | 'is_supplier' | 'is_broker'; canonical: 'VENDOR' | 'CUSTOMER' | 'SUPPLIER' | 'BROKER' }> = [
+          { key: 'is_customer', canonical: 'CUSTOMER' },
+          { key: 'is_supplier', canonical: 'SUPPLIER' },
+          { key: 'is_vendor', canonical: 'VENDOR' },
+          { key: 'is_broker', canonical: 'BROKER' },
+        ];
+        const previousFlags = selectedEntity ? {
+          is_vendor: !!selectedEntity.is_vendor,
+          is_customer: !!selectedEntity.is_customer,
+          is_supplier: !!selectedEntity.is_supplier,
+          is_broker: !!selectedEntity.is_broker,
+        } : { is_vendor: false, is_customer: false, is_supplier: false, is_broker: false };
+        for (const r of roleTypes) {
+          const desired = !!formData[r.key];
+          const previous = previousFlags[r.key];
+          if (desired === previous) continue;
+          const action = desired ? assignRoleAction : revokeRoleAction;
+          const result = await action(entityId, r.canonical, 'GLOBAL', null);
+          if (!result.ok) {
+            throw new Error(`Role sync failed for ${r.canonical}: ${result.error}`);
+          }
+        }
+      }
+
       clearTimeout(timeoutId);
       toast.success('Data kontak berhasil disimpan', { id: toastId });
       setIsModalOpen(false);
@@ -391,6 +425,71 @@ export default function HQContactsPage() {
     }
   };
 
+  const getOwnershipLabel = (isOwn: boolean | null) => {
+    if (isOwn === true) return 'Internal / Own';
+    if (isOwn === false) return 'External / Non-own';
+    return 'Unclassified';
+  };
+
+  const getOwnershipBadgeClass = (isOwn: boolean | null) => {
+    if (isOwn === true) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (isOwn === false) return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-slate-100 text-slate-500 border-slate-200';
+  };
+
+  const handleOpenOwnershipConfirm = (value: boolean) => {
+    if (!selectedEntity) return;
+    setOwnershipSelected(value);
+    setExpectedCurrentValue(selectedEntity.is_own);
+    setOwnershipReason('');
+    setOwnershipError(null);
+    setOwnershipConfirmOpen(true);
+  };
+
+  const handleSetOwnership = async () => {
+    if (!selectedEntity || ownershipSelected === null) return;
+    const reason = ownershipReason.trim();
+    if (reason.length < 5) {
+      setOwnershipError('Reason must be at least 5 characters.');
+      return;
+    }
+    setOwnershipSubmitting(true);
+    setOwnershipError(null);
+    try {
+      const result = await setEntityOwnershipAction(
+        selectedEntity.id,
+        ownershipSelected,
+        expectedCurrentValue,
+        reason
+      );
+      if (!result.ok) {
+        if (result.error && result.error.includes('CONCURRENCY_CONFLICT')) {
+          toast.error('Ownership has changed since loaded. Refreshing...');
+          fetchEntities();
+          setOwnershipConfirmOpen(false);
+          return;
+        }
+        throw new Error(result.error || 'Unknown error');
+      }
+      toast.success('Ownership classification updated.');
+      setOwnershipConfirmOpen(false);
+      fetchEntities();
+    } catch (error: any) {
+      const msg = error?.message || String(error);
+      if (msg.includes('403') || msg.toLowerCase().includes('permission')) {
+        setOwnershipError('You do not have permission to change ownership classification.');
+      } else if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+        setOwnershipError('Entity not found.');
+      } else if (msg.toLowerCase().includes('reason')) {
+        setOwnershipError('Invalid reason provided.');
+      } else {
+        setOwnershipError(msg);
+      }
+    } finally {
+      setOwnershipSubmitting(false);
+    }
+  };
+
   const fetchOtherAddresses = async (entityId: string) => {
     const { data } = await supabase.from('md_entity_addresses').select('*').eq('entity_id', entityId);
     const normalizedData = (data || []).map(addr => ({
@@ -409,6 +508,7 @@ export default function HQContactsPage() {
   const handleOpenModal = (entity?: Entity) => {
     if (entity) {
       setSelectedEntity(entity);
+      setExpectedCurrentValue(entity.is_own);
       setFormData({
         name: entity.name,
         legal_name: entity.legal_name || '',
@@ -421,6 +521,7 @@ export default function HQContactsPage() {
         is_supplier: entity.is_supplier,
         is_vendor: entity.is_vendor,
         is_broker: entity.is_broker,
+        is_own: entity.is_own,
         vendor_type: entity.vendor_type || 'OTHER',
         billing_address: entity.billing_address || '',
         billing_city: entity.billing_city || '',
@@ -439,8 +540,9 @@ export default function HQContactsPage() {
       supabase.from('md_entity_addresses').select('*').eq('entity_id', entity.id).then(({ data }) => {
         setOtherAddresses((data || []) as EntityAddress[]);
       });
-    } else {
+} else {
       setSelectedEntity(null);
+      setExpectedCurrentValue(null);
       setFormData({
         name: '',
         legal_name: '',
@@ -453,6 +555,7 @@ export default function HQContactsPage() {
         is_supplier: false,
         is_vendor: false,
         is_broker: false,
+        is_own: null,
         vendor_type: 'OTHER',
         billing_address: '',
         billing_city: '',
@@ -462,8 +565,8 @@ export default function HQContactsPage() {
         billing_longitude: 0,
         billing_directions: '',
         billing_method: 'hardcopy',
-    payment_terms: '',
-    notes: '',
+        payment_terms: '',
+        notes: '',
         is_active: true,
         parent_id: '',
       });
@@ -582,17 +685,17 @@ export default function HQContactsPage() {
                                     {ent.logo_url ? (
                                       <img src={ent.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
                                     ) : (
-                                      <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
-                                        {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
-                                      </div>
-                                    )}
+                                        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                                          {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
+                                     </div>
+                                     )}
                                     <div>
                                       <div className="text-sm font-medium text-slate-900">{ent.name}</div>
-                                      {ent.parent_id && (
-                                        <div className="text-xs text-blue-500 mt-0.5">
-                                          Child of {entities.find(e => e.id === ent.parent_id)?.name || 'Unknown Parent'}
-                                        </div>
-                                      )}
+                                       {ent.parent_id && (
+                                         <div className="text-xs text-blue-500 mt-0.5">
+                                           Child of {entities.find(e => e.id === ent.parent_id)?.name || 'Unknown Parent'}
+                                         </div>
+                                       )}
                                       <div className="text-xs text-slate-400 mt-0.5">{ent.legal_name || '-'}</div>
                                     </div>
                                   </div>
@@ -677,24 +780,87 @@ export default function HQContactsPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="col-span-full grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {(['is_customer', 'is_supplier', 'is_vendor', 'is_broker'] as const).map(role => (
-                      <label 
-                        key={role} 
-                        className={`
-                          flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer select-none
-                          ${formData[role] ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-100 text-slate-400 hover:border-slate-200'}
-                        `}
-                      >
-                        <input 
-                          type="checkbox" 
-                          className="hidden" 
-                          checked={formData[role]}
-                          onChange={(e) => setFormData({...formData, [role]: e.target.checked})}
-                        />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{role.split('_')[1]}</span>
-                      </label>
-                    ))}
-                  </div>
+{(['is_customer', 'is_supplier', 'is_vendor', 'is_broker'] as const).map(role => (
+                     <label 
+                       key={role} 
+                       className={`
+                         flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer select-none
+                         ${formData[role] ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-100 text-slate-400 hover:border-slate-200'}
+                       `}
+                     >
+                       <input 
+                         type="checkbox" 
+                         className="hidden" 
+                         checked={formData[role]}
+                         onChange={(e) => setFormData({...formData, [role]: e.target.checked})}
+                       />
+                       <span className="text-[10px] font-bold uppercase tracking-widest">{role.split('_')[1]}</span>
+                       </label>
+                   ))}
+                   
+                   {/* Ownership Classification Section */}
+                   <div className="col-span-full mb-6">
+                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                       <Globe className="w-4 h-4" />
+                       <span>Ownership Classification</span>
+                     </div>
+                     <div className="space-y-4">
+                       <div className="space-y-2">
+                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Current Ownership</label>
+                         <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg">
+                           <span className="text-sm font-medium">{getOwnershipLabel(selectedEntity?.is_own)}</span>
+                           <span className="px-2 py-0.5 text-xs rounded-full">{getOwnershipBadgeClass(selectedEntity?.is_own)}</span>
+                         </div>
+                       </div>
+                       <div className="space-y-2">
+                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">New Classification</label>
+                         <div className="flex gap-3">
+                           <label className="flex items-center cursor-pointer select-none rounded-full border border-slate-200 px-3 py-1">
+                             <input 
+                               type="radio" 
+                               className="hidden" 
+                               checked={ownershipSelected === true}
+                               onChange={(e) => setOwnershipSelected(true)}
+                             />
+                             <span className="text-[10px] font-medium">Internal / Own</span>
+                           </label>
+                           <label className="flex items-center cursor-pointer select-none rounded-full border border-slate-200 px-3 py-1">
+                             <input 
+                               type="radio" 
+                               className="hidden" 
+                               checked={ownershipSelected === false}
+                               onChange={(e) => setOwnershipSelected(false)}
+                             />
+                             <span className="text-[10px] font-medium">External / Non-own</span>
+                           </label>
+                           <label className="flex items-center cursor-pointer select-none rounded-full border border-slate-200 px-3 py-1">
+                             <input 
+                               type="radio" 
+                               className="hidden" 
+                               checked={ownershipSelected === null}
+                               onChange={(e) => setOwnershipSelected(null)}
+                             />
+                             <span className="text-[10px] font-medium">Unclassified</span>
+                           </label>
+                         </div>
+                         {ownershipSelected !== null && (
+                           <div className="space-y-2">
+                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reason for Change</label>
+                             <textarea 
+                               value={ownershipReason}
+                               onChange={(e) => setOwnershipReason(e.target.value)}
+                               placeholder="Explain why ownership is changing (minimum 5 characters)"
+                               className="w-full min-h-[60px] p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                             />
+                             {ownershipError && (
+                               <p className="text-[9px] text-rose-600 mt-1">{ownershipError}</p>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                      </div>
+                    </div>
+                   </div>
 
                   {formData.is_vendor && (
                     <div className="col-span-full animate-in slide-in-from-top-2">

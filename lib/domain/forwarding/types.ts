@@ -20,7 +20,7 @@ export type LegType = 'SEA' | 'LAND' | 'AIR' | 'CONSOLIDATION';
 export type TransportationMode = 'TRUCK' | 'CONTAINER';
 
 // Service type
-export type ServiceType = 'SEA_FREIGHT' | 'LAND_FREIGHT' | 'CONSOLIDATION';
+export type ServiceType = 'FCL' | 'LCL';
 
 // Execution configuration
 export interface ExecutionConfig {
@@ -184,5 +184,109 @@ export interface PriceMaster {
   cogs_other?: number | null;
   is_active?: boolean | null;
   created_at?: string;
+  [key: string]: any;
+}
+
+// Forwarding order header (fw_order_headers row)
+export interface ForwardingOrderHeader {
+  id: string;
+  tenant_id: string;
+  work_order_id: string;
+  customer_id: string;
+  service_type?: 'FCL' | 'LCL';
+  vessel_name?: string | null;
+  voyage_no?: string | null;
+  etd?: string | null;
+  eta?: string | null;
+  origin_port_id?: string | null;
+  dest_port_id?: string | null;
+  cargo_owner_name?: string | null;
+  cargo_owner_email?: string | null;
+  cargo_owner_phone?: string | null;
+  consignee_name?: string | null;
+  consignee_email?: string | null;
+  consignee_phone?: string | null;
+  tracking_token?: string | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+// Consolidation (fw_consolidations row)
+export interface ForwardingConsolidation {
+  id: string;
+  tenant_id: string;
+  consol_number: string;
+  shipping_line_id?: string | null;
+  shipping_line_name?: string | null;
+  vessel_name: string;
+  voyage_number?: string | null;
+  origin_port: string;
+  destination_port: string;
+  etd?: string | null;
+  eta?: string | null;
+  actual_etd?: string | null;
+  actual_eta?: string | null;
+  consol_warehouse_origin_id?: string | null;
+  consol_warehouse_destination_id?: string | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+// Container assignment (fw_container_assignments row)
+export interface ForwardingContainerAssignment {
+  id: string;
+  tenant_id: string;
+  consolidation_id: string;
+  container_number: string;
+  container_type: string;
+  seal_number?: string | null;
+  bl_number?: string | null;
+  max_volume_cbm?: number | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+// Container item (fw_container_items row)
+export interface ForwardingContainerItem {
+  id: string;
+  tenant_id: string;
+  container_assignment_id: string;
+  wo_item_id: string;
+  volume_cbm?: number | null;
+  gross_weight_kg?: number | null;
+  packages?: number | null;
+  package_type?: string | null;
+  commodity?: string | null;
+  description?: string | null;
+  delivery_type?: string | null;
+  delivery_address?: string | null;
+  delivery_contact?: string | null;
+  delivery_phone?: string | null;
+  pickup_wo_id?: string | null;
+  port_haulage_origin_wo_id?: string | null;
+  port_haulage_dest_wo_id?: string | null;
+  last_mile_wo_id?: string | null;
+  price_master_id?: string | null;
+  sell_price_snapshot?: number | null;
+  cogs_pickup?: number | null;
+  cogs_port_haulage_origin?: number | null;
+  cogs_ocean_freight?: number | null;
+  cogs_thc_origin?: number | null;
+  cogs_thc_dest?: number | null;
+  cogs_port_haulage_dest?: number | null;
+  cogs_last_mile?: number | null;
+  cogs_documentation?: number | null;
+  cogs_other?: number | null;
+  goods_received_at?: string | null;
+  is_deconsoled?: boolean | null;
+  deconsoled_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
 }

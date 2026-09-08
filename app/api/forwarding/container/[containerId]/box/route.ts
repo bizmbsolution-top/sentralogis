@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
+import { assertPermission } from '@/lib/application/identity/resolver';
+import { IdentityResolutionError } from '@/lib/application/identity/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ containerId: string }> }
 ) {
   try {
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:manage');
+
     const { containerId } = await params;
     const body = await req.json();
-    const { tenant_id, user_id, box_code, volume_cbm, colli, weight_kg, seal_number } = body;
+    const { box_code, volume_cbm, colli, weight_kg, seal_number } = body;
+    const tenant_id = ctx.tenantId;
 
-    if (!tenant_id || !user_id) {
-      return NextResponse.json({ success: false, error: 'Missing tenant_id or user_id' }, { status: 400 });
+    if (!box_code) {
+      return NextResponse.json({ success: false, error: 'box_code harus diisi' }, { status: 400 });
     }
 
     const { data: container, error: containerError } = await supabaseAdmin
@@ -59,6 +66,12 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: newBox });
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Create box error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -69,13 +82,11 @@ export async function GET(
   { params }: { params: Promise<{ containerId: string }> }
 ) {
   try {
-    const { containerId } = await params;
-    const { searchParams } = new URL(req.url);
-    const tenant_id = searchParams.get('tenant_id');
+    const ctx = await resolveSessionIdentity();
+    assertPermission(ctx, 'commercial:read');
 
-    if (!tenant_id) {
-      return NextResponse.json({ success: false, error: 'Missing tenant_id' }, { status: 400 });
-    }
+    const { containerId } = await params;
+    const tenant_id = ctx.tenantId;
 
     const { data: boxes, error } = await supabaseAdmin
       .from('fw_box_assignments')
@@ -109,6 +120,12 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: boxesWithItems });
   } catch (error: any) {
+    if (error instanceof IdentityResolutionError) {
+      return NextResponse.json(
+        { success: false, error: error.code, message: error.message },
+        { status: error.statusCode },
+      );
+    }
     console.error('Fetch boxes error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

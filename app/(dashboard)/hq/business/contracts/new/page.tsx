@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import ContractWizard from './ContractWizard';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { supabase } from '@/lib/supabaseClient';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 export default function NewContractPage() {
   const { profile } = useAuth();
@@ -25,14 +26,8 @@ export default function NewContractPage() {
       }
 
       try {
-        const customersPromise = supabase
-          .from('md_entities')
-          .select('id, name, code:entity_code')
-          .eq('tenant_id', tenantId)
-          .eq('is_customer', true)
-          .eq('is_active', true)
-          .order('name');
-          
+        const customersPromise = getEntitiesByRole('CUSTOMER');
+        
         const warehousesPromise = supabase
           .from('md_warehouses')
           .select('id, name')
@@ -81,7 +76,7 @@ export default function NewContractPage() {
           console.error("UOMs fetch error:", uomsResponse.error);
         }
 
-        if (customersResponse.data) setCustomers(customersResponse.data);
+        if (customersResponse.data) setCustomers(customersResponse.data.map((c: any) => ({ ...c, code: c.entity_code })));
         if (warehousesResponse.data) setWarehouses(warehousesResponse.data as any);
         if (servicesResponse.data) setServices(servicesResponse.data);
         if (uomsResponse.data) setUoms(uomsResponse.data);

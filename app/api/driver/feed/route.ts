@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
         : Promise.resolve({ data: [], error: null }),
       supabaseAdmin
         .from("driver_coins")
-        .select("id, amount, status, description, created_at")
+        .select("id, coins, coin_value, status, created_at")
         .in("driver_id", driverIds),
       supabaseAdmin
         .from("driver_attendance")
@@ -369,7 +369,7 @@ export async function GET(request: NextRequest) {
 
     // 7. Coin balance calculation
     const coinsData = coinsRes.data || [];
-    const totalCoins = coinsData.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+    const totalCoins = coinsData.reduce((s: number, c: any) => s + Number(c.coins || 0), 0);
 
     // 8. Active shift fleet plate
     let activeShiftData: any = shiftRes.data || null;
@@ -400,6 +400,8 @@ export async function GET(request: NextRequest) {
         total_km_driven: canonicalProfile?.total_km_driven || totalKMCalculated,
         linked_driver_ids: driverIds,
         linked_tenant_ids: tenantIds,
+        total_coins: totalCoins,
+        total_coin_value: totalCoins * 5000,
       },
       active_job: activeJob,
       queued_jobs: queuedJobs,

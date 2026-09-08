@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { 
@@ -12,19 +11,18 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import type { Consolidation } from '@/lib/domain/forwarding/types';
 import Link from 'next/link';
+import { fetchConsolidations } from '@/lib/actions/forwardingActions';
 
 export default function ConsolidationListPage() {
   const { profile } = useAuth();
   const router = useRouter();
   
-  const [items, setItems] = useState<Consolidation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // Modal State for Create
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+   const [items, setItems] = useState<Consolidation[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [submitting, setSubmitting] = useState(false);
+   const [isModalOpen, setIsModalOpen] = useState(false);
+   
+   const [searchTerm, setSearchTerm] = useState('');
   
   const [formData, setFormData] = useState({
     vessel_name: '',
@@ -36,33 +34,18 @@ export default function ConsolidationListPage() {
     shipping_line_name: ''
   });
 
-  // Sync tenant info
-  useEffect(() => {
-    if (profile?.tenant_id) {
-      setTenantId(profile.tenant_id);
-    }
-  }, [profile]);
-
   const fetchData = useCallback(async () => {
-    if (!tenantId) return;
     setLoading(true);
-
     try {
-      const { data, error } = await supabase
-        .from('fw_consolidations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setItems((data as Consolidation[]) || []);
+      const data = await fetchConsolidations();
+      setItems(data);
     } catch (error: any) {
-      console.error('Fetch error:', error);
+      console.error(error);
       toast.error('Gagal memuat data Konsolidasi');
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -70,32 +53,27 @@ export default function ConsolidationListPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId) return;
     setSubmitting(true);
 
     try {
-      const payload = {
-        tenant_id: tenantId,
-        vessel_name: formData.vessel_name,
-        voyage_number: formData.voyage_number,
-        origin_port: formData.origin_port,
-        destination_port: formData.destination_port,
-        etd: formData.etd || null,
-        eta: formData.eta || null,
-        shipping_line_name: formData.shipping_line_name || null,
-        status: 'open'
-      };
+      const res = await fetch('/api/forwarding/consol', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vessel_name: formData.vessel_name,
+          voyage_number: formData.voyage_number,
+          origin_port: formData.origin_port,
+          destination_port: formData.destination_port,
+          etd: formData.etd || null,
+          eta: formData.eta || null,
+          shipping_line_name: formData.shipping_line_name || null,
+        }),
+      });
 
-      const { data, error } = await supabase
-        .from('fw_consolidations')
-        .insert([payload as any])
-        .select('id')
-        .single();
-      
-      if (error) throw error;
-      
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
       toast.success('Konsolidasi baru berhasil dibuat');
-      setIsModalOpen(false);
       setFormData({
         vessel_name: '',
         voyage_number: '',
@@ -107,7 +85,7 @@ export default function ConsolidationListPage() {
       });
       fetchData();
     } catch (error: any) {
-      console.error('Submit error:', error);
+      console.error(error);
       toast.error(error.message || 'Gagal membuat konsolidasi');
     } finally {
       setSubmitting(false);

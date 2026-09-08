@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { getNextQuoteNumber } from '@/app/quote/number-actions';
 
 // Mock types for UI display before DB is fully seeded
 type DealStage = 'PROSPECTING' | 'NEGOTIATION' | 'QUOTATION' | 'WON' | 'LOST';
@@ -97,7 +98,8 @@ function DealDrawer({ dealId, onClose, onDealUpdated }: { dealId: string; onClos
     if (!deal) return;
     setCreatingQuote(true);
     try {
-      const quoteNumber = `QT-${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2, '0')}-${Math.floor(Math.random()*10000).toString().padStart(4, '0')}`;
+      // U-11: Server-side quote number authority (replaces client-side Math.random)
+      const quoteNumber = await getNextQuoteNumber(profile?.tenant_id as string);
       const { data, error } = await supabase.from('crm_quotations').insert([{
         tenant_id: profile?.tenant_id as string,
         deal_id: deal.id,

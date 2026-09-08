@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { toast, Toaster } from "react-hot-toast";
 import { 
   ClipboardList, Search, RefreshCw, Warehouse,
-  CheckCircle2, Clock, PlayCircle, Loader2, Package, ArrowRight, Truck, Calendar
+  CheckCircle2, Clock, PlayCircle, Loader2, Package, ArrowRight, Truck, Calendar, XCircle
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import dayjs from "dayjs";
@@ -146,6 +146,24 @@ export default function WarehouseWorkOrdersPage() {
      return jos.length > 0 && jos.every((j: any) => ['completed', 'done', 'selesai'].includes(j.status?.toLowerCase()));
    };
 
+   // [AI] Effective status derived from actual JO states — wo_items.status can be stale
+   // (mass corruption incident 2026-07-28 set every item to handover_rejected)
+   const ACTIVE_JO_STATES = ['in_progress', 'checking', 'putaway_in_progress', 'unloading', 'truck_arrived',
+     'menuju', 'tiba', 'picking_up', 'delivering', 'start journey', 'menunggu mulai / start', 'menunggu berangkat'];
+   const ASSIGNED_JO_STATES = ['assigned', 'confirmed_assigned', 'dispatched'];
+
+   const getEffectiveStatus = (item: WOItem): string => {
+     const jos = (item.job_orders || []).filter((j: any) => (j.status || '').toLowerCase() !== 'cancelled');
+     if (jos.length === 0) return item.status?.toLowerCase() || '';
+     const rejected = jos.filter((j: any) => (j.status || '').toLowerCase() === 'rejected');
+     if (rejected.length === jos.length) return 'handover_rejected';
+     const active = jos.filter((j: any) => !rejected.includes(j));
+     if (active.length > 0 && active.every((j: any) => ['completed', 'done', 'selesai', 'pekerjaan selesai'].includes((j.status || '').toLowerCase()))) return 'completed';
+     if (active.some((j: any) => ACTIVE_JO_STATES.some(s => (j.status || '').toLowerCase().includes(s)))) return 'in_progress';
+     if (active.some((j: any) => ASSIGNED_JO_STATES.includes((j.status || '').toLowerCase()) || (j.fleet_id && j.driver_id))) return 'assigned';
+     return 'pending';
+   };
+
    const getItemType = (item: WOItem): string => {
      const opType = item.item_data?.operation_type?.toUpperCase() || '';
      const direction = item.item_data?.direction || '';
@@ -153,6 +171,8 @@ export default function WarehouseWorkOrdersPage() {
      if (isTransfer && direction === 'INBOUND') return 'TRANSFER_IN';
      if (isTransfer && direction === 'OUTBOUND') return 'TRANSFER_OUT';
      if (isTransfer) return 'TRANSFER_IN';
+     // [AI] Value Added Services — repacking/kitting/bundling/VAS/cross-docking
+     if (['REPACKING', 'KITTING', 'BUNDLING', 'VAS', 'CROSS_DOCKING'].includes(opType)) return 'ADD_SERVICE';
      if (direction === 'INBOUND' || opType === 'INBOUND') return 'INBOUND';
      if (direction === 'OUTBOUND' || opType === 'OUTBOUND') return 'OUTBOUND';
      return 'UNKNOWN';
@@ -162,6 +182,7 @@ export default function WarehouseWorkOrdersPage() {
    const inboundCount = allTypes.filter(t => t === 'INBOUND').length;
    const outboundCount = allTypes.filter(t => t === 'OUTBOUND').length;
    const transferCount = allTypes.filter(t => ['TRANSFER_IN', 'TRANSFER_OUT'].includes(t)).length;
+   const addServiceCount = allTypes.filter(t => t === 'ADD_SERVICE').length;
    const hasOutbound = outboundCount > 0;
 
    const typeFilteredItems = items.filter(item => {
@@ -170,22 +191,25 @@ export default function WarehouseWorkOrdersPage() {
      if (typeFilter === 'INBOUND') return itemType === 'INBOUND';
      if (typeFilter === 'OUTBOUND') return itemType === 'OUTBOUND';
      if (typeFilter === 'TRANSFER') return ['TRANSFER_IN', 'TRANSFER_OUT'].includes(itemType);
+     if (typeFilter === 'ADD_SERVICE') return itemType === 'ADD_SERVICE';
      return true;
    });
 
-   const pendingCount = typeFilteredItems.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(i.status?.toLowerCase() || '')).length;
-   const inProgressCount = typeFilteredItems.filter(i => !isItemCompleted(i) && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(i.status?.toLowerCase() || '')).length;
+   const pendingCount = typeFilteredItems.filter(i => !isItemCompleted(i) && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(getEffectiveStatus(i))).length;
+   const inProgressCount = typeFilteredItems.filter(i => !isItemCompleted(i) && ['in_progress', 'assigned'].includes(getEffectiveStatus(i))).length;
    const completedCount = typeFilteredItems.filter(i => isItemCompleted(i)).length;
+   const rejectedCount = typeFilteredItems.filter(i => getEffectiveStatus(i) === 'handover_rejected').length;
 
    const displayItems = filteredItems.filter(item => {
       if (statusFilter === 'ALL' && typeFilter === 'ALL') return true;
       const completed = isItemCompleted(item);
-      const s = item.status?.toLowerCase() || '';
-      
+      const s = getEffectiveStatus(item);
+
       const matchesStatus = statusFilter === 'ALL' ? true : (
         statusFilter === 'PENDING' ? (!completed && ['need_assignment', 'pending', 'menunggu_wh_eksekusi'].includes(s)) :
-        statusFilter === 'IN_PROGRESS' ? (!completed && !['need_assignment', 'pending', 'menunggu_wh_eksekusi', 'completed', 'done', 'selesai'].includes(s)) :
-        statusFilter === 'COMPLETED' ? completed : true
+        statusFilter === 'IN_PROGRESS' ? (!completed && ['in_progress', 'assigned'].includes(s)) :
+        statusFilter === 'COMPLETED' ? completed :
+        statusFilter === 'REJECTED' ? (!completed && s === 'handover_rejected') : true
       );
       if (!matchesStatus) return false;
 
@@ -194,6 +218,7 @@ export default function WarehouseWorkOrdersPage() {
       if (typeFilter === 'INBOUND') return itemType === 'INBOUND';
       if (typeFilter === 'OUTBOUND') return itemType === 'OUTBOUND';
       if (typeFilter === 'TRANSFER') return ['TRANSFER_IN', 'TRANSFER_OUT'].includes(itemType);
+      if (typeFilter === 'ADD_SERVICE') return itemType === 'ADD_SERVICE';
       return true;
    });
 
@@ -226,7 +251,7 @@ export default function WarehouseWorkOrdersPage() {
       </div>
 
       {/* Summary Cards as Filters */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
          <button onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')} className={`p-4 bg-white border ${statusFilter === 'PENDING' ? 'border-amber-500 ring-2 ring-amber-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-amber-300`}>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                <Clock className="w-5 h-5" />
@@ -254,6 +279,15 @@ export default function WarehouseWorkOrdersPage() {
                <p className="text-xl font-black italic">{completedCount}</p>
             </div>
          </button>
+         <button onClick={() => setStatusFilter(statusFilter === 'REJECTED' ? 'ALL' : 'REJECTED')} className={`p-4 bg-white border ${statusFilter === 'REJECTED' ? 'border-rose-500 ring-2 ring-rose-500/20 shadow-md' : 'border-slate-200'} rounded-3xl shadow-sm flex flex-col gap-2 text-left transition-all hover:border-rose-300`}>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+               <XCircle className="w-5 h-5" />
+            </div>
+            <div>
+               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 line-clamp-1">Ditolak HQ</p>
+               <p className="text-xl font-black italic">{rejectedCount}</p>
+            </div>
+         </button>
       </div>
 
       {/* Type Tabs */}
@@ -272,6 +306,11 @@ export default function WarehouseWorkOrdersPage() {
          <button onClick={() => setTypeFilter('TRANSFER')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'TRANSFER' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-white text-purple-600 border border-purple-200 hover:border-purple-300'}`}>
             TRANSFER <span className="opacity-60">({transferCount})</span>
          </button>
+         {addServiceCount > 0 && (
+           <button onClick={() => setTypeFilter('ADD_SERVICE')} className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${typeFilter === 'ADD_SERVICE' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'bg-white text-orange-600 border border-orange-200 hover:border-orange-300'}`}>
+              ADD SERVICE <span className="opacity-60">({addServiceCount})</span>
+           </button>
+         )}
       </div>
 
       {/* Search & List */}
@@ -321,13 +360,21 @@ export default function WarehouseWorkOrdersPage() {
                     const isTransfer = opType.includes('TRANSFER');
                     const isInboundTransfer = isTransfer && direction === 'INBOUND';
                     const isOutboundTransfer = isTransfer && direction === 'OUTBOUND';
+                    // [AI] Value Added Services — repacking/kitting/bundling/VAS/cross-docking
+                    const isAddService = ['REPACKING', 'KITTING', 'BUNDLING', 'VAS', 'CROSS_DOCKING'].includes(opType);
                     
                     let opLabel = 'OUTBOUND';
                     let opShort = 'OUT';
                     let opBgIcon = 'bg-orange-100 text-orange-600';
                     let opBgBadge = 'bg-orange-100 text-orange-700';
                     
-                    if (isInboundTransfer) {
+                    if (isAddService) {
+                      opLabel = opType === 'REPACKING' ? 'REPACKING' : opType === 'KITTING' ? 'KITTING' :
+                                opType === 'BUNDLING' ? 'BUNDLING' : opType === 'VAS' ? 'ADD SERVICE' : 'CROSS-DOCK';
+                      opShort = 'VAS';
+                      opBgIcon = 'bg-amber-100 text-amber-600';
+                      opBgBadge = 'bg-amber-100 text-amber-700';
+                    } else if (isInboundTransfer) {
                       opLabel = 'TRANSFER IN';
                       opShort = 'IN';
                       opBgIcon = 'bg-purple-100 text-purple-600';
@@ -343,19 +390,20 @@ export default function WarehouseWorkOrdersPage() {
                       opBgIcon = 'bg-sky-100 text-sky-600';
                       opBgBadge = 'bg-sky-100 text-sky-700';
                     }
+                   // [AI] Badge derived from effective status (JO-based), not raw wo_items.status
+                   const effStatus = getEffectiveStatus(item);
                    let badgeComponent = <Badge className="!bg-amber-100 !text-amber-700 !border-amber-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PERLU ASSIGNMENT</Badge>;
 
-                   if (item.status === 'menunggu_wh_eksekusi') {
-                      badgeComponent = <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">SIAP EKSEKUSI</Badge>;
-                   }
-
-                   if (isCompleted || item.status === 'completed') {
+                   if (effStatus === 'handover_rejected') {
+                      badgeComponent = <Badge className="!bg-rose-100 !text-rose-700 !border-rose-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">DITOLAK HQ</Badge>;
+                   } else if (effStatus === 'completed' || isCompleted) {
                       badgeComponent = <Badge className="!bg-indigo-950 !text-white !border-indigo-950 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PEKERJAAN SELESAI</Badge>;
-                   } else {
-                      const anyInProgress = jos.some((j: any) => ['in_progress', 'checking', 'putaway_in_progress', 'unloading'].includes(j.status?.toLowerCase())) || ['in_progress'].includes(item.status?.toLowerCase() || '');
-                      if (anyInProgress) {
-                         badgeComponent = <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">PROSES WMS</Badge>;
-                      }
+                   } else if (['in_progress', 'checking', 'putaway_in_progress', 'unloading', 'truck_arrived'].includes(effStatus)) {
+                      badgeComponent = <Badge className="!bg-emerald-100 !text-emerald-700 !border-emerald-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">PROSES WMS</Badge>;
+                   } else if (effStatus === 'assigned') {
+                      badgeComponent = <Badge className="!bg-sky-100 !text-sky-700 !border-sky-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">UNIT DITUGASKAN</Badge>;
+                   } else if (item.status?.toLowerCase() === 'menunggu_wh_eksekusi') {
+                      badgeComponent = <Badge className="!bg-indigo-100 !text-indigo-600 !border-indigo-200 font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">SIAP EKSEKUSI</Badge>;
                    }
 
                    return (
@@ -390,7 +438,7 @@ export default function WarehouseWorkOrdersPage() {
 
                                <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                   <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {dayjs(item.wo?.execution_date).format('DD MMM YYYY')}</span>
-                                  <span className="flex items-center gap-1"><ClipboardList className="w-3 h-3" /> JO: {completedJos.length}/{jos.length} done</span>
+                                  <span className="flex items-center gap-1"><ClipboardList className="w-3 h-3" /> Tasks: {completedJos.length}/{jos.length} done</span>
                                </div>
                             </div>
                          </div>

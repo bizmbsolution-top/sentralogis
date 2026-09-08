@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { generateDriverCodeAction } from '@/lib/actions/masterCodeActions';
+import { getEntitiesByRole } from '@/lib/actions/entity-role-actions';
 
 const isDuplicateDriverPhoneError = (error: any) => {
   const message = String(
@@ -105,16 +106,11 @@ export default function DriversPage() {
       if (driverError) throw driverError;
 
       // Fetch Vendors (Transporters)
-      const { data: vendorData } = await supabase
-        .from('md_entities')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('is_vendor', true)
-        .eq('vendor_type', 'TRANSPORTER')
-        .eq('is_active', true);
+      const vendorResult = await getEntitiesByRole('VENDOR');
+      const vendorData = vendorResult.ok && vendorResult.data ? vendorResult.data.filter((v: any) => v.vendor_type === 'TRANSPORTER') : [];
 
       setDrivers((driverData as any[]) || []);
-      setVendors((vendorData as any[]) || []);
+      setVendors(vendorData || []);
     } catch (error: any) {
       toast.error('Gagal mengambil data master');
     } finally {

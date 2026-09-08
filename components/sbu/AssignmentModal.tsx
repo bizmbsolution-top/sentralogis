@@ -304,8 +304,6 @@ export default function AssignmentModal({
           driver_share_percentage:
             selectedTransporterId === "own" ? Number(driverShare) : 0,
           status: "pending",
-          tracking_token: crypto.randomUUID(),
-          driver_link_token: Math.random().toString(36).substring(2, 15),
         } as any)
         .select()
         .single();

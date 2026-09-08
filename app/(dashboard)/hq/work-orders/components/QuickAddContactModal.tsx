@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { X, Save, Loader2, Building2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { assignRoleAction } from '@/lib/actions/role-mutation-actions';
 
 interface QuickAddContactModalProps {
   onClose: () => void;
@@ -23,24 +24,38 @@ export default function QuickAddContactModal({ onClose, onSuccess }: QuickAddCon
 
     setLoading(true);
     try {
+      // [AI] DATA-4E-X4: Entity insert without direct role flag writes.
+      // Role flags (is_customer/is_vendor) are now exclusively managed via canonical
+      // assignRoleAction per BR10 dual-write pattern. W4 (QuickAddContactModal) was
+      // previously the third effective legacy role writer.
       const { data, error } = await supabase
         .from('md_entities')
         .insert({
           tenant_id: profile.tenant_id,
           name: name.toUpperCase(),
-          is_customer: true,
-          is_vendor: true,
           is_active: true
         } as any)
         .select()
         .single();
 
       if (error) throw error;
-      
+
+      const newEntity = data as { id: string };
+
+      // [AI] DATA-4E-X4: Sync canonical party_roles via server actions for Quick Add.
+      // Quick Add grants BOTH CUSTOMER + VENDOR roles (preserves prior behavior).
+      const roleTypes: Array<'CUSTOMER' | 'VENDOR'> = ['CUSTOMER', 'VENDOR'];
+      for (const canonical of roleTypes) {
+        const result = await assignRoleAction(newEntity.id, canonical, 'GLOBAL', null);
+        if (!result.ok) {
+          throw new Error(`Role sync failed for ${canonical}: ${result.error}`);
+        }
+      }
+
       toast.success('Kontak baru berhasil ditambahkan');
       onSuccess(data);
     } catch (err: any) {
-      toast.error('Gagal menambah kontak');
+      toast.error(err?.message || 'Gagal menambah kontak');
     } finally {
       setLoading(false);
     }
@@ -62,7 +77,7 @@ export default function QuickAddContactModal({ onClose, onSuccess }: QuickAddCon
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Company Name *</label>
-            <input 
+            <input
               autoFocus
               type="text"
               required
@@ -73,8 +88,8 @@ export default function QuickAddContactModal({ onClose, onSuccess }: QuickAddCon
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/20 flex items-center justify-center gap-2"
           >
