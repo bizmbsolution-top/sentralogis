@@ -31,6 +31,7 @@ import { runU17OperationalHandoffContractSuite } from '../lib/__tests__/u17-oper
 import { runU17rOperationalHandoffContractForensicReconciliationSuite } from '../lib/__tests__/u17r-operational-handoff-contract-forensic-reconciliation.test';
 import { runU17aFulfillmentAdrRatificationSuite } from '../lib/__tests__/u17a-fulfillment-operational-handoff-adr-ratification.test';
 import { runAdr091Suite } from '../lib/__tests__/adr091-copilot-domain-mutation-authority.test';
+import { runAdr092Phase3Suite } from '../lib/__tests__/adr092-phase3-assign-driver-e2e.test';
 import { runU18OperationalHandoffFoundationSuite } from '../lib/__tests__/u18-operational-handoff-foundation.test';
 import { runU18rOperationalHandoffContractForensicReconciliationSuite } from '../lib/__tests__/u18r-operational-handoff-foundation-forensic-reconciliation.test';
 import { runU19OperationalHandoffDomainExecutionSuite } from '../lib/__tests__/u19-operational-handoff-domain-execution-integration.test';
@@ -130,6 +131,7 @@ const asyncSuites: Array<{ name: string; fn: () => Promise<SuiteResult> }> = [
   { name: 'DATA-4E Post-X4 Reconciliation Assessment', fn: async () => { const r = await runPostX4ReconciliationAssessment(); return toSuiteResult(r); } },
   { name: 'DATA-4E Final Closure Assessment', fn: async () => { const r = await runFinalClosureAssessment(); return toSuiteResult(r); } },
   { name: 'R-Reader Wave R-A Entity Ownership Migration', fn: async () => { const r = await runRReaderWaveRASuite(); return toSuiteResult(r); } },
+  { name: 'ADR-092 Phase 3 ASSIGN_DRIVER Integration/E2E', fn: runAdr092Phase3Suite },
 ];
 
 let totalPass = 0;
