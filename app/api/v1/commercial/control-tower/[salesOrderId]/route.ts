@@ -18,10 +18,13 @@ import {
 } from '@/lib/control-tower/service';
 import { toErrorResponse } from '@/lib/sales-order/http';
 
-export async function GET(req: NextRequest, { params }: { params: { salesOrderId: string } }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ salesOrderId: string }> },
+) {
   try {
     const session = await resolveSessionIdentity();
-    const { salesOrderId } = params;
+    const { salesOrderId } = await params;
     const { searchParams } = new URL(req.url);
     const view = searchParams.get('view');
 
