@@ -4,6 +4,7 @@ import { StructuralValidationResult } from '../validation/ValidationModels';
 import { ExplainabilityData } from '../metrics/ExplainabilityData';
 import { EnrichedOperationalContext } from '../engine/ContextEnricher';
 import { CopilotResponse } from '../engine/CopilotEngine';
+import type { IdentityContext } from '@/lib/application/identity/types';
 
 export enum PipelineStatus {
   CONTINUE = 'CONTINUE',
@@ -24,7 +25,8 @@ export class PipelineContext {
   
   userInput: string;
   context: OperationalContext;
-  
+  identity: IdentityContext | null;
+
   resolvedIntentName?: string;
   resolvedIntentSuggestions?: string[];
   resolvedEntities?: EntityResolutionResult;
@@ -40,11 +42,12 @@ export class PipelineContext {
   
   finalResponse?: CopilotResponse;
 
-  constructor(userInput: string, context: OperationalContext) {
+  constructor(userInput: string, context: OperationalContext, identity?: IdentityContext | null) {
     this.pipelineId = `pl-${Math.random().toString(36).substring(2, 9)}`;
     this.correlationId = `cor-${Math.random().toString(36).substring(2, 9)}`;
     this.userInput = userInput;
     this.context = context;
+    this.identity = identity ?? null;
   }
 }
 

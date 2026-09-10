@@ -1,6 +1,7 @@
 import { CopilotMetrics } from '../metrics/PerformanceMetrics';
 import { EnrichedOperationalContext } from './ContextEnricher';
 import { OperationalContext } from '../context/OperationalContext';
+import type { IdentityContext } from '@/lib/application/identity/types';
 
 import { CopilotPipeline } from '../pipeline/CopilotPipeline';
 import { PipelineContext } from '../pipeline/PipelineModels';
@@ -26,7 +27,8 @@ export class CopilotEngine {
   
   static async processCommand(
     userInput: string,
-    context: OperationalContext
+    context: OperationalContext,
+    identity?: IdentityContext,
   ): Promise<CopilotResponse> {
     
     const pipeline = new CopilotPipeline()
@@ -37,7 +39,7 @@ export class CopilotEngine {
       .register(new ExplainabilityStage())
       .register(new ResponseStage());
       
-    const pipelineContext = new PipelineContext(userInput, context);
+    const pipelineContext = new PipelineContext(userInput, context, identity);
     
     await pipeline.execute(pipelineContext);
     

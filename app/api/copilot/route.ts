@@ -6,7 +6,6 @@ import { UserContext } from '@/src/platforms/copilot/context/UserContext';
 import { PermissionContext } from '@/src/platforms/copilot/context/PermissionContext';
 import { ConversationContext } from '@/src/platforms/copilot/context/ConversationContext';
 import { WorkspaceContext } from '@/src/platforms/copilot/context/WorkspaceContext';
-import { MockVisionAdapter } from '@/src/platforms/copilot/intelligence/adapters/MockVisionAdapter';
 import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
 import { assertPermission } from '@/lib/application/identity/resolver';
 import { createFoundationContext } from '@/lib/copilot/foundation/integration';
@@ -28,12 +27,17 @@ export async function POST(req: Request) {
     let inputText = message || '';
 
     if (image && image.filename && image.data) {
-      const extractedText = await MockVisionAdapter.extractTextFromImage(
-        image.filename, 
-        image.mimeType || 'image/png', 
-        image.data
-      );
-      inputText += `\n[SYSTEM ENRICHED OCR TEXT FROM ${image.filename}]:\n${extractedText}`;
+      if (process.env.NODE_ENV !== 'production') {
+        const { MockVisionAdapter } = await import(
+          '@/src/platforms/copilot/intelligence/adapters/MockVisionAdapter'
+        );
+        const extractedText = await MockVisionAdapter.extractTextFromImage(
+          image.filename,
+          image.mimeType || 'image/png',
+          image.data
+        );
+        inputText += `\n[SYSTEM ENRICHED OCR TEXT FROM ${image.filename}]:\n${extractedText}`;
+      }
     }
 
     if (!inputText.trim()) {
@@ -50,7 +54,7 @@ export async function POST(req: Request) {
       workspace: WorkspaceContext.create(activeContext.workspace || {})
     });
 
-    const response = await CopilotEngine.processCommand(inputText, context);
+    const response = await CopilotEngine.processCommand(inputText, context, ctx);
 
     const [operationalSummary] = await Promise.all([
       OperationalSummaryProvider.getSummary(foundationContext).catch(() => null),

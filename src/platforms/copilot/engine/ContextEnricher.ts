@@ -6,6 +6,7 @@ import { OperationalInsightEngine } from '../insight/OperationalInsightEngine';
 import { OperationalInsight } from '../insight/OperationalInsight';
 import { createFoundationContext } from '@/lib/copilot/foundation/integration';
 import { TimelineQueryProvider } from '@/lib/copilot/read/timeline-provider';
+import type { IdentityContext } from '@/lib/application/identity/types';
 
 export interface EnrichedOperationalContext {
   situation: OperationalSituation;
@@ -21,9 +22,9 @@ export class ContextEnricher {
    */
   static async enrichFromDatabase(
     jobOrderId?: string,
-    identityContext?: { tenantId: string; userId: string },
+    identity?: IdentityContext,
   ): Promise<EnrichedOperationalContext> {
-    if (!jobOrderId || !identityContext) {
+    if (!jobOrderId || !identity) {
       const situation = OperationalContextEngine.evaluateSituation([]);
       return {
         situation,
@@ -33,15 +34,7 @@ export class ContextEnricher {
       };
     }
 
-    const foundationContext = createFoundationContext({
-      tenantId: identityContext.tenantId,
-      userId: identityContext.userId,
-      role: 'USER',
-      permissions: ['commercial:read'],
-      isTenantOwner: false,
-      membershipId: null,
-      sbuScope: null,
-    } as any);
+    const foundationContext = createFoundationContext(identity);
 
     try {
       const result = await TimelineQueryProvider.getTimeline(foundationContext, {
