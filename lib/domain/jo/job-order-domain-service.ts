@@ -836,62 +836,43 @@ export class DriverReplacementService {
         };
       }
 
-      const now = new Date().toISOString();
-      const newToken = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const { data, error } = await db().rpc('replace_driver_atomic', {
+        p_tenant_id: context.tenantId,
+        p_job_order_id: input.jobOrderId,
+        p_new_driver_id: input.newDriverId,
+        p_new_fleet_id: input.newFleetId || null,
+        p_new_transporter_id: input.newTransporterId || null,
+        p_reason: input.reason || null,
+      });
 
-      const updatePayload: Record<string, unknown> = {
-        driver_id: input.newDriverId,
-        driver_link_token: newToken,
-        driver_response: 'accepted',
-        driver_response_at: now,
-        accepted_at: now,
-        status: 'ASSIGNED',
-        rejection_note: input.reason ? `[REPLACE] ${input.reason}` : (jo.rejectionNote || '[REPLACE] Driver replaced'),
-        updated_at: now,
-      };
-
-      if (input.newFleetId) {
-        updatePayload.fleet_id = input.newFleetId;
-      }
-      if (input.newTransporterId) {
-        updatePayload.transporter_id = input.newTransporterId;
-      }
-
-      const { data, error } = await db()
-        .from('job_orders')
-        .update(updatePayload)
-        .eq('id', input.jobOrderId)
-        .eq('tenant_id', context.tenantId)
-        .select('*')
-        .single();
-
-      if (error || !data) {
+      if (error) {
         return {
           success: false,
-          error: error?.message || 'Failed to replace driver',
+          error: error.message,
           code: 'DATABASE_ERROR',
         };
       }
 
-      // Release old assets
-      if (jo.fleetId) {
-        await db().from('md_fleets').update({ status: 'available' }).eq('id', jo.fleetId).eq('status', 'on_duty');
-      }
-      if (jo.driverId) {
-        await db().from('md_drivers').update({ status: 'available', is_working: false }).eq('id', jo.driverId).eq('is_working', true);
+      const row = (data as any[] | null)?.[0];
+      if (!row) {
+        return {
+          success: false,
+          error: 'No response from replace_driver_atomic',
+          code: 'DATABASE_ERROR',
+        };
       }
 
-      // Mark new assets
-      if (input.newFleetId) {
-        await db().from('md_fleets').update({ status: 'on_duty' }).eq('id', input.newFleetId);
+      if (!row.p_success) {
+        return {
+          success: false,
+          error: row.p_error,
+          code: row.p_code || 'DATABASE_ERROR',
+        };
       }
-      await db().from('md_drivers').update({ status: 'on_duty', is_working: true }).eq('id', input.newDriverId);
-
-      await insertJobTracking(context.tenantId, input.jobOrderId, 'OPS_REJECT_REASSIGN', `Driver replaced. Reason: ${input.reason || 'N/A'}`);
 
       return {
         success: true,
-        jobOrder: mapRowToJobOrder(data),
+        jobOrder: mapRowToJobOrder(JSON.parse(row.p_job_order)),
       };
     } catch (err: unknown) {
       if (err instanceof JobOrderError) {
