@@ -162,7 +162,81 @@ class MockJobOrderDb implements JobOrderDbClient {
   }
 
   rpc(fn: string, args: Record<string, unknown>) {
+    if (fn === 'replace_driver_atomic') {
+      return Promise.resolve(this.mockReplaceDriverAtomic(args));
+    }
     return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
+  }
+
+  private mockReplaceDriverAtomic(args: Record<string, unknown>): {
+    data: Array<Record<string, unknown>> | null;
+    error: DbError | null;
+  } {
+    const p_tenant_id = String(args.p_tenant_id);
+    const p_job_order_id = String(args.p_job_order_id);
+    const p_new_driver_id = String(args.p_new_driver_id);
+    const p_new_fleet_id = args.p_new_fleet_id ? String(args.p_new_fleet_id) : null;
+    const p_new_transporter_id = args.p_new_transporter_id ? String(args.p_new_transporter_id) : null;
+    const p_reason = args.p_reason ? String(args.p_reason) : null;
+
+    const joIdx = this.jobOrders.findIndex((j) => j.id === p_job_order_id && j.tenant_id === p_tenant_id);
+    if (joIdx === -1) {
+      return {
+        data: [{ p_success: false, p_error: 'Job order not found', p_code: 'NOT_FOUND', p_job_order: null }],
+        error: null,
+      };
+    }
+
+    const jo = this.jobOrders[joIdx];
+    const oldFleetId = jo.fleet_id;
+    const oldDriverId = jo.driver_id;
+
+    jo.driver_id = p_new_driver_id;
+    jo.driver_link_token = `mock-token-${Date.now()}`;
+    jo.driver_response = 'accepted';
+    jo.driver_response_at = new Date().toISOString();
+    jo.accepted_at = new Date().toISOString();
+    jo.status = 'ASSIGNED';
+    jo.rejection_note = p_reason && p_reason.trim() !== ''
+      ? `[REPLACE] ${p_reason}`
+      : (jo.rejection_note || '[REPLACE] Driver replaced');
+    jo.updated_at = new Date().toISOString();
+    if (p_new_fleet_id) jo.fleet_id = p_new_fleet_id;
+    if (p_new_transporter_id) jo.transporter_id = p_new_transporter_id;
+
+    if (oldFleetId) {
+      const fleet = this.mdFleets.find((f) => f.id === oldFleetId && f.status === 'on_duty');
+      if (fleet) fleet.status = 'available';
+    }
+    if (oldDriverId) {
+      const driver = this.mdDrivers.find((d) => d.id === oldDriverId && d.is_working === true);
+      if (driver) {
+        driver.status = 'available';
+        driver.is_working = false;
+      }
+    }
+    if (p_new_fleet_id) {
+      const newFleet = this.mdFleets.find((f) => f.id === p_new_fleet_id);
+      if (newFleet) newFleet.status = 'on_duty';
+    }
+    const newDriver = this.mdDrivers.find((d) => d.id === p_new_driver_id);
+    if (newDriver) {
+      newDriver.status = 'on_duty';
+      newDriver.is_working = true;
+    }
+
+    this.jobTracking.push({
+      job_order_id: p_job_order_id,
+      status_update: 'OPS_REJECT_REASSIGN',
+      notes: `Driver replaced. Reason: ${p_reason || 'N/A'}`,
+      source: 'copilot',
+      created_at: new Date().toISOString(),
+    });
+
+    return {
+      data: [{ p_success: true, p_error: null, p_code: null, p_job_order: JSON.stringify(jo) }],
+      error: null,
+    };
   }
 
   private applyFilters(rows: Row[], filters: any[]): Row[] {
