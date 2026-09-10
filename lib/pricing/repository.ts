@@ -26,7 +26,37 @@ import type {
 // DATABASE CLIENT INJECTION (testability)
 // ============================================================================
 
-type PricingDbClient = ReturnType<typeof supabaseAdmin.from>;
+type DbRow = Record<string, unknown>;
+interface DbError { message: string; code?: string }
+interface DbSingleResult { data: DbRow | null; error: DbError | null }
+interface DbListResult { data: DbRow[] | null; error: DbError | null }
+
+interface PricingQueryChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): PricingQueryChain;
+  in(col: string, vals: unknown[]): PricingQueryChain;
+  order(col: string, opts: { ascending: boolean }): PricingQueryChain;
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
+}
+
+interface PricingInsertChain extends PromiseLike<DbListResult> {
+  select(cols?: string): {
+    single(): Promise<DbSingleResult>;
+    maybeSingle(): Promise<DbSingleResult>;
+  };
+}
+
+type PricingDbClient = {
+  from(table: string): {
+    select(cols?: string): PricingQueryChain;
+    insert(row: DbRow): PricingInsertChain;
+    update(row: DbRow): PricingQueryChain;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{
+    data: unknown;
+    error: DbError | null;
+  }>;
+};
 let _client: PricingDbClient | null = null;
 
 export function _setPricingDbClient(client: PricingDbClient | null): void {

@@ -95,7 +95,33 @@ export default function HQContactsPage() {
   // Addresses State (within Modal)
   const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    legal_name: string;
+    tax_id: string;
+    email: string;
+    phone: string;
+    mobile: string;
+    whatsapp: string;
+    is_customer: boolean;
+    is_supplier: boolean;
+    is_vendor: boolean;
+    is_broker: boolean;
+    is_own: boolean | null;
+    vendor_type: string;
+    billing_address: string;
+    billing_city: string;
+    billing_province: string;
+    billing_postal_code: string;
+    billing_latitude: number;
+    billing_longitude: number;
+    billing_directions: string;
+    billing_method: string;
+    payment_terms: string;
+    notes: string;
+    is_active: boolean;
+    parent_id: string;
+  }>({
     name: '',
     legal_name: '',
     tax_id: '',
@@ -107,6 +133,7 @@ export default function HQContactsPage() {
     is_supplier: false,
     is_vendor: false,
     is_broker: false,
+    is_own: null,
     vendor_type: 'OTHER',
     billing_address: '',
     billing_city: '',
@@ -808,8 +835,8 @@ export default function HQContactsPage() {
                        <div className="space-y-2">
                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Current Ownership</label>
                          <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg">
-                           <span className="text-sm font-medium">{getOwnershipLabel(selectedEntity?.is_own)}</span>
-                           <span className="px-2 py-0.5 text-xs rounded-full">{getOwnershipBadgeClass(selectedEntity?.is_own)}</span>
+                            <span className="text-sm font-medium">{getOwnershipLabel(selectedEntity?.is_own ?? null)}</span>
+                            <span className="px-2 py-0.5 text-xs rounded-full">{getOwnershipBadgeClass(selectedEntity?.is_own ?? null)}</span>
                          </div>
                        </div>
                        <div className="space-y-2">

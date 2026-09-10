@@ -36,7 +36,8 @@ import {
 } from './types';
 import { createSOLineItem, listSOLineItemsBySO, _setSalesOrderLineDbClient } from './line-repository';
 import { resolvePricingAndCommit } from './line-service';
-import type { PriceSnapshot, PricingCapabilityType, PricingSide } from '../pricing/types';
+import type { PricingCapabilityType, PricingSide } from '../pricing/types';
+import type { PriceSnapshot } from './line-types';
 
 // ============================================================================
 // DATABASE CLIENT INJECTION (testability)
@@ -327,10 +328,18 @@ export async function createSalesOrder(
       400,
       `Failed to create Sales Order: ${error.message}`,
     );
-  }
+   }
 
-  // ---- GATE 6: Quote → SO line item transfer (ADR-081) ----
-  let salesOrder = mapRowToSalesOrder(data as DbRow);
+if (!data) {
+      throw new SalesOrderError(
+        'DATABASE_ERROR',
+        400,
+        'Failed to create Sales Order: no data returned',
+      );
+    }
+
+   // ---- GATE 6: Quote → SO line item transfer (ADR-081) ----
+   let salesOrder = mapRowToSalesOrder(data);
   if (input.quoteId) {
     const quote = await db()
       .from('crm_quotations')
@@ -362,12 +371,12 @@ export async function createSalesOrder(
       );
     }
 
-    const existingLines = await listSOLineItemsBySO(context, data.id);
+    const existingLines = await listSOLineItemsBySO(context, salesOrder.id);
     if (existingLines.length === 0) {
       const currency = input.currency || 'IDR';
 
       const serviceIds = [...new Set(quoteItems.filter(qi => qi.service_id).map(qi => qi.service_id as string))];
-      let serviceMap: Record<string, string> = {};
+      let serviceMap: Record<string, PricingCapabilityType> = {};
       if (serviceIds.length > 0) {
         const { data: services } = await db()
           .from('md_services')
@@ -375,7 +384,7 @@ export async function createSalesOrder(
           .in('id', serviceIds);
         if (services) {
           for (const svc of services) {
-            serviceMap[svc.id] = mapSbuToCapability(svc.sbu_type as string);
+            serviceMap[svc.id as string] = mapSbuToCapability(svc.sbu_type as string);
           }
         }
       }
@@ -388,10 +397,10 @@ export async function createSalesOrder(
         const lineItemTotal = unitPrice * quantity;
 
         await createSOLineItem(context, {
-          salesOrderId: data.id,
+          salesOrderId: salesOrder.id,
           lineSequence: i + 1,
-          sourceQuoteItemId: quoteItem.id,
-          capabilityType: quoteItem.service_id ? (serviceMap[quoteItem.service_id] || 'FORWARDING') : 'FORWARDING',
+          sourceQuoteItemId: quoteItem.id as string,
+          capabilityType: quoteItem.service_id ? (serviceMap[quoteItem.service_id as string] || 'FORWARDING') : 'FORWARDING',
           side: 'SELL',
           serviceDescription: (quoteItem.description as string) || 'Quote Line Item',
           quantity,
@@ -407,25 +416,25 @@ export async function createSalesOrder(
       await db()
         .from('sales_orders')
         .update({ total_agreed_revenue: lineTotal })
-        .eq('id', data.id)
+        .eq('id', salesOrder.id)
         .eq('tenant_id', tenantId)
         .select('*');
 
-      salesOrder = await findById(tenantId, data.id);
+      salesOrder = await findById(tenantId, salesOrder.id);
     }
   }
 
   // ---- GATE 6B: Canonical pricing line items (ADR-082) ----
   if (!input.quoteId && input.lineItems && input.lineItems.length > 0) {
-    const pricingResult = await resolvePricingAndCommit(context, data.id, input.lineItems);
+    const pricingResult = await resolvePricingAndCommit(context, salesOrder.id, input.lineItems);
     await db()
       .from('sales_orders')
       .update({ total_agreed_revenue: pricingResult.totalAmount })
-      .eq('id', data.id)
+      .eq('id', salesOrder.id)
       .eq('tenant_id', tenantId)
       .select('*');
 
-    salesOrder = await findById(tenantId, data.id);
+    salesOrder = await findById(tenantId, salesOrder.id);
   }
 
   return { salesOrder, created: true };

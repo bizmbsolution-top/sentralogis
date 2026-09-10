@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { supabaseAdmin, createAdminClient } from '@/lib/supabase/admin';
 import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission } from '@/lib/application/identity/resolver';
 

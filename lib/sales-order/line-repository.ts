@@ -11,6 +11,7 @@
 
 import type { IdentityContext } from '../application/identity/types';
 import { assertPermission } from '../application/identity/resolver';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import type {
   SalesOrderLineItem,
   CreateSOLineItemInput,
@@ -42,14 +43,26 @@ interface SalesOrderLineQueryChain extends PromiseLike<DbListResult> {
   maybeSingle(): Promise<DbSingleResult>;
 }
 
-interface SalesOrderLineUpdateChain {
+interface SalesOrderLineUpdateChain extends PromiseLike<DbListResult> {
   eq(col: string, val: unknown): SalesOrderLineUpdateChain;
-  select(): Promise<DbListResult>;
+  in(col: string, vals: unknown[]): SalesOrderLineUpdateChain;
+  is(col: string, val: unknown | null): SalesOrderLineUpdateChain;
+  not(col: string, op: string, val: string): SalesOrderLineUpdateChain;
+  order(col: string, opts: { ascending: boolean }): SalesOrderLineUpdateChain;
+  select(cols?: string): SalesOrderLineSelectChain;
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
 }
 
-interface SalesOrderLineInsertChain {
-  select(): {
+interface SalesOrderLineSelectChain extends PromiseLike<DbListResult> {
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
+}
+
+interface SalesOrderLineInsertChain extends PromiseLike<DbListResult> {
+  select(cols?: string): {
     single(): Promise<DbSingleResult>;
+    maybeSingle(): Promise<DbSingleResult>;
   };
 }
 

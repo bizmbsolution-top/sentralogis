@@ -5,11 +5,12 @@ import { toOperationalHandoffErrorResponse } from '@/lib/operational-handoff/htt
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const context = await resolveSessionIdentity();
-    const handoff = await findOperationalHandoffById(context, params.id);
+    const { id } = await params;
+    const handoff = await findOperationalHandoffById(context, id);
     return NextResponse.json({ success: true, data: handoff });
   } catch (error) {
     return toOperationalHandoffErrorResponse(error);

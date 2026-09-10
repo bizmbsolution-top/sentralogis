@@ -21,4 +21,4 @@ export {
   JobOrderCancellationService,
   JobOrderDomainService,
   jobOrderDomainService,
-} from './service';
+  } from './job-order-domain-service';

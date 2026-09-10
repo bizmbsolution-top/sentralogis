@@ -147,14 +147,15 @@ async function createCustomsDeclarationForForwardingHandoff(
     importer_id: importerEntityId,
     customs_office_code: customsOfficeCode,
     declaration_type: declarationType as any,
-    shipment_id: shipmentId || null,
-    work_order_id: null,
-    service_request_id: null,
-    execution_leg_id: null,
-    job_order_id: null,
+    shipment_id: shipmentId ?? undefined,
+    work_order_id: undefined,
+    service_request_id: undefined,
+    execution_leg_id: undefined,
+    job_order_id: undefined,
   };
 
-  const declaration = await customsService.createDeclaration(dto);
+  const aggregate = await customsService.createDeclaration(dto);
+  const declaration = aggregate.declaration;
 
   if (shipmentId) {
     const attachmentResult = CustomsAttachmentService.attachShipment(

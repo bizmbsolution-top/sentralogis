@@ -143,7 +143,21 @@ class MockJobOrderDb implements JobOrderDbClient {
         updateChain._filters = [];
         return updateChain;
       },
-      delete() { return deleteChain; },
+      delete() {
+        const deleteChain: any = {
+          _filters: [] as any[],
+          eq(col: string, val: unknown) { deleteChain._filters.push({ type: 'eq', col, val }); return deleteChain; },
+          in(col: string, vals: unknown[]) { deleteChain._filters.push({ type: 'in', col, val: vals }); return deleteChain; },
+          is(col: string, val: unknown | null) { deleteChain._filters.push({ type: 'is', col, val }); return deleteChain; },
+          not(col: string, op: string, val: string) { deleteChain._filters.push({ type: 'not', col, op, val }); return deleteChain; },
+          then(resolve: (v: DbListResult) => void) {
+            const filtered = self.applyFilters(rows(), deleteChain._filters);
+            filtered.splice(0, filtered.length);
+            resolve({ data: [], error: null });
+          },
+        };
+        return deleteChain;
+      },
     };
   }
 

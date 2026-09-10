@@ -20,14 +20,13 @@ import {
 } from '@/lib/sales-order/service';
 import { toErrorResponse } from '@/lib/sales-order/http';
 
-interface RouteContext {
-  params: { id: string };
-}
-
-export async function GET(req: NextRequest, ctx: RouteContext) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await resolveSessionIdentity();
-    const { id } = ctx.params;
+    const { id } = await params;
     const so = await findSalesOrderById(session, id);
     return NextResponse.json({ success: true, data: so });
   } catch (error) {
@@ -35,10 +34,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   }
 }
 
-export async function PATCH(req: NextRequest, ctx: RouteContext) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await resolveSessionIdentity();
-    const { id } = ctx.params;
+    const { id } = await params;
     const body = await req.json().catch(() => null);
     if (!body) {
       return NextResponse.json(
@@ -64,10 +66,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   }
 }
 
-export async function POST(req: NextRequest, ctx: RouteContext) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await resolveSessionIdentity();
-    const { id } = ctx.params;
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const action = body?.action as string | undefined;
 

@@ -22,6 +22,8 @@ import { JO_PENDING_ASSIGNMENT_STATUSES, JO_REJECTED_STATUSES, JO_ACTIVE_STATUSE
 import type { AssignmentSlot, WoItemContext, TransporterOption } from './assignment';
 import { parseItemData, computeMaxJoCount, validateVendorPurchasePrice, resolveIsVendor } from './assignment';
 
+export type { AssignmentSlot, WoItemContext, TransporterOption };
+
 // ============================================================================
 // DATABASE CLIENT INJECTION (testability)
 // ============================================================================
@@ -34,7 +36,7 @@ interface DbListResult { data: DbRow[] | null; error: DbError | null }
 export interface JobOrderDbClient {
   from(table: string): {
     select(cols?: string): JobOrderQueryChain;
-    insert(row: DbRow): JobOrderInsertChain;
+    insert(row: DbRow | DbRow[]): JobOrderInsertChain;
     update(row: DbRow): JobOrderUpdateChain;
     delete(): JobOrderDeleteChain;
   };
@@ -47,17 +49,30 @@ export interface JobOrderDbClient {
 interface JobOrderQueryChain extends PromiseLike<DbListResult> {
   eq(col: string, val: unknown): JobOrderQueryChain;
   in(col: string, vals: unknown[]): JobOrderQueryChain;
+  is(col: string, val: unknown | null): JobOrderQueryChain;
+  not(col: string, op: string, val: string): JobOrderQueryChain;
   order(col: string, opts: { ascending: boolean }): JobOrderQueryChain;
   single(): Promise<DbSingleResult>;
   maybeSingle(): Promise<DbSingleResult>;
 }
 
-interface JobOrderUpdateChain {
+interface JobOrderUpdateChain extends PromiseLike<DbListResult> {
   eq(col: string, val: unknown): JobOrderUpdateChain;
-  select(cols?: string): Promise<DbListResult>;
+  in(col: string, vals: unknown[]): JobOrderUpdateChain;
+  is(col: string, val: unknown | null): JobOrderUpdateChain;
+  not(col: string, op: string, val: string): JobOrderUpdateChain;
+  order(col: string, opts: { ascending: boolean }): JobOrderUpdateChain;
+  select(cols?: string): JobOrderSelectChain;
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
 }
 
-interface JobOrderInsertChain {
+interface JobOrderSelectChain extends PromiseLike<DbListResult> {
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
+}
+
+interface JobOrderInsertChain extends PromiseLike<DbListResult> {
   select(cols?: string): {
     single(): Promise<DbSingleResult>;
     maybeSingle(): Promise<DbSingleResult>;
@@ -143,6 +158,7 @@ export interface SaveAssignmentsResult {
   savedCount: number;
   woItemStatus: string;
   error?: string;
+  code?: string;
   isHandoverFlow: boolean;
 }
 
@@ -164,6 +180,15 @@ export interface BatchAssignInput {
   woNumber: string;
   woItemStatus: string;
   item_data: unknown;
+  transporters: TransporterOption[];
+  drivers: {
+    id: string;
+    md_entities?: { is_vendor?: boolean } | null;
+  }[];
+  fleets: {
+    id: string;
+    fleet_type_id?: string | null;
+  }[];
 }
 
 export interface ReplaceDriverInput {
@@ -423,13 +448,13 @@ async function upsertJobOrder(tenantId: string, assign: AssignmentSlot, payload:
       .eq('tenant_id', tenantId)
       .select('id');
 
-    if (error) throw error;
-    if (data && data.length > 0) {
-      return data[0] as string;
-    }
+     if (error) throw error;
+     if (data && data.length > 0) {
+       return data[0]?.id as string;
+     }
   }
 
-  const insertPayload = { ...payload, tenant_id: tenantId };
+  const insertPayload: Record<string, unknown> = { ...payload, tenant_id: tenantId };
   const isUuid = assign.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assign.id);
   if (isUuid) {
     insertPayload.id = assign.id;
@@ -441,8 +466,9 @@ async function upsertJobOrder(tenantId: string, assign: AssignmentSlot, payload:
     .select('id')
     .single();
 
-  if (error) throw error;
-  return data.id as string;
+   if (error) throw error;
+   if (data) return data.id as string;
+   return '';
 }
 
 // ============================================================================
@@ -664,7 +690,7 @@ export class JobOrderAssignmentService {
         if (assign.save_to_master && !isVendor && assign.fleet_id) {
           const fleet = input.fleets.find((f) => f.id === assign.fleet_id);
           if (fleet) {
-            await saveMasterAllowance(tenantId, parsedItemData, assign.fleet_id, fleet.fleet_type_id, Number(assign.advance_amount) || 0);
+            await saveMasterAllowance(tenantId, parsedItemData, assign.fleet_id, fleet.fleet_type_id ?? null, Number(assign.advance_amount) || 0);
           }
         }
 
@@ -734,11 +760,11 @@ export class JobOrderAssignmentService {
       const { data: siblingItems } = await db()
         .from('wo_items')
         .select('status')
-        .eq('wo_id', woItem.wo_id);
+        .eq('wo_id', woId);
 
       const siblingAssignedCount = siblingItems?.filter((i) =>
         ['assigned', 'confirmed_assigned', 'dispatched', 'active', 'in_progress', 'completed'].includes(
-          (i.status || '').toLowerCase()
+          (i.status as string || '').toLowerCase()
         )
       ).length || 0;
 
@@ -749,15 +775,15 @@ export class JobOrderAssignmentService {
         const { data: parentWo } = await db()
           .from('work_orders')
           .select('status')
-          .eq('id', woItem.wo_id)
+          .eq('id', woId)
           .single();
 
-        const currentParentStatus = (parentWo?.status || '').toLowerCase();
+          const currentParentStatus = (parentWo?.status as string || '').toLowerCase();
         if (['draft', 'pending', 'need_assignment'].includes(currentParentStatus)) {
           await db()
             .from('work_orders')
             .update({ status: 'assigned' })
-            .eq('id', woItem.wo_id);
+            .eq('id', woId);
         }
       }
 
@@ -770,8 +796,11 @@ export class JobOrderAssignmentService {
     } catch (err: unknown) {
       return {
         success: false,
+        savedCount: 0,
+        woItemStatus: input.woItemStatus,
         error: err instanceof Error ? err.message : 'Unknown error',
         code: 'DATABASE_ERROR',
+        isHandoverFlow: input.mode === 'handover',
       };
     }
   }

@@ -9,6 +9,7 @@
  */
 
 import type { PricingCapabilityType, PricingSide } from '../pricing/types';
+import type { PricingContext } from '../pricing/selection';
 
 // ============================================================================
 // SO LINE ITEM STATUS

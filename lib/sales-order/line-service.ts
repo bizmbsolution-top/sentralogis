@@ -15,6 +15,7 @@ import type { PricingContext } from '../pricing/selection';
 import type { CalculationInput, CalculationResult } from '../pricing/calculation';
 import { PricingService } from '../pricing/service';
 import type { RateSelectionResult } from '../pricing/selection';
+import type { PricingCapabilityType, PricingSide } from '../pricing/types';
 import {
   createSOLineItem,
   listSOLineItemsBySO,

@@ -165,8 +165,10 @@ export type OperationalHandoffErrorCode =
   | 'HANDOFF_TERMINAL'
   | 'UNAUTHORIZED'
   | 'IDEMPOTENCY_CONFLICT'
-  | 'ADAPTER_REJECTED'
-  | 'DATABASE_ERROR';
+   | 'ADAPTER_REJECTED'
+  | 'DATABASE_ERROR'
+  | 'MISSING_IMPORTER_ENTITY'
+  | 'SHIPMENT_ATTACHMENT_FAILED';
 
 export class OperationalHandoffError extends Error {
   constructor(

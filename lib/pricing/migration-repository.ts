@@ -43,26 +43,6 @@ interface FwPriceMasterRow {
 // DRY-RUN / PREVIEW
 // ============================================================================
 
-export interface FwPriceMasterDryRunItem {
-  sourceRecordId: string;
-  rateCode: string;
-  capabilityType: string;
-  rateDescription: string;
-  status: string;
-  items: Array<{
-    chargeBasis: string;
-    unitOfMeasure: string;
-    unitRate: number | null;
-    minCharge: number | null;
-    currency: string;
-    applicabilityConditions: Record<string, unknown>;
-    skip?: boolean;
-    skipReason?: string;
-  }>;
-  warnings: string[];
-  exceptions: string[];
-}
-
 export async function dryRunFwPriceMaster(tenantId: string): Promise<FwPriceMasterDryRunItem[]> {
   const { data: rates, error } = await supabaseAdmin
     .from('fw_price_master')
@@ -515,6 +495,6 @@ function buildRateDescription(serviceType: string, originPort: string, destinati
   return `${serviceType} ${originPort} → ${destinationPort}`;
 }
 
-function isPresent(value: number | null): boolean {
+function isPresent(value: number | null): value is number {
   return value !== null && value !== undefined && !isNaN(value);
 }

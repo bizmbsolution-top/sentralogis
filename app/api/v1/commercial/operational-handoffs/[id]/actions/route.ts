@@ -6,7 +6,7 @@ import { toOperationalHandoffErrorResponse } from '@/lib/operational-handoff/htt
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const context = await resolveSessionIdentity();
@@ -26,7 +26,8 @@ export async function POST(
       );
     }
 
-    const updated = await performOperationalHandoffAction(context, params.id, input);
+    const { id } = await params;
+    const updated = await performOperationalHandoffAction(context, id, input);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     return toOperationalHandoffErrorResponse(error);
