@@ -25,6 +25,65 @@ import type {
 import { TokenError } from './types';
 
 // ============================================================================
+// DATABASE CLIENT INJECTION (testability — TOKEN-5)
+// ============================================================================
+type DbRow = Record<string, unknown>;
+interface DbError { message: string; code?: string }
+interface DbSingleResult { data: DbRow | null; error: DbError | null }
+interface DbListResult { data: DbRow[] | null; error: DbError | null }
+
+export interface TokenDbClient {
+  from(table: string): {
+    select(cols?: string): TokenQueryChain;
+    insert(row: DbRow | DbRow[]): TokenInsertChain;
+    update(row: DbRow): TokenUpdateChain;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: DbError | null }>;
+}
+
+interface TokenQueryChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): TokenQueryChain;
+  order(col: string, opts: { ascending: boolean }): TokenQueryChain;
+  limit(n: number): TokenQueryChain;
+  lte(col: string, val: unknown): TokenQueryChain;
+  or(s: string): TokenQueryChain;
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
+}
+
+interface TokenInsertChain extends PromiseLike<DbSingleResult> {
+  select(): { single(): Promise<DbSingleResult> };
+}
+
+interface TokenUpdateChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): TokenUpdateChain;
+  select(): { single(): Promise<DbSingleResult> };
+}
+
+let _injectedDb: TokenDbClient = supabaseAdmin as unknown as TokenDbClient;
+
+export function _setTokenDbClient(client: TokenDbClient | null): void {
+  _injectedDb = client ?? (supabaseAdmin as unknown as TokenDbClient);
+}
+
+function db(): TokenDbClient {
+  return _injectedDb;
+}
+
+// ============================================================================
+// CAMELCASE CONVERSION
+// Supabase returns snake_case rows; domain types use camelCase.
+// ============================================================================
+function toCamel(row: DbRow | null): DbRow | null {
+  if (!row) return null;
+  const out: DbRow = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())] = v;
+  }
+  return out;
+}
+
+// ============================================================================
 // TENANT TOKEN PRICE REPOSITORY
 // ============================================================================
 
@@ -34,7 +93,7 @@ export async function createTenantTokenPrice(
 ): Promise<TenantTokenPrice> {
   assertPermission(ctx, 'tenant:manage');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('tenant_token_prices')
     .insert({
       tenant_id: input.tenantId,
@@ -55,7 +114,7 @@ export async function createTenantTokenPrice(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to create token price: ${error.message}`);
   }
 
-  return data as unknown as TenantTokenPrice;
+  return toCamel(data) as unknown as TenantTokenPrice;
 }
 
 export async function getActiveTokenPrice(
@@ -64,7 +123,7 @@ export async function getActiveTokenPrice(
 ): Promise<TenantTokenPrice | null> {
   assertPermission(ctx, 'commercial:read');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('tenant_token_prices')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -79,7 +138,7 @@ export async function getActiveTokenPrice(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to fetch token price: ${error.message}`);
   }
 
-  return data as unknown as TenantTokenPrice | null;
+  return toCamel(data) as unknown as TenantTokenPrice | null;
 }
 
 // ============================================================================
@@ -92,7 +151,7 @@ export async function createTenantServiceRate(
 ): Promise<TenantServiceRate> {
   assertPermission(ctx, 'tenant:manage');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('tenant_service_rates')
     .insert({
       tenant_id: input.tenantId,
@@ -113,7 +172,7 @@ export async function createTenantServiceRate(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to create service rate: ${error.message}`);
   }
 
-  return data as unknown as TenantServiceRate;
+  return toCamel(data) as unknown as TenantServiceRate;
 }
 
 export async function getActiveServiceRate(
@@ -123,7 +182,7 @@ export async function getActiveServiceRate(
 ): Promise<TenantServiceRate | null> {
   assertPermission(ctx, 'commercial:read');
 
-  const { data, error} = await supabaseAdmin
+  const { data, error} = await db()
     .from('tenant_service_rates')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -139,7 +198,7 @@ export async function getActiveServiceRate(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to fetch service rate: ${error.message}`);
   }
 
-  return data as unknown as TenantServiceRate | null;
+  return toCamel(data) as unknown as TenantServiceRate | null;
 }
 
 // ============================================================================
@@ -157,7 +216,7 @@ export async function recordConsumptionEvent(
 ): Promise<TokenConsumptionEvent> {
   assertPermission(ctx, 'commercial:manage');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('token_consumption_events')
     .insert({
       tenant_id: ctx.tenantId,
@@ -181,7 +240,7 @@ export async function recordConsumptionEvent(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to record consumption: ${error.message}`);
   }
 
-  return data as unknown as TokenConsumptionEvent;
+  return toCamel(data) as unknown as TokenConsumptionEvent;
 }
 
 export async function getConsumptionByIdempotencyKey(
@@ -190,7 +249,7 @@ export async function getConsumptionByIdempotencyKey(
 ): Promise<TokenConsumptionEvent | null> {
   assertPermission(ctx, 'commercial:read');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('token_consumption_events')
     .select('*')
     .eq('tenant_id', ctx.tenantId)
@@ -201,7 +260,7 @@ export async function getConsumptionByIdempotencyKey(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to fetch consumption: ${error.message}`);
   }
 
-  return data as unknown as TokenConsumptionEvent | null;
+  return toCamel(data) as unknown as TokenConsumptionEvent | null;
 }
 
 // ============================================================================
@@ -214,7 +273,7 @@ export async function getTokenBalance(
 ): Promise<number> {
   assertPermission(ctx, 'commercial:read');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('tenants')
     .select('token_balance')
     .eq('id', tenantId)
@@ -234,7 +293,7 @@ export async function deductTokenBalance(
 ): Promise<number> {
   assertPermission(ctx, 'commercial:manage');
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('tenants')
     .update({
       token_balance: Math.max(

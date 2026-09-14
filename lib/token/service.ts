@@ -7,6 +7,7 @@
  * - Tenant is resolved EXCLUSIVELY from the trusted IdentityContext (U-01).
  * - Authorization via assertPermission (U-02).
  * - Rate identity is DB-generated UUID.
+ * - DB client injection for testability (TOKEN-5).
  */
 
 import type { IdentityContext } from '../application/identity/types';
@@ -20,6 +21,7 @@ import {
   getConsumptionByIdempotencyKey,
   getTokenBalance,
   deductTokenBalance,
+  _setTokenDbClient,
 } from './repository';
 import type {
   TenantTokenPrice,
@@ -31,6 +33,52 @@ import type {
   TokenServiceType,
 } from './types';
 import { TokenError } from './types';
+
+// ============================================================================
+// DATABASE CLIENT INJECTION (testability — TOKEN-5)
+// ============================================================================
+type DbRow = Record<string, unknown>;
+interface DbError { message: string; code?: string }
+interface DbSingleResult { data: DbRow | null; error: DbError | null }
+interface DbListResult { data: DbRow[] | null; error: DbError | null }
+
+export interface TokenDbClient {
+  from(table: string): {
+    select(cols?: string): TokenQueryChain;
+    insert(row: DbRow | DbRow[]): TokenInsertChain;
+    update(row: DbRow): TokenUpdateChain;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: DbError | null }>;
+}
+
+interface TokenQueryChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): TokenQueryChain;
+  order(col: string, opts: { ascending: boolean }): TokenQueryChain;
+  limit(n: number): TokenQueryChain;
+  lte(col: string, val: unknown): TokenQueryChain;
+  or(s: string): TokenQueryChain;
+  single(): Promise<DbSingleResult>;
+  maybeSingle(): Promise<DbSingleResult>;
+}
+
+interface TokenInsertChain extends PromiseLike<DbSingleResult> {
+  select(): { single(): Promise<DbSingleResult> };
+}
+
+interface TokenUpdateChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): TokenUpdateChain;
+  select(): { single(): Promise<DbSingleResult> };
+}
+
+let _injectedDb: TokenDbClient | null = null;
+
+export function _setTokenDbClient(client: TokenDbClient | null): void {
+  _injectedDb = client;
+}
+
+export function _getTokenDbClient(): TokenDbClient | null {
+  return _injectedDb;
+}
 
 export class TokenService {
   constructor(private readonly ctx: IdentityContext) {}
