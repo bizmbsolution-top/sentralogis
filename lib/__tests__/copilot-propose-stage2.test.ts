@@ -7,25 +7,31 @@
  * policy checks, authorization, and READ-only/EXECUTE boundary.
  */
 
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { ProposalService } from '@/lib/copilot/propose/proposal-service';
 import { DecisionPolicyRegistry } from '@/src/platforms/copilot/policy/DecisionPolicyRegistry';
-import { DefaultIntents } from '@/src/platforms/copilot/registry/DefaultIntents';
+import { DefaultIntents, registerDefaultIntents } from '@/src/platforms/copilot/registry/DefaultIntents';
 import type { CopilotProposal } from '@/lib/copilot/propose/types';
 import { EntityResolutionResult } from '@/src/platforms/copilot/intelligence/entities/models';
 import type { ExtractedEntity } from '@/src/platforms/copilot/intelligence/entities/models';
 import { ProposalAuthorityService } from '@/lib/copilot/propose/proposal-authority-service';
 
-jest.mock('@/lib/copilot/propose/proposal-authority-service');
+const mockedProposalAuthority = vi.mocked(ProposalAuthorityService, true);
 
-const mockedProposalAuthority = jest.mocked(ProposalAuthorityService, true);
+vi.mock('@/lib/copilot/propose/proposal-authority-service', () => ({
+  ProposalAuthorityService: {
+    createProposal: vi.fn(),
+  },
+}));
 
 describe('Copilot Stage 2 PROPOSE', () => {
   beforeAll(() => {
+    registerDefaultIntents();
     DecisionPolicyRegistry.loadDefaultPolicies();
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockedProposalAuthority.createProposal.mockResolvedValue({
       id: 'proposal-id-1',
       tenant_id: 'tenant-001',
@@ -119,7 +125,7 @@ describe('Copilot Stage 2 PROPOSE', () => {
     it('returns ALLOWED policy status for intent without policy', async () => {
       const entities = [buildEntity({ entityType: 'JobOrder', resolvedId: 'jo-2' })];
       const resolution = buildResolution(entities);
-      const context = buildContext();
+      const context = buildContext({ permissions: ['Basic.Read', 'commercial:read'] });
 
       const proposal = await ProposalService.generateProposal(
         {
@@ -137,7 +143,7 @@ describe('Copilot Stage 2 PROPOSE', () => {
     it('returns REJECTED policy status when blocked situation matches', async () => {
       const entities = [
         buildEntity({ entityType: 'JobOrder', resolvedId: 'jo-3' }),
-        buildEntity({ entityType: 'SituationCatalog', resolvedId: 'WAITING_UNLOADING' }),
+        buildEntity({ entityType: 'WAITING_UNLOADING', resolvedId: 'WAITING_UNLOADING' }),
       ];
       const resolution = buildResolution(entities);
       const context = buildContext({ permissions: ['JobOrder.Update', 'commercial:read'] });
@@ -148,7 +154,7 @@ describe('Copilot Stage 2 PROPOSE', () => {
           description: 'Replace driver',
           entities: [
             { entityType: 'JobOrder', entityId: 'jo-3', displayName: 'JO-003', status: null },
-            { entityType: 'SituationCatalog', entityId: 'WAITING_UNLOADING', displayName: 'Waiting Unloading', status: null },
+            { entityType: 'WAITING_UNLOADING', entityId: 'WAITING_UNLOADING', displayName: 'Waiting Unloading', status: null },
           ],
           context,
         },
