@@ -7,14 +7,469 @@
  * and mock elimination for production READ paths.
  */
 
+import { describe, it, expect, beforeEach } from 'vitest';
 import { TimelineQueryProvider } from '@/lib/copilot/read/timeline-provider';
 import { OperationalSummaryProvider } from '@/lib/copilot/read/summary-provider';
 import { EntitySearchProvider } from '@/lib/copilot/read/entity-provider';
 import { NotificationInboxProvider } from '@/lib/copilot/read/notification-provider';
+import { _setEventOutboxDbClient } from '@/lib/domain/event/event-outbox-query-service';
+import { _setEntityQueryDbClient } from '@/lib/domain/entity/entity-query-service';
+import { _setSalesOrderDbClient } from '@/lib/sales-order/service';
+import { _setFulfillmentDbClient } from '@/lib/fulfillment/service';
+import { _setOperationalHandoffDbClient } from '@/lib/operational-handoff/service';
 import { createFoundationContext } from '@/lib/copilot/foundation/integration';
 import type { FoundationContext } from '@/lib/copilot/foundation/contracts';
 
+// ---------------------------------------------------------------------------
+// Mock DB client for EventOutboxQueryService
+// ---------------------------------------------------------------------------
+interface DbError { message: string; code?: string }
+interface DbListResult { data: Record<string, unknown>[] | null; error: DbError | null }
+
+class MockEventOutboxDb implements EventOutboxDbClient {
+  rows: Record<string, unknown>[] = [];
+
+  from(table: string) {
+    const self = this;
+    const chain: any = {
+      _filters: [] as Array<{ col: string; val: unknown }>,
+      _limit: 50,
+      eq(col: string, val: unknown) { this._filters.push({ col, val }); return this; },
+      order(_col: string, _opts: { ascending: boolean }) { return this; },
+      limit(n: number) { this._limit = n; return this; },
+      lt(_col: string, _val: unknown) { return this; },
+      gte(_col: string, _val: unknown) { return this; },
+      lte(_col: string, _val: unknown) { return this; },
+      in(_col: string, _vals: string[]) { return this; },
+      async then(resolve: any) {
+        let rows = [...self.rows];
+        for (const f of chain._filters) rows = rows.filter((r) => r[f.col] === f.val);
+        const result: DbListResult = { data: rows.slice(0, chain._limit), error: null };
+        return resolve(result);
+      },
+    };
+    return {
+      select(_cols?: string) {
+        return chain;
+      },
+    };
+  }
+}
+
+interface EventOutboxDbClient {
+  from(table: string): {
+    select(cols?: string): {
+      eq(col: string, val: unknown): any;
+      order(col: string, opts: { ascending: boolean }): any;
+      limit(n: number): any;
+      lt(col: string, val: unknown): any;
+      gte(col: string, val: unknown): any;
+      lte(col: string, val: unknown): any;
+      in(col: string, vals: string[]): any;
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock DB client for EntityQueryService
+// ---------------------------------------------------------------------------
+class MockEntityDb implements EntityQueryDbClient {
+  rows: Record<string, unknown>[] = [];
+
+  from(table: string) {
+    const self = this;
+    const chain: any = {
+      _filters: [] as Array<{ col: string; val: unknown }>,
+      _limit: 20,
+      _ilikeCol: null as string | null,
+      _ilikeVal: null as string | null,
+      _inCol: null as string | null,
+      _inVals: null as string[] | null,
+      eq(col: string, val: unknown) { this._filters.push({ col, val }); return this; },
+      ilike(col: string, val: string) { this._ilikeCol = col; this._ilikeVal = val; return this; },
+      in(col: string, vals: string[]) { this._inCol = col; this._inVals = vals; return this; },
+      limit(n: number) { this._limit = n; return this; },
+      order(_col: string, _opts: { ascending: boolean }) { return this; },
+      or(_s: string) { return this; },
+      async then(resolve: any) {
+        let rows = [...self.rows];
+        for (const f of chain._filters) rows = rows.filter((r) => r[f.col] === f.val);
+        if (chain._ilikeCol && chain._ilikeVal) {
+          const pat = chain._ilikeVal.replace(/%/g, '.*');
+          const re = new RegExp(pat, 'i');
+          rows = rows.filter((r) => re.test(String(r[chain._ilikeCol!] || '')));
+        }
+        if (chain._inCol && chain._inVals) {
+          rows = rows.filter((r) => chain._inVals!.includes(String(r[chain._inCol!] || '')));
+        }
+        const result: DbListResult = { data: rows.slice(0, chain._limit), error: null };
+        return resolve(result);
+      },
+    };
+    return {
+      select(_cols?: string) {
+        return chain;
+      },
+    };
+  }
+}
+
+interface EntityQueryDbClient {
+  from(table: string): {
+    select(cols?: string): {
+      eq(col: string, val: unknown): any;
+      ilike(col: string, val: string): any;
+      in(col: string, vals: string[]): any;
+      limit(n: number): any;
+      order(col: string, opts: { ascending: boolean }): any;
+      or(s: string): any;
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock DB client for SalesOrderDbClient
+// ---------------------------------------------------------------------------
+class MockSoDb implements SalesOrderDbClient {
+  rows: Record<string, unknown>[] = [];
+
+  from(_table: string) {
+    const self = this;
+    const chain: any = {
+      _filters: [] as Array<{ col: string; val: unknown }>,
+      _limit: 20,
+      eq(col: string, val: unknown) { this._filters.push({ col, val }); return this; },
+      in(_col: string, _vals: unknown[]) { return this; },
+      order(_col: string, _opts: { ascending: boolean }) { return this; },
+      limit(n: number) { this._limit = n; return this; },
+      async single() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async maybeSingle() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async then(resolve: any) {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return resolve({ data: rows.slice(0, chain._limit), error: null });
+      },
+    };
+    return {
+      select(_cols?: string) { return chain; },
+      insert(_row: any) {
+        return {
+          select() {
+            return {
+              single: () => ({ data: null, error: null }),
+              maybeSingle: () => ({ data: null, error: null }),
+            };
+          },
+        };
+      },
+      update(_row: any) {
+        return {
+          eq() {
+            return {
+              select: () => Promise.resolve({ data: [], error: null }),
+            };
+          },
+        };
+      },
+    };
+  }
+
+  rpc(_fn: string, _args: Record<string, unknown>) {
+    return Promise.resolve({ data: null, error: null });
+  }
+}
+
+interface SalesOrderDbClient {
+  from(table: string): {
+    select(cols?: string): any;
+    insert(row: any): any;
+    update(row: any): any;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: DbError | null }>;
+}
+
+// ---------------------------------------------------------------------------
+// Mock DB client for FulfillmentDbClient
+// ---------------------------------------------------------------------------
+class MockFlDb implements FulfillmentDbClient {
+  rows: Record<string, unknown>[] = [];
+
+  from(_table: string) {
+    const self = this;
+    const chain: any = {
+      _filters: [] as Array<{ col: string; val: unknown }>,
+      _limit: 20,
+      eq(col: string, val: unknown) { this._filters.push({ col, val }); return this; },
+      in(_col: string, _vals: unknown[]) { return this; },
+      order(_col: string, _opts: { ascending: boolean }) { return this; },
+      limit(n: number) { this._limit = n; return this; },
+      async single() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async maybeSingle() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async then(resolve: any) {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return resolve({ data: rows.slice(0, chain._limit), error: null });
+      },
+    };
+    return {
+      select(_cols?: string) { return chain; },
+      insert(_row: any) {
+        return {
+          select() {
+            return {
+              single: () => ({ data: null, error: null }),
+              maybeSingle: () => ({ data: null, error: null }),
+            };
+          },
+        };
+      },
+      update(_row: any) {
+        return {
+          eq() {
+            return {
+              select: () => Promise.resolve({ data: [], error: null }),
+            };
+          },
+        };
+      },
+      delete() {
+        return {
+          eq() {
+            return {
+              select: () => Promise.resolve({ data: [], error: null }),
+            };
+          },
+        };
+      },
+    };
+  }
+
+  rpc(_fn: string, _args: Record<string, unknown>) {
+    return Promise.resolve({ data: null, error: null });
+  }
+}
+
+interface FulfillmentDbClient {
+  from(table: string): {
+    select(cols?: string): any;
+    insert(row: any): any;
+    update(row: any): any;
+    delete(): any;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: DbError | null }>;
+}
+
+// ---------------------------------------------------------------------------
+// Mock DB client for OperationalHandoffDbClient
+// ---------------------------------------------------------------------------
+class MockOhDb implements OperationalHandoffDbClient {
+  rows: Record<string, unknown>[] = [];
+
+  from(_table: string) {
+    const self = this;
+    const chain: any = {
+      _filters: [] as Array<{ col: string; val: unknown }>,
+      _limit: 20,
+      eq(col: string, val: unknown) { this._filters.push({ col, val }); return this; },
+      in(_col: string, _vals: unknown[]) { return this; },
+      order(_col: string, _opts: { ascending: boolean }) { return this; },
+      limit(n: number) { this._limit = n; return this; },
+      async single() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async maybeSingle() {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return { data: rows[0] || null, error: null };
+      },
+      async then(resolve: any) {
+        const rows = [...self.rows].filter((r) =>
+          chain._filters.every((f) => r[f.col] === f.val),
+        );
+        return resolve({ data: rows.slice(0, chain._limit), error: null });
+      },
+    };
+    return {
+      select(_cols?: string) { return chain; },
+      insert(_row: any) {
+        return {
+          select() {
+            return {
+              single: () => ({ data: null, error: null }),
+              maybeSingle: () => ({ data: null, error: null }),
+            };
+          },
+        };
+      },
+      update(_row: any) {
+        return {
+          eq() {
+            return {
+              select: () => Promise.resolve({ data: [], error: null }),
+            };
+          },
+        };
+      },
+      delete() {
+        return {
+          eq() {
+            return {
+              select: () => Promise.resolve({ data: [], error: null }),
+            };
+          },
+        };
+      },
+    };
+  }
+
+  rpc(_fn: string, _args: Record<string, unknown>) {
+    return Promise.resolve({ data: null, error: null });
+  }
+}
+
+interface OperationalHandoffDbClient {
+  from(table: string): {
+    select(cols?: string): any;
+    insert(row: any): any;
+    update(row: any): any;
+    delete(): any;
+  };
+  rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: DbError | null }>;
+}
+
 describe('Copilot Stage 1 READ', () => {
+    let mockEventDb: MockEventOutboxDb;
+    let mockEntityDb: MockEntityDb;
+    let mockSoDb: MockSoDb;
+    let mockFlDb: MockFlDb;
+    let mockOhDb: MockOhDb;
+
+    beforeEach(() => {
+      mockEventDb = new MockEventOutboxDb();
+      _setEventOutboxDbClient(mockEventDb as any);
+      mockEntityDb = new MockEntityDb();
+      _setEntityQueryDbClient(mockEntityDb as any);
+      mockSoDb = new MockSoDb();
+      mockSoDb.rows = [
+        {
+          id: 'so-known-id',
+          tenant_id: 'tenant-001',
+          engagement_id: 'eng-001',
+          quote_id: null,
+          so_number: 'SO-2026-09-0001',
+          status: 'CONFIRMED',
+          version_no: 1,
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+          created_by: 'user-001',
+          updated_by: null,
+          cancelled_reason: null,
+        },
+      ];
+      _setSalesOrderDbClient(mockSoDb as any);
+      mockFlDb = new MockFlDb();
+      mockFlDb.rows = [
+        {
+          id: 'so-known-id',
+          tenant_id: 'tenant-001',
+          engagement_id: 'eng-001',
+          quote_id: null,
+          so_number: 'SO-2026-09-0001',
+          status: 'CONFIRMED',
+          version_no: 1,
+          customer_id: 'cust-001',
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+          created_by: 'user-001',
+          updated_by: null,
+          cancelled_reason: null,
+        },
+        {
+          id: 'fl-001',
+          tenant_id: 'tenant-001',
+          sales_order_id: 'so-known-id',
+          fulfillment_number: 'FL-2026-09-0001',
+          status: 'PLANNED',
+          revision_no: 1,
+          version_no: 1,
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+          created_by: 'user-001',
+          updated_by: null,
+          cancelled_reason: null,
+        },
+        {
+          id: 'fl-002',
+          tenant_id: 'tenant-001',
+          sales_order_id: 'so-known-id',
+          fulfillment_number: 'FL-2026-09-0002',
+          status: 'CANCELLED',
+          revision_no: 2,
+          version_no: 1,
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+          created_by: 'user-001',
+          updated_by: null,
+          cancelled_reason: 'replanned',
+        },
+        {
+          id: 'alloc-001',
+          tenant_id: 'tenant-001',
+          fulfillment_id: 'fl-001',
+          capability_type: 'FORWARDING',
+          capability_binding_id: null,
+          shipment_id: null,
+          allocated_quantity: 1,
+          delivered_quantity: 0,
+          status: 'PLANNED',
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+        },
+        {
+          id: 'alloc-002',
+          tenant_id: 'tenant-001',
+          fulfillment_id: 'fl-001',
+          capability_type: 'CUSTOMS',
+          capability_binding_id: null,
+          shipment_id: null,
+          allocated_quantity: 1,
+          delivered_quantity: 0,
+          status: 'PLANNED',
+          created_at: '2026-09-01T00:00:00Z',
+          updated_at: '2026-09-01T00:00:00Z',
+        },
+      ];
+      _setFulfillmentDbClient(mockFlDb as any);
+      mockOhDb = new MockOhDb();
+      _setOperationalHandoffDbClient(mockOhDb as any);
+    });
+
   const buildContext = (overrides: Partial<FoundationContext['identity']> = {}): FoundationContext => {
     const identity = {
       tenantId: 'tenant-001',
