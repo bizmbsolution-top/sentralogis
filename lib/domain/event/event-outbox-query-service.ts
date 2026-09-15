@@ -17,6 +17,53 @@ import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission } from '@/lib/application/identity/resolver';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
+// ============================================================================
+// DATABASE CLIENT INJECTION (testability — READ-1)
+// ============================================================================
+type DbRow = Record<string, unknown>;
+interface DbError { message: string; code?: string }
+interface DbListResult { data: DbRow[] | null; error: DbError | null }
+
+/**
+ * Minimal typed projection for event outbox rows.
+ * Casts the generic DbRow to the fields actually selected by the query.
+ */
+interface EventOutboxDbRow {
+  id: string;
+  event_name: string;
+  payload?: Record<string, any> | null;
+  created_at: string;
+  tenant_id: string;
+  aggregate_type?: string | null;
+  aggregate_id?: string | null;
+}
+
+export interface EventOutboxDbClient {
+  from(table: string): {
+    select(cols?: string): EventOutboxQueryChain;
+  };
+}
+
+interface EventOutboxQueryChain extends PromiseLike<DbListResult> {
+  eq(col: string, val: unknown): EventOutboxQueryChain;
+  order(col: string, opts: { ascending: boolean }): EventOutboxQueryChain;
+  limit(n: number): EventOutboxQueryChain;
+  lt(col: string, val: unknown): EventOutboxQueryChain;
+  gte(col: string, val: unknown): EventOutboxQueryChain;
+  lte(col: string, val: unknown): EventOutboxQueryChain;
+  in(col: string, vals: string[]): EventOutboxQueryChain;
+}
+
+let _injectedDb: EventOutboxDbClient = supabaseAdmin as unknown as EventOutboxDbClient;
+
+export function _setEventOutboxDbClient(client: EventOutboxDbClient | null): void {
+  _injectedDb = client ?? (supabaseAdmin as unknown as EventOutboxDbClient);
+}
+
+function db(): EventOutboxDbClient {
+  return _injectedDb;
+}
+
 export interface EventOutboxQueryOptions {
   categories?: Array<'status_change' | 'exception' | 'handoff' | 'system'>;
   from?: string | null;
@@ -56,7 +103,7 @@ export class EventOutboxQueryService {
     const limit = options?.limit ?? 50;
     const cursor = options?.cursor ?? null;
 
-    let query = supabaseAdmin
+    let query = db()
       .from('event_outbox')
       .select('id, event_name, payload, created_at, tenant_id, aggregate_type, aggregate_id')
       .eq('tenant_id', tenantId)
@@ -89,8 +136,8 @@ export class EventOutboxQueryService {
       };
     }
 
-    const items: EventOutboxItem[] = data.map((row) => {
-      const payload = (row.payload as Record<string, any>) || {};
+    const items: EventOutboxItem[] = (data as unknown as EventOutboxDbRow[]).map((row) => {
+      const payload = row.payload || {};
       return {
         notificationId: row.id,
         category: this.mapEventNameToCategory(row.event_name),

@@ -21,7 +21,6 @@ import {
   getConsumptionByIdempotencyKey,
   getTokenBalance,
   deductTokenBalance,
-  _setTokenDbClient,
 } from './repository';
 import type {
   TenantTokenPrice,

@@ -52,12 +52,12 @@ interface TokenQueryChain extends PromiseLike<DbListResult> {
 }
 
 interface TokenInsertChain extends PromiseLike<DbSingleResult> {
-  select(): { single(): Promise<DbSingleResult> };
+  select(_cols?: string): { single(): Promise<DbSingleResult> };
 }
 
 interface TokenUpdateChain extends PromiseLike<DbListResult> {
   eq(col: string, val: unknown): TokenUpdateChain;
-  select(): { single(): Promise<DbSingleResult> };
+  select(_cols?: string): { single(): Promise<DbSingleResult> };
 }
 
 let _injectedDb: TokenDbClient = supabaseAdmin as unknown as TokenDbClient;
@@ -283,7 +283,7 @@ export async function getTokenBalance(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to fetch token balance: ${error.message}`);
   }
 
-  return data?.token_balance ?? 0;
+  return Number((data as DbRow | null)?.token_balance ?? 0);
 }
 
 export async function deductTokenBalance(
@@ -310,5 +310,5 @@ export async function deductTokenBalance(
     throw new TokenError('DATABASE_ERROR', 400, `Failed to deduct token balance: ${error.message}`);
   }
 
-  return data.token_balance;
+  return Number((data as DbRow | null)?.token_balance ?? 0);
 }
