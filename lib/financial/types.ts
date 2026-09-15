@@ -205,6 +205,7 @@ export interface CreateInvoiceInput {
   currency: string;
   taxPercentage?: number;
   billableEventIds: string[];
+  idempotencyKey?: string | null;
 }
 
 export interface CreateAdjustmentInput {
@@ -236,6 +237,7 @@ export interface CreateInvoiceResult {
 // ============================================================================
 
 export type FinancialErrorCode =
+  | 'INVALID_INPUT'
   | 'BILLABLE_EVENT_NOT_FOUND'
   | 'BILLABLE_EVENT_NOT_OWNED'
   | 'INVOICE_NOT_FOUND'
