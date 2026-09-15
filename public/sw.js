@@ -6,7 +6,7 @@ const ASSETS_TO_CACHE = [
   '/warehouse/portal',
   '/warehouse/portal/login',
   '/driver/portal',
-  '/sentralogis_logo.png',
+  '/logosentralogis.png',
   '/favicon.ico'
 ];
 
@@ -23,7 +23,7 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: data.icon || '/sentralogis_logo.png',
+    icon: data.icon || '/logosentralogis.png',
     badge: data.badge || '/favicon.ico',
     vibrate: data.vibrate || [200, 100, 200],
     tag: data.tag || 'sentralogis-notification',

@@ -104,7 +104,7 @@ export default function CustomerPortalLayout({
           {/* Logo and Entity Badge */}
           <div className="flex items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-2.5">
-              <img src="/sentralogis_logo.png" alt="Sentralogis" className="h-8 sm:h-10 w-auto drop-shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
+              <img src="/logosentralogis.png" alt="Sentralogis" className="h-8 sm:h-10 w-auto drop-shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
               <div className="flex flex-col">
                 <span className="text-base sm:text-lg font-black tracking-wider text-white uppercase leading-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
                   Sentralogis

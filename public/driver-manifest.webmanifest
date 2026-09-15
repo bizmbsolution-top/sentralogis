@@ -4,15 +4,15 @@
   "description": "Aplikasi driver SentraLogis — tracking, navigasi, dan manajemen tugas pengiriman",
   "icons": [
     {
-      "src": "/logo2sentralogis.png",
+      "src": "/logosentralogis.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/sentralogis_logo.svg",
+      "src": "/favicon.ico",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/x-icon"
     }
   ],
   "start_url": "/driver/portal",
