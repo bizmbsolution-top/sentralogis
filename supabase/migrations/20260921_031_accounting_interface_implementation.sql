@@ -67,7 +67,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.accounting_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES public.md_tenants(id) ON DELETE CASCADE,
-  event_type com_accounting_event_status NOT NULL,
+  event_type com_accounting_event_type NOT NULL,
   source_entity_type TEXT NOT NULL,
   source_entity_id UUID NOT NULL,
   source_reference TEXT,
