@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { CommandCenterAttentionPanel } from '@/components/control-tower/CommandCenterAttentionPanel';
+import { Breadcrumb } from '@/components/layout/Breadcrumb';
 
 export default function CommercialControlTowerIndexPage() {
   const router = useRouter();
@@ -60,7 +62,7 @@ export default function CommercialControlTowerIndexPage() {
             <div className="flex items-center gap-2">
               <Layers className="w-6 h-6 text-blue-600" />
               <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
-                Commercial Control Tower
+                Command Center
               </h1>
             </div>
             <p className="text-xs text-slate-500 mt-1">
@@ -81,6 +83,14 @@ export default function CommercialControlTowerIndexPage() {
           </div>
         </div>
       </div>
+
+      {/* Breadcrumb */}
+      <Breadcrumb />
+
+      {/* Attention Panel */}
+      {!loading && !error && filteredOrders.length > 0 && (
+        <CommandCenterAttentionPanel salesOrders={filteredOrders} />
+      )}
 
       {/* Content */}
       {loading ? (

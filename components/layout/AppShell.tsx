@@ -4,39 +4,54 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import MobileBottomNav from './MobileBottomNav';
+import { useAuth } from '@/lib/hooks/useAuth';
+import {
+  NavigationSection,
+  NAVIGATION_SECTIONS,
+  getNavigationSectionLabel,
+  getVisibleNavigationSections,
+  getSectionFromPathname,
+} from '@/lib/navigation/types';
 
-export type Workspace = 'commercial' | 'operations' | 'finance' | 'intelligence' | 'admin';
-
-export interface WorkspaceDefinition {
-  id: Workspace;
-  label: string;
-  description: string;
-  icon: string;
-  href: string;
-  requiredPermission?: string;
-}
-
-export const WORKSPACES: WorkspaceDefinition[] = [
-  { id: 'commercial', label: 'Commercial', description: 'Customers, Engagements, Orders', icon: '💼', href: '/commercial' },
-  { id: 'operations', label: 'Operations', description: 'Fulfillment, Shipments, Execution', icon: '⚙️', href: '/operations' },
-  { id: 'finance', label: 'Financial', description: 'Invoices, Payments, Settlements', icon: '💰', href: '/finance' },
-  { id: 'intelligence', label: 'Intelligence', description: 'Visibility, Margin, Exceptions', icon: '📊', href: '/intelligence' },
-  { id: 'admin', label: 'Administration', description: 'Users, Roles, Settings', icon: '⚙️', href: '/admin' },
-];
-
-interface WorkspaceContextType {
-  activeWorkspace: Workspace;
-  setActiveWorkspace: (workspace: Workspace) => void;
-  sidebarOpen: boolean;
+interface NavigationContextType {
+  activeSection: NavigationSection | null;
+  setActiveSection: (section: NavigationSection) => void;
+  visibleSections: NavigationSection[];
+  isSidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
 }
 
-const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
+const NavigationContext = createContext<NavigationContextType | null>(null);
 
-export function useWorkspace() {
-  const ctx = useContext(WorkspaceContext);
-  if (!ctx) throw new Error('useWorkspace must be used within WorkspaceProvider');
+export function useNavigation() {
+  const ctx = useContext(NavigationContext);
+  if (!ctx) {
+    throw new Error('useNavigation must be used within NavigationProvider');
+  }
   return ctx;
+}
+
+export function getActiveSectionForPathname(pathname: string): NavigationSection | null {
+  const section = getSectionFromPathname(pathname);
+  if (section) return section;
+
+  const roleBasedFallbacks: Array<[string, NavigationSection]> = [
+    ['/tenant', 'administration'],
+    ['/owner', 'administration'],
+    ['/sbu', 'work'],
+    ['/hq', 'work'],
+    ['/portal/customer', 'customers'],
+    ['/portal/partner', 'customers'],
+    ['/driver', 'work'],
+    ['/ground', 'work'],
+  ];
+
+  for (const [prefix, section] of roleBasedFallbacks) {
+    if (pathname.startsWith(prefix)) return section;
+  }
+
+  return 'command-center';
 }
 
 interface AppShellProps {
@@ -45,8 +60,22 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace>('commercial');
+  const { profile } = useAuth();
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+
+  const role = profile?.role;
+  const [activeSection, setActiveSectionState] = useState<NavigationSection | null>(null);
+
+  const visibleSections = getVisibleNavigationSections(role);
+
+  useEffect(() => {
+    const initialSection = getActiveSectionForPathname(pathname);
+    if (initialSection && visibleSections.includes(initialSection)) {
+      setActiveSectionState(initialSection);
+    } else if (initialSection) {
+      setActiveSectionState(initialSection);
+    }
+  }, [pathname, visibleSections]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -54,29 +83,30 @@ export default function AppShell({ children }: AppShellProps) {
     }
   }, []);
 
-  useEffect(() => {
-    if (pathname.startsWith('/commercial')) setActiveWorkspace('commercial');
-    else if (pathname.startsWith('/operations') || pathname.startsWith('/sbu')) setActiveWorkspace('operations');
-    else if (pathname.startsWith('/finance') || pathname.startsWith('/hq/finance')) setActiveWorkspace('finance');
-    else if (pathname.startsWith('/intelligence')) setActiveWorkspace('intelligence');
-    else if (pathname.startsWith('/admin') || pathname.startsWith('/tenant')) setActiveWorkspace('admin');
-  }, [pathname]);
-
-  const handleSetActiveWorkspace = useCallback((workspace: Workspace) => {
-    setActiveWorkspace(workspace);
-    const def = WORKSPACES.find((w) => w.id === workspace);
-    if (def) window.location.href = def.href;
+  const setActiveSection = useCallback((section: NavigationSection) => {
+    setActiveSectionState(section);
   }, []);
 
   return (
-    <WorkspaceContext.Provider value={{ activeWorkspace, setActiveWorkspace: handleSetActiveWorkspace, sidebarOpen, setSidebarOpen }}>
+    <NavigationContext.Provider
+      value={{
+        activeSection,
+        setActiveSection,
+        visibleSections,
+        isSidebarOpen,
+        setSidebarOpen,
+      }}
+    >
       <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <TopBar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-          <main className="flex-1 p-4 md:p-6 overflow-y-auto">{children}</main>
+          <TopBar onMenuClick={() => setSidebarOpen(!isSidebarOpen)} />
+          <main className="flex-1 p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-6 overflow-y-auto">{children}</main>
         </div>
+        <MobileBottomNav />
       </div>
-    </WorkspaceContext.Provider>
+    </NavigationContext.Provider>
   );
 }
+
+export { NAVIGATION_SECTIONS, getNavigationSectionLabel };

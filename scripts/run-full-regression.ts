@@ -55,6 +55,7 @@ import { runX6TestSuite } from '../lib/__tests__/x6-reader-readiness.test';
 import { runPostX4ReconciliationAssessment } from '../lib/__tests__/post-x4-reconciliation-assessment.test';
 import { runFinalClosureAssessment } from '../lib/__tests__/data4e-final-closure-assessment.test';
 import { runRReaderWaveRASuite } from '../lib/__tests__/r-reader-wave-r-a.test';
+import { runUiux4dExternalPortalsSuite } from '../lib/__tests__/uiux4d-external-portals.test';
 
 interface SuiteResult { passed: number; failed: number; total: number }
 type SuiteFn = () => SuiteResult | Promise<SuiteResult> | Array<{ testId: string; description: string; pass: boolean; error?: string }>;
@@ -132,6 +133,7 @@ const asyncSuites: Array<{ name: string; fn: () => Promise<SuiteResult> }> = [
   { name: 'DATA-4E Final Closure Assessment', fn: async () => { const r = await runFinalClosureAssessment(); return toSuiteResult(r); } },
   { name: 'R-Reader Wave R-A Entity Ownership Migration', fn: async () => { const r = await runRReaderWaveRASuite(); return toSuiteResult(r); } },
   { name: 'ADR-092 Phase 3 ASSIGN_DRIVER Integration/E2E', fn: runAdr092Phase3Suite },
+  { name: 'UI/UX-4D External Portals & Mobile', fn: async () => toSuiteResult(runUiux4dExternalPortalsSuite()) },
 ];
 
 let totalPass = 0;

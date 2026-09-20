@@ -5,12 +5,34 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
+const ROLE_LABELS: Record<string, string> = {
+  owner_sentralogis: 'Super Owner',
+  tenant_superadmin: 'Tenant Admin',
+  tenant_admin: 'Tenant Admin',
+  hq_sales_staff: 'Sales Staff',
+  hq_commercial_director: 'Commercial Director',
+  hq_sales_manager: 'Sales Manager',
+  hq_marketing_staff: 'Marketing Staff',
+  hq_pricing_analyst: 'Pricing Analyst',
+  hq_ops: 'Operations',
+  hq_finance: 'Finance',
+  hq_cs: 'Customer Service',
+  hq_director_ops: 'Director',
+  driver: 'Driver',
+  warehouse_customer: 'Customer',
+  ground_staff: 'Ground Staff',
+};
+
+function getRoleLabel(role: string | undefined): string {
+  if (!role) return 'User';
+  return ROLE_LABELS[role] || role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export default function ProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const { profile, logout } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -36,41 +58,36 @@ export default function ProfileDropdown() {
         </div>
         <div className="hidden sm:block text-left">
           <p className="text-xs font-bold text-slate-900 leading-none">{profile?.full_name || 'Administrator'}</p>
-          <p className="text-[10px] font-medium text-slate-500 mt-1 leading-none">{profile?.role?.toUpperCase() || 'USER'}</p>
+          <p className="text-[10px] font-medium text-slate-500 mt-1 leading-none">{getRoleLabel(profile?.role)}</p>
         </div>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown Menu */}
       {isOpen && (
         <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-900/5 py-2 z-[150] animate-in fade-in zoom-in-95 duration-200">
           <div className="px-4 py-3 border-b border-slate-50 mb-1">
             <p className="text-xs font-bold text-slate-900">{profile?.email || 'user@example.com'}</p>
-            <p className="text-[10px] font-medium text-slate-400 mt-0.5">Authorized Identity</p>
+            <p className="text-[10px] font-medium text-slate-400 mt-0.5">{getRoleLabel(profile?.role)}</p>
+            {profile?.tenants?.name && (
+              <p className="text-[10px] font-medium text-slate-400 mt-0.5">{profile.tenants.name}</p>
+            )}
           </div>
           
-          {profile?.role?.toLowerCase().includes('tenant') ? (
+          {(profile?.role === 'tenant_superadmin' || profile?.role === 'tenant_admin') ? (
             <>
               <Link 
-                href="/tenant" 
+                href="/tenant/profile" 
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                <User className="w-4 h-4" /> Node Profile
+                <User className="w-4 h-4" /> My Profile
               </Link>
               <Link 
-                href="/tenant/topup" 
+                href="/tenant/statement" 
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                <div className="w-4 h-4 rounded-full border border-blue-500 flex items-center justify-center text-[8px] font-bold text-blue-500">T</div> Energy Recharge
-              </Link>
-              <Link 
-                href="/tenant/history" 
-                className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <div className="w-4 h-4 rounded-full border border-slate-400 flex items-center justify-center text-[8px] font-bold text-slate-400">H</div> Activity Log
+                <Settings className="w-4 h-4" /> Activity
               </Link>
             </>
           ) : (
@@ -80,14 +97,14 @@ export default function ProfileDropdown() {
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                <User className="w-4 h-4" /> Profile Details
+                <User className="w-4 h-4" /> Profile
               </Link>
               <Link 
                 href="/owner/settings" 
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
-                <Settings className="w-4 h-4" /> Account Settings
+                <Settings className="w-4 h-4" /> Settings
               </Link>
             </>
           )}
@@ -98,7 +115,7 @@ export default function ProfileDropdown() {
             onClick={() => { logout(); setIsOpen(false); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
           >
-            <LogOut className="w-4 h-4" /> Terminate Session
+            <LogOut className="w-4 h-4" /> Logout
           </button>
         </div>
       )}
