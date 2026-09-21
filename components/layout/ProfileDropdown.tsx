@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { User, Settings, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -30,7 +30,7 @@ function getRoleLabel(role: string | undefined): string {
 
 export default function ProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { profile, logout } = useAuth();
+  const { profile } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,15 +109,9 @@ export default function ProfileDropdown() {
             </>
           )}
           
-          <div className="h-px bg-slate-100 my-1" />
-          
-          <button 
-            onClick={() => { logout(); setIsOpen(false); }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
+           <div className="h-px bg-slate-100 my-1" />
+           
+         </div>
       )}
     </div>
   );

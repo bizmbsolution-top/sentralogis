@@ -58,7 +58,6 @@ const SECTION_NAV: Record<NavigationSection, NavGroup[]> = {
         { label: 'Sales Orders', href: '/commercial/sales-orders', icon: <ShoppingCart className="w-4 h-4" /> },
         { label: 'Quotes', href: '/commercial/quotations', icon: <FileText className="w-4 h-4" /> },
         { label: 'Engagements', href: '/commercial/engagements', icon: <Users className="w-4 h-4" /> },
-        { label: 'Quotations', href: '/commercial/quotations', icon: <FileText className="w-4 h-4" /> },
       ],
     },
   ],
