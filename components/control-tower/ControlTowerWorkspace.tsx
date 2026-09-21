@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { 
   Building2, 
   DollarSign, 
@@ -12,6 +13,7 @@ import {
   AlertCircle, 
   Loader2,
   FileCheck,
+  FileText,
   ExternalLink
 } from 'lucide-react';
 import { ExecutionHealthBar } from './ExecutionHealthBar';
@@ -178,8 +180,15 @@ export function ControlTowerWorkspace({
             </div>
           </div>
 
-          {/* View switcher & refresh */}
+          {/* View Switcher & Refresh */}
           <div className="flex items-center gap-2">
+            <Link
+              href={`/commercial/sales-orders/${so.id}`}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 flex items-center gap-1.5 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              View Sales Order
+            </Link>
             <button
               onClick={() => setViewMode('customer')}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 flex items-center gap-1.5 transition-colors"

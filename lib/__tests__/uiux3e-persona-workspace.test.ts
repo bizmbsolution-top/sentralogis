@@ -41,21 +41,11 @@ describe('Phase UI/UX-3E Persona Workspace Implementation', () => {
   });
 
   describe('Operations Workspace', () => {
-    test('Operations dashboard page exists', () => {
+    test('Operations dashboard page exists and redirects to Control Tower', () => {
       expect(fileExists('app/(dashboard)/operations/page.tsx')).toBe(true);
-    });
-
-    test('Operations dashboard shows work queue', () => {
       const src = readFile('app/(dashboard)/operations/page.tsx');
-      expect(src).toContain('Forwarding');
-      expect(src).toContain('Trucking');
-      expect(src).toContain('Customs');
-      expect(src).toContain('Warehouse');
-    });
-
-    test('Operations dashboard shows exceptions', () => {
-      const src = readFile('app/(dashboard)/operations/page.tsx');
-      expect(src).toContain('Operational Exceptions');
+      expect(src).toContain('redirect');
+      expect(src).toContain('/commercial/control-tower');
     });
   });
 

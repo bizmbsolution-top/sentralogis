@@ -31,13 +31,13 @@ export interface AppDefinition {
 
 const APPS: AppDefinition[] = [
   { id: 'commercial', label: 'Commercial', description: 'Customers, Engagements, Orders', icon: <Users className="w-6 h-6" />, href: '/commercial', color: 'bg-blue-500' },
-  { id: 'operations', label: 'Operations', description: 'Fulfillment, Shipments, Execution', icon: <Package className="w-6 h-6" />, href: '/operations', color: 'bg-amber-500' },
+  { id: 'operations', label: 'Operations', description: 'Fulfillment, Shipments, Execution', icon: <Package className="w-6 h-6" />, href: '/commercial/control-tower', color: 'bg-amber-500' },
   { id: 'finance', label: 'Finance', description: 'Invoices, Payments, Settlements', icon: <DollarSign className="w-6 h-6" />, href: '/finance', color: 'bg-green-500' },
   { id: 'intelligence', label: 'Intelligence', description: 'Visibility, Margin, Exceptions', icon: <BarChart3 className="w-6 h-6" />, href: '/intelligence', color: 'bg-purple-500' },
-  { id: 'forwarding', label: 'Forwarding', description: 'Shipments, Consolidations', icon: <Ship className="w-6 h-6" />, href: '/operations/forwarding', color: 'bg-cyan-500' },
-  { id: 'trucking', label: 'Trucking', description: 'Work Orders, Assignments, Fleet', icon: <Truck className="w-6 h-6" />, href: '/operations/trucking', color: 'bg-orange-500' },
-  { id: 'customs', label: 'Customs', description: 'Declarations, Clearance', icon: <Shield className="w-6 h-6" />, href: '/operations/customs', color: 'bg-red-500' },
-  { id: 'warehouse', label: 'Warehouse', description: 'Inbound, Outbound, Inventory', icon: <Warehouse className="w-6 h-6" />, href: '/operations/warehouse', color: 'bg-indigo-500' },
+  { id: 'forwarding', label: 'Forwarding', description: 'Shipments, Consolidations', icon: <Ship className="w-6 h-6" />, href: '/sbu/forwarding/shipments', color: 'bg-cyan-500' },
+  { id: 'trucking', label: 'Trucking', description: 'Work Orders, Assignments, Fleet', icon: <Truck className="w-6 h-6" />, href: '/sbu/trucking/work-orders', color: 'bg-orange-500' },
+  { id: 'customs', label: 'Customs', description: 'Declarations, Clearance', icon: <Shield className="w-6 h-6" />, href: '/sbu/clearance/declarations', color: 'bg-red-500' },
+  { id: 'warehouse', label: 'Warehouse', description: 'Inbound, Outbound, Inventory', icon: <Warehouse className="w-6 h-6" />, href: '/sbu/warehouse/inbound', color: 'bg-indigo-500' },
   { id: 'pricing', label: 'Pricing', description: 'Rate Masters, Versions, Overrides', icon: <BarChart3 className="w-6 h-6" />, href: '/pricing', color: 'bg-pink-500' },
   { id: 'control-tower', label: 'Control Tower', description: 'Cross-domain visibility', icon: <Globe className="w-6 h-6" />, href: '/commercial/control-tower', color: 'bg-teal-500' },
 ];

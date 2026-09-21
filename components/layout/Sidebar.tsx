@@ -37,7 +37,6 @@ const SECTION_NAV: Record<NavigationSection, NavGroup[]> = {
       label: 'Attention',
       items: [
         { label: 'Control Tower', href: '/commercial/control-tower', icon: <LayoutGrid className="w-4 h-4" /> },
-        { label: 'Work Queue', href: '/operations', icon: <ClipboardList className="w-4 h-4" /> },
       ],
     },
   ],
@@ -45,9 +44,7 @@ const SECTION_NAV: Record<NavigationSection, NavGroup[]> = {
     {
       label: 'Work Queue',
       items: [
-        { label: 'All Work', href: '/operations', icon: <ClipboardList className="w-4 h-4" /> },
-        { label: 'Work Orders', href: '/sbu/trucking/work-orders', icon: <Truck className="w-4 h-4" /> },
-        { label: 'Assignments', href: '/sbu/trucking/assignments', icon: <Package className="w-4 h-4" /> },
+        { label: 'Control Tower', href: '/commercial/control-tower', icon: <LayoutGrid className="w-4 h-4" /> },
       ],
     },
   ],

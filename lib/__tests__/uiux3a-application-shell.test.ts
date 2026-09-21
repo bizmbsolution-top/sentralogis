@@ -379,7 +379,6 @@ describe('Phase UI/UX-4B Component Alignment & Mobile', () => {
       const src = readFile('lib/navigation/types.tsx');
       expect(src).toContain('getSectionFromPathname');
       expect(src).toContain('/commercial/control-tower');
-      expect(src).toContain('/operations');
       expect(src).toContain('/sbu/forwarding/shipments');
       expect(src).toContain('/sbu/trucking/work-orders');
       expect(src).toContain('/financial/invoices');

@@ -55,10 +55,10 @@ const NAV_ITEMS: CommandCategory[] = [
     id: 'operations',
     label: 'Operations',
     items: [
-      { id: 'forwarding', label: 'Forwarding', icon: <Ship className="w-4 h-4" />, category: 'Operations', href: '/operations/forwarding' },
-      { id: 'trucking', label: 'Trucking', icon: <Truck className="w-4 h-4" />, category: 'Operations', href: '/operations/trucking' },
-      { id: 'customs', label: 'Customs', icon: <Shield className="w-4 h-4" />, category: 'Operations', href: '/operations/customs' },
-      { id: 'warehouse', label: 'Warehouse', icon: <Warehouse className="w-4 h-4" />, category: 'Operations', href: '/operations/warehouse' },
+       { id: 'forwarding', label: 'Forwarding', icon: <Ship className="w-4 h-4" />, category: 'Operations', href: '/sbu/forwarding/shipments' },
+       { id: 'trucking', label: 'Trucking', icon: <Truck className="w-4 h-4" />, category: 'Operations', href: '/sbu/trucking/work-orders' },
+       { id: 'customs', label: 'Customs', icon: <Shield className="w-4 h-4" />, category: 'Operations', href: '/sbu/clearance/declarations' },
+       { id: 'warehouse', label: 'Warehouse', icon: <Warehouse className="w-4 h-4" />, category: 'Operations', href: '/sbu/warehouse/inbound' },
     ],
   },
   {

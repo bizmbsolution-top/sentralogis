@@ -22,7 +22,6 @@ interface BreadcrumbProps {
 
 const ROUTE_LABEL_MAP: Record<string, string> = {
   '/commercial': 'Commercial',
-  '/operations': 'Work',
   '/commercial/sales-orders': 'Orders',
   '/commercial/quotations': 'Quotes',
   '/commercial/engagements': 'Customers',

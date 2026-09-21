@@ -26,14 +26,14 @@ export interface WorkItem {
 
 const TODAY_ITEMS: WorkItem[] = [
   { id: 'pending-approvals', label: 'Pending Approvals', description: '3 overrides awaiting review', icon: <AlertTriangle className="w-4 h-4" />, count: 3, urgency: 'high', href: '/pricing/overrides' },
-  { id: 'active-shipments', label: 'Active Shipments', description: '12 in transit', icon: <Ship className="w-4 h-4" />, count: 12, urgency: 'medium', href: '/operations/forwarding' },
-  { id: 'assigned-jobs', label: 'Assigned Jobs', description: '5 jobs today', icon: <Truck className="w-4 h-4" />, count: 5, urgency: 'medium', href: '/operations/trucking' },
+  { id: 'active-shipments', label: 'Active Shipments', description: '12 in transit', icon: <Ship className="w-4 h-4" />, count: 12, urgency: 'medium', href: '/sbu/forwarding/shipments' },
+  { id: 'assigned-jobs', label: 'Assigned Jobs', description: '5 jobs today', icon: <Truck className="w-4 h-4" />, count: 5, urgency: 'medium', href: '/sbu/trucking/work-orders' },
 ];
 
 const ATTENTION_ITEMS: WorkItem[] = [
   { id: 'overdue-invoice', label: 'Overdue Invoice', description: 'INV-2026-00042', icon: <FileText className="w-4 h-4" />, urgency: 'high', href: '/financial/invoices' },
-  { id: 'delayed-shipment', label: 'Delayed Shipment', description: 'SHP-2026-00125', icon: <Package className="w-4 h-4" />, urgency: 'high', href: '/operations/forwarding' },
-  { id: 'customs-hold', label: 'Customs Hold', description: 'Declaration DECL-001', icon: <AlertTriangle className="w-4 h-4" />, urgency: 'high', href: '/operations/customs' },
+  { id: 'delayed-shipment', label: 'Delayed Shipment', description: 'SHP-2026-00125', icon: <Package className="w-4 h-4" />, urgency: 'high', href: '/sbu/forwarding/shipments' },
+  { id: 'customs-hold', label: 'Customs Hold', description: 'Declaration DECL-001', icon: <AlertTriangle className="w-4 h-4" />, urgency: 'high', href: '/sbu/clearance/declarations' },
 ];
 
 export default function MyWork() {

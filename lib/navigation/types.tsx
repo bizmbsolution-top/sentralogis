@@ -52,7 +52,7 @@ export const NAVIGATION_SECTIONS: NavigationSectionDefinition[] = [
     label: 'Work',
     description: 'Work queue across all SBUs',
     icon: <ClipboardList className="w-5 h-5" />,
-    href: '/operations',
+    href: '/commercial/sales-orders',
   },
   {
     id: 'orders',
@@ -211,7 +211,6 @@ export function getVisibleNavigationSections(
 export function getSectionFromPathname(pathname: string): NavigationSection | null {
   const mappings: Array<[RegExp, NavigationSection]> = [
     [/^\/commercial\/control-tower/, 'command-center'],
-    [/^\/operations/, 'work'],
     [/^\/(?:commercial\/sales-orders|commercial\/quotations|commercial\/leads|commercial\/pipeline)/, 'orders'],
     [/^\/commercial\/sales-orders\/[^/]+\/fulfillment/, 'fulfillment'],
     [/^\/(?:sbu\/forwarding\/shipments|sbu\/forwarding\/consol)/, 'shipments'],

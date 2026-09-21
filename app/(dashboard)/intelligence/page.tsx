@@ -33,16 +33,16 @@ interface Risk {
 }
 
 const DOMAIN_HEALTH: DomainHealth[] = [
-  { domain: 'Forwarding', status: 'healthy', metric: '12 active shipments', icon: <Ship className="w-5 h-5" />, href: '/operations/forwarding' },
-  { domain: 'Trucking', status: 'warning', metric: '3 delayed JOs', icon: <Truck className="w-5 h-5" />, href: '/operations/trucking' },
-  { domain: 'Customs', status: 'critical', metric: '1 declaration on hold', icon: <Shield className="w-5 h-5" />, href: '/operations/customs' },
-  { domain: 'Warehouse', status: 'healthy', metric: '5 pending tasks', icon: <Warehouse className="w-5 h-5" />, href: '/operations/warehouse' },
+  { domain: 'Forwarding', status: 'healthy', metric: '12 active shipments', icon: <Ship className="w-5 h-5" />, href: '/sbu/forwarding/shipments' },
+  { domain: 'Trucking', status: 'warning', metric: '3 delayed JOs', icon: <Truck className="w-5 h-5" />, href: '/sbu/trucking/work-orders' },
+  { domain: 'Customs', status: 'critical', metric: '1 declaration on hold', icon: <Shield className="w-5 h-5" />, href: '/sbu/clearance/declarations' },
+  { domain: 'Warehouse', status: 'healthy', metric: '5 pending tasks', icon: <Warehouse className="w-5 h-5" />, href: '/sbu/warehouse/inbound' },
 ];
 
 const RISKS: Risk[] = [
-  { id: '1', label: 'Shipment Delay', description: 'SHP-2026-00125 exceeded ETA by 2 days', severity: 'critical', href: '/operations/forwarding/shipments/shp-2026-00125' },
-  { id: '2', label: 'Customs Hold', description: 'DECL-001 requires additional documents', severity: 'high', href: '/operations/customs/declarations/decl-001' },
-  { id: '3', label: 'SLA Risk', description: '2 trucking JOs approaching SLA', severity: 'medium', href: '/operations/trucking' },
+  { id: '1', label: 'Shipment Delay', description: 'SHP-2026-00125 exceeded ETA by 2 days', severity: 'critical', href: '/sbu/forwarding/shipments/shp-2026-00125' },
+  { id: '2', label: 'Customs Hold', description: 'DECL-001 requires additional documents', severity: 'high', href: '/sbu/clearance/declarations/decl-001' },
+  { id: '3', label: 'SLA Risk', description: '2 trucking JOs approaching SLA', severity: 'medium', href: '/sbu/trucking/work-orders' },
 ];
 
 export default function ControlTowerDashboard() {

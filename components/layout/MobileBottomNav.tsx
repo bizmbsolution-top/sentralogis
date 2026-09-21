@@ -29,7 +29,7 @@ interface MobileNavItem {
 
 const SECTION_HREF_MAP: Record<string, string> = {
   'command-center': '/commercial/control-tower',
-  'work': '/operations',
+  'work': '/commercial/control-tower',
   'orders': '/commercial/sales-orders',
   'fulfillment': '/commercial/sales-orders',
   'shipments': '/sbu/forwarding/shipments',
