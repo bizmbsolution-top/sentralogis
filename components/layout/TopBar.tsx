@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Menu, Search, Bell, LogOut } from 'lucide-react';
+import { Menu, Search, Bell } from 'lucide-react';
 import { useNavigation, getNavigationSectionLabel } from './AppShell';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ProfileDropdown from './ProfileDropdown';
@@ -12,12 +12,16 @@ interface TopBarProps {
 
 export default function TopBar({ onMenuClick }: TopBarProps) {
   const { activeSection } = useNavigation();
-  const { logout } = useAuth();
+  const { profile, logout } = useAuth();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-6">
       <div className="flex items-center gap-4">
-        <button onClick={onMenuClick} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+        <button
+          onClick={onMenuClick}
+          aria-label="Open navigation menu"
+          className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
           <Menu className="w-5 h-5 text-slate-600 dark:text-slate-400" />
         </button>
 
@@ -25,6 +29,29 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           <div className="hidden md:block">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {getNavigationSectionLabel(activeSection)}
+            </span>
+          </div>
+        )}
+
+        {/* Tenant branding badge */}
+        {profile?.tenants?.name && (
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60">
+            {profile.tenants.logo_url ? (
+              <img
+                src={profile.tenants.logo_url}
+                alt={profile.tenants.name}
+                className="w-5 h-5 rounded object-contain bg-white/20 shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-5 h-5 rounded bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {profile.tenants.name.substring(0, 2).toUpperCase()}
+              </div>
+            )}
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px] sm:max-w-[180px]">
+              {profile.tenants.name}
             </span>
           </div>
         )}
@@ -40,21 +67,17 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           />
         </div>
 
-        <button className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-          <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
-
         <button
-          onClick={logout}
-          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors"
-          title="Logout"
+          aria-label="Notifications"
+          className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
-          <LogOut className="w-5 h-5" />
+          <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
         </button>
 
-        <div className="pl-3 border-l border-slate-200 dark:border-slate-700">
-          <ProfileDropdown />
+        <div className="pl-2 border-l border-slate-200 dark:border-slate-700 flex items-center gap-2">
+          {/* User profile dropdown containing Profile links and Logout */}
+          <ProfileDropdown onSignOut={logout} />
         </div>
       </div>
     </header>

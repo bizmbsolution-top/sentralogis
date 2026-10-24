@@ -20,6 +20,7 @@ interface NavigationContextType {
   visibleSections: NavigationSection[];
   isSidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  role?: string | null;
 }
 
 const NavigationContext = createContext<NavigationContextType | null>(null);
@@ -78,8 +79,33 @@ export default function AppShell({ children }: AppShellProps) {
   }, [pathname, visibleSections]);
 
   useEffect(() => {
+    // Initial responsive setup + desktop preference
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 1024;
+      if (isMobile) {
+        setSidebarOpen(false);
+      } else {
+        const saved = localStorage.getItem('sentralogis-sidebar-open');
+        if (saved !== null) {
+          setSidebarOpen(saved === 'true');
+        } else {
+          setSidebarOpen(true);
+        }
+      }
+    }
+  }, []);
+
+  // Auto-close drawer on mobile when navigating
+  useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setSidebarOpen(false);
+    }
+  }, [pathname]);
+
+  const handleSetSidebarOpen = useCallback((open: boolean) => {
+    setSidebarOpen(open);
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      localStorage.setItem('sentralogis-sidebar-open', String(open));
     }
   }, []);
 
@@ -94,13 +120,14 @@ export default function AppShell({ children }: AppShellProps) {
         setActiveSection,
         visibleSections,
         isSidebarOpen,
-        setSidebarOpen,
+        setSidebarOpen: handleSetSidebarOpen,
+        role,
       }}
     >
       <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => handleSetSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <TopBar onMenuClick={() => setSidebarOpen(!isSidebarOpen)} />
+          <TopBar onMenuClick={() => handleSetSidebarOpen(!isSidebarOpen)} />
           <main className="flex-1 p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-6 overflow-y-auto">{children}</main>
         </div>
         <MobileBottomNav />
