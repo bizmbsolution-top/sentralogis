@@ -52,6 +52,36 @@ function makeId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+const GREETINGS_ONLY = [
+  'selamat pagi',
+  'selamat siang',
+  'selamat sore',
+  'selamat malam',
+  'halo',
+  'hai',
+  'hey',
+  'hei',
+  'pagi',
+  'siang',
+  'sore',
+  'malam',
+  'copilot',
+];
+
+const CHATTER_ONLY = [
+  'apa kabar',
+  'bagaimana kabarnya',
+  'cuaca hari ini bagaimana',
+  'lagi apa',
+  'siapa kamu',
+  'kamu siapa',
+  'ceritakan lelucon',
+  'terima kasih',
+  'makasih',
+  'thanks',
+  'thank you',
+];
+
 export interface QueryResolutionResult {
   resolutionState: QueryResolutionState;
   queryContext: ConversationalQueryContext;
@@ -112,6 +142,29 @@ export class ConversationalQueryResolver {
       greetings.some((g) => text === g || text.startsWith(g + ' ') || text.endsWith(' ' + g)) ||
       chatter.some((c) => text.includes(c))
     );
+  }
+
+  /**
+   * Strips a leading greeting or chatter token so operational intent detection
+   * is not suppressed by a polite opener (§21).
+   * E.g. "halo, tampilkan semua user" → "tampilkan semua user".
+   * Returns the input unchanged when no leading greeting prefix is detected.
+   */
+  public static normalizeForClassification(rawInput: string): string {
+    const text = rawInput.trim();
+    const lower = text.toLowerCase();
+
+    const prefixes = [...GREETINGS_ONLY, ...CHATTER_ONLY];
+
+    for (const p of prefixes) {
+      const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`^${escaped}\\s*[!?.,;:]*\\s+`, 'i');
+      if (re.test(lower)) {
+        return text.replace(re, '').trim();
+      }
+    }
+
+    return text;
   }
 
   /**

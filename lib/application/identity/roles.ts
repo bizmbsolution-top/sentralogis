@@ -126,27 +126,38 @@ export const ALL_SBU_TYPES: readonly SbuType[] = [SBU_TRUCKING, SBU_WAREHOUSE, S
 
 /** Platform owner (single-tenant root). */
 export function isOwnerRole(role: string): boolean {
-  return role === ROLE_OWNER;
+  const r = role.toLowerCase();
+  return r === ROLE_OWNER || r === 'tenant_owner';
 }
 
 /** HQ-level roles (prefix hq_). */
 export function isHqRole(role: string): boolean {
-  return role.startsWith('hq_');
+  return role.toLowerCase().startsWith('hq_');
 }
 
 /** SBU-level roles (prefix sbu_). */
 export function isSbuRole(role: string): boolean {
-  return role.startsWith('sbu_');
+  return role.toLowerCase().startsWith('sbu_');
 }
 
 /** Tenant-level admin roles. */
 export function isTenantAdminRole(role: string): boolean {
-  return role === ROLE_TENANT_SUPERADMIN || role === ROLE_TENANT_ADMIN;
+  const norm = normalizeLegacyRole(role.toLowerCase());
+  return norm === ROLE_TENANT_SUPERADMIN || norm === ROLE_TENANT_ADMIN;
 }
 
 /** Global role = owner or any HQ role (from existing roles.ts pattern). */
 export function isGlobalRole(role: string): boolean {
   return isOwnerRole(role) || isHqRole(role);
+}
+
+/**
+ * Canonical cross-SBU authority check.
+ * Evaluates whether a role holds explicit tenant-wide cross-SBU authority:
+ * Global roles (platform owner, HQ directors/staff) or Tenant Admin roles.
+ */
+export function hasCrossSbuAuthority(role: string): boolean {
+  return isGlobalRole(role) || isTenantAdminRole(role);
 }
 
 /** Operational roles that execute work (driver, ground_staff). */
@@ -231,4 +242,25 @@ export function sbuRoleLevel(role: string): SbuRoleLevel {
   if (role.includes('_fin_')) return 'fin';
   if (role.includes('_admin_')) return 'admin';
   return null;
+}
+
+/**
+ * Map an SbuType to its canonical operational representation in wo_items/job_orders.
+ * Deterministic mapping:
+ * - 'trucking'   -> 'TRUCKING'
+ * - 'warehouse'  -> 'WAREHOUSE'
+ * - 'clearances' -> 'CLEARANCE'
+ * - 'forwarding' -> 'FORWARDING'
+ */
+export function sbuScopeToOperationalType(sbuScope: SbuType): string {
+  switch (sbuScope) {
+    case SBU_TRUCKING:
+      return 'TRUCKING';
+    case SBU_WAREHOUSE:
+      return 'WAREHOUSE';
+    case SBU_CUSTOMS:
+      return 'CLEARANCE';
+    case SBU_FORWARDING:
+      return 'FORWARDING';
+  }
 }

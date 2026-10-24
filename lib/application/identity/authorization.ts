@@ -22,6 +22,7 @@ import {
   isHqRole,
   isSbuRole,
   isTenantAdminRole,
+  hasCrossSbuAuthority,
   sbuTypeFromRole,
   ROLE_OWNER,
   ROLE_TENANT_SUPERADMIN,
@@ -58,6 +59,12 @@ import {
   ROLE_SBU_FIN_FWD,
 } from './roles';
 
+import {
+  MASTER_DATA_FULL_GRANT,
+  MASTER_DATA_CS_GRANT,
+  type MasterDataPermission,
+} from './master-data-permissions';
+
 /* ================================================================== */
 /*  PERMISSION VOCABULARY                                              */
 /* ================================================================== */
@@ -70,6 +77,7 @@ import {
  * Permissions are NOT invented to fill a matrix.
  */
 export type Permission =
+  | MasterDataPermission
   // Commercial / Work Orders
   | 'commercial:read'
   | 'commercial:manage'
@@ -110,7 +118,14 @@ export type Permission =
   // Pricing override governance (ADR-063)
   | 'pricing:override'
   | 'pricing:approve'
-  | 'pricing:read';
+  | 'pricing:read'
+  // Copilot interface entry permission
+  | 'copilot:read'
+  // Customer registration capabilities (Phase 4B / CS Customer Registration)
+  | 'customer:register'
+  // Sales Order capabilities (Phase 4B / CS SO Creation)
+  | 'sales_order:create'
+  | 'sales_order:read';
 
 /* ================================================================== */
 /*  ROLE → PERMISSION MATRIX                                           */
@@ -138,7 +153,10 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- Platform ---- */
    [ROLE_OWNER]: [
+    ...MASTER_DATA_FULL_GRANT,
+     'copilot:read',
      'commercial:read', 'commercial:manage',
+     'sales_order:create', 'sales_order:read',
      'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
      'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update', 'job_order:complete',
      'shipment:read', 'shipment:manage',
@@ -155,7 +173,10 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- Tenant owner branch (resolver sets 'TENANT_OWNER' role) ---- */
   'TENANT_OWNER': [
+    ...MASTER_DATA_FULL_GRANT,
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
     'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update', 'job_order:complete',
     'shipment:read', 'shipment:manage',
@@ -171,7 +192,10 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- Tenant Admin ---- */
   [ROLE_TENANT_SUPERADMIN]: [
+    ...MASTER_DATA_FULL_GRANT,
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
     'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update', 'job_order:complete',
     'shipment:read', 'shipment:manage',
@@ -185,7 +209,10 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_TENANT_ADMIN]: [
+    ...MASTER_DATA_FULL_GRANT,
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
     'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update', 'job_order:complete',
     'shipment:read', 'shipment:manage',
@@ -200,6 +227,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- HQ Directors ---- */
   [ROLE_HQ_DIRECTOR_OPS]: [
+    'copilot:read',
     'commercial:read',
     'work_order:read', 'work_order:update', 'work_order:approve',
     'job_order:read', 'job_order:assign', 'job_order:update',
@@ -211,6 +239,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_DIRECTOR_FIN]: [
+    'copilot:read',
     'commercial:read',
     'work_order:read',
     'job_order:read',
@@ -222,6 +251,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_DIRECTOR_COMM]: [
+    'copilot:read',
     'commercial:read', 'commercial:manage',
     'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
     'shipment:read', 'shipment:manage',
@@ -230,6 +260,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_DIRECTOR_BIZDEV]: [
+    'copilot:read',
     'commercial:read',
     'work_order:read',
     'customer_visibility:read',
@@ -237,11 +268,13 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_DIRECTOR_HRD]: [
+    'copilot:read',
     'staff:manage',
     'intelligence:read',
   ],
 
   [ROLE_HQ_DIRECTOR_CS]: [
+    'copilot:read',
     'commercial:read',
     'work_order:read', 'work_order:update',
     'job_order:read',
@@ -251,7 +284,9 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- HQ Commercial ---- */
   [ROLE_HQ_COMMERCIAL_DIRECTOR]: [
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update', 'work_order:approve',
     'shipment:read', 'shipment:manage',
     'customer_visibility:read',
@@ -259,19 +294,24 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_SALES_MANAGER]: [
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update',
     'customer_visibility:read',
     'intelligence:read',
   ],
 
   [ROLE_HQ_SALES_STAFF]: [
+    'copilot:read',
     'commercial:read', 'commercial:manage',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:create', 'work_order:update',
     'customer_visibility:read',
   ],
 
   [ROLE_HQ_PRICING_ANALYST]: [
+    'copilot:read',
     'commercial:read', 'commercial:manage',
     'work_order:read',
     'finance:read',
@@ -279,6 +319,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_MARKETING_STAFF]: [
+    'copilot:read',
     'commercial:read',
     'customer_visibility:read',
     'intelligence:read',
@@ -286,6 +327,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- HQ Operations / CS / Finance ---- */
   [ROLE_HQ_OPS]: [
+    'copilot:read',
     'work_order:read', 'work_order:create', 'work_order:update',
     'job_order:read', 'job_order:assign', 'job_order:update',
     'shipment:read',
@@ -296,12 +338,17 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_HQ_CS]: [
+    ...MASTER_DATA_CS_GRANT,
+    'copilot:read',
+    'customer:register',
+    'sales_order:create', 'sales_order:read',
     'work_order:read', 'work_order:update',
     'job_order:read',
     'customer_visibility:read',
   ],
 
   [ROLE_HQ_FINANCE]: [
+    'copilot:read',
     'work_order:read',
     'job_order:read',
     'finance:read', 'finance:manage',
@@ -310,6 +357,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- SBU Trucking ---- */
   [ROLE_SBU_MANAGER_TR]: [
+    'copilot:read',
     'work_order:read', 'work_order:update',
     'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update', 'job_order:complete',
     'fleet:read', 'fleet:manage',
@@ -317,12 +365,14 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   ],
 
   [ROLE_SBU_OPS_TR]: [
+    'copilot:read',
     'work_order:read', 'work_order:update',
     'job_order:read', 'job_order:create', 'job_order:assign', 'job_order:update',
     'fleet:read',
   ],
 
   [ROLE_SBU_FIN_TR]: [
+    'copilot:read',
     'work_order:read',
     'job_order:read',
     'finance:read',
@@ -330,56 +380,66 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   /* ---- SBU Warehouse ---- */
   [ROLE_SBU_MANAGER_WH]: [
+    'copilot:read',
     'warehouse:read', 'warehouse:manage',
     'job_order:read', 'job_order:create', 'job_order:update',
     'intelligence:read',
   ],
 
   [ROLE_SBU_OPS_WH]: [
+    'copilot:read',
     'warehouse:read', 'warehouse:manage',
     'job_order:read', 'job_order:create', 'job_order:update',
   ],
 
   [ROLE_SBU_FIN_WH]: [
+    'copilot:read',
     'warehouse:read',
     'finance:read',
   ],
 
   [ROLE_SBU_ADMIN_WH]: [
+    'copilot:read',
     'warehouse:read', 'warehouse:manage',
     'job_order:read',
   ],
 
   /* ---- SBU Customs/Clearance ---- */
   [ROLE_SBU_MANAGER_CL]: [
+    'copilot:read',
     'customs:read', 'customs:manage',
     'work_order:read',
     'intelligence:read',
   ],
 
   [ROLE_SBU_OPS_CL]: [
+    'copilot:read',
     'customs:read', 'customs:manage',
     'work_order:read',
   ],
 
   [ROLE_SBU_FIN_CL]: [
+    'copilot:read',
     'customs:read',
     'finance:read',
   ],
 
   /* ---- SBU Forwarding ---- */
   [ROLE_SBU_MANAGER_FWD]: [
+    'copilot:read',
     'shipment:read', 'shipment:manage',
     'work_order:read', 'work_order:update',
     'intelligence:read',
   ],
 
   [ROLE_SBU_OPS_FWD]: [
+    'copilot:read',
     'shipment:read', 'shipment:manage',
     'work_order:read', 'work_order:update',
   ],
 
   [ROLE_SBU_FIN_FWD]: [
+    'copilot:read',
     'shipment:read',
     'finance:read',
   ],
@@ -458,8 +518,8 @@ export function assertRole(ctx: IdentityContext, ...allowedRoles: string[]): voi
  * @throws {IdentityResolutionError} 403 when SBU access is insufficient.
  */
 export function assertSbuAccess(ctx: IdentityContext, requiredSbu: SbuType): void {
-  // Global roles have tenant-wide scope.
-  if (isGlobalRole(ctx.role) || isTenantAdminRole(ctx.role)) {
+  // Global roles & tenant admin roles have explicit tenant-wide cross-SBU scope.
+  if (hasCrossSbuAuthority(ctx.role)) {
     return;
   }
   // SBU roles: check if their SBU matches.
