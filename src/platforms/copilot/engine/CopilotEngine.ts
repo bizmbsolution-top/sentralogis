@@ -19,6 +19,7 @@ export interface CopilotResponse {
   content?: string;
   proposal?: any;
   timeline?: any;
+  results?: any[];
   metrics: CopilotMetrics;
   enrichedContext?: EnrichedOperationalContext;
 }

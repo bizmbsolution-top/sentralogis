@@ -17,7 +17,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { IdentityContext } from '@/lib/application/identity/types';
-import { assertPermission } from '@/lib/application/identity/resolver';
+import { assertPermission, assertAnyPermission } from '@/lib/application/identity/resolver';
 import type {
   Engagement,
   EngagementStatus,
@@ -160,7 +160,7 @@ export async function resolveOrCreateEngagement(
   context: IdentityContext,
 ): Promise<EngagementResult> {
   // ---- GATE 1: Authorization (U-02) ----
-  assertPermission(context, 'commercial:manage');
+  assertAnyPermission(context, ['commercial:manage', 'sales_order:create']);
 
   // ---- GATE 2: Trusted tenant (U-01 invariant — §7) ----
   // tenantId comes EXCLUSIVELY from IdentityContext, never from input.

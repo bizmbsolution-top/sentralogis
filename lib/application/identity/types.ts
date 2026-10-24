@@ -1,3 +1,4 @@
+import type { MasterDataPermission } from './master-data-permissions';
 /**
  * Sentralogis — Phase 4B-1a / U-01 + U-02
  * lib/application/identity/types.ts
@@ -47,7 +48,16 @@ export type IdentityPermission =
   // Pricing override governance (ADR-063)
   | 'pricing:override'
   | 'pricing:approve'
-  | 'pricing:read';
+  | 'pricing:read'
+  // Copilot interface entry permission
+  | 'copilot:read'
+  // Customer registration capabilities (Phase 4B / CS Customer Registration)
+  | 'customer:register'
+  // Sales Order capabilities (Phase 4B / CS SO Creation)
+  | 'sales_order:create'
+  | 'sales_order:read'
+  // Master Data permissions
+  | MasterDataPermission;
 
 /**
  * Trusted server-side identity context.

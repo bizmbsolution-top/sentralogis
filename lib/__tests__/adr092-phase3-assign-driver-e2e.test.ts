@@ -357,7 +357,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -400,7 +400,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -439,7 +439,7 @@ export async function runAdr092Phase3Suite() {
         throw new Error('Proposal not found or access denied.');
       };
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...buildProposal(), outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-UNKNOWN');
@@ -473,7 +473,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx({ permissions: ['commercial:read'] });
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -507,7 +507,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ tenant_id: 'tenant-other', entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx({ tenantId: 'tenant-attacker', permissions: ['job_order:assign'] });
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -541,7 +541,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -582,7 +582,7 @@ export async function runAdr092Phase3Suite() {
         }
         return { ...proposal, outcome: 'ALREADY_EXECUTED', lifecycle_state: 'EXECUTED', proposal_payload: { executionResult: { executionId: 'exec-existing', status: 'SUCCESS', message: 'Already executed', affectedEntities: [] } } } as any;
       };
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -620,7 +620,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -654,7 +654,7 @@ export async function runAdr092Phase3Suite() {
       const proposal = buildProposal({ entities: [{ entityType: 'JobOrder', entityId: joId, displayName: 'JO-001' }, { entityType: 'Driver', entityId: 'driver-1', displayName: 'Driver-001' }] });
       ProposalAuthorityService.getProposal = async () => proposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...proposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const request = buildExecutionRequest('CP-2026-09-0001');
@@ -694,7 +694,7 @@ export async function runAdr092Phase3Suite() {
       const cancelProposal = buildProposal({ intent: 'CANCEL_JOB', proposal_number: 'CP-CANCEL', entities: [{ entityType: 'JobOrder', entityId: 'jo-cancel', displayName: 'JO-CANCEL' }] });
       ProposalAuthorityService.getProposal = async () => cancelProposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...cancelProposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const identity = makeCtx();
       const cancelResult = await ExecutionService.execute(identity, {
@@ -707,7 +707,7 @@ export async function runAdr092Phase3Suite() {
       const replaceProposal = buildProposal({ intent: 'REPLACE_DRIVER', proposal_number: 'CP-REPLACE', entities: [{ entityType: 'JobOrder', entityId: 'jo-replace', displayName: 'JO-REPLACE' }, { entityType: 'Driver', entityId: 'driver-new', displayName: 'Driver-NEW' }] });
       ProposalAuthorityService.getProposal = async () => replaceProposal;
       ProposalAuthorityService.claimProposalForExecution = async () => ({ ...replaceProposal, outcome: 'CLAIMED', lifecycle_state: 'EXECUTABLE' } as any);
-      ProposalAuthorityService.recordExecutionResult = async () => {};
+      ProposalAuthorityService.recordExecutionResult = async () => ({} as any);
 
       const replaceResult = await ExecutionService.execute(identity, {
         proposalId: 'CP-REPLACE',

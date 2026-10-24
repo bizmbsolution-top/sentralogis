@@ -30,6 +30,7 @@ export class ConversationContext {
   
   activeIntent(): string | null { return this._activeIntent; }
   activeEntity(type: string): string | null { return this._referencedEntities[type] || null; }
+  getMemory(key: string): any { return this._conversationMemory[key]; }
   
   // NOTE: In a fully immutable architecture, these return a NEW instance of ConversationContext
   remember(key: string, value: any): ConversationContext {

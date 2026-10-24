@@ -23,7 +23,8 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { IdentityContext } from '@/lib/application/identity/types';
-import { assertPermission } from '@/lib/application/identity/resolver';
+import { assertPermission, assertAnyPermission } from '@/lib/application/identity/resolver';
+import { resolveOrCreateEngagement, _setEngagementDbClient } from '@/lib/application/engagement/engagement-bridge';
 import {
   SalesOrder,
   SalesOrderStatus,
@@ -88,6 +89,7 @@ let _client: SalesOrderDbClient = supabaseAdmin as unknown as SalesOrderDbClient
  */
 export function _setSalesOrderDbClient(client: SalesOrderDbClient | null): void {
   _client = client ?? (supabaseAdmin as unknown as SalesOrderDbClient);
+  _setEngagementDbClient(client as any);
 }
 
 export { _setSalesOrderLineDbClient } from './line-repository';
@@ -267,7 +269,7 @@ export async function createSalesOrder(
   context: IdentityContext,
 ): Promise<CreateSalesOrderResult> {
   // ---- GATE 1: Authorization (U-02) ----
-  assertPermission(context, 'commercial:manage');
+  assertAnyPermission(context, ['commercial:manage', 'sales_order:create']);
 
   // ---- GATE 2: Trusted tenant (U-01) — never from client ----
   const tenantId = context.tenantId;
@@ -470,7 +472,7 @@ export async function updateDraftSalesOrder(
   input: UpdateSalesOrderInput,
   context: IdentityContext,
 ): Promise<SalesOrder> {
-  assertPermission(context, 'commercial:manage');
+  assertAnyPermission(context, ['commercial:manage', 'sales_order:create']);
   const tenantId = context.tenantId;
 
   const current = await findById(tenantId, salesOrderId);
@@ -483,7 +485,64 @@ export async function updateDraftSalesOrder(
     );
   }
 
+  let newEngagementId: string | undefined = undefined;
+
+  if (input.customerId !== undefined && input.customerId !== null) {
+    const targetCustomerId = input.customerId.trim();
+    if (!targetCustomerId) {
+      throw new SalesOrderError(
+        'VALIDATION_FAILED',
+        400,
+        'customerId cannot be empty.',
+      );
+    }
+
+    const { data: custEntity, error: custErr } = await db()
+      .from('md_entities')
+      .select('id, entity_code, name, is_active')
+      .eq('id', targetCustomerId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (custErr || !custEntity) {
+      throw new SalesOrderError(
+        'CUSTOMER_NOT_FOUND',
+        404,
+        `Customer ${targetCustomerId} not found in tenant ${tenantId}.`,
+      );
+    }
+
+    if (custEntity.is_active === false) {
+      throw new SalesOrderError(
+        'CUSTOMER_INACTIVE',
+        422,
+        `Customer ${custEntity.name || targetCustomerId} is inactive and cannot be assigned.`,
+      );
+    }
+
+    const currentEngagement = await validateEngagement(tenantId, current.engagementId);
+    if (currentEngagement.customer_id !== targetCustomerId) {
+      const outcome = await resolveOrCreateEngagement(
+        {
+          customerId: targetCustomerId,
+          targetFulfillmentDate: input.targetFulfillmentDate ?? current.targetFulfillmentDate,
+          currency: input.currency ?? current.currency,
+          commercialNotes: input.commercialNotes ?? current.commercialNotes,
+        },
+        context,
+      );
+      newEngagementId = outcome.engagement.id;
+    }
+  } else if (input.engagementId !== undefined && input.engagementId !== null) {
+    const targetEngagementId = input.engagementId.trim();
+    if (targetEngagementId && targetEngagementId !== current.engagementId) {
+      await validateEngagement(tenantId, targetEngagementId);
+      newEngagementId = targetEngagementId;
+    }
+  }
+
   const updatePayload: DbRow = {
+    ...(newEngagementId ? { engagement_id: newEngagementId } : {}),
     ...(input.targetFulfillmentDate !== undefined ? { target_fulfillment_date: input.targetFulfillmentDate } : {}),
     ...(input.currency !== undefined ? { currency: input.currency } : {}),
     ...(input.totalAgreedRevenue !== undefined ? { total_agreed_revenue: input.totalAgreedRevenue } : {}),
@@ -618,7 +677,7 @@ export async function findSalesOrderById(
   context: IdentityContext,
   salesOrderId: string,
 ): Promise<SalesOrder> {
-  assertPermission(context, 'commercial:read');
+  assertAnyPermission(context, ['commercial:read', 'sales_order:read']);
   return findById(context.tenantId, salesOrderId);
 }
 
@@ -652,8 +711,179 @@ export async function listSalesOrdersForEngagement(
   context: IdentityContext,
   engagementId: string,
 ): Promise<SalesOrder[]> {
-  assertPermission(context, 'commercial:read');
+  assertAnyPermission(context, ['commercial:read', 'sales_order:read']);
   const tenantId = context.tenantId;
   await validateEngagement(tenantId, engagementId);
   return listByEngagement(tenantId, engagementId);
+}
+
+/**
+ * Enrich canonical SalesOrder records with customerId, customerName, customerCode,
+ * and engagementNumber from commercial_work_orders + md_entities (strictly tenant-scoped).
+ */
+export async function enrichSalesOrdersWithCustomer(
+  context: IdentityContext,
+  orders: SalesOrder[],
+): Promise<SalesOrder[]> {
+  if (!orders || orders.length === 0) return [];
+  const tenantId = context.tenantId;
+  const engagementIds = Array.from(new Set(orders.map((o) => o.engagementId).filter(Boolean)));
+  if (engagementIds.length === 0) return orders;
+
+  const { data: engRows } = await db()
+    .from('commercial_work_orders')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .in('id', engagementIds);
+
+  const engMap = new Map<string, { workOrderNumber: string | null; customerId: string | null }>();
+  const customerIdsSet = new Set<string>();
+  for (const row of engRows || []) {
+    const cid = row.customer_id ? String(row.customer_id) : null;
+    if (cid) customerIdsSet.add(cid);
+    engMap.set(String(row.id), {
+      workOrderNumber: (row.wo_number || row.work_order_number) ? String(row.wo_number || row.work_order_number) : null,
+      customerId: cid,
+    });
+  }
+
+  const custMap = new Map<string, { name: string | null; code: string | null }>();
+  const customerIds = Array.from(customerIdsSet);
+  if (customerIds.length > 0) {
+    const { data: custRows } = await db()
+      .from('md_entities')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .in('id', customerIds);
+    for (const c of custRows || []) {
+      custMap.set(String(c.id), {
+        name: c.name ? String(c.name) : null,
+        code: (c.entity_code || c.code || c.initial) ? String(c.entity_code || c.code || c.initial) : null,
+      });
+    }
+  }
+
+  return orders.map((o) => {
+    const eng = engMap.get(o.engagementId);
+    const cust = eng?.customerId ? custMap.get(eng.customerId) : undefined;
+    return {
+      ...o,
+      customerId: eng?.customerId ?? o.customerId ?? null,
+      customerName: cust?.name ?? o.customerName ?? null,
+      customerCode: cust?.code ?? o.customerCode ?? null,
+      engagementNumber: eng?.workOrderNumber ?? o.engagementNumber ?? null,
+    };
+  });
+}
+
+/**
+ * List all Sales Orders for the authenticated tenant, optionally filtered by
+ * engagementId or status, enriched with customer and engagement details.
+ */
+export async function listSalesOrdersForTenant(
+  context: IdentityContext,
+  opts?: { engagementId?: string | null; status?: string | null; limit?: number },
+): Promise<SalesOrder[]> {
+  assertAnyPermission(context, ['commercial:read', 'sales_order:read']);
+  const tenantId = context.tenantId;
+
+  if (opts?.engagementId) {
+    const list = await listSalesOrdersForEngagement(context, opts.engagementId);
+    return enrichSalesOrdersWithCustomer(context, list);
+  }
+
+  let query = db()
+    .from('sales_orders')
+    .select('*')
+    .eq('tenant_id', tenantId);
+
+  if (opts?.status) {
+    query = query.eq('status', opts.status);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) {
+    throw new SalesOrderError(
+      'DATABASE_ERROR',
+      400,
+      `Failed to list Sales Orders: ${error.message}`,
+    );
+  }
+
+  const limit = opts?.limit && opts.limit > 0 ? Math.min(opts.limit, 200) : 100;
+  const sliced = (data || []).slice(0, limit).map((r) => mapRowToSalesOrder(r as DbRow));
+  return enrichSalesOrdersWithCustomer(context, sliced);
+}
+
+/**
+ * List tenant customers (from md_entities) and existing commercial engagements
+ * (from commercial_work_orders) to support the Create Sales Order UI.
+ */
+export async function listCustomersAndEngagementsForTenant(
+  context: IdentityContext,
+  opts?: { search?: string },
+): Promise<{
+  customers: Array<{ id: string; name: string; legalName?: string | null; code: string | null }>;
+  engagements: Array<{ id: string; workOrderNumber: string; customerId: string; customerName: string | null; status: string }>;
+}> {
+  assertAnyPermission(context, ['commercial:read', 'customer_visibility:read', 'sales_order:read', 'sales_order:create']);
+  const tenantId = context.tenantId;
+
+  const [{ data: custRows }, { data: engRows }] = await Promise.all([
+    db()
+      .from('md_entities')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('name', { ascending: true }),
+    (context.permissions.includes('commercial:read') ? db() : ({ from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: [] }) }) }) }) } as any))
+      .from('commercial_work_orders')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const custMap = new Map<string, { id: string; name: string; legalName: string | null; code: string | null }>();
+  let customers: Array<{ id: string; name: string; legalName: string | null; code: string | null }> = [];
+  for (const r of custRows || []) {
+    if (r.is_active === false) continue;
+    const item = {
+      id: String(r.id),
+      name: String(r.name || 'Customer'),
+      legalName: r.legal_name ? String(r.legal_name) : null,
+      code: (r.entity_code || r.code || r.initial) ? String(r.entity_code || r.code || r.initial) : null,
+    };
+    custMap.set(item.id, item);
+    customers.push(item);
+  }
+
+  if (opts?.search && opts.search.trim()) {
+    const q = opts.search.trim().toLowerCase();
+    const cleanQ = q.replace(/^(pt|cv|ud)\.?\s+/i, '').trim();
+    customers = customers.filter((c) => {
+      const name = (c.name || '').toLowerCase();
+      const legal = (c.legalName || '').toLowerCase();
+      const code = (c.code || '').toLowerCase();
+      return (
+        name.includes(q) ||
+        name.replace(/^(pt|cv|ud)\.?\s+/i, '').trim().includes(cleanQ) ||
+        legal.includes(q) ||
+        legal.replace(/^(pt|cv|ud)\.?\s+/i, '').trim().includes(cleanQ) ||
+        code.includes(q)
+      );
+    });
+  }
+
+  const engagements = (engRows || []).map((e: any) => {
+    const cid = String(e.customer_id);
+    const cust = custMap.get(cid);
+    return {
+      id: String(e.id),
+      workOrderNumber: String(e.wo_number || e.work_order_number || e.id),
+      customerId: cid,
+      customerName: cust?.name ?? null,
+      status: String(e.status || 'OPEN'),
+    };
+  });
+
+  return { customers, engagements };
 }

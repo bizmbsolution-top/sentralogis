@@ -33,6 +33,7 @@ interface Profile {
   tenants?: {
     tenant_code: string;
     name: string;
+    logo_url?: string | null;
   };
   [key: string]: any;
 }
@@ -263,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Promise.race([
           supabase
             .from('tenants')
-            .select('tenant_code, name')
+            .select('tenant_code, name, logo_url')
             .eq('id', finalProfile.tenant_id)
             .maybeSingle(),
           bgTimeoutPromise
@@ -271,7 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(bgTimeoutId);
           if (result && result !== BG_TIMEOUT_SYM && result.data) {
             finalProfile.tenant_code = result.data.tenant_code;
-            finalProfile.tenants = { tenant_code: result.data.tenant_code, name: result.data.name };
+            finalProfile.tenants = { tenant_code: result.data.tenant_code, name: result.data.name, logo_url: result.data.logo_url || null };
             setProfile({ ...finalProfile });
             profileCache.current = { ...finalProfile };
           }
@@ -603,7 +604,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Clean up dangling promise on auth failure
         profilePromise = null;
         profileResolve = null;
-        toast.error(error.message);
         setLoading(false);
         setProfileLoading(false);
         return { data: null, error };

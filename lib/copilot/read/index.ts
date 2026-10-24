@@ -11,3 +11,12 @@ export { TimelineQueryProvider } from './timeline-provider';
 export { OperationalSummaryProvider } from './summary-provider';
 export { EntitySearchProvider } from './entity-provider';
 export { NotificationInboxProvider } from './notification-provider';
+export { OperationalLiveReadGateway, _setOperationalReadDelegate } from './operational-live-read-gateway';
+export type {
+  OperationalEntityType,
+  OperationalReadSource,
+  OperationalReadAction,
+  OperationalReadResult,
+  LiveReadResolutionState,
+  OperationalLiveReadResponse,
+} from './types';

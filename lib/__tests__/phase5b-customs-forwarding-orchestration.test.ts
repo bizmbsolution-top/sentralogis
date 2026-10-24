@@ -310,7 +310,7 @@ export async function runPhase5BCustomsForwardingOrchestrationSuite(): Promise<{
     const ctx = makeContext();
 
     let createdDeclaration: { id: string; declaration_number: string; tenant_id: string } | null = null;
-    let attachCalled = false;
+    let attachCalled: boolean = false;
 
     const originalCreateDeclaration = CustomsService.prototype.createDeclaration;
     const originalAttachShipment = CustomsAttachmentService.attachShipment;
@@ -357,7 +357,7 @@ export async function runPhase5BCustomsForwardingOrchestrationSuite(): Promise<{
       const referenceOk = accepted.assignedDomainReference?.referenceType === 'SHIPMENT' &&
                           accepted.assignedDomainReference?.referenceId === shipmentId;
       const declarationOk = createdDeclaration !== null;
-      const attachmentOk = attachCalled === true;
+      const attachmentOk = Boolean(attachCalled);
 
       return statusOk && referenceOk && declarationOk && attachmentOk;
     } finally {

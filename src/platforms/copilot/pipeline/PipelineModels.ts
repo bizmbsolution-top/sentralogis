@@ -19,10 +19,33 @@ export interface PipelineResult {
   message?: string;
 }
 
+export type CopilotAiStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'DEGRADED';
+
+export type IntentResolutionSource = 'OPENAI' | 'GEMINI' | 'DETERMINISTIC_FALLBACK' | 'NONE';
+
+export type UpstreamFailureClass =
+  | 'CAPACITY_EXHAUSTED'
+  | 'TIMEOUT_EXCEEDED'
+  | 'QUOTA_EXHAUSTED'
+  | 'UPSTREAM_FAILURE'
+  | 'INVALID_REQUEST'
+  | 'AUTH_MISCONFIGURED'
+  | 'MODEL_INELIGIBLE'
+  | 'PAYLOAD_INVALID_JSON'
+  | 'PAYLOAD_SCHEMA_MISMATCH';
+
+export interface CopilotResolutionMetadata {
+  aiStatus: CopilotAiStatus;
+  resolutionSource: IntentResolutionSource;
+  failureClass?: UpstreamFailureClass;
+}
+
 export class PipelineContext {
   public readonly pipelineId: string;
   public readonly correlationId: string;
   
+  resolutionMetadata?: CopilotResolutionMetadata;
+
   userInput: string;
   context: OperationalContext;
   identity: IdentityContext | null;

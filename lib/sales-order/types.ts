@@ -74,6 +74,11 @@ export interface SalesOrder {
   updatedAt: string;
   createdBy: string | null;
   updatedBy: string | null;
+  /** Enriched from parent commercial_work_orders + md_entities when available. */
+  customerId?: string | null;
+  customerName?: string | null;
+  customerCode?: string | null;
+  engagementNumber?: string | null;
 }
 
 // ============================================================================
@@ -112,6 +117,8 @@ export interface CreateSalesOrderInput {
 
 /** Fields editable while a Sales Order remains in DRAFT. */
 export interface UpdateSalesOrderInput {
+  customerId?: string | null;
+  engagementId?: string | null;
   targetFulfillmentDate?: string | null;
   currency?: string;
   totalAgreedRevenue?: number;
@@ -137,6 +144,7 @@ export interface CreateSalesOrderResult {
 
 export type SalesOrderErrorCode =
   | 'CUSTOMER_NOT_FOUND'
+  | 'CUSTOMER_INACTIVE'
   | 'ENGAGEMENT_NOT_FOUND'
   | 'ENGAGEMENT_NOT_OWNED'
   | 'SALES_ORDER_NOT_FOUND'
@@ -146,6 +154,7 @@ export type SalesOrderErrorCode =
   | 'QUOTE_NO_ITEMS'
   | 'INVALID_STATUS_TRANSITION'
   | 'NOT_EDITABLE'
+  | 'VALIDATION_FAILED'
   | 'UNIQUE_VIOLATION'
   | 'FORBIDDEN_WO_SHARING'
   | 'DATABASE_ERROR';

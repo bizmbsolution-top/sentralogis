@@ -188,7 +188,7 @@ class SalesOrderMockDb {
           : [];
         const chain = {
           select() {
-            const filters: Array<{ col: string; val: unknown }> = [];
+            const filters: Array<{ col: string; val: unknown; op?: string }> = [];
             const match = (r: Row) => filters.every((f) => {
               if (f.op === 'in') return (f.val as unknown[]).includes(r[f.col]);
               return r[f.col] === f.val;
@@ -678,8 +678,8 @@ export async function runU13SalesOrderFoundationSuite(): Promise<{ passed: numbe
     await createSalesOrder({ engagementId: ENG_A1, quoteId: QUOTE_A1 }, makeCtx());
     const fwdLine = mock.soLineItems.find((l) => l.source_quote_item_id === 'qi-1');
     const customsLine = mock.soLineItems.find((l) => l.source_quote_item_id === 'qi-2');
-    if (fwdLine.capability_type !== 'FORWARDING') throw new Error(`expected FORWARDING, got ${fwdLine.capability_type}`);
-    if (customsLine.capability_type !== 'CUSTOMS') throw new Error(`expected CUSTOMS, got ${customsLine.capability_type}`);
+    if (!fwdLine || fwdLine.capability_type !== 'FORWARDING') throw new Error(`expected FORWARDING, got ${fwdLine?.capability_type}`);
+    if (!customsLine || customsLine.capability_type !== 'CUSTOMS') throw new Error(`expected CUSTOMS, got ${customsLine?.capability_type}`);
   });
 
   // ------- Cross-tenant engagement rejected -------

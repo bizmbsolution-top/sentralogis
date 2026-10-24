@@ -162,6 +162,18 @@ export function assertPermission(ctx: IdentityContext, permission: IdentityPermi
 }
 
 /**
+ * Assert the context carries at least one of the specified permissions.
+ * Call this BEFORE an operation that accepts multiple alternate permissions.
+ * @throws {IdentityResolutionError} 403 when none of the permissions match.
+ */
+export function assertAnyPermission(ctx: IdentityContext, permissions: IdentityPermission[]): void {
+  const hasAny = permissions.some((p) => ctx.permissions.includes(p));
+  if (!hasAny) {
+    throw ERR_FORBIDDEN_PERMISSION(permissions[0]);
+  }
+}
+
+/**
  * Assert that a data row's tenant matches the trusted identity context.
  * Use this in any privileged operation before issuing a privileged query.
  * @throws {IdentityResolutionError} 403 when tenants don't match.
