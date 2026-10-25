@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#4f46e5',      // indigo-600
     icons: [
       {
-        src: '/sentralogis_logo.png',
-        sizes: '192x192 512x512',
+        src: '/logosentralogis.png',
+        sizes: 'any',
         type: 'image/png',
         purpose: 'maskable'
       }

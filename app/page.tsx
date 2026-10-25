@@ -103,7 +103,7 @@ export default function SentralogisLanding() {
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="relative flex items-center justify-center">
                 <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500/30 via-purple-500/20 to-pink-500/30 blur-lg rounded-full" />
-                <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-7 sm:h-9 w-auto relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                <img src="/logosentralogis.png" alt="Sentralogis" className="h-9 sm:h-11 w-auto object-contain relative z-10 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
               </div>
               <span className="text-base sm:text-xl font-black tracking-wider uppercase text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
                 Sentralogis

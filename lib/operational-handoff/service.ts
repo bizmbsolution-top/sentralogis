@@ -155,7 +155,7 @@ async function createCustomsDeclarationForForwardingHandoff(
   };
 
   const aggregate = await customsService.createDeclaration(dto);
-  const declaration = aggregate.declaration;
+  const declaration = (aggregate as any)?.declaration || (aggregate as any);
 
   if (shipmentId) {
     const attachmentResult = CustomsAttachmentService.attachShipment(
@@ -400,7 +400,9 @@ export async function findOperationalHandoffById(
   context: IdentityContext,
   handoffId: string,
 ): Promise<OperationalHandoff> {
-  assertPermission(context, 'commercial:read');
+  if (!context.permissions.includes('commercial:read') && !context.permissions.includes('sales_order:read')) {
+    assertPermission(context, 'commercial:read');
+  }
 
   const db = getDb();
   const { data, error } = await db
@@ -425,7 +427,9 @@ export async function listOperationalHandoffsByFulfillment(
   context: IdentityContext,
   fulfillmentId: string,
 ): Promise<OperationalHandoff[]> {
-  assertPermission(context, 'commercial:read');
+  if (!context.permissions.includes('commercial:read') && !context.permissions.includes('sales_order:read')) {
+    assertPermission(context, 'commercial:read');
+  }
 
   const db = getDb();
   const { data, error } = await db

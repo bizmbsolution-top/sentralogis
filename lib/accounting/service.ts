@@ -16,13 +16,18 @@ import {
   updateAccountingEventStatus,
   createAccountingProvider,
   getAccountingProviderByCode,
+  getSettlementOutboxEvent,
 } from './repository';
+import { OutboxDispatcher } from './dispatcher';
 import type {
   AccountingEvent,
   AccountingEventLine,
   AccountingProvider,
   CreateAccountingEventInput,
   CreateAccountingProviderInput,
+  ErpProviderAdapter,
+  DispatchResult,
+  OutboxDispatchSummary,
 } from './types';
 
 export class AccountingService {
@@ -59,4 +64,34 @@ export class AccountingService {
   async getProvider(providerCode: string): Promise<AccountingProvider | null> {
     return getAccountingProviderByCode(this.ctx, providerCode);
   }
+
+  async getSettlementOutboxEvent(settlementId: string): Promise<{ event: AccountingEvent; lines: AccountingEventLine[] } | null> {
+    return getSettlementOutboxEvent(this.ctx, settlementId);
+  }
+
+  /**
+   * Dispatches pending VALIDATED events through the provided ERP adapter.
+   * Bound to caller's IdentityContext tenantId with commercial:manage authorization.
+   */
+  async dispatchPendingEvents(
+    adapter: ErpProviderAdapter,
+    options?: { limit?: number; overrideClient?: unknown }
+  ): Promise<OutboxDispatchSummary> {
+    assertPermission(this.ctx, 'commercial:manage');
+    return OutboxDispatcher.dispatchPendingEvents(this.ctx, adapter, options);
+  }
+
+  /**
+   * Dispatches a single VALIDATED event through the provided ERP adapter.
+   * Bound to caller's IdentityContext tenantId with commercial:manage authorization.
+   */
+  async dispatchSingleEvent(
+    eventId: string,
+    adapter: ErpProviderAdapter,
+    options?: { overrideClient?: unknown }
+  ): Promise<DispatchResult> {
+    assertPermission(this.ctx, 'commercial:manage');
+    return OutboxDispatcher.dispatchEvent(this.ctx, eventId, adapter, options);
+  }
 }
+

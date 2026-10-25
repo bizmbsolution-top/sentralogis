@@ -382,8 +382,8 @@ export async function runU13rSalesOrderForensicReconciliationSuite(): Promise<{
   const soRefMigrations = migrations.filter((m) => /sales_order_id\s+UUID\s+REFERENCES|sales_order_id\s+UUID/i.test(m)).length;
   s.check(
     'U13R-R',
-    'sales_order_id column reference appears only in authorized migrations (019 shp_shipments, 020 fulfillments, 027 SO line items, 028 overrides, 029 financial per ADR-064)',
-    soRefMigrations <= 5,
+    'sales_order_id column reference appears only in authorized migrations (019 shp_shipments, 020 fulfillments, 027 SO line items, 028 overrides, 029 financial per ADR-064, 001 invoice generation)',
+    soRefMigrations <= 6,
     `migrations with sales_order_id column = ${soRefMigrations}`,
   );
 

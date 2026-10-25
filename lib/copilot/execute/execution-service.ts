@@ -36,6 +36,7 @@ import { ProposalAuthorityService, type AuthoritativeProposal } from '@/lib/copi
 import { ActionBridge } from '@/src/platforms/copilot/execution/ActionBridge';
 import { JobOrderAssignmentService, JobOrderCancellationService, DriverReplacementService, type AssignDriverInput, type ReplaceDriverInput, type JobOrderResult } from '@/lib/domain/jo/job-order-domain-service';
 import { isCopilotActionEnabled, COPILOT_FEATURE_FLAGS } from '@/lib/copilot/feature-flags';
+import { recordCopilotExecution, type CopilotExecutionEvent } from '@/lib/copilot/execute/telemetry';
 
 export class ExecutionService {
   /**
@@ -52,8 +53,18 @@ export class ExecutionService {
     const { proposalId, confirmation } = request;
 
     if (!proposalId) {
+      const executionId = `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      this.recordTelemetry({
+        identity,
+        executionId,
+        proposalId: proposalId || 'UNKNOWN',
+        intent: 'UNKNOWN',
+        status: 'DENIED',
+        event: 'STARTED',
+        message: 'Execution denied: proposalId is required.',
+      });
       return {
-        executionId: `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        executionId,
         status: 'DENIED',
         intent: 'UNKNOWN',
         message: 'Execution denied: proposalId is required.',
@@ -61,7 +72,7 @@ export class ExecutionService {
         durationMs: 0,
         timestamp: new Date().toISOString(),
         audit: {
-          correlationId: `exec-${Date.now()}`,
+          correlationId: executionId,
           actorUserId: identity.userId,
           actorTenantId: identity.tenantId,
           proposalId: proposalId || 'UNKNOWN',
@@ -74,8 +85,19 @@ export class ExecutionService {
       authoritativeProposal = await ProposalAuthorityService.getProposal(identity, proposalId);
     } catch (error: any) {
       const message = error?.message || 'Proposal not found or access denied.';
+      const executionId = `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      this.recordTelemetry({
+        identity,
+        executionId,
+        proposalId,
+        intent: 'UNKNOWN',
+        status: 'DENIED',
+        event: 'FAILED',
+        message,
+        failureCategory: 'PROPOSAL_NOT_FOUND',
+      });
       return {
-        executionId: `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        executionId,
         status: 'DENIED',
         intent: 'UNKNOWN',
         message,
@@ -83,7 +105,7 @@ export class ExecutionService {
         durationMs: 0,
         timestamp: new Date().toISOString(),
         audit: {
-          correlationId: `exec-${Date.now()}`,
+          correlationId: executionId,
           actorUserId: identity.userId,
           actorTenantId: identity.tenantId,
           proposalId,
@@ -355,6 +377,41 @@ export class ExecutionService {
       authorized: missingPermissions.length === 0,
       missingPermissions,
     };
+  }
+
+  /**
+   * Record execution telemetry through the canonical audit log.
+   * Failures are swallowed so telemetry never affects execution semantics.
+   */
+  private static recordTelemetry(params: {
+    identity: IdentityContext;
+    executionId: string;
+    proposalId: string;
+    intent: string;
+    status: 'SUCCESS' | 'FAILED' | 'DENIED';
+    event: CopilotExecutionEvent;
+    message: string;
+    durationMs?: number;
+    failureCategory?: string;
+    claimResult?: string;
+    domainServiceResult?: string;
+    entities?: Array<{ entityType: string; entityId: string; displayName: string }>;
+  }): void {
+    recordCopilotExecution({
+      executionId: params.executionId,
+      proposalId: params.proposalId,
+      intent: params.intent,
+      status: params.status,
+      event: params.event,
+      message: params.message,
+      tenantId: params.identity.tenantId,
+      actorUserId: params.identity.userId,
+      durationMs: params.durationMs,
+      failureCategory: params.failureCategory,
+      claimResult: params.claimResult,
+      domainServiceResult: params.domainServiceResult,
+      entities: params.entities,
+    });
   }
 
   private static async routeToDomainService(

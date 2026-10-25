@@ -26,6 +26,7 @@ export function toFinancialErrorResponse(error: unknown): NextResponse {
     const code =
       error.code === 'DUPLICATE_IDEMPOTENCY' ? 'CONFLICT'
       : error.code === 'BILLABLE_EVENT_NOT_FOUND' || error.code === 'INVOICE_NOT_FOUND' ? 'NOT_FOUND'
+      : error.code === 'CAPABILITY_DISABLED' ? 'FORBIDDEN'
       : error.code;
     return NextResponse.json(
       { success: false, error: code, message: error.message },

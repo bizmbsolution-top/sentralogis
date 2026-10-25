@@ -38,7 +38,7 @@ export const DriverHeader: React.FC<DriverHeaderProps> = ({
       <div className="flex justify-between items-center relative z-10">
         <div className="flex items-center gap-3">
           <img
-            src="/logo2sentralogis.png"
+            src="/logosentralogis.png"
             alt="SentraLogis"
             className="w-10 h-10 rounded-xl object-contain bg-white/20 backdrop-blur-md p-1 border border-white/20 shadow-sm"
           />

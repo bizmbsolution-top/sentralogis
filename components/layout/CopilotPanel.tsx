@@ -20,6 +20,8 @@ export default function CopilotPanel() {
       timestamp: new Date().toISOString(),
     },
   ]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [orderFlowState, setOrderFlowState] = useState<any>(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -46,9 +48,22 @@ export default function CopilotPanel() {
       const res = await fetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({
+          message: input,
+          conversationId,
+          activeContext: {
+            conversationId,
+            orderFlowState,
+          },
+        }),
       });
       const data = await res.json();
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+      }
+      if (data.response?.orderFlowState !== undefined) {
+        setOrderFlowState(data.response.orderFlowState);
+      }
 
       const assistantMessage: CopilotMessage = {
         id: (Date.now() + 1).toString(),

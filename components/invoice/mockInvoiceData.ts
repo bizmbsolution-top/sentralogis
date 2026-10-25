@@ -1,7 +1,7 @@
 export const mockTenants = {
   sentralogis: {
     name: 'SENTRALOGIS LOGISTICS',
-    logo_url: '/sentralogis_logo.svg',
+    logo_url: '/logosentralogis.png',
     address: 'Jl. Boulevard Raya No. 45\nJakarta Barat 12120\nIndonesia',
     phone: '+62-21-1234-5678',
     branding: {
@@ -11,7 +11,7 @@ export const mockTenants = {
   },
   halu: {
     name: 'PT HALU LOGISTIK INDONESIA',
-    logo_url: '/logo.png',
+    logo_url: null,
     address: 'Jl. Industri Raya No. 1\nTangerang 15001\nIndonesia',
     phone: '+62-21-9876-5432',
     branding: {

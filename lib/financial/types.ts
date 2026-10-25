@@ -103,6 +103,7 @@ export interface FinInvoice {
   externalReference: string | null;
   idempotencyKey: string | null;
   sentAt: string | null;
+  issuedAt?: string | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -233,11 +234,46 @@ export interface CreateInvoiceResult {
 }
 
 // ============================================================================
+// CANONICAL AR REPORT TYPES (D-4, D-6)
+// ============================================================================
+
+export interface ArInvoiceItem {
+  invoiceId: string;
+  invoiceNumber: string;
+  customerId: string | null;
+  salesOrderId: string | null;
+  status: string;
+  invoiceDate: string;
+  dueDate: string | null;
+  issuedAt: string | null;
+  currency: string;
+  totalAmount: number;
+  paidAmountHeader: number;
+  authoritativeAllocatedAmount: number;
+  reconciliationDelta: number;
+  authoritativeOutstandingBalance: number;
+  isOverdue: boolean;
+  overdueDays: number;
+}
+
+export interface ArOutstandingReport {
+  tenantId: string;
+  generatedAt: string;
+  totalInvoicesCount: number;
+  totalOutstandingBalance: number;
+  totalAllocatedAmount: number;
+  totalOverdueBalance: number;
+  currency: string;
+  invoices: ArInvoiceItem[];
+}
+
+// ============================================================================
 // ERROR TYPES
 // ============================================================================
 
 export type FinancialErrorCode =
   | 'INVALID_INPUT'
+  | 'CAPABILITY_DISABLED'
   | 'BILLABLE_EVENT_NOT_FOUND'
   | 'BILLABLE_EVENT_NOT_OWNED'
   | 'INVOICE_NOT_FOUND'
@@ -250,10 +286,10 @@ export type FinancialErrorCode =
 export class FinancialError extends Error {
   constructor(
     public readonly code: FinancialErrorCode,
-    public readonly statusCode: 400 | 404 | 409 | 422,
+    public readonly statusCode: 400 | 403 | 404 | 409 | 422,
     message: string,
   ) {
-    super(message);
+    super(`[${code}] ${message}`);
     this.name = 'FinancialError';
   }
 }

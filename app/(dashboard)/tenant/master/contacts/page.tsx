@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import GoogleMapsInput from '@/components/master/GoogleMapsInput';
+import MasterCustomerModal from '@/components/master/MasterCustomerModal';
 import { assignRoleAction, revokeRoleAction } from '@/lib/actions/role-mutation-actions';
 
 interface EntityAddress {
@@ -65,9 +66,11 @@ export default function ContactsPage() {
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   
   // Addresses State (within Modal)
   const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
@@ -394,13 +397,25 @@ if (otherAddresses.length > 0) {
           </h1>
           <p className="text-sm text-slate-500 mt-1">Kelola data Customer, Supplier, Vendor, dan Broker dalam satu tempat.</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all font-medium text-sm shadow-sm active:scale-95"
-        >
-          <Plus size={18} />
-          Add Contact
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              setSelectedCustomerId(null);
+              setIsCustomerModalOpen(true);
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm shadow-sm active:scale-95 shadow-blue-600/20"
+          >
+            <Building2 size={18} />
+            Daftar Customer Baru
+          </button>
+          <button 
+            onClick={() => handleOpenModal()}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all font-medium text-sm shadow-sm active:scale-95"
+          >
+            <Plus size={18} />
+            Add Other Contact
+          </button>
+        </div>
       </div>
 
       {/* Tabs & Search */}
@@ -499,7 +514,15 @@ if (otherAddresses.length > 0) {
                     </td>
                     <td className="px-4 py-4 text-right space-x-2">
                       <button 
-                        onClick={() => handleOpenModal(ent)}
+                        onClick={() => {
+                          if (ent.is_customer) {
+                            setSelectedCustomerId(ent.id);
+                            setIsCustomerModalOpen(true);
+                          } else {
+                            handleOpenModal(ent);
+                          }
+                        }}
+                        title={ent.is_customer ? 'Edit Master Customer' : 'Edit Contact'}
                         className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100"
                       >
                         <Edit2 size={16} />
@@ -850,6 +873,19 @@ if (otherAddresses.length > 0) {
           </Card>
         </div>
       )}
+
+      {/* Master Customer Modal (Dedicated V1 per SPEC-MC-2026-10-V1) */}
+      <MasterCustomerModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => {
+          setIsCustomerModalOpen(false);
+          setSelectedCustomerId(null);
+        }}
+        onSuccess={() => {
+          fetchEntities();
+        }}
+        selectedEntityId={selectedCustomerId}
+      />
     </div>
   );
 }

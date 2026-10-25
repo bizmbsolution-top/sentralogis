@@ -72,7 +72,7 @@ export async function GET() {
               const payload: PushPayload = {
                 title: 'Waktu Keberangkatan Tiba',
                 body: `JO ${jo.jo_number} otomatis dimulai. Silakan jalan menuju ${firstStopName}.`,
-                icon: '/sentralogis_logo.png',
+                icon: '/logosentralogis.png',
                 tag: `jo-autostart-${jo.id}`,
                 data: { job_id: jo.id, token: jo.driver_link_token },
               };

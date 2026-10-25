@@ -41,6 +41,9 @@
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/__tests__/**",
-    "run_*_tests.ts"
+    "lib/__tests__/**/*",
+    "run_*_tests.ts",
+    "_governance/**/*"
   ]
 }
+

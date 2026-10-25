@@ -192,18 +192,26 @@ export interface CreatePaymentResult {
 export type PaymentErrorCode =
   | 'PAYMENT_NOT_FOUND'
   | 'PAYMENT_NOT_OWNED'
+  | 'INVOICE_NOT_FOUND'
+  | 'INVOICE_NOT_OWNED'
   | 'INVALID_TRANSITION'
+  | 'INVALID_STATE'
+  | 'INVALID_AMOUNT'
   | 'DUPLICATE_IDEMPOTENCY'
   | 'ALLOCATION_EXCEEDS_PAYMENT'
+  | 'ALLOCATION_EXCEEDS_INVOICE'
+  | 'CURRENCY_MISMATCH'
+  | 'CROSS_TENANT_FORBIDDEN'
+  | 'CAPABILITY_DISABLED'
   | 'DATABASE_ERROR';
 
 export class PaymentError extends Error {
   constructor(
     public readonly code: PaymentErrorCode,
-    public readonly statusCode: 400 | 404 | 409 | 422,
+    public readonly statusCode: 400 | 403 | 404 | 409 | 422 | 500,
     message: string,
   ) {
-    super(message);
+    super(`[${code}] ${message}`);
     this.name = 'PaymentError';
   }
 }

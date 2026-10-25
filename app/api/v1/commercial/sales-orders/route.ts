@@ -14,7 +14,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
-import { createSalesOrder, listSalesOrdersForEngagement } from '@/lib/sales-order/service';
+import { resolveOrCreateEngagement } from '@/lib/application/engagement/engagement-bridge';
+import {
+  createSalesOrder,
+  confirmSalesOrder,
+  listSalesOrdersForTenant,
+  listCustomersAndEngagementsForTenant,
+  enrichSalesOrdersWithCustomer,
+} from '@/lib/sales-order/service';
 import { toErrorResponse } from '@/lib/sales-order/http';
 
 export async function POST(req: NextRequest) {
@@ -27,23 +34,76 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    let engagementId = typeof body.engagementId === 'string' && body.engagementId.trim() ? body.engagementId.trim() : '';
+    const customerId = typeof body.customerId === 'string' && body.customerId.trim() ? body.customerId.trim() : '';
+
+    if (!engagementId && customerId) {
+      const engResult = await resolveOrCreateEngagement(
+        {
+          customerId,
+          targetFulfillmentDate: body.targetFulfillmentDate ?? null,
+          currency: body.currency || 'IDR',
+          commercialNotes: body.commercialNotes ?? null,
+        },
+        ctx,
+      );
+      engagementId = engResult.engagement.id;
+    }
+
+    if (!engagementId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'VALIDATION_FAILED',
+          message: 'Customer atau Engagement wajib dipilih sebelum membuat Sales Order.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const totalAgreedRevenue =
+      body.totalAgreedRevenue !== undefined && body.totalAgreedRevenue !== null
+        ? Number(body.totalAgreedRevenue)
+        : 0;
+    if (!Number.isFinite(totalAgreedRevenue) || totalAgreedRevenue < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'VALIDATION_FAILED',
+          message: 'Total nilai kesepakatan (totalAgreedRevenue) harus berupa angka >= 0.',
+        },
+        { status: 400 },
+      );
+    }
+
     const result = await createSalesOrder(
       {
-        engagementId: body.engagementId,
+        engagementId,
         quoteId: body.quoteId ?? null,
-        idempotencyKey: body.idempotencyKey ?? null,
+        idempotencyKey: typeof body.idempotencyKey === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.idempotencyKey.trim()) ? body.idempotencyKey.trim() : null,
         orderDate: body.orderDate,
         targetFulfillmentDate: body.targetFulfillmentDate ?? null,
-        currency: body.currency,
-        totalAgreedRevenue: body.totalAgreedRevenue,
-        paymentTermsDays: body.paymentTermsDays,
+        currency: body.currency || 'IDR',
+        totalAgreedRevenue,
+        paymentTermsDays:
+          body.paymentTermsDays !== undefined && body.paymentTermsDays !== null
+            ? Number(body.paymentTermsDays)
+            : 30,
         incoterm: body.incoterm ?? null,
         commercialNotes: body.commercialNotes ?? null,
       },
       ctx,
     );
+
+    let finalSo = result.salesOrder;
+    if (body.confirmImmediately === true && finalSo.status === 'DRAFT') {
+      finalSo = await confirmSalesOrder(finalSo.id, ctx);
+    }
+
+    const [enriched] = await enrichSalesOrdersWithCustomer(ctx, [finalSo]);
     return NextResponse.json(
-      { success: true, data: result.salesOrder, meta: { created: result.created } },
+      { success: true, data: enriched ?? finalSo, meta: { created: result.created } },
       { status: result.created ? 201 : 200 },
     );
   } catch (error) {
@@ -54,14 +114,23 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const ctx = await resolveSessionIdentity();
-    const engagementId = req.nextUrl.searchParams.get('engagementId');
-    if (!engagementId) {
-      return NextResponse.json(
-        { success: false, error: 'BAD_REQUEST', message: 'engagementId query param is required.' },
-        { status: 400 },
-      );
+    const meta = req.nextUrl.searchParams.get('meta');
+    if (meta === 'customers') {
+      const q = req.nextUrl.searchParams.get('q');
+      const lookup = await listCustomersAndEngagementsForTenant(ctx, { search: q || undefined });
+      return NextResponse.json({ success: true, data: lookup });
     }
-    const list = await listSalesOrdersForEngagement(ctx, engagementId);
+
+    const engagementId = req.nextUrl.searchParams.get('engagementId');
+    const status = req.nextUrl.searchParams.get('status');
+    const limitParam = req.nextUrl.searchParams.get('limit');
+    const limit = limitParam ? Number(limitParam) : 100;
+
+    const list = await listSalesOrdersForTenant(ctx, {
+      engagementId: engagementId || null,
+      status: status || null,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
+    });
     return NextResponse.json({ success: true, data: list });
   } catch (error) {
     return toErrorResponse(error);

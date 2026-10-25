@@ -9,7 +9,7 @@
  * - Financial records are append-only after commitment.
  * - Idempotent: duplicate requests return existing records.
  * - Immutable: committed records cannot be silently mutated.
- * - Invoice numbers are server-side authoritative (Math.random() outlawed).
+ * - Invoice numbers are server-side authoritative (client-side random generation outlawed).
  * - Duplicate prevention: one non-null billable_event_id → at most one invoice line.
  */
 
@@ -26,6 +26,8 @@ import type {
   CreateBillableEventInput,
   CreateInvoiceInput,
   CreateAdjustmentInput,
+  ArInvoiceItem,
+  ArOutstandingReport,
 } from './types';
 import { FinancialError } from './types';
 
@@ -69,7 +71,10 @@ interface FinancialInsertChain {
 
 interface FinancialUpdateChain extends PromiseLike<DbListResult> {
   eq(col: string, val: unknown): FinancialUpdateChain;
-  select(cols?: string): Promise<DbListResult>;
+  select(cols?: string): {
+    single(): Promise<DbSingleResult>;
+    maybeSingle(): Promise<DbSingleResult>;
+  } & PromiseLike<DbListResult>;
 }
 
 interface FinancialDeleteChain {
@@ -197,7 +202,8 @@ export async function createInvoice(
 
   // GAP-1: FIN_INVOICE capability gate — fail-closed, server-side.
   // The flag controls the financial mutation capability, not merely UI visibility.
-  assertInvoiceGenerationEnabled();
+  // Tenant identity is server-derived from IdentityContext — never from client input.
+  assertInvoiceGenerationEnabled({ tenantId: ctx.tenantId });
 
   // 1. Validate and fetch all billable events with their committed financial values
   //    This ensures financial integrity - we copy committed values, never recalculate.
@@ -371,6 +377,190 @@ export async function getInvoiceById(
   }
 
   return data as unknown as FinInvoice | null;
+}
+
+export async function issueInvoice(
+  ctx: IdentityContext,
+  invoiceId: string,
+): Promise<FinInvoice> {
+  assertPermission(ctx, 'commercial:manage');
+
+  // 1. Fetch invoice and verify tenant ownership
+  const { data: invoice, error: fetchError } = await db()
+    .from('fin_invoices')
+    .select('*')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (fetchError || !invoice) {
+    throw new FinancialError('INVOICE_NOT_FOUND', 404, `Invoice ${invoiceId} not found.`);
+  }
+
+  // 2. Enforce status transition invariant: only DRAFT -> ISSUED
+  if (invoice.status !== 'DRAFT') {
+    throw new FinancialError(
+      'INVALID_TRANSITION',
+      409,
+      `Cannot issue invoice in status ${invoice.status}. Only DRAFT invoices can be issued.`,
+    );
+  }
+
+  // 3. Business rule pre-conditions
+  if (!invoice.customer_id) {
+    throw new FinancialError('INVALID_INPUT', 400, 'Invoice must have an associated customer before issuance.');
+  }
+
+  const totalAmount = Number(invoice.total_amount) || 0;
+  if (totalAmount <= 0) {
+    throw new FinancialError('INVALID_INPUT', 400, 'Invoice total amount must be greater than zero.');
+  }
+
+  // 4. Update status and issued_at timestamp atomically with strict concurrency predicate
+  const issuedAt = new Date().toISOString();
+  const { data: updated, error: updateError } = await db()
+    .from('fin_invoices')
+    .update({
+      status: 'ISSUED',
+      issued_at: issuedAt,
+      updated_by: ctx.userId,
+    })
+    .eq('id', invoiceId)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('status', 'DRAFT')
+    .select('*')
+    .single();
+
+  if (updateError || !updated) {
+    throw new FinancialError(
+      'INVALID_TRANSITION',
+      409,
+      `Cannot issue invoice ${invoiceId}: invoice is not in DRAFT status or was concurrently modified.`,
+    );
+  }
+
+  return updated as unknown as FinInvoice;
+}
+
+export async function getArOutstanding(
+  ctx: IdentityContext,
+  options?: {
+    customerId?: string;
+    currency?: string;
+  },
+): Promise<ArOutstandingReport> {
+  assertPermission(ctx, 'commercial:read');
+
+  // 1. Fetch positive AR-eligible invoices (D-1, H-1: ISSUED and PARTIAL_PAID only)
+  let invoiceQuery = db()
+    .from('fin_invoices')
+    .select('*')
+    .eq('tenant_id', ctx.tenantId)
+    .in('status', ['ISSUED', 'PARTIAL_PAID']);
+
+  if (options?.customerId) {
+    invoiceQuery = invoiceQuery.eq('customer_id', options.customerId);
+  }
+
+  if (options?.currency) {
+    invoiceQuery = invoiceQuery.eq('currency', options.currency);
+  }
+
+  const { data: invoices, error: invError } = await invoiceQuery;
+
+  if (invError) {
+    throw new FinancialError('DATABASE_ERROR', 400, `Failed to fetch invoices for AR calculation: ${invError.message}`);
+  }
+
+  const invoiceRows = (invoices || []) as any[];
+  const invoiceIds = invoiceRows.map((r) => r.id);
+
+  // 2. Fetch authoritative payment allocations (D-4, D-3.B: status IN ('ALLOCATED', 'SETTLED'))
+  let allocationRows: any[] = [];
+  if (invoiceIds.length > 0) {
+    const { data: allocs, error: allocError } = await db()
+      .from('fin_payment_allocations')
+      .select('invoice_id, amount, status')
+      .eq('tenant_id', ctx.tenantId)
+      .in('invoice_id', invoiceIds)
+      .in('status', ['ALLOCATED', 'SETTLED']);
+
+    if (allocError) {
+      throw new FinancialError('DATABASE_ERROR', 400, `Failed to fetch payment allocations for AR calculation: ${allocError.message}`);
+    }
+
+    allocationRows = (allocs || []) as any[];
+  }
+
+  // Sum allocations per invoice
+  const allocSumByInvoice = new Map<string, number>();
+  for (const a of allocationRows) {
+    const invId = a.invoice_id;
+    const amt = Number(a.amount) || 0;
+    allocSumByInvoice.set(invId, (allocSumByInvoice.get(invId) || 0) + amt);
+  }
+
+  const now = new Date();
+  const arInvoices: ArInvoiceItem[] = [];
+  let totalOutstanding = 0;
+  let totalAllocated = 0;
+  let totalOverdue = 0;
+
+  for (const inv of invoiceRows) {
+    const total = Number(inv.total_amount) || 0;
+    const paidHeader = Number(inv.paid_amount) || 0;
+    const authoritativeAllocated = allocSumByInvoice.get(inv.id) || 0;
+    const reconciliationDelta = paidHeader - authoritativeAllocated;
+    const authoritativeOutstanding = Math.max(0, total - authoritativeAllocated);
+
+    let isOverdue = false;
+    let overdueDays = 0;
+
+    if (inv.due_date) {
+      const dueDate = new Date(inv.due_date);
+      if (dueDate < now && authoritativeOutstanding > 0) {
+        isOverdue = true;
+        const diffMs = now.getTime() - dueDate.getTime();
+        overdueDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    totalOutstanding += authoritativeOutstanding;
+    totalAllocated += authoritativeAllocated;
+    if (isOverdue) {
+      totalOverdue += authoritativeOutstanding;
+    }
+
+    arInvoices.push({
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoice_number,
+      customerId: inv.customer_id,
+      salesOrderId: inv.sales_order_id,
+      status: inv.status,
+      invoiceDate: inv.invoice_date,
+      dueDate: inv.due_date,
+      issuedAt: inv.issued_at ?? null,
+      currency: inv.currency,
+      totalAmount: total,
+      paidAmountHeader: paidHeader,
+      authoritativeAllocatedAmount: authoritativeAllocated,
+      reconciliationDelta,
+      authoritativeOutstandingBalance: authoritativeOutstanding,
+      isOverdue,
+      overdueDays,
+    });
+  }
+
+  return {
+    tenantId: ctx.tenantId,
+    generatedAt: now.toISOString(),
+    totalInvoicesCount: arInvoices.length,
+    totalOutstandingBalance: totalOutstanding,
+    totalAllocatedAmount: totalAllocated,
+    totalOverdueBalance: totalOverdue,
+    currency: options?.currency || (arInvoices.length > 0 ? arInvoices[0].currency : 'IDR'),
+    invoices: arInvoices,
+  };
 }
 
 // ============================================================================

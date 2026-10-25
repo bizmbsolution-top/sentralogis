@@ -61,6 +61,11 @@ export default function MobileBottomNav() {
   const { visibleSections, activeSection } = useNavigation();
   const pathname = usePathname();
 
+  // Dedicated operational workspace: Copilot V2 suppresses global bottom nav
+  if (pathname?.startsWith('/copilot/v2')) {
+    return null;
+  }
+
   const visiblePriorityItems = MOBILE_NAV_PRIORITY.filter((item) =>
     visibleSections.includes(item.id as any)
   ).slice(0, 5);

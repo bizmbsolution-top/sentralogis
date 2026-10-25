@@ -462,7 +462,7 @@ export function FooterSection() {
     <footer className="relative z-10 py-12 sm:py-16 px-5 sm:px-6 border-t border-white/5">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-3">
-          <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-8 w-auto opacity-60" />
+          <img src="/logosentralogis.png" alt="Sentralogis" className="h-8 w-auto object-contain opacity-60" />
           <span className="text-white/40 text-sm font-black uppercase tracking-wider">{t.landing.footerTagline}</span>
         </div>
         <div className="flex flex-wrap justify-center gap-6 text-xs font-bold tracking-widest uppercase text-white/30">

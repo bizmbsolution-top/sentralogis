@@ -115,7 +115,7 @@ export const NAVIGATION_SECTIONS: NavigationSectionDefinition[] = [
     label: 'Copilot',
     description: 'AI assistance',
     icon: <Bot className="w-5 h-5" />,
-    href: '/copilot',
+    href: '/copilot/v2',
   },
   {
     id: 'administration',
@@ -180,6 +180,10 @@ export function getVisibleNavigationSections(
   if (role === 'owner_sentralogis') return all;
   if (role === 'tenant_superadmin' || role === 'tenant_admin') return all;
 
+  if (role === 'hq_cs') {
+    return all;
+  }
+
   if (role.startsWith('hq_')) {
     return all.filter((s) => s !== 'administration');
   }
@@ -220,7 +224,7 @@ export function getSectionFromPathname(pathname: string): NavigationSection | nu
     [/^\/(?:financial\/|hq\/finance|reporting\/finance)/, 'finance'],
     [/^\/(?:intelligence|reporting\/bi|reporting\/operational|director\/(ops|cs|fin|bizdev|hrd|sbu|token|pl)|hq\/fleet-performance|hq\/driver-performance)/, 'intelligence'],
     [/^\/copilot/, 'copilot'],
-    [/^\/(?:admin|owner\/(users|settings|tenants|observability))/, 'administration'],
+    [/^\/(?:admin|owner\/(users|settings|tenants|observability)|tenant)/, 'administration'],
   ];
 
   for (const [regex, section] of mappings) {

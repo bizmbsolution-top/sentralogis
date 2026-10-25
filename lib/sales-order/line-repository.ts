@@ -128,7 +128,9 @@ export async function getSOLineItemById(
   ctx: IdentityContext,
   lineItemId: string,
 ): Promise<SalesOrderLineItem | null> {
-  assertPermission(ctx, 'commercial:read');
+  if (!ctx.permissions.includes('commercial:read') && !ctx.permissions.includes('sales_order:read')) {
+    assertPermission(ctx, 'commercial:read');
+  }
 
   const { data, error } = await (await db())
     .from('sales_order_line_items')
@@ -148,7 +150,9 @@ export async function listSOLineItemsBySO(
   ctx: IdentityContext,
   salesOrderId: string,
 ): Promise<SalesOrderLineItem[]> {
-  assertPermission(ctx, 'commercial:read');
+  if (!ctx.permissions.includes('commercial:read') && !ctx.permissions.includes('sales_order:read')) {
+    assertPermission(ctx, 'commercial:read');
+  }
 
   const { data, error } = await (await db())
     .from('sales_order_line_items')

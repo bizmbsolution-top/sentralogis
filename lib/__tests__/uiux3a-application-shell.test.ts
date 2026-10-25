@@ -185,10 +185,10 @@ describe('Phase UI/UX-4A Navigation Foundation', () => {
       expect(fs.existsSync(path.join(ROOT, 'components/layout/ProfileDropdown.tsx'))).toBe(true);
     });
 
-    test('dropdown has profile access', () => {
+    test('dropdown has profile access and logout action', () => {
       const src = readFile('components/layout/ProfileDropdown.tsx');
       expect(src).toContain('Profile');
-      expect(src).not.toContain('Logout');
+      expect(src).toContain('Logout');
     });
 
     test('placeholder labels are cleaned up', () => {
@@ -348,29 +348,31 @@ describe('Phase UI/UX-4B Component Alignment & Mobile', () => {
       expect(src).toContain('tenants?.name');
     });
 
-    test('dropdown does not contain logout (separated to TopBar)', () => {
+    test('dropdown contains logout action in profile menu', () => {
       const src = readFile('components/layout/ProfileDropdown.tsx');
-      expect(src).not.toContain('LogOut');
-      expect(src).not.toContain('logout');
+      expect(src).toContain('LogOut');
+      expect(src).toContain('Logout');
     });
   });
 
-  describe('TopBar Logout Separation', () => {
-    test('topbar has dedicated logout button', () => {
-      const src = readFile('components/layout/TopBar.tsx');
-      expect(src).toContain('LogOut');
-      expect(src).toContain('logout');
-    });
-
-    test('topbar logout calls canonical auth logout', () => {
+  describe('TopBar Auth Integration & Tenant Branding', () => {
+    test('topbar delegates auth actions to ProfileDropdown', () => {
       const src = readFile('components/layout/TopBar.tsx');
       expect(src).toContain('useAuth');
       expect(src).toContain('logout');
+      expect(src).toContain('ProfileDropdown');
     });
 
-    test('topbar integrates ProfileDropdown', () => {
+    test('topbar displays active tenant branding and logo', () => {
       const src = readFile('components/layout/TopBar.tsx');
-      expect(src).toContain('ProfileDropdown');
+      expect(src).toContain('profile?.tenants?.name');
+      expect(src).toContain('profile.tenants.logo_url');
+    });
+
+    test('sidebar displays active tenant branding and logo when expanded', () => {
+      const src = readFile('components/layout/Sidebar.tsx');
+      expect(src).toContain('profile?.tenants?.name');
+      expect(src).toContain('profile.tenants.logo_url');
     });
   });
 

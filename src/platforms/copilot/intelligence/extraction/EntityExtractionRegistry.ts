@@ -16,6 +16,9 @@ export class EntityExtractionRegistry {
   }
 
   static get(entityType: string): EntityExtractionStrategy | undefined {
+    if (this.strategies.size === 0) {
+      this.loadDefaultExtractors();
+    }
     return this.strategies.get(entityType);
   }
 

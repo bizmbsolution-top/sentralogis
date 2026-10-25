@@ -40,12 +40,19 @@ export interface ExecutionFailedPayload {
   service: string;
 }
 
+export interface AiDegradedOrUnavailablePayload {
+  aiStatus: 'UNAVAILABLE' | 'DEGRADED';
+  failureClass: string;
+  reason: string;
+}
+
 export type TelemetryPayload =
   | { eventType: 'INTENT_RESOLVED'; payload: IntentResolvedPayload }
   | { eventType: 'INTENT_UNKNOWN'; payload: IntentUnknownPayload }
   | { eventType: 'GEMINI_TIMEOUT'; payload: { durationMs: number } }
   | { eventType: 'GEMINI_LATENCY'; payload: { durationMs: number } }
   | { eventType: 'FALLBACK_TRIGGERED'; payload: FallbackPayload }
+  | { eventType: 'AI_DEGRADED_OR_UNAVAILABLE'; payload: AiDegradedOrUnavailablePayload }
   | { eventType: 'PIPELINE_EXECUTION'; payload: PipelineExecutionPayload }
   | { eventType: 'VALIDATION_FAILED'; payload: ValidationFailedPayload }
   | { eventType: 'PLANNER_FAILED'; payload: { reason: string } }

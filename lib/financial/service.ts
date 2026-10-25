@@ -17,6 +17,8 @@ import {
   listBillableEventsBySO,
   createInvoice,
   getInvoiceById,
+  issueInvoice,
+  getArOutstanding,
   createArAp,
   getArApById,
   createAdjustment,
@@ -30,6 +32,7 @@ import type {
   CreateBillableEventInput,
   CreateInvoiceInput,
   CreateAdjustmentInput,
+  ArOutstandingReport,
 } from './types';
 import { FinancialError } from './types';
 
@@ -54,6 +57,14 @@ export class FinancialService {
 
   async getInvoice(invoiceId: string): Promise<FinInvoice | null> {
     return getInvoiceById(this.ctx, invoiceId);
+  }
+
+  async issueInvoice(invoiceId: string): Promise<FinInvoice> {
+    return issueInvoice(this.ctx, invoiceId);
+  }
+
+  async getArOutstanding(options?: { customerId?: string; currency?: string }): Promise<ArOutstandingReport> {
+    return getArOutstanding(this.ctx, options);
   }
 
   async createArAp(

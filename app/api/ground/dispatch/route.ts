@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       const notificationPayload = {
         title: `🚛 JO Baru: ${jo.jo_number}`,
         body: "JO baru sudah masuk ke antrian operasional. Segera proses.",
-        icon: "/sentralogis_logo.svg",
+        icon: "/logosentralogis.png",
         data: { jo_id: job_order_id, type: "ground_staff_dispatch" },
       };
 

@@ -130,7 +130,7 @@ BEGIN
     created_by, updated_by
   ) VALUES (
     p_tenant_id, v_invoice_number, p_sales_order_id, v_customer_id,
-    p_side, 'DRAFT', CURRENT_DATE, p_due_date, p_currency,
+    p_side::com_fin_ar_ap_side, 'DRAFT', CURRENT_DATE, p_due_date, p_currency,
     p_subtotal, p_tax_percentage * p_subtotal / 100, p_total_amount, 0,
     p_idempotency_key,
     gen_random_uuid(), gen_random_uuid()
@@ -190,6 +190,8 @@ BEGIN
   );
 
 EXCEPTION
+  WHEN unique_violation THEN
+    RAISE;
   WHEN OTHERS THEN
     -- Rollback everything on failure (transaction abort)
     RETURN jsonb_build_object(

@@ -256,7 +256,9 @@ async function getSOLineItemById(
   ctx: IdentityContext,
   lineItemId: string,
 ): Promise<SalesOrderLineItem | null> {
-  assertPermission(ctx, 'commercial:read');
+  if (!ctx.permissions.includes('commercial:read') && !ctx.permissions.includes('sales_order:read')) {
+    assertPermission(ctx, 'commercial:read');
+  }
 
   const { supabaseAdmin } = await import('@/lib/supabase/admin');
   const { data, error } = await supabaseAdmin

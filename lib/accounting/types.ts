@@ -147,12 +147,68 @@ export interface CreateAccountingProviderInput {
 }
 
 // ============================================================================
+// ============================================================================
 // RESULT TYPES
 // ============================================================================
 
 export interface CreateAccountingEventResult {
   event: AccountingEvent;
   lines: AccountingEventLine[];
+}
+
+export interface SettlementOutboxEventResult {
+  settlementId: string;
+  allocationId: string;
+  status: string;
+  settledAt: string;
+  accountingEventId: string;
+  amount: number;
+  currency: string;
+  isDuplicate: boolean;
+}
+
+// ============================================================================
+// ERP DISPATCH & ADAPTER TYPES (ADR-064 / D1-D7)
+// ============================================================================
+
+/**
+ * Categorization of ERP provider dispatch responses.
+ * Note: AMBIGUOUS is strictly an application/operational outcome.
+ * It is NOT an accounting_events database status.
+ */
+export type ProviderResponseCategory =
+  | 'ACKNOWLEDGED'
+  | 'REJECTED'
+  | 'TRANSIENT_FAILURE'
+  | 'AMBIGUOUS';
+
+export interface DispatchResult {
+  category: ProviderResponseCategory;
+  externalCorrelationId?: string | null;
+  externalSystem?: string | null;
+  voucherNumber?: string | null;
+  rawResponse?: unknown;
+  failureReason?: string | null;
+  isRetryable: boolean;
+}
+
+export interface OutboxDispatchSummary {
+  totalProcessed: number;
+  acknowledgedCount: number;
+  rejectedCount: number;
+  transientFailureCount: number;
+  ambiguousCount: number;
+  results: Array<{ eventId: string; result: DispatchResult }>;
+}
+
+export interface ErpProviderAdapter {
+  readonly providerCode: string;
+  dispatch(
+    event: AccountingEvent,
+    lines: AccountingEventLine[],
+    options?: { idempotencyKey?: string }
+  ): Promise<DispatchResult>;
+  reconcile?(event: AccountingEvent): Promise<DispatchResult>;
 }
 
 // ============================================================================
@@ -166,15 +222,17 @@ export type AccountingErrorCode =
   | 'INVALID_TRANSITION'
   | 'DUPLICATE_IDEMPOTENCY'
   | 'PROVIDER_NOT_FOUND'
-  | 'DATABASE_ERROR';
+  | 'DATABASE_ERROR'
+  | 'DISPATCH_ERROR';
 
 export class AccountingError extends Error {
   constructor(
     public readonly code: AccountingErrorCode,
-    public readonly statusCode: 400 | 404 | 409 | 422,
+    public readonly statusCode: 400 | 403 | 404 | 409 | 422,
     message: string,
   ) {
     super(message);
     this.name = 'AccountingError';
   }
 }
+

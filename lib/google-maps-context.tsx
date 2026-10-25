@@ -13,10 +13,7 @@ type GoogleMapsContextType = {
 const GoogleMapsContext = createContext<GoogleMapsContextType>({ isLoaded: false });
 
 export function GoogleMapsProvider({ children }: { children: ReactNode }) {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-        throw new Error('Missing Google Maps API key in .env.local');
-    }
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
     const { isLoaded } = useJsApiLoader({
         id: "google-map-script",
@@ -25,8 +22,10 @@ export function GoogleMapsProvider({ children }: { children: ReactNode }) {
         language: "id",
     });
 
+    const safeIsLoaded = Boolean(apiKey && isLoaded);
+
     return (
-        <GoogleMapsContext.Provider value={{ isLoaded }}>
+        <GoogleMapsContext.Provider value={{ isLoaded: safeIsLoaded }}>
             {children}
         </GoogleMapsContext.Provider>
     );

@@ -1,4 +1,5 @@
 import { IntentDefinition } from './IntentDefinition';
+import { registerDefaultIntents } from './DefaultIntents';
 
 export class IntentRegistry {
   private static instance: IntentRegistry;
@@ -20,10 +21,16 @@ export class IntentRegistry {
   }
 
   public get(name: string): IntentDefinition | undefined {
+    if (this.intents.size === 0) {
+      registerDefaultIntents();
+    }
     return this.intents.get(name);
   }
 
   public getAll(): IntentDefinition[] {
+    if (this.intents.size === 0) {
+      registerDefaultIntents();
+    }
     return Array.from(this.intents.values());
   }
 }

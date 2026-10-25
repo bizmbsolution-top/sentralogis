@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const payload: PushPayload = {
       title,
       body,
-      icon: '/sentralogis_logo.png',
+      icon: '/logosentralogis.png',
       badge: '/favicon.ico',
       vibrate: [200, 100, 200],
       tag: tag || 'job-assignment',

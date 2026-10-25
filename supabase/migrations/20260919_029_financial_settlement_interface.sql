@@ -110,7 +110,7 @@ COMMENT ON TABLE public.fin_billable_events IS
 CREATE INDEX IF NOT EXISTS idx_billable_events_tenant ON public.fin_billable_events(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_billable_events_so ON public.fin_billable_events(sales_order_id);
 CREATE INDEX IF NOT EXISTS idx_billable_events_status ON public.fin_billable_events(status);
-CREATE INDEX IF NOT_EXISTS idx_billable_events_line ON public.fin_billable_events(so_line_item_id);
+CREATE INDEX IF NOT EXISTS idx_billable_events_line ON public.fin_billable_events(so_line_item_id);
 
 -- ----------------------------------------------------------------------------
 -- 6. FIN INVOICES (commercial-keyed; ADR-064)
@@ -148,7 +148,7 @@ COMMENT ON TABLE public.fin_invoices IS
   '5C-5/ADR-064: Commercial-keyed invoices. Consume billable events. Do NOT recalculate from current rates.';
 
 CREATE INDEX IF NOT EXISTS idx_fin_invoices_tenant ON public.fin_invoices(tenant_id);
-CREATE INDEX IF NOT_EXISTS idx_fin_invoices_so ON public.fin_invoices(sales_order_id);
+CREATE INDEX IF NOT EXISTS idx_fin_invoices_so ON public.fin_invoices(sales_order_id);
 CREATE INDEX IF NOT EXISTS idx_fin_invoices_status ON public.fin_invoices(status);
 CREATE INDEX IF NOT EXISTS idx_fin_invoices_customer ON public.fin_invoices(customer_id);
 

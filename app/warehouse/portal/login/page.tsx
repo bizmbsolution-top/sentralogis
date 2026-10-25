@@ -72,7 +72,7 @@ export default function WarehouseLoginPage() {
         
         <div className="text-center space-y-2">
           <div className="mb-4 flex justify-center">
-            <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-16 w-auto drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
+            <img src="/logosentralogis.png" alt="Sentralogis" className="h-16 w-auto object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">Welcome to Warehouse Portal</h1>
           <p className="text-xs font-semibold text-slate-400">Enter your WhatsApp & Touch PIN to access inventory tools</p>

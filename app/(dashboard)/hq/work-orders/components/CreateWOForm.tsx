@@ -37,6 +37,10 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
   const [activeSbuTypes, setActiveSbuTypes] = useState<Set<string>>(new Set());
   const [customerSearch, setCustomerSearch] = useState('');
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  // SO-Mandatory Slice 1 (Phase 3C): eligible Sales Orders for new WO creation.
+  const [salesOrders, setSalesOrders] = useState<any[]>([]);
+  const [salesOrderId, setSalesOrderId] = useState('');
+  const [loadingSalesOrders, setLoadingSalesOrders] = useState(false);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
   
   // [AI] Build SBU options from active tenant_sbus records
@@ -302,11 +306,67 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       });
   }, [profile?.tenant_id]);
 
+  const localItemSeqRef = useRef(1);
+
+  // SO-Mandatory Slice 1: load eligible Sales Orders for NEW work orders via canonical API.
+  useEffect(() => {
+    if (editId || !profile?.tenant_id) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingSalesOrders(true);
+      try {
+        const res = await fetch('/api/v1/commercial/sales-orders?limit=100');
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && Array.isArray(json.data)) {
+          const eligible = json.data
+            .filter((s: any) => ['CONFIRMED', 'IN_FULFILLMENT', 'PARTIALLY_FULFILLED'].includes(s.status))
+            .map((s: any) => ({
+              id: s.id,
+              so_number: s.soNumber || s.so_number,
+              status: s.status,
+              customer_id: s.customerId || s.customer_id || null,
+              customer_name: s.customerName || s.customer_name || null,
+            }));
+          setSalesOrders(eligible);
+
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const urlSoId = params.get('salesOrderId');
+            const urlCustomerId = params.get('customerId');
+            if (urlSoId) {
+              setSalesOrderId(urlSoId);
+              const matchedSo = eligible.find((s: any) => s.id === urlSoId);
+              const effectiveCustomerId = urlCustomerId || matchedSo?.customer_id;
+              if (effectiveCustomerId) {
+                setFormData((prev) => ({
+                  ...prev,
+                  customer_id: prev.customer_id || effectiveCustomerId,
+                }));
+              }
+            } else if (urlCustomerId) {
+              setFormData((prev) => ({
+                ...prev,
+                customer_id: prev.customer_id || urlCustomerId,
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Sales Order Fetch Error:', err);
+      } finally {
+        if (!cancelled) setLoadingSalesOrders(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, profile?.tenant_id]);
+
   const handleAddItem = (item: any) => {
     if (editingItem) {
       setWoItems(prev => prev.map(i => i.id === editingItem.id ? { ...item, id: editingItem.id } : i));
     } else {
-      const newId = Math.random().toString(36).substr(2, 9);
+      const newId = `local-item-${localItemSeqRef.current++}`;
       setWoItems(prev => [...prev, { ...item, id: newId }]);
     }
     setActiveSBUModal(null);
@@ -321,6 +381,12 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     if (!profile?.tenant_id) return;
     if (!formData.customer_id || woItems.length === 0) {
       toast.error('Customer dan Minimal 1 Item wajib diisi.');
+      return;
+    }
+
+    // SO-Mandatory (Phase 3C / L1): every NEW WO must reference an eligible Sales Order.
+    if (!editId && !salesOrderId) {
+      toast.error('Sales Order wajib dipilih untuk pembuatan WO baru.');
       return;
     }
 
@@ -349,6 +415,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     try {
       let woNumber = '';
       let woId = editId;
+      const controlWarnings: string[] = [];
+      const serverItemIds: Record<string, string> = {};
 
       const tenantInitial = (profile?.tenants as any)?.name || profile?.tenant_code || 'HQ';
 
@@ -385,14 +453,54 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
         }
         if (error) throw error;
       } else {
-        step = 'insert-work-order';
-        let { data: wo, error } = await supabase.from('work_orders').insert(payload as any).select().single();
-        if (error && /order_time/i.test(error.message || '')) {
-          const { order_time, ...safePayload } = payload;
-          ({ data: wo, error } = await supabase.from('work_orders').insert(safePayload).select().single());
+        // SO-MANDATORY SLICE 1 (Phase 3C): creation goes through the shared
+        // server-side boundary with server-side SO eligibility validation.
+        step = 'server-wo-create';
+        const createRes = await fetch('/api/v1/operational/work-orders/mutate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'WO_CREATE',
+            idempotencyKey: `wo-create-${woNumber}`,
+            input: {
+              woNumber,
+              customerId: formData.customer_id,
+              salesOrderId,
+              status,
+              orderDate: formData.order_date,
+              executionDate: formData.execution_date,
+              executionTime: formData.execution_time,
+              orderTime: formData.order_time,
+              regionId: formData.region_id || null,
+              notes: formData.notes || null,
+            },
+          }),
+        }).then(r => r.json());
+
+        if (!createRes.success) {
+          if (createRes.error?.code === 'IDEMPOTENCY_VIOLATION') {
+            // L3-4: read back by verified natural key (UNIQUE tenant_id + wo_number) before continuing.
+            const { data: rbWo } = await supabase
+              .from('work_orders')
+              .select('id')
+              .eq('tenant_id', profile.tenant_id)
+              .eq('wo_number', woNumber)
+              .maybeSingle();
+            if (!rbWo) throw new Error('Readback Work Order gagal setelah deteksi duplikat.');
+            woId = rbWo.id;
+          } else {
+            throw new Error(
+              (createRes.error?.message || 'Gagal membuat Work Order.') +
+                (createRes.error?.code ? ` (${createRes.error.code})` : ''),
+            );
+          }
+        } else {
+          if (!createRes.workOrder?.id) throw new Error('WO_CREATE sukses tetapi tanpa id — readback diperlukan.');
+          woId = createRes.workOrder.id;
+          if (createRes.outcome === 'PARTIAL') {
+            controlWarnings.push('WO tersimpan, tetapi catatan kontrol (audit/idempotency) gagal tersimpan.');
+          }
         }
-        if (error) throw error;
-        woId = wo?.id;
       }
       // STEP 1: If editId is present, check existing wo_items in database
       let existingDbItemIds: string[] = [];
@@ -408,7 +516,150 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           }
         }
       } else {
-        await supabase.from('wo_items').delete().eq('wo_id', woId as string);
+        // Slice 1 (Phase 3C): create-path items are persisted via the shared server
+        // boundary (WO_ITEM_UPSERT) BEFORE this loop — never delete them here.
+      }
+
+      // SO-MANDATORY SLICE 1: server-side item creation (+ conditional manifests).
+      if (!editId) {
+        step = 'server-items-upsert';
+        const itemPayloads = woItems.map((item: any, index: number) => {
+          const sbuKey = item.sbu_type === 'TRUCKING' ? 'TRUCKING' :
+                         item.sbu_type === 'CLEARANCE' ? 'CC' :
+                         item.sbu_type === 'WAREHOUSE' ? 'WH' :
+                         item.sbu_type === 'FORWARDING' ? 'FW' : 'OT';
+          const unitQty = item.quantity || item.item_data?.unit_count || 1;
+          const itemCode = `${woNumber}/${sbuKey === 'TRUCKING' ? 'TR' : sbuKey}${unitQty.toString().padStart(2, '0')}`;
+          return {
+            clientKey: String(index),
+            itemCode,
+            sbuType: item.sbu_type,
+            maxJoCount: item.quantity || item.item_data?.unit_count || 1,
+            unitPrice: item.unit_price || 0,
+            totalRevenue: item.total_revenue || 0,
+            status: status === 'draft' ? 'draft' : 'need_assignment',
+            itemData: item.item_data,
+            manifests: Array.isArray(item.manifests)
+              ? item.manifests.map((m: any) => ({
+                  productSkuId: m.product_sku_id ?? null,
+                  quantity: m.quantity || 1,
+                  unitWeightKg: m.unit_weight_kg || 0,
+                  unitVolumeM3: m.unit_volume_m3 || 0,
+                  notes: m.notes || null,
+                  locationCode: m.location_code || null,
+                  inventoryId: m.inventory_id || null,
+                  batchNumber: m.batch_number || null,
+                  earliestExpiry: m.earliest_expiry || null,
+                }))
+              : null,
+          };
+        });
+
+        const itemsRes = await fetch('/api/v1/operational/work-orders/mutate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'WO_ITEM_UPSERT',
+            idempotencyKey: `wo-items-${woNumber}`,
+            input: { workOrderId: woId, items: itemPayloads },
+          }),
+        }).then(r => r.json());
+
+        if (!itemsRes.success && itemsRes.error?.code !== 'IDEMPOTENCY_VIOLATION') {
+          if (itemsRes.items && itemsRes.outcome === 'PARTIAL') {
+            controlWarnings.push('Sebagian item gagal tersimpan — kirim ulang dengan kunci yang sama untuk melengkapi.');
+          }
+          throw new Error(itemsRes.error?.message || 'Gagal menyimpan item Work Order.');
+        }
+
+        // Reconcile ids by natural key (item_code within this WO) — covers success,
+        // duplicate replay, and partial-retry readback (L3-4). Duplicate item codes
+        // fall back to insert-order matching when counts align.
+        const { data: rbItems } = await supabase.from('wo_items').select('id, item_code').eq('wo_id', woId as string);
+        const rbList = rbItems || [];
+        const queues = new Map<string, string[]>();
+        for (const ri of rbList) {
+          const arr = queues.get(ri.item_code) || [];
+          arr.push(ri.id);
+          queues.set(ri.item_code, arr);
+        }
+        const unmatchedIds = rbList.map((ri: any) => ri.id as string);
+        itemPayloads.forEach((p: any) => {
+          const q = queues.get(p.itemCode);
+          if (q && q.length > 0) {
+            const id = q.shift() as string;
+            serverItemIds[p.clientKey] = id;
+            const ui = unmatchedIds.indexOf(id);
+            if (ui >= 0) unmatchedIds.splice(ui, 1);
+          }
+        });
+        // Second pass: assign leftover ids to leftover payloads in order (duplicate codes).
+        let leftover = 0;
+        itemPayloads.forEach((p: any) => {
+          if (!serverItemIds[p.clientKey] && leftover < unmatchedIds.length) {
+            serverItemIds[p.clientKey] = unmatchedIds[leftover++];
+          }
+        });
+        if (Object.keys(serverItemIds).length !== itemPayloads.length) {
+          throw new Error('Readback item gagal: sebagian item tidak ditemukan setelah penyimpanan server.');
+        }
+        if (itemsRes.outcome === 'PARTIAL') {
+          controlWarnings.push('Item tersimpan sebagian (PARTIAL) — periksa konsistensi sebelum retry.');
+        }
+      }
+
+      // SO-MANDATORY SLICE 1: server-side trucking JO creation (+ conditional routes).
+      if (!editId) {
+        step = 'server-trucking-jos';
+        for (const [index, item] of woItems.entries()) {
+          if (!(item.sbu_type === 'TRUCKING' && item.item_data?.stops)) continue;
+          const joItemId = serverItemIds[String(index)];
+          if (!joItemId) throw new Error(`wo_item id tidak terbaca utk item ${index} — pembuatan JO dihentikan.`);
+          const unitCount = item.item_data.unit_count || 1;
+          for (let i = 1; i <= unitCount; i++) {
+            const joNumber = `${woNumber}-${i.toString().padStart(2, '0')}`;
+            const routePayloads = (item.item_data.stops || []).map((stop: any) => ({
+              sequence: stop.sequence || 0,
+              stopType: stop.stop_type || 'DROPOFF',
+              sourceType: stop.source_type || 'MD_LOCATION',
+              sourceId: stop.source_id,
+              locationName: stop.location_name || 'Unknown Location',
+              address: stop.address || '',
+              latitude: stop.latitude,
+              longitude: stop.longitude,
+              contactName: stop.contact_name || '',
+              contactPhone: stop.contact_phone || '',
+              status: status === 'draft' ? 'draft' : 'pending',
+            }));
+            const joRes = await fetch('/api/v1/operational/work-orders/mutate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                command: 'JO_CREATE',
+                idempotencyKey: `wo-jo-${joNumber}`,
+                input: {
+                  woItemId: joItemId,
+                  joNumber,
+                  sbuType: 'TRUCKING',
+                  status: status === 'draft' ? 'draft' : 'pending',
+                  totalStops: item.item_data.stops.length,
+                  routes: routePayloads,
+                },
+              }),
+            }).then(r => r.json());
+
+            if (!joRes.success && joRes.error?.code !== 'IDEMPOTENCY_VIOLATION') {
+              if (joRes.outcome === 'PARTIAL') {
+                controlWarnings.push(`JO ${joNumber} tersimpan sebagian (routes/kontrol gagal) — retry akan merekonsiliasi.`);
+                continue;
+              }
+              throw new Error(joRes.error?.message || `Gagal membuat Job Order ${joNumber}.`);
+            }
+            if (joRes.outcome === 'PARTIAL') {
+              controlWarnings.push(`JO ${joNumber}: stage sampingan/kontrol gagal (PARTIAL).`);
+            }
+          }
+        }
       }
 
       const sbuCounts: Record<string, number> = {};
@@ -441,7 +692,7 @@ for (const [index, item] of woItems.entries()) {
             .eq('id', item.id);
           if (updateItemError) throw updateItemError;
           woItemId = item.id;
-        } else {
+        } else if (editId) {
           step = `insert-wo-item-${index}`;
           // INSERT new wo_item
           const { data: woItem, error: itemError } = await supabase
@@ -461,10 +712,15 @@ for (const [index, item] of woItems.entries()) {
             .single();
           if (itemError) throw itemError;
           woItemId = woItem.id;
+        } else {
+          // Slice 1 (create path): item rows already persisted via server boundary.
+          const mappedId = serverItemIds[String(index)];
+          if (!mappedId) throw new Error(`Item ${index} tidak memiliki id hasil boundary server.`);
+          woItemId = mappedId;
         }
 
-        // INSERT / UPDATE MANIFESTS IF ANY
-        if (item.manifests && Array.isArray(item.manifests)) {
+        // INSERT / UPDATE MANIFESTS IF ANY (create path: handled by WO_ITEM_UPSERT server-side)
+        if (editId && item.manifests && Array.isArray(item.manifests)) {
           if (isExistingItem) {
             await supabase.from('wo_item_manifests').delete().eq('wo_item_id', woItemId);
           }
@@ -489,7 +745,8 @@ for (const [index, item] of woItems.entries()) {
           }
         }
 
-        if (item.sbu_type === 'TRUCKING' && item.item_data.stops) {
+        // Trucking JOs + routes: create path handled server-side (JO_CREATE) BEFORE this loop.
+        if (editId && item.sbu_type === 'TRUCKING' && item.item_data.stops) {
           step = `trucking-jo-${index}`;
           const unitCount = item.item_data.unit_count || 1;
           let existingJOs: any[] = [];
@@ -698,7 +955,11 @@ for (const [index, item] of woItems.entries()) {
         }
       }
 
-      toast.success(editId ? 'Perubahan berhasil disimpan' : 'Berhasil disimpan');
+      if (controlWarnings.length > 0) {
+        toast.error(`Tersimpan dengan peringatan kontrol: ${controlWarnings.join(' | ')}`);
+      } else {
+        toast.success(editId ? 'Perubahan berhasil disimpan' : 'Berhasil disimpan');
+      }
       onBack();
     } catch (err: any) {
       console.error('=== SUBMIT DIAGNOSTICS ===');
@@ -858,6 +1119,42 @@ for (const [index, item] of woItems.entries()) {
                     )}
                   </div>
                 </div>
+
+                {/* SO-MANDATORY SLICE 1 (Phase 3C): Sales Order untuk WO baru */}
+                {!editId && !isReadOnly && (
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <Calendar size={12} /> Sales Order * (SO-Mandatory)
+                    </label>
+                    <select
+                      value={salesOrderId}
+                      onChange={(e) => {
+                        const nextSoId = e.target.value;
+                        setSalesOrderId(nextSoId);
+                        const matchedSo = salesOrders.find((s) => s.id === nextSoId);
+                        if (matchedSo?.customer_id) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            customer_id: matchedSo.customer_id,
+                          }));
+                        }
+                      }}
+                      className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all text-slate-900"
+                    >
+                      <option value="">
+                        {loadingSalesOrders ? 'Memuat Sales Order...' : salesOrders.length === 0 ? 'Tidak ada SO eligible (CONFIRMED/IN_FULFILLMENT/PARTIALLY_FULFILLED)' : '-- Pilih Sales Order --'}
+                      </option>
+                      {salesOrders.map((so) => (
+                        <option key={so.id} value={so.id}>
+                          {so.so_number} — {so.status}{so.customer_name ? ` (${so.customer_name})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] font-medium text-slate-400 ml-1">
+                      WO baru wajib terikat pada SO tenant dengan status eligible; validasi ulang dilakukan di server.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-3">

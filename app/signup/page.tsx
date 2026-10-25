@@ -88,7 +88,7 @@ export default function SignupPage() {
 
         <div className="mb-10 text-center md:text-left">
           <div className="flex justify-center md:justify-start mb-6">
-            <img src="/logo.svg" alt="Logo" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(0,112,192,0.2)]" />
+              <img src="/logosentralogis.png" alt="Sentralogis" className="w-20 h-20 object-contain drop-shadow-[0_0_15px_rgba(0,112,192,0.2)]" />
           </div>
           <h1 className="text-4xl font-black italic tracking-tighter uppercase mb-2">Registrasi<span className="text-emerald-500">.</span></h1>
           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] font-mono">Pendaftaran Entitas Bisnis Baru</p>

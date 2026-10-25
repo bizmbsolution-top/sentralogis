@@ -257,6 +257,8 @@ export default function LoginPage() {
           toast.error('Email belum dikonfirmasi. Cek inbox Anda.');
         } else if (error.message?.includes('Too many requests')) {
           toast.error('Terlalu banyak percobaan. Tunggu sebentar.');
+        } else if (error.message?.includes('Failed to fetch') || error.message?.includes('fetch')) {
+          toast.error('Gagal terhubung ke server autentikasi. Periksa koneksi internet, adblocker/Brave Shields, atau DNS Anda.', { duration: 5000 });
         } else {
           const safeMsg = typeof error.message === 'string'
             ? error.message.replace(/["'`]/g, '\\$&')
@@ -359,7 +361,7 @@ export default function LoginPage() {
               {/* Form Header */}
               <div className="text-center mb-8 relative z-10 space-y-2">
                 <div className="mb-4 flex justify-center">
-                  <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-16 w-auto drop-shadow-[0_0_12px_rgba(139,92,246,0.5)]" />
+                  <img src="/logosentralogis.png" alt="Sentralogis" className="h-16 w-auto object-contain drop-shadow-[0_0_12px_rgba(139,92,246,0.5)]" />
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Welcome to Management Portal</h1>
                 <p className="text-xs font-semibold text-slate-400">Sign in with your corporate credentials to access Executive Backoffice & Command Center</p>

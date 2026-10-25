@@ -24,7 +24,7 @@ import type { CreateInvoiceInput } from '@/lib/financial/types';
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await resolveSessionIdentity();
+    const ctx = await resolveSessionIdentity(undefined, req);
 
     const body = await req.json().catch(() => null);
     if (!body) {

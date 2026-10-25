@@ -142,7 +142,7 @@ export class JoAutoCompleteService {
             const payload: PushPayload = {
               title: '✅ Tugas Selesai',
               body: `JO ${jo.jo_number} telah selesai secara otomatis. Terima kasih!`,
-              icon: '/sentralogis_logo.png',
+              icon: '/logosentralogis.png',
               badge: '/favicon.ico',
               vibrate: [200, 100, 200],
               tag: `jo-complete-${jo.id}`,

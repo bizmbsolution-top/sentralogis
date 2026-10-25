@@ -16,7 +16,8 @@ export type { IdentityErrorCode } from './errors';
 // --- Role vocabulary ---
 export {
   normalizeLegacyRole, isOwnerRole, isHqRole, isSbuRole, isTenantAdminRole, isGlobalRole, isOperationalRole,
-  sbuTypeFromRole, sbuRoleLevel, LEGACY_ROLES, ALL_SBU_TYPES,
+  hasCrossSbuAuthority,
+  sbuTypeFromRole, sbuRoleLevel, sbuScopeToOperationalType, LEGACY_ROLES, ALL_SBU_TYPES,
   ROLE_OWNER, ROLE_TENANT_SUPERADMIN, ROLE_TENANT_ADMIN,
   ROLE_HQ_COMMERCIAL_DIRECTOR, ROLE_HQ_SALES_MANAGER, ROLE_HQ_SALES_STAFF,
   ROLE_HQ_PRICING_ANALYST, ROLE_HQ_MARKETING_STAFF,

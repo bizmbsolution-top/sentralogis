@@ -1,25 +1,39 @@
 # ADR-092 — AI Copilot EXECUTE → Canonical Domain Wiring
 
-**Status:** PROPOSED — NOT RATIFIED  
-**Date:** 2026-09-08  
+**Status:** RATIFIED AS AMENDED — 2026-09-30  
+**Date:** 2026-09-08 (original) · 2026-09-30 (amended)  
 **Author:** Sentralogis Architecture  
 **Depends on:** ADR-090 (RATIFIED), ADR-091 (RATIFIED), E7 (GREEN — IMMUTABLE), E9 (GREEN — IMMUTABLE)  
 **Supersedes:** None  
+**Amendment authority:** AD-01 = RATIFY AS AMENDED, recorded in `docs/architecture/SENTRALOGIS_ADR_092_RATIFY_AMEND_HUMAN_DECISION_GATE.md` (HUMAN ARCHITECTURAL DECISION CLOSURE). This status reflects governance ratification of the amended document only — it is not runtime readiness, staging/production verification, feature-flag activation, or production deployment.
 
 ---
 
 ## 1. Context
 
-AI Copilot EXECUTE boundary currently returns mock success responses for mutation intents without invoking canonical domain services.
+> **Amended 2026-09-30 (stale-wording correction, issue I-17 of the decision package).** The original text of this section described the EXECUTE boundary as returning mock success responses with no `REPLACE_DRIVER` handler. That description was accurate at original drafting (2026-09-08) but no longer matches the currently evidenced source architecture. The original wording is preserved below as `§1.1 Original problem statement (historical)`; the current evidenced state follows in `§1.2`.
 
-Current `ExecutionService.routeToDomainService` (`lib/copilot/execute/execution-service.ts:358-424`):
-- `ASSIGN_DRIVER`: returns hardcoded success message without calling `JobOrderAssignmentService`
-- `CANCEL_JOB`: returns hardcoded success message without calling `JobOrderCancellationService`
-- `REPLACE_DRIVER`: throws `No execution handler` — no handler exists
+### 1.1 Original problem statement (historical, 2026-09-08)
+
+AI Copilot EXECUTE boundary returned mock success responses for mutation intents without invoking canonical domain services.
+
+Original `ExecutionService.routeToDomainService` (`lib/copilot/execute/execution-service.ts`):
+- `ASSIGN_DRIVER`: returned hardcoded success message without calling `JobOrderAssignmentService`
+- `CANCEL_JOB`: returned hardcoded success message without calling `JobOrderCancellationService`
+- `REPLACE_DRIVER`: threw `No execution handler` — no handler existed
 - `SHOW_TIMELINE`: not handled in `routeToDomainService` (read-only, no mutation required)
 
+### 1.2 Current evidenced source state (as recorded in the decision package)
+
+The decision package `SENTRALOGIS_ADR_092_RATIFY_AMEND_HUMAN_DECISION_GATE.md` (§5 source evidence, §10 matrix M-2) records:
+- `routeToDomainService` contains exactly three mutation cases — `ASSIGN_DRIVER`, `CANCEL_JOB`, `REPLACE_DRIVER` — each fail-closed behind its feature flag before canonical service invocation, plus `default → throw` for unknown intents.
+- `SHOW_TIMELINE` remains read-only and is not handled in the EXECUTE switch.
+- All three flags default OFF (fail-closed). Runtime EXECUTE verification remains **NOT ESTABLISHED**; real staging EXECUTE remains **NOT PERFORMED**; production verification remains **NOT ESTABLISHED**.
+
+This is a source-evidence statement only. It is NOT runtime verification and NOT production activation.
+
 ADR-090 established the proposal authority boundary (PROPOSE → `copilot_proposals` → EXECUTE).  
-ADR-091 established the domain mutation authority boundary (canonical services for `ASSIGN_DRIVER`, `REPLACE_DRIVER`, `CANCEL_JOB`).  
+ADR-091 established the domain mutation authority boundary (canonical services for `ASSIGN_DRIVER`, `REPLACE_DRIVER`, `CANCEL_JOB`) — ADR-091 remains the underlying RATIFIED domain-mutation authority; this ADR is the Copilot wiring/governance layer and does not create domain mutation authority.  
 E7 established proposal-level execution idempotency.  
 E9 established atomic concurrent execution claim.
 
@@ -30,6 +44,8 @@ This ADR defines how EXECUTE wires to canonical domain mutation services without
 ## 2. Problem Statement
 
 The EXECUTE boundary has authority scaffolding but no authoritative domain mutation path:
+
+> **Amended 2026-09-30:** this table records the problem as stated at original drafting (2026-09-08). Per §1.2 and the decision package, the EXECUTE → domain-mutation gap and the `REPLACE_DRIVER` handler gap are now closed **in source**; runtime verification remains a separate, unmet gate (§20a.F).
 
 | Layer | Current State | Gap |
 |-------|---------------|-----|
@@ -448,7 +464,8 @@ Only after the acceptance suite passes for an action may it be enabled in produc
 ### 15.3 Reversibility
 
 Wiring must be reversible at the integration layer without weakening domain invariants:
-- Feature flag OFF → EXECUTE returns DENIED with "not implemented" message
+- Feature flag OFF → `routeToDomainService` throws the "action not enabled" error **before** any canonical service invocation; the execution result is recorded as `FAILED` with that message and **zero domain mutations** (source/test evidence per the decision package §10 matrix M-3 and §11 issue I-18: Phase 3 test T2 asserts flag OFF → `status=FAILED`). *(Amended 2026-09-30: the original wording claimed flag OFF returns `DENIED`; that contradicted current source/test evidence and has been corrected.)*
+- Feature flag OFF (`OFF`), authorization refusal (`DENIED`), execution failure (`FAILED`), `NOT TESTED`, and `UNKNOWN` are distinct states and must not be equated or collapsed.
 - No domain mutations occur when flag is OFF
 - Domain services remain unchanged
 
@@ -561,14 +578,64 @@ Implementation requires:
 
 ---
 
-## 21. Status
+## 20a. Governance Clarifications (Amendment 2026-09-30)
 
-**PROPOSED — AWAITING HUMAN RATIFICATION**
+Added under AD-03/AD-04/AD-05 = ADD / CLARIFY. Document-only: no new commands, permissions, flags, implementation, or runtime claims.
 
-This ADR establishes the architectural boundary for future AI Copilot EXECUTE → canonical domain wiring. It does not authorize implementation.
+### 20a.A — Primary Command Interface
 
-Implementation requires separate explicit authorization for each action.
+Copilot is the intended Primary Command Interface for Sentralogis, while remaining separate from the system's authorization authority. Copilot may interpret intent, resolve context, present information, prepare proposals, request confirmation, and invoke authorized domain commands. This is a **target architecture** statement (C0 CD-01 direction); it does NOT claim that this target architecture is already fully deployed, operationally established, or runtime-verified. The distinctions `TARGET ARCHITECTURE` vs `CURRENT IMPLEMENTATION` vs `RUNTIME VERIFICATION` vs `PRODUCTION ACTIVATION` remain separate and must not be collapsed.
+
+### 20a.B — Authorization / Authorized Data Surface
+
+Copilot is not a free-form database interface. Copilot operates only through authorized server-side identity, tenant, permission, and data/domain access boundaries: `resolveSessionIdentity()` → `IdentityContext` → server-side authorization → authorized data surface / domain context. Copilot READ flows only through an Authorized Data Surface appropriate to the authenticated user's identity, tenant, permissions, and domain context. **Natural-language input must not grant authority**: user language, intent, entity names, or a requested role must never override server-side authorization, and Copilot must not infer authorization from natural-language intent. No client-supplied identity, no weakened tenant isolation, no second authorization authority.
+
+### 20a.C — READ / PROPOSE / EXECUTE Separation
+
+- **READ** — retrieves authorized information; does not mutate domain state.
+- **PROPOSE** — prepares a proposed action; a proposal is not execution.
+- **EXECUTE** — performs an authorized, confirmed mutation through the canonical domain service.
+
+These three modes are distinct and must not be collapsed. EXECUTE requires, with no step bypassable: (1) authenticated server identity; (2) tenant context; (3) required server-side permission; (4) authorized proposal/action; (5) explicit human confirmation; (6) feature flag enabled for the specific command; (7) canonical domain service execution; (8) audit/event recording.
+
+### 20a.D — EXECUTE Scope (Allowlist, Unchanged)
+
+The authorized Copilot EXECUTE surface is an explicit allowlist, not an open command mechanism:
+
+```text
+ASSIGN_DRIVER
+REPLACE_DRIVER
+CANCEL_JOB
+```
+
+`SHOW_TIMELINE` remains READ-only and is NOT an EXECUTE mutation command. ADR-091 remains the underlying RATIFIED domain-mutation authority; this ADR is only the Copilot wiring/governance layer and does not create domain mutation authority. Everything else (including `UPDATE_STATUS`, `VERIFY_POD`, `CREATE_INVOICE`, `APPROVE_PAYMENT`, `POST_ACCOUNTING`, `CREATE_CUSTOMER`, and any background/autonomous command) is outside this ADR's EXECUTE scope unless separately authorized by future governance. Historical documentation examples are not implemented EXECUTE handlers. AD-02 = RETAIN EXISTING RATIFIED JO DOMAIN BOUNDARY — this amendment adds no commands.
+
+### 20a.E — Financial / Accounting / Administrative Exclusion
+
+ADR-092 does NOT authorize Copilot EXECUTE for: financial mutation, accounting mutation, invoice mutation, payment approval, settlement mutation, administrative/security mutation, RLS mutation, tenant administration, permission administration, or schema/database administration. Such capabilities remain outside the current EXECUTE boundary. This establishes scope only and does not prohibit future architecture work under separate governance.
+
+### 20a.F — Runtime / Production Boundary
+
+ADR-092 governance status (including this amendment and RATIFIED AS AMENDED status) is separate from, and does not constitute: runtime verification; staging execution verification; production verification; production activation; production deployment. Current evidence, unchanged by this amendment: runtime EXECUTE verification = **NOT ESTABLISHED**; real staging EXECUTE = **NOT PERFORMED**; production EXECUTE verification = **NOT ESTABLISHED**. Feature flags `COPILOT_EXECUTE_ASSIGN_DRIVER`, `COPILOT_EXECUTE_REPLACE_DRIVER`, `COPILOT_EXECUTE_CANCEL_JOB` remain default **OFF** (fail-closed); this amendment does not activate them, does not modify their values, and does not claim they are enabled in production. Flag activation, rollout, and deployment each require separate authorization and evidence gates.
+
+### 20a.G — Failure / Unknown / Anti-Fabrication
+
+Copilot must not report a mutation as completed without authoritative execution evidence. If the required authoritative data or execution evidence is unavailable, Copilot must communicate that limitation rather than inventing a result. The states `OFF`, `DENIED`, `FAILED`, `NOT TESTED`, and `UNKNOWN` are distinct and must not be equated; execution outcomes must distinguish at minimum `UNKNOWN`, `NOT AUTHORIZED`, `PROPOSED`, `WAITING FOR CONFIRMATION`, `FAILED`, and `COMPLETED`.
 
 ---
 
-**END OF ADR-092 (PROPOSED)**
+## 21. Status
+
+**RATIFIED AS AMENDED — 2026-09-30**
+
+This ADR establishes the architectural boundary for AI Copilot EXECUTE → canonical domain wiring. It was amended and ratified with status `RATIFIED AS AMENDED` solely because AD-01 = RATIFY AS AMENDED was explicitly selected by the Human Architect, with AD-03/AD-04/AD-05 = ADD / CLARIFY and AD-06 = AUTHORIZE ADR-092 EDIT IN A SEPARATE FOLLOW-UP GATE, recorded in `docs/architecture/SENTRALOGIS_ADR_092_RATIFY_AMEND_HUMAN_DECISION_GATE.md` (HUMAN ARCHITECTURAL DECISION CLOSURE).
+
+AD-02 = RETAIN EXISTING RATIFIED JO DOMAIN BOUNDARY: the EXECUTE allowlist remains exactly `ASSIGN_DRIVER`, `REPLACE_DRIVER`, `CANCEL_JOB` (§5, §20a.D). ADR-091 remains the underlying RATIFIED domain-mutation authority and is unmodified.
+
+This status is a governance document status only. It does NOT constitute runtime readiness, staging or production verification, feature-flag activation, rollout, or production deployment — all of which remain separate future gates (§20a.F).
+
+This ADR does not authorize implementation. Implementation requires separate explicit authorization for each action (§19).
+
+---
+
+**END OF ADR-092 (RATIFIED AS AMENDED)**

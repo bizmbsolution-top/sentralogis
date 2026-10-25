@@ -9,10 +9,16 @@ export class IntentKnowledgeRegistry {
   }
 
   static get(intentId: string): IntentKnowledge | undefined {
+    if (this.intents.size === 0) {
+      this.loadDefaultKnowledge();
+    }
     return this.intents.get(intentId);
   }
 
   static getAll(): IntentKnowledge[] {
+    if (this.intents.size === 0) {
+      this.loadDefaultKnowledge();
+    }
     return Array.from(this.intents.values());
   }
 

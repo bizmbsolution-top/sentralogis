@@ -428,7 +428,9 @@ export async function findFulfillmentById(
 ): Promise<Fulfillment> {
   const context = (typeof arg1 === 'object' ? arg1 : arg2) as IdentityContext;
   const fulfillmentId = (typeof arg1 === 'string' ? arg1 : arg2) as string;
-  assertPermission(context, 'commercial:read');
+  if (!context.permissions.includes('commercial:read') && !context.permissions.includes('sales_order:read')) {
+    assertPermission(context, 'commercial:read');
+  }
   return findById(context.tenantId, fulfillmentId);
 }
 
@@ -441,7 +443,9 @@ export async function findFulfillmentCompositionById(
 ): Promise<FulfillmentComposition> {
   const context = (typeof arg1 === 'object' ? arg1 : arg2) as IdentityContext;
   const fulfillmentId = (typeof arg1 === 'string' ? arg1 : arg2) as string;
-  assertPermission(context, 'commercial:read');
+  if (!context.permissions.includes('commercial:read') && !context.permissions.includes('sales_order:read')) {
+    assertPermission(context, 'commercial:read');
+  }
   const fulfillment = await findById(context.tenantId, fulfillmentId);
 
   const { data, error } = await db()
@@ -474,7 +478,9 @@ export async function listFulfillmentsBySalesOrder(
 ): Promise<Fulfillment[]> {
   const context = (typeof arg1 === 'object' ? arg1 : arg2) as IdentityContext;
   const salesOrderId = (typeof arg1 === 'string' ? arg1 : arg2) as string;
-  assertPermission(context, 'commercial:read');
+  if (!context.permissions.includes('commercial:read') && !context.permissions.includes('sales_order:read')) {
+    assertPermission(context, 'commercial:read');
+  }
   const tenantId = context.tenantId;
   await validateSalesOrder(tenantId, salesOrderId);
 

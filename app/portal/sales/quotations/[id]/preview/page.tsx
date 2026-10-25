@@ -125,7 +125,7 @@ export default function QuotationPrintPreview({ params }: { params: Promise<{ id
               {quote.tenants?.logo_url ? (
                 <img src={quote.tenants.logo_url} alt={tenantName} className="h-10 mb-2 ml-auto object-contain" />
               ) : (
-                <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-10 mb-2 ml-auto object-contain" />
+                <img src="/logosentralogis.png" alt="Sentralogis" className="h-10 mb-2 ml-auto object-contain" />
               )}
               <p className="text-[10px] text-slate-500 font-medium">{tenantName}</p>
               <p className="text-[10px] text-slate-500 max-w-[200px] ml-auto">{quote.tenants?.company_address || ''}</p>

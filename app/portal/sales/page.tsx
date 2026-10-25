@@ -64,7 +64,7 @@ export default function MobileDashboard() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <img src="/logo2sentralogis.png" alt="Sentralogis" className="h-6 brightness-0 invert" />
+              <img src="/logosentralogis.png" alt="Sentralogis" className="h-7 w-auto object-contain rounded-lg bg-white/90 p-1 shadow-sm" />
               <span className="text-[9px] text-indigo-200 mt-1 opacity-80">powered by Sentralogis.com</span>
             </div>
             <p className="text-indigo-200 text-sm font-medium mb-1">Good Morning,</p>

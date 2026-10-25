@@ -46,6 +46,8 @@ import { runU24CommercialExecutionWorkspaceProductionSuite } from '../lib/__test
 import { runU24rCommercialExecutionWorkspaceProductionForensicReconciliationSuite } from '../lib/__tests__/u24r-commercial-execution-workspace-production-forensic-reconciliation.test';
 import { runU25RealWorldLogisticsScenarioValidationSuite } from '../lib/__tests__/u25-real-world-logistics-scenario-validation.test';
 import { runU25rRealWorldLogisticsScenarioForensicReconciliationSuite } from '../lib/__tests__/u25r-real-world-logistics-scenario-forensic-reconciliation.test';
+import { runU25FinInvoiceNumberingDuplicatePreventionSuite } from '../lib/__tests__/u25-fin-invoice-numbering-duplicate-prevention.test';
+import { runU25RTestIsolationSuite } from '../lib/__tests__/u25r-test-isolation-mechanism.test';
 import { runPhase5BCustomsForwardingOrchestrationSuite } from '../lib/__tests__/phase5b-customs-forwarding-orchestration.test';
 import { runData3PartyRoleFoundationSuite } from '../lib/__tests__/data3-party-role-foundation.test';
 import { runX3TestSuite } from '../lib/__tests__/x3-w2-canonical-writer.test';
@@ -55,7 +57,12 @@ import { runX6TestSuite } from '../lib/__tests__/x6-reader-readiness.test';
 import { runPostX4ReconciliationAssessment } from '../lib/__tests__/post-x4-reconciliation-assessment.test';
 import { runFinalClosureAssessment } from '../lib/__tests__/data4e-final-closure-assessment.test';
 import { runRReaderWaveRASuite } from '../lib/__tests__/r-reader-wave-r-a.test';
+import { runUiux4cShipmentDetailSuite } from '../lib/__tests__/uiux4c-shipment-detail.test';
+import { runUiux4cExceptionCenterSuite } from '../lib/__tests__/uiux4c-exception-center.test';
+import { runUiux4cCustomer360Suite } from '../lib/__tests__/uiux4c-customer-360.test';
+import { runUiux4cFinancialWorkspaceSuite } from '../lib/__tests__/uiux4c-financial-workspace.test';
 import { runUiux4dExternalPortalsSuite } from '../lib/__tests__/uiux4d-external-portals.test';
+import { runSalesOrderReadAuthorizationSuite } from '../lib/__tests__/sales-order-read-authorization.test';
 
 interface SuiteResult { passed: number; failed: number; total: number }
 type SuiteFn = () => SuiteResult | Promise<SuiteResult> | Array<{ testId: string; description: string; pass: boolean; error?: string }>;
@@ -123,6 +130,8 @@ const asyncSuites: Array<{ name: string; fn: () => Promise<SuiteResult> }> = [
   { name: 'U-24R Commercial Execution Workspace Production Forensic Reconciliation', fn: runU24rCommercialExecutionWorkspaceProductionForensicReconciliationSuite },
   { name: 'U-25 Real-World Logistics Scenario Validation', fn: runU25RealWorldLogisticsScenarioValidationSuite },
   { name: 'U-25R Real-World Logistics Scenario Forensic Reconciliation', fn: runU25rRealWorldLogisticsScenarioForensicReconciliationSuite },
+  { name: 'U-25 Fin Invoice Numbering & Duplicate Prevention', fn: async () => toSuiteResult(runU25FinInvoiceNumberingDuplicatePreventionSuite()) },
+  { name: 'U-25R Test Isolation Mechanism', fn: async () => toSuiteResult(runU25RTestIsolationSuite()) },
   { name: 'Phase 5B Customs-Forwarding Operational Orchestration', fn: runPhase5BCustomsForwardingOrchestrationSuite },
   { name: 'DATA-3 Party Role Foundation', fn: async () => toSuiteResult(runData3PartyRoleFoundationSuite()) },
   { name: 'DATA-4E X3 W2 Tenant Contacts Canonical Writer', fn: async () => { const r = await runX3TestSuite(); return toSuiteResult(r); } },
@@ -133,7 +142,12 @@ const asyncSuites: Array<{ name: string; fn: () => Promise<SuiteResult> }> = [
   { name: 'DATA-4E Final Closure Assessment', fn: async () => { const r = await runFinalClosureAssessment(); return toSuiteResult(r); } },
   { name: 'R-Reader Wave R-A Entity Ownership Migration', fn: async () => { const r = await runRReaderWaveRASuite(); return toSuiteResult(r); } },
   { name: 'ADR-092 Phase 3 ASSIGN_DRIVER Integration/E2E', fn: runAdr092Phase3Suite },
+  { name: 'UI/UX-4C Shipment Detail', fn: async () => toSuiteResult(runUiux4cShipmentDetailSuite()) },
+  { name: 'UI/UX-4C Exception Center', fn: async () => toSuiteResult(runUiux4cExceptionCenterSuite()) },
+  { name: 'UI/UX-4C Customer 360', fn: async () => toSuiteResult(runUiux4cCustomer360Suite()) },
+  { name: 'UI/UX-4C Financial Workspace', fn: async () => toSuiteResult(runUiux4cFinancialWorkspaceSuite()) },
   { name: 'UI/UX-4D External Portals & Mobile', fn: async () => toSuiteResult(runUiux4dExternalPortalsSuite()) },
+  { name: 'Sales Order Read Authorization', fn: runSalesOrderReadAuthorizationSuite },
 ];
 
 let totalPass = 0;

@@ -17,6 +17,7 @@ import {
   updateDraftSalesOrder,
   confirmSalesOrder,
   cancelSalesOrder,
+  enrichSalesOrdersWithCustomer,
 } from '@/lib/sales-order/service';
 import { toErrorResponse } from '@/lib/sales-order/http';
 
@@ -28,7 +29,8 @@ export async function GET(
     const session = await resolveSessionIdentity();
     const { id } = await params;
     const so = await findSalesOrderById(session, id);
-    return NextResponse.json({ success: true, data: so });
+    const [enriched] = await enrichSalesOrdersWithCustomer(session, [so]);
+    return NextResponse.json({ success: true, data: enriched ?? so });
   } catch (error) {
     return toErrorResponse(error);
   }
@@ -51,6 +53,7 @@ export async function PATCH(
     const so = await updateDraftSalesOrder(
       id,
       {
+        customerId: typeof body.customerId === 'string' ? body.customerId : undefined,
         targetFulfillmentDate: body.targetFulfillmentDate,
         currency: body.currency,
         totalAgreedRevenue: body.totalAgreedRevenue,
@@ -60,7 +63,8 @@ export async function PATCH(
       },
       session,
     );
-    return NextResponse.json({ success: true, data: so });
+    const [enriched] = await enrichSalesOrdersWithCustomer(session, [so]);
+    return NextResponse.json({ success: true, data: enriched ?? so });
   } catch (error) {
     return toErrorResponse(error);
   }
@@ -78,11 +82,13 @@ export async function POST(
 
     if (action === 'confirm') {
       const so = await confirmSalesOrder(id, session);
-      return NextResponse.json({ success: true, data: so });
+      const [enriched] = await enrichSalesOrdersWithCustomer(session, [so]);
+      return NextResponse.json({ success: true, data: enriched ?? so });
     }
     if (action === 'cancel') {
       const so = await cancelSalesOrder(id, session, body?.reason ?? undefined);
-      return NextResponse.json({ success: true, data: so });
+      const [enriched] = await enrichSalesOrdersWithCustomer(session, [so]);
+      return NextResponse.json({ success: true, data: enriched ?? so });
     }
 
     return NextResponse.json(

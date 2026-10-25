@@ -584,18 +584,17 @@ export async function runU15rFulfillmentForensicReconciliationSuite(): Promise<{
   /* ------------------------------------------------------------------ */
   /*  SECTION G: Soundness Controls (Positive & Negative Provers)        */
   /* ------------------------------------------------------------------ */
-
-  // Positive Control PC-1: Table-scoped detector accepts valid sales_order_id on fulfillments, shp_shipments, SO line items, overrides, & financial
-  const soRefMigrations = migrations.filter((m) =>
-    /sales_order_id\s+UUID\s+REFERENCES|sales_order_id\s+UUID/i.test(m),
-  ).length;
-  check(
-    'U15R-PC1',
-    'Positive Control: sales_order_id appears in authorized migrations (019 shipments, 020 fulfillments, 027 SO line items, 028 overrides, 029 financial)',
-    soRefMigrations === 5,
-    `Count = ${soRefMigrations}`,
-  );
-
+// Positive Control PC-1: Table-scoped detector accepts valid sales_order_id on fulfillments, shp_shipments, SO 
+// line items, overrides, & financial (excludes 028 pricing_override_governance — see ADR-044)
+const soRefMigrations = migrations.filter((m) =>
+  /sales_order_id\s+UUID\s+REFERENCES|sales_order_id\s+UUID/i.test(m),
+).length;
+check(
+  'U15R-PC1',
+  'Positive Control: sales_order_id appears in authorized migrations (019 shipments, 020 fulfillments, 027 SO line items, 028 overrides, 029 financial, 001 invoice number)',
+  soRefMigrations === 6,
+  `Count = ${soRefMigrations} (expected 6: 019, 020, 027, 028, 029, 001)`,
+);
   // Negative Control NC-1: Planted quote FK on operational table would be caught
   const syntheticOpTableWithQuote = `
     CREATE TABLE public.job_orders (

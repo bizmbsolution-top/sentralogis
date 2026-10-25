@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import type {
@@ -62,6 +62,7 @@ export function CopilotV2Provider({ children }: { children: React.ReactNode }) {
   const timerRefs = useRef<NodeJS.Timeout[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const entityAbortRef = useRef<AbortController | null>(null);
+  const conversationIdRef = useRef<string>(`conv-${Date.now()}`);
   const conversationStateRef = useRef<ConversationalContextState>({
     conversationHistory: [],
   });
@@ -80,18 +81,168 @@ export function CopilotV2Provider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearConversation = useCallback(() => {
+    clearTimers();
+    abortControllerRef.current?.abort();
+    entityAbortRef.current?.abort();
+    conversationIdRef.current = `conv-${Date.now()}`;
+    conversationStateRef.current = { conversationHistory: [] };
+    setActiveEntityRefs([]);
+    setDetailPanel({ type: "empty" });
     setMessages([WELCOME_MESSAGE]);
+    setIsProcessing(false);
+  }, [clearTimers]);
+
+  const selectEntity = useCallback(async (ref: EntityReference) => {
+    entityAbortRef.current?.abort();
+    const controller = new AbortController();
+    entityAbortRef.current = controller;
+
+    setMobileDetailOpen(true);
+    setDetailPanel({
+      type: ref.type,
+      entity: {
+        type: ref.type,
+        id: ref.id,
+        title: ref.label || ref.id,
+        subtitle: "Loading details from canonical domain...",
+        status: ref.status || "LOADING",
+        statusColor: ref.statusColor || "gray",
+        fields: [],
+      },
+    });
+
+    try {
+      const result = await fetchEntityDetail(ref.type, ref.id, {
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
+
+      if (result.success && result.data) {
+        setDetailPanel({
+          type: ref.type,
+          entity: result.data,
+        });
+      } else {
+        setDetailPanel({
+          type: ref.type,
+          entity: {
+            type: ref.type,
+            id: ref.id,
+            title: ref.label || ref.id,
+            subtitle: "Canonical entity detail",
+            status: ref.status || "UNAVAILABLE",
+            statusColor: ref.statusColor || "gray",
+            fields: [
+              {
+                label: "Notice",
+                value: result.error || "Unable to load canonical entity details.",
+              },
+            ],
+          },
+        });
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+    }
   }, []);
 
-  const selectEntity = useCallback(() => {}, []);
   const closeDetail = useCallback(() => setDetailPanel({ type: "empty" }), []);
-  const selectSuggestedPrompt = useCallback(() => {}, []);
-  const useSuggestedPrompt = useCallback(() => {}, []);
   const openMobileDetail = useCallback(() => setMobileDetailOpen(true), []);
   const closeMobileDetail = useCallback(() => setMobileDetailOpen(false), []);
   const openMobileContext = useCallback(() => setMobileContextOpen(true), []);
   const closeMobileContext = useCallback(() => setMobileContextOpen(false), []);
-  const sendMessage = useCallback(async () => {}, []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const userMsg: CopilotMessage = {
+      id: makeId(),
+      role: "user",
+      type: "text",
+      content: trimmed,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setIsProcessing(true);
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const transportResult = await sendCopilotMessage(trimmed, {
+        conversationId: conversationIdRef.current,
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
+
+      const isNetworkFallbackEligible =
+        !IS_PRODUCTION &&
+        transportResult.messages.length === 1 &&
+        transportResult.messages[0].type === "error" &&
+        (transportResult.messages[0].content || "").includes("Unable to connect to Copilot backend");
+
+      const finalMessages: CopilotMessage[] = isNetworkFallbackEligible
+        ? (() => {
+            const sandboxTurn = ConversationalSandboxEngine.processUserMessage(
+              trimmed,
+              conversationStateRef.current,
+            );
+            conversationStateRef.current = sandboxTurn.updatedState;
+            return sandboxTurn.responseMessages;
+          })()
+        : transportResult.messages;
+
+      setMessages((prev) => [...prev, ...finalMessages]);
+      const collectedRefs: EntityReference[] = [];
+      for (const msg of finalMessages) {
+        if (msg.entityRefs && msg.entityRefs.length > 0) {
+          for (const r of msg.entityRefs) {
+            if (!collectedRefs.some((existing) => existing.type === r.type && existing.id === r.id)) {
+              collectedRefs.push(r);
+            }
+          }
+        }
+      }
+      if (collectedRefs.length > 0) {
+        setActiveEntityRefs(collectedRefs);
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: makeId(),
+          role: "assistant",
+          type: "error",
+          content: "Something interrupted this request.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      if (!controller.signal.aborted) {
+        setIsProcessing(false);
+      }
+    }
+  }, []);
+
+  const selectSuggestedPrompt = useCallback(
+    (prompt: SuggestedPrompt) => {
+      sendMessage(prompt.query);
+    },
+    [sendMessage],
+  );
+
+  const useSuggestedPrompt = useCallback(
+    (prompt: SuggestedPrompt) => {
+      sendMessage(prompt.query);
+    },
+    [sendMessage],
+  );
 
   return (
     <CopilotV2Context.Provider
