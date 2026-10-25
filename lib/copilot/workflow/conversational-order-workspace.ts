@@ -20,6 +20,8 @@ import { assertPermission, assertAnyPermission } from '@/lib/application/identit
 import { resolveOrCreateEngagement } from '@/lib/application/engagement/engagement-bridge';
 import { createSalesOrder, confirmSalesOrder } from '@/lib/sales-order/service';
 import { LocationMatchingService } from '@/lib/location/location-matching-service';
+import { CustomerIntentHandler } from '@/lib/copilot/customer/customer-intent-handler';
+import { generateNextCustomerCode } from '@/lib/actions/customer-master-actions';
 
 export type SbuType = 'TRUCKING' | 'WAREHOUSE' | 'CLEARANCE' | 'FORWARDING';
 
@@ -512,10 +514,10 @@ export class ConversationalOrderWorkspace {
     }
 
     // If user asked explicitly to register new customer:
-    const wantsRegister = /\b(daftar|daftarkan|registrasi|customer baru|tambah customer)\b/i.test(input);
+    const wantsRegister = /\b(daftar|daftarkan|registrasi|customer baru|pelanggan baru|tambah customer|tambah pelanggan)\b/i.test(input);
     if (wantsRegister) {
-      const nameMatch = input.match(/(?:nama|bernama|customer baru)\s+((?:PT|CV)\s+[A-Za-z0-9\s.,-]+|[A-Za-z0-9\s._-]{3,35}?)(?=[,.;]|$)/i);
-      const targetName = nameMatch ? nameMatch[1].trim() : state.customerName;
+      const extractedName = CustomerIntentHandler.extractCandidateCustomerName(input);
+      const targetName = extractedName || state.customerName;
       if (targetName) {
         state.newCustomerCandidate = { name: targetName };
         state.step = 'CUSTOMER_REGISTRATION';
@@ -539,12 +541,15 @@ export class ConversationalOrderWorkspace {
       const custRegex2 = new RegExp(`\\b((?:PT|CV)\\s+[A-Za-z0-9\\s.]{3,30}?)(?=\\s+${delimiterPattern}|[,.;]|$)`, 'i');
       const custMatch = input.match(custRegex1) || input.match(custRegex2);
       if (custMatch) {
-        searchTerm = custMatch[1].trim();
+        searchTerm = CustomerIntentHandler.extractCandidateCustomerName(custMatch[1].trim()) || custMatch[1].trim();
         state.customerName = searchTerm;
       } else if (input.trim().length >= 2 && !this.isOrderInitiationIntent(input)) {
-        searchTerm = input.trim();
+        searchTerm = CustomerIntentHandler.extractCandidateCustomerName(input.trim()) || input.trim();
         state.customerName = searchTerm;
       }
+    } else {
+      searchTerm = CustomerIntentHandler.extractCandidateCustomerName(searchTerm) || searchTerm;
+      state.customerName = searchTerm;
     }
 
     if (!searchTerm) {
@@ -729,7 +734,8 @@ export class ConversationalOrderWorkspace {
     state: GuidedOrderFlowState,
     identity: IdentityContext,
   ): Promise<WorkspaceTurnResult> {
-    const candidateName = state.newCustomerCandidate?.name || state.customerName || input.trim();
+    const rawCandidate = state.newCustomerCandidate?.name || state.customerName || input.trim();
+    const candidateName = CustomerIntentHandler.extractCandidateCustomerName(rawCandidate) || rawCandidate;
     const isAffirmative = /^(ya|ya,\s*daftarkan|daftarkan|setuju|lanjut|ok|yes|lanjutkan)$/i.test(input.trim());
 
     if (!isAffirmative) {
@@ -831,14 +837,13 @@ export class ConversationalOrderWorkspace {
       console.error('[ConversationalOrderWorkspace] Pre-flight check error:', checkErr);
     }
 
-    // Actor has customer:register or commercial:manage -> Register in md_entities
-    const cleanEntityCode = candidateName
-      .toUpperCase()
-      .replace(/\b(PT|CV|TBK|LTD|INC)\b/g, '')
-      .replace(/[^A-Z0-9]/g, '')
-      .substring(0, 6) || 'CUS';
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const generatedCode = `${cleanEntityCode}-${randomSuffix}`;
+    // Actor has customer:register or commercial:manage -> Register in md_entities with canonical server code
+    let generatedCode = `CUS-${new Date().getFullYear()}-0001`;
+    try {
+      generatedCode = await generateNextCustomerCode(identity.tenantId, getDb());
+    } catch (codeErr) {
+      console.error('[ConversationalOrderWorkspace] generateNextCustomerCode fallback:', codeErr);
+    }
 
     const { data: newCust, error: insertErr } = await (getDb() as any)
       .from('md_entities')
@@ -846,10 +851,13 @@ export class ConversationalOrderWorkspace {
         tenant_id: identity.tenantId,
         entity_code: generatedCode,
         name: candidateName,
+        legal_name: candidateName,
+        phone: null,
+        email: null,
         is_customer: true,
         is_active: true,
       })
-      .select('id, name, entity_code')
+      .select('id, name, legal_name, entity_code, phone, email, is_customer, is_active')
       .single();
 
     if (insertErr || !newCust) {

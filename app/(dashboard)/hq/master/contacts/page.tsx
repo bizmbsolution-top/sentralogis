@@ -712,7 +712,7 @@ export default function HQContactsPage() {
                                     {ent.logo_url ? (
                                       <img src={ent.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
                                     ) : (
-                                        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                                        <div aria-hidden="true" style={{ userSelect: 'none' }} className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400 select-none">
                                           {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
                                      </div>
                                      )}

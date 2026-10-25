@@ -94,10 +94,11 @@ export class IntentStage implements PipelineStage {
         (/\b(belum jalan|belum sebelum|belum tuntas|sedang berjalan|masih berjalan|in progress|ongoing|rejected|ditolak|cancelled|batal|completed|selesai)\b/i.test(normalizedUserInput) && !isFlowCancellation)
       );
 
+    const isCustomerSearch = CustomerIntentHandler.isCustomerSearchIntent(context.userInput);
     const shouldRouteToOrderWorkspace =
       isOrderInitiation ||
       isFlowCancellation ||
-      (Boolean(activeOrderFlow) && !isExplicitReadQuery);
+      (Boolean(activeOrderFlow) && !isExplicitReadQuery && !isCustomerSearch);
 
     if (context.identity && shouldRouteToOrderWorkspace) {
       try {

@@ -573,4 +573,103 @@ describe('Targeted: Customer Registration via Copilot', () => {
     // Entity count unchanged
     expect(mockEntities.length).toBe(initialCount);
   });
+
+  // 14. Hotfix P0: "nama pelanggan baru PT UJI COBA TRANSPORT" extracts exact name, canonical entity_code, null phone/email, and CUSTOMER role
+  it('14. "nama pelanggan baru PT UJI COBA TRANSPORT" extracts clean name "PT UJI COBA TRANSPORT" with canonical entity_code, null phone/email, and CUSTOMER party_role', async () => {
+    const convoId = 'convo-hotfix-uji-coba-transport';
+    const context = createTestContext(csIdentityA, convoId);
+
+    // Step 1: User sends "nama pelanggan baru PT UJI COBA TRANSPORT"
+    const r1 = await CopilotEngine.processCommand('nama pelanggan baru PT UJI COBA TRANSPORT', context, csIdentityA);
+    expect(r1.type).toBe('text');
+    expect(r1.content).toContain('Ringkasan Pra-Pendaftaran Customer Baru');
+    expect(r1.content).toContain('**PT UJI COBA TRANSPORT**');
+    expect(r1.content).not.toContain('**pelanggan baru PT UJI COBA TRANSPORT**');
+
+    // Step 2: User confirms with "YA"
+    const r2 = await CopilotEngine.processCommand('YA', context, csIdentityA);
+    expect(r2.type).toBe('text');
+    expect(r2.content).toContain('Customer baru berhasil didaftarkan ke data master');
+    expect(r2.content).toContain('**PT UJI COBA TRANSPORT**');
+
+    // Verify canonical record in md_entities
+    const created: any = mockEntities.find((e) => e.name === 'PT UJI COBA TRANSPORT');
+    expect(created).toBeDefined();
+    expect(created.name).toBe('PT UJI COBA TRANSPORT');
+    expect(created.name).not.toBe('P');
+    expect(created.name).not.toContain('pelanggan baru');
+    expect(created.legal_name).toBe('PT UJI COBA TRANSPORT');
+    expect(created.phone).toBeNull();
+    expect(created.phone).not.toBe('CUS');
+    expect(created.email).toBeNull();
+    expect(created.is_customer).toBe(true);
+    expect(created.is_active).toBe(true);
+    expect(created.entity_code).toMatch(/^CUS(-\d{4}-\d{4}|\/\d{3})$/);
+    expect(created.entity_code).not.toMatch(/^PELANG-/);
+
+    // Verify canonical party_roles record (never contains instruction phrase)
+    const roleAssigned = mockPartyRoles.find((pr) => pr.party_id === created.id);
+    expect(roleAssigned).toBeDefined();
+    expect(roleAssigned?.role_type).toBe('CUSTOMER');
+    expect(roleAssigned?.context_type).toBe('GLOBAL');
+    expect(roleAssigned?.tenant_id).toBe(TENANT_A);
+
+    // Verify API result payload structure matches Master Customer table contract
+    expect(r2.results).toBeDefined();
+    expect(r2.results?.[0]).toMatchObject({
+      id: created.id,
+      name: 'PT UJI COBA TRANSPORT',
+      legal_name: 'PT UJI COBA TRANSPORT',
+      entity_code: created.entity_code,
+      phone: null,
+      email: null,
+      is_customer: true,
+      is_active: true,
+    });
+  });
+
+  // 15. Hotfix P0: Deterministic parser normalizes various instruction prefixes and rejects single-char or instruction-only strings
+  it('15. extractCandidateCustomerName strips instruction prefixes and never returns "P" or instruction words', () => {
+    expect(CustomerIntentHandler.extractCandidateCustomerName('nama pelanggan baru PT UJI COBA TRANSPORT')).toBe('PT UJI COBA TRANSPORT');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('nama resmi pelanggan baru PT UJI COBA TRANSPORT')).toBe('PT UJI COBA TRANSPORT');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('daftarkan pelanggan baru dengan nama PT UJI COBA TRANSPORT')).toBe('PT UJI COBA TRANSPORT');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('buat customer baru bernama: PT UJI COBA TRANSPORT')).toBe('PT UJI COBA TRANSPORT');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('Ya, daftarkan pelanggan baru PT UJI COBA TRANSPORT')).toBe('PT UJI COBA TRANSPORT');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('nama pelanggan baru')).toBe('');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('pelanggan baru')).toBe('');
+    expect(CustomerIntentHandler.extractCandidateCustomerName('P')).toBe('');
+  });
+
+  // 16. Hotfix P0: "edit PT UJI COBA TRANSPORT" routes to customer search/edit, NOT new customer registration
+  it('16. Intent "edit PT UJI COBA TRANSPORT" routes to customer search/edit and never triggers new customer registration', async () => {
+    // Seed PT UJI COBA TRANSPORT in TENANT_A
+    mockEntities.push({
+      id: '2c15eeec-4054-460a-a03f-13c6f0880df3',
+      tenant_id: TENANT_A,
+      name: 'PT UJI COBA TRANSPORT',
+      legal_name: 'PT UJI COBA TRANSPORT',
+      entity_code: 'CUS/018',
+      is_customer: true,
+      is_active: true,
+    });
+
+    const convoId = 'convo-edit-intent-test';
+    const context = createTestContext(csIdentityA, convoId);
+    const countBefore = mockEntities.length;
+
+    expect(CustomerIntentHandler.isCustomerCreateIntent('edit PT UJI COBA TRANSPORT', csIdentityA, convoId)).toBe(false);
+    expect(CustomerIntentHandler.isCustomerSearchIntent('edit PT UJI COBA TRANSPORT')).toBe(true);
+
+    const res = await CopilotEngine.processCommand('edit PT UJI COBA TRANSPORT', context, csIdentityA);
+    expect(res.type).toBe('text');
+    expect(res.content).toContain('Ditemukan data customer master');
+    expect(res.content).toContain('PT UJI COBA TRANSPORT');
+    expect(res.content).toContain('CUS/018');
+    expect(res.content).toContain('2c15eeec-4054-460a-a03f-13c6f0880df3');
+    expect(res.content).toContain('/tenant/master/contacts');
+    expect(res.content).not.toContain('Ringkasan Pra-Pendaftaran Customer Baru');
+
+    // Ensure no new entity was created
+    expect(mockEntities.length).toBe(countBefore);
+  });
 });

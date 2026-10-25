@@ -487,25 +487,34 @@ if (otherAddresses.length > 0) {
                         {(ent as any).logo_url ? (
                           <img src={(ent as any).logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
                         ) : (
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">
+                          <div aria-hidden="true" style={{ userSelect: 'none' }} className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400 select-none">
                             {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
                           </div>
                         )}
                         <div>
                           <div className="font-medium text-slate-900">{ent.name}</div>
-                          <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
+                          {ent.legal_name && ent.legal_name !== ent.name && (
+                            <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
+                          )}
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {ent.is_customer && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase">CUS</span>}
+                        {(ent.is_customer || (ent as any).party_roles?.some((r: any) => r.role_type === 'CUSTOMER' && r.is_active !== false)) && (
+                          <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase">CUS</span>
+                        )}
                         {ent.is_supplier && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-bold rounded uppercase">SPP</span>}
                         {ent.is_vendor && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-bold rounded uppercase">VND {ent.vendor_type !== 'OTHER' && `(${ent.vendor_type})`}</span>}
                         {ent.is_broker && <span className="px-1.5 py-0.5 bg-slate-50 text-slate-600 text-[9px] font-bold rounded uppercase">BRO</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{ent.phone || ent.mobile || '-'}</td>
+                    <td className="px-4 py-4 text-slate-600">
+                      {(() => {
+                        const rawPhone = (ent.phone || ent.mobile || '').trim();
+                        return !rawPhone || /^(CUS|SPP|VND|BRO|CUSTOMER)$/i.test(rawPhone) ? '-' : rawPhone;
+                      })()}
+                    </td>
                     <td className="px-4 py-4 text-slate-600">{ent.email || '-'}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${ent.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>

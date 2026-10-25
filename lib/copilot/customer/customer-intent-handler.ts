@@ -20,6 +20,7 @@
 import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission, assertAnyPermission } from '@/lib/application/identity/resolver';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { generateNextCustomerCode } from '@/lib/actions/customer-master-actions';
 
 export interface CustomerHandlingResult {
   handled: boolean;
@@ -27,7 +28,17 @@ export interface CustomerHandlingResult {
   content: string;
   proposal?: any;
   status: 'SUCCESS' | 'BLOCKED' | 'NOT_FOUND' | 'REQUIRES_CLARIFICATION';
-  results?: Array<{ id: string; name: string; code?: string | null; is_active?: boolean }>;
+  results?: Array<{
+    id: string;
+    name: string;
+    legal_name?: string | null;
+    entity_code?: string | null;
+    code?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    is_customer?: boolean;
+    is_active?: boolean;
+  }>;
 }
 
 let _customerDbClient: any = null;
@@ -128,16 +139,84 @@ export class CustomerIntentHandler {
   }
 
   /**
-   * Evaluates if the user input expresses an intent to search customers.
+   * Normalizes and extracts the official customer name from a user instruction,
+   * ensuring instruction phrases like "nama pelanggan baru", "daftarkan customer baru",
+   * "bernama", etc. never leak into the canonical customer name or legal_name.
+   */
+  static extractCandidateCustomerName(input: string): string {
+    let clean = (input || '')
+      .trim()
+      .replace(/^[\s,.:;!?'"-]+|[\s,.:;!?'"-]+$/g, '')
+      .trim();
+
+    const prefixPatterns: RegExp[] = [
+      /^(?:ya,?\s*daftarkan|ya,?\s*simpan|ya,?\s*lanjut(?:kan)?|tolong|mohon|silakan|coba)\b[\s,.:;-]*/i,
+      /^(?:buat(?:kan)?|tambah(?:kan)?|daftarkan|daftar|registrasi(?:kan)?|bikin|simpan|input|masukkan)\b[\s,.:;-]*/i,
+      /^(?:data|entitas|master|akun|profil)\b[\s,.:;-]*/i,
+      /^(?:nama\s+resmi|nama\s+lengkap|nama\s+perusahaan|nama)\b[\s,.:;-]*/i,
+      /^(?:pelanggan|customer|klien|rekanan|mitra)\s+baru\b[\s,.:;-]*/i,
+      /^(?:pelanggan|customer|klien|rekanan|mitra)\b[\s,.:;-]*/i,
+      /^(?:baru|resmi)\b[\s,.:;-]*/i,
+      /^(?:dengan\s+nama|atas\s+nama|bernama|yaitu|adalah|sebagai|untuk)\b[\s,.:;-]*/i,
+    ];
+
+    let changed = true;
+    let safety = 0;
+    while (changed && safety < 15) {
+      changed = false;
+      safety++;
+      for (const pattern of prefixPatterns) {
+        const next = clean.replace(pattern, '').trim();
+        if (next !== clean) {
+          clean = next.replace(/^[\s,.:;!?'"-]+/, '').trim();
+          changed = true;
+        }
+      }
+    }
+
+    clean = clean.replace(/[\s,.:;!?'"-]+$/, '').trim();
+
+    if (
+      !clean ||
+      clean.length < 2 ||
+      /^(?:baru|pelanggan|customer|klien|nama|resmi|data|master|ya|ok|yes|setuju|lanjut|simpan)$/i.test(clean)
+    ) {
+      return '';
+    }
+
+    return clean;
+  }
+
+  /**
+   * Evaluates if the user input expresses an intent to search or edit customers.
    */
   static isCustomerSearchIntent(input: string): boolean {
     const trimmed = input.trim().toLowerCase();
-    
+
+    // Reject operational numbers or non-customer edit targets
+    if (/\b(job order|work order|sales order|shipment|invoice|jo|wo|so|shp|inv)\b/i.test(trimmed)) {
+      return false;
+    }
+
+    // Customer edit / lookup intent (e.g. "edit PT UJI COBA TRANSPORT", "edit pelanggan PT X", "ubah customer PT X")
+    if (
+      /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(?:data\s+)?(pelanggan|customer|klien)\b/i.test(trimmed) ||
+      /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(?:pt|cv|ud|tbk|ltd|inc)\b/i.test(trimmed)
+    ) {
+      return true;
+    }
+    if (/^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(.+)$/i.test(trimmed)) {
+      const m = trimmed.match(/^(?:tolong\s+|mohon\s+)?(?:edit|ubah|update|perbarui|koreksi)\s+(.+)$/i);
+      if (m && this.isStandaloneCustomerName(m[1].trim())) {
+        return true;
+      }
+    }
+
     // Explicit customer search phrasing
     if (
       /\b(cari|cek|lihat|temukan|daftar|list)\s+(pelanggan|customer|klien)\b/i.test(trimmed) ||
       /^(apakah\s+ada|ada)\s+(pelanggan|customer|klien)\b/i.test(trimmed) ||
-      /^(pelanggan|customer|klien)\s+/i.test(trimmed) ||
+      /^(pelanggan|customer|klien)\s+(?!baru\b)/i.test(trimmed) ||
       /^daftar\s+(pelanggan|customer)$/i.test(trimmed) ||
       /^customer$/i.test(trimmed) ||
       /^pelanggan$/i.test(trimmed)
@@ -164,6 +243,11 @@ export class CustomerIntentHandler {
       return false;
     }
 
+    // Must not be an edit/update/search intent (e.g. "edit PT UJI COBA TRANSPORT")
+    if (/^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi|cari|cek|lihat|temukan)\b/i.test(trimmed)) {
+      return false;
+    }
+
     // Check if there is a pending registration waiting for confirmation
     if (identity) {
       const pending = this.getPendingRegistration(identity, conversationId);
@@ -182,6 +266,7 @@ export class CustomerIntentHandler {
     return (
       /\b(ya,?\s*)?(buat|tambah|daftarkan|registrasi|bikin)\s+(pelanggan|customer|klien)\s+baru\b/i.test(trimmed) ||
       /\b(ya,?\s*)?(buat|tambah|daftarkan|registrasi|bikin)\s+(pelanggan|customer|klien)\b/i.test(trimmed) ||
+      /\bnama\s+(?:resmi\s+)?(pelanggan|customer|klien)\s+baru\b/i.test(trimmed) ||
       /\bya,?\s*daftarkan\b/i.test(trimmed) ||
       /\b(pelanggan|customer|klien)\s+baru\b/i.test(trimmed) ||
       /\bdaftarkan\s+(pelanggan|customer)\b/i.test(trimmed)
@@ -198,7 +283,7 @@ export class CustomerIntentHandler {
 
     // Reject operational numbers, commands, and keywords
     if (/^(jo|wo|so|shp|inv)[-_0-9]/i.test(trimmed)) return false;
-    if (/^(halo|hai|pagi|siang|sore|malam|batal|cancel|assign|ganti|tampilkan|lihat|cari|cek|status|buka|open|detail)\b/i.test(trimmed)) return false;
+    if (/^(halo|hai|pagi|siang|sore|malam|batal|cancel|assign|ganti|edit|ubah|update|perbarui|koreksi|tampilkan|lihat|cari|cek|status|buka|open|detail)\b/i.test(trimmed)) return false;
     if (/\b(job order|work order|sales order|shipment|invoice|driver|supir|truk|armada)\b/i.test(lower)) return false;
 
     // Corporate entity prefixes (PT, CV, UD, TBK, LTD, INC)
@@ -224,14 +309,15 @@ export class CustomerIntentHandler {
   }
 
   /**
-   * Extracts search term from customer search query.
+   * Extracts search term from customer search or edit query.
    */
   static extractSearchTerm(input: string): string {
     const clean = input.trim()
       .replace(/^[\s,.;!?-]+|[\s,.;!?-]+$/g, '')
-      .replace(/^(apakah\s+ada|tolong\s+)?(cari|cek|lihat|temukan|daftar)\s+(pelanggan|customer|klien)\s*/i, '')
-      .replace(/^(pelanggan|customer|klien)\s*/i, '')
-      .replace(/^(apakah\s+ada)\s+(pelanggan|customer|klien)\s*/i, '')
+      .replace(/^(?:apakah\s+ada|tolong|mohon)\s+/i, '')
+      .replace(/^(?:cari|cek|lihat|temukan|daftar|edit|ubah|update|perbarui|koreksi)\s+(?:data\s+)?(?:pelanggan|customer|klien)?\s*(?:baru\s+)?/i, '')
+      .replace(/^(?:pelanggan|customer|klien)\s*(?:baru\s+)?/i, '')
+      .replace(/^(?:apakah\s+ada)\s+(?:pelanggan|customer|klien)\s*/i, '')
       .replace(/\?+$/, '')
       .trim();
 
@@ -239,7 +325,7 @@ export class CustomerIntentHandler {
   }
 
   /**
-   * Handles customer search queries.
+   * Handles customer search and customer edit lookup queries.
    */
   static async handleCustomerSearch(
     input: string,
@@ -262,6 +348,7 @@ export class CustomerIntentHandler {
       };
     }
 
+    const isEditRequest = /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\b/i.test(input.trim());
     const term = this.extractSearchTerm(input);
     const cleanCore = term
       .replace(/^(PT|CV|UD|TBK|LTD|INC)\.?\s+/i, '')
@@ -272,7 +359,7 @@ export class CustomerIntentHandler {
 
     let query = db
       .from('md_entities')
-      .select('id, name, entity_code, legal_name, is_active')
+      .select('id, name, entity_code, legal_name, phone, email, is_customer, is_active')
       .eq('tenant_id', identity.tenantId);
 
     if (term.length > 0) {
@@ -307,7 +394,7 @@ export class CustomerIntentHandler {
         content:
           `Customer **${displayTerm}** tidak ditemukan pada data master.\n\n` +
           `Apakah Anda ingin mendaftarkan customer baru atau mencari dengan kata kunci lain?\n\n` +
-          `- [Buka Form Buat Sales Order](/commercial/sales-orders/create) • [Buka Master Kontak](/hq/master/contacts)`,
+          `- [Buka Form Buat Sales Order](/commercial/sales-orders/create) • [Buka Master Kontak](/tenant/master/contacts) • [Master Kontak HQ](/hq/master/contacts)`,
         results: [],
       };
     }
@@ -317,6 +404,10 @@ export class CustomerIntentHandler {
       const c = rows[0];
       const statusLabel = c.is_active !== false ? 'AKTIF' : 'NON-AKTIF';
       const codeLabel = c.entity_code ? ` (Kode: \`${c.entity_code}\`)` : '';
+      const legalLine = c.legal_name ? `  - Nama Resmi: **${c.legal_name}**\n` : '';
+      const editGuidance = isEditRequest
+        ? `*Untuk memperbarui data resmi, NPWP, alamat, atau kontak PIC customer **${c.name}**, silakan buka [Master Customer](/tenant/master/contacts) atau [Master Kontak HQ](/hq/master/contacts).*`
+        : `*Apakah Anda ingin membuat pesanan atau memperbarui data customer ini?*`;
       return {
         handled: true,
         type: 'text',
@@ -324,10 +415,11 @@ export class CustomerIntentHandler {
         content:
           `Ditemukan data customer master:\n\n` +
           `- **${c.name}**${codeLabel}\n` +
+          legalLine +
           `  - ID Kanonik: \`${c.id}\`\n` +
           `  - Status: **${statusLabel}**\n\n` +
-          `*Apakah Anda ingin membuat pesanan untuk customer ini?*\n` +
-          `Ketik **"buat order untuk ${c.name}"** atau buka [Form Buat Sales Order](/commercial/sales-orders/create?customerId=${c.id}&customer=${encodeURIComponent(c.name)}).`,
+          `${editGuidance}\n` +
+          `Ketik **"buat order untuk ${c.name}"**, buka [Form Buat Sales Order](/commercial/sales-orders/create?customerId=${c.id}&customer=${encodeURIComponent(c.name)}), atau [Edit di Master Customer](/tenant/master/contacts).`,
         results: rows,
       };
     }
@@ -344,7 +436,7 @@ export class CustomerIntentHandler {
       content:
         `Ditemukan **${rows.length}** customer pada data master:\n\n` +
         `${listItems}\n\n` +
-        `*Silakan sebutkan nama lengkap customer untuk memilih atau memulai pembuatan order.*`,
+        `*Silakan sebutkan nama lengkap customer untuk memilih, melihat detail, atau memulai pembuatan order.*`,
       results: rows,
     };
   }
@@ -503,28 +595,25 @@ export class CustomerIntentHandler {
       };
     }
 
-    // 2. Extract potential candidate name from input or retrieve from pending session
-    const clean = trimmedInput
-      .replace(/^(ya,?\s*daftarkan|buat|tambah|daftarkan|registrasi|bikin)\s+(?:pelanggan|customer|klien)?\s*(?:baru\s+)?/i, '')
-      .replace(/^(pelanggan|customer|klien)\s+baru\s*/i, '')
-      .replace(/^nama\s+(?:resmi\s+)?(?:customer\s+)?/i, '')
-      .replace(/\?+$/, '')
-      .trim();
+    // 2. Extract and normalize candidate name from input or retrieve from pending session
+    const clean = this.extractCandidateCustomerName(trimmedInput);
 
     // Check if input is an affirmative confirmation command like "Ya, daftarkan PT XYZ", or simple "YA" / "setuju"
     const isAffirmative = /^(ya,?\s*daftarkan|ya\b|setuju\b|konfirmasi\b|ok\b|yes\b|simpan\b|lanjut\b|lanjutkan\b)/i.test(trimmedInput);
     let candidateName = '';
 
     if (isAffirmative) {
-      const remainder = trimmedInput
-        .replace(/^(ya,?\s*daftarkan|ya\b|setuju\b|konfirmasi\b|ok\b|yes\b|simpan\b|lanjut\b|lanjutkan\b)\s*(?:customer|pelanggan)?\s*(?:baru)?\s*/i, '')
+      const remainderRaw = trimmedInput
+        .replace(/^(ya,?\s*daftarkan|ya\b|setuju\b|konfirmasi\b|ok\b|yes\b|simpan\b|lanjut\b|lanjutkan\b)\s*/i, '')
         .trim();
-      candidateName = remainder || (pending ? pending.candidateName : '');
+      const remainderClean = this.extractCandidateCustomerName(remainderRaw);
+      const pendingClean = pending ? this.extractCandidateCustomerName(pending.candidateName) || pending.candidateName : '';
+      candidateName = remainderClean || pendingClean;
     } else {
       candidateName = clean;
     }
 
-    if (!candidateName || candidateName.toLowerCase() === 'baru') {
+    if (!candidateName || candidateName.length < 2 || candidateName.toLowerCase() === 'baru') {
       return {
         handled: true,
         type: 'text',
@@ -540,7 +629,7 @@ export class CustomerIntentHandler {
     try {
       const { data: existingEntities } = await db
         .from('md_entities')
-        .select('id, name, entity_code, is_active')
+        .select('id, name, legal_name, entity_code, phone, email, is_customer, is_active')
         .eq('tenant_id', identity.tenantId)
         .ilike('name', candidateName)
         .limit(1);
@@ -588,13 +677,12 @@ export class CustomerIntentHandler {
 
     // If confirmation is given ("Ya, daftarkan [Nama]" or "YA" with pending registration):
     if (isAffirmative && candidateName.length >= 3) {
-      const cleanEntityCode = candidateName
-        .toUpperCase()
-        .replace(/\b(PT|CV|TBK|LTD|INC)\b/g, '')
-        .replace(/[^A-Z0-9]/g, '')
-        .substring(0, 6) || 'CUS';
-      const randomSuffix = Math.floor(100 + Math.random() * 900);
-      const generatedCode = `${cleanEntityCode}-${randomSuffix}`;
+      let generatedCode = `CUS-${new Date().getFullYear()}-0001`;
+      try {
+        generatedCode = await generateNextCustomerCode(identity.tenantId, db);
+      } catch (codeErr) {
+        console.error('[CustomerIntentHandler] generateNextCustomerCode fallback:', codeErr);
+      }
 
       let createdEntity: any = null;
       let insertError: any = null;
@@ -606,10 +694,13 @@ export class CustomerIntentHandler {
             tenant_id: identity.tenantId,
             entity_code: generatedCode,
             name: candidateName,
+            legal_name: candidateName,
+            phone: null,
+            email: null,
             is_customer: true,
             is_active: true,
           })
-          .select('id, name, entity_code, is_active')
+          .select('id, name, legal_name, entity_code, phone, email, is_customer, is_active')
           .single();
 
         createdEntity = data;
@@ -660,7 +751,7 @@ export class CustomerIntentHandler {
           `Customer kini siap digunakan untuk transaksi operasional dan pesanan penjualan (Sales Order).\n\n` +
           `**Langkah Selanjutnya:**\n` +
           `Apakah Anda ingin lanjut membuat Sales Order untuk customer ini? Ketik *"buat order baru untuk ${createdEntity.name}"* atau ketik *"selesai"* jika hanya mendaftarkan customer.\n\n` +
-          `[Buka Form Buat Sales Order](/commercial/sales-orders/create?customerId=${createdEntity.id}&customer=${encodeURIComponent(createdEntity.name)}) • [Buka Master Kontak](/hq/master/contacts)`,
+          `[Buka Form Buat Sales Order](/commercial/sales-orders/create?customerId=${createdEntity.id}&customer=${encodeURIComponent(createdEntity.name)}) • [Buka Master Kontak](/tenant/master/contacts)`,
         results: [createdEntity],
       };
     }
