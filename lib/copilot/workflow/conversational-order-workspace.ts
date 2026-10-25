@@ -194,6 +194,7 @@ export class ConversationalOrderWorkspace {
    */
   static resetAllSessions(): void {
     sessionStore.clear();
+    CustomerIntentHandler.resetPendingRegistrations();
   }
 
   /**
@@ -348,7 +349,7 @@ export class ConversationalOrderWorkspace {
 
     // Customer (supports "Customer: PT TRADING PERDANA SUKSES (TPS)")
     const corpPrefix = '(?:PT|CV|UD|TBK|LTD|INC)\\.?';
-    const custDelimiter = '(?:trucking|warehouse|clearance|forwarding|layanan|service|muatan|barang|kargo|dengan|via|tujuan|asal|ke|dari|nilai|rp|idr|tanggal|tgl|draft|confirm|lanjut|sbu)';
+    const custDelimiter = '(?:trucking|warehouse|clearance|forwarding|layanan|service|muatan|barang|kargo|dengan|via|tujuan|asal|ke|dari|nilai|rp|idr|tanggal|tgl|draft|confirm|lanjut|sbu)\\b';
     const custMatch =
       input.match(new RegExp(`(?:customer|pelanggan|untuk|atas nama)\\s*:\\s*([^,.;\\n]+?)(?=\\s+${custDelimiter}|[,.;\\n]|$)`, 'i')) ||
       input.match(new RegExp(`(?:customer|pelanggan|untuk|atas nama)\\s+(${corpPrefix}\\s+[^,.;\\n]+?)(?=\\s+${custDelimiter}|[,.;\\n]|$)`, 'i')) ||
@@ -406,6 +407,78 @@ export class ConversationalOrderWorkspace {
     state: GuidedOrderFlowState,
     identity: IdentityContext,
   ): Promise<WorkspaceTurnResult> {
+    // 0. Check if user is correcting the name of a just-confirmed customer in this active order session
+    const isNameCorrection =
+      state.customerId &&
+      state.customerId !== 'TEMP_UNCOMMITTED_CUSTOMER' &&
+      state.step !== 'CUSTOMER_SELECTION' &&
+      state.step !== 'CUSTOMER_REGISTRATION' &&
+      (/^(?:maaf[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi)\s+nama(?:\s+(?:pelanggan|customer|klien))?\b/i.test(input.trim()) ||
+        /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit)\s+nama\s+(?:pelanggan|customer|klien)/i.test(input.trim()));
+
+    if (isNameCorrection && state.customerId) {
+      let hasRenameAuth = false;
+      try {
+        assertAnyPermission(identity, ['commercial:manage', 'customer:register']);
+        hasRenameAuth = true;
+      } catch {
+        hasRenameAuth = false;
+      }
+
+      if (!hasRenameAuth) {
+        return {
+          handled: true,
+          state,
+          responseText: `Akses ditolak: Koreksi nama Customer pada data master memerlukan izin 'customer:register' atau 'commercial:manage'.`,
+        };
+      }
+
+      const menjadiMatch = input.trim().match(/\b(?:menjadi|jadi|seharusnya|harusnya|yang\s+benar|maksud\s+saya)\s*[:,-]?\s*(.+)$/i);
+      const rawNew = menjadiMatch ? menjadiMatch[1] : input.trim();
+      const correctedName = CustomerIntentHandler.extractCandidateCustomerName(rawNew);
+
+      if (correctedName && correctedName.length >= 2) {
+        const previousName = state.customerName;
+        try {
+          const updateChain = (getDb() as any)
+            .from('md_entities')
+            .update({
+              name: correctedName,
+              legal_name: correctedName,
+            })
+            .eq('id', state.customerId)
+            .eq('tenant_id', identity.tenantId);
+          if (typeof updateChain.select === 'function') {
+            await updateChain.select();
+          } else {
+            await updateChain;
+          }
+        } catch (err) {
+          console.error('[ConversationalOrderWorkspace] Customer name correction update error:', err);
+        }
+
+        state.customerName = correctedName;
+        CustomerIntentHandler.saveLastRegisteredCustomer(identity, {
+          id: state.customerId,
+          name: correctedName,
+          entity_code: state.customerCode || null,
+        });
+
+        return {
+          handled: true,
+          state,
+          responseText:
+            `Koreksi nama customer berhasil disimpan pada entitas yang sama (ID: \`${state.customerId}\`, tanpa membuat duplikat):\n` +
+            `- **Nama Sebelumnya:** ~~${previousName}~~\n` +
+            `- **Nama Resmi Baru:** **${correctedName}**\n\n` +
+            (!state.sbuType
+              ? `Silakan lanjutkan memilih jenis layanan/SBU (**Trucking**, **Warehouse**, **Clearance**, atau **Forwarding**).`
+              : `Draft Sales Order telah diperbarui menggunakan nama **${correctedName}**. Silakan lanjutkan pengisian detail order atau konfirmasi simpan.`),
+          actionRequired: !state.sbuType ? 'CHOOSE_SERVICE' : 'PROVIDE_DETAILS',
+        };
+      }
+    }
+
     // Check for inline additions and corrections at any point
     this.extractInlineFields(input, state);
     this.handleInlineCorrections(input, state);
@@ -536,7 +609,7 @@ export class ConversationalOrderWorkspace {
     // If customerName is known or provided in input, search md_entities
     let searchTerm = state.customerName;
     if (!searchTerm) {
-      const delimiterPattern = '(?:trucking|warehouse|clearance|forwarding|layanan|service|muatan|barang|kargo|dengan|via|tujuan|asal|ke|dari|nilai|rp\\.?|idr|tanggal|tgl|draft|confirm|lanjut|$)';
+      const delimiterPattern = '(?:(?:trucking|warehouse|clearance|forwarding|layanan|service|muatan|barang|kargo|dengan|via|tujuan|asal|ke|dari|nilai|rp\\.?|idr|tanggal|tgl|draft|confirm|lanjut)\\b|$)';
       const custRegex1 = new RegExp(`(?:customer|pelanggan|untuk|atas nama)\\s+((?:PT|CV)\\s+[A-Za-z0-9\\s.,-]+|[A-Za-z0-9\\s._-]{3,35}?)(?=\\s+${delimiterPattern}|[,.;]|$)`, 'i');
       const custRegex2 = new RegExp(`\\b((?:PT|CV)\\s+[A-Za-z0-9\\s.]{3,30}?)(?=\\s+${delimiterPattern}|[,.;]|$)`, 'i');
       const custMatch = input.match(custRegex1) || input.match(custRegex2);
@@ -734,12 +807,14 @@ export class ConversationalOrderWorkspace {
     state: GuidedOrderFlowState,
     identity: IdentityContext,
   ): Promise<WorkspaceTurnResult> {
-    const rawCandidate = state.newCustomerCandidate?.name || state.customerName || input.trim();
-    const candidateName = CustomerIntentHandler.extractCandidateCustomerName(rawCandidate) || rawCandidate;
     const isAffirmative = /^(ya|ya,\s*daftarkan|daftarkan|setuju|lanjut|ok|yes|lanjutkan)$/i.test(input.trim());
+    const inputExtracted = !isAffirmative ? CustomerIntentHandler.extractCandidateCustomerName(input.trim()) : '';
+    const rawCandidate = inputExtracted || state.newCustomerCandidate?.name || state.customerName || input.trim();
+    const candidateName = CustomerIntentHandler.extractCandidateCustomerName(rawCandidate) || rawCandidate;
 
     if (!isAffirmative) {
       state.newCustomerCandidate = { name: candidateName };
+      state.customerName = candidateName;
       // Check if candidate duplicates any existing entity
       const token = candidateName
         .replace(/\b(PT|CV|UD|TBK|LTD|INC)\b/gi, '')
@@ -886,9 +961,11 @@ export class ConversationalOrderWorkspace {
 
     state.customerId = newCust.id;
     state.customerName = newCust.name;
+    state.customerCode = newCust.entity_code || null;
     state.customerIsNew = true;
     state.newCustomerCandidate = undefined;
     state.step = !state.sbuType ? 'SERVICE_SELECTION' : 'ORDER_DETAILS';
+    CustomerIntentHandler.saveLastRegisteredCustomer(identity, newCust);
 
     return {
       handled: true,

@@ -94,7 +94,8 @@ export class IntentStage implements PipelineStage {
         (/\b(belum jalan|belum sebelum|belum tuntas|sedang berjalan|masih berjalan|in progress|ongoing|rejected|ditolak|cancelled|batal|completed|selesai)\b/i.test(normalizedUserInput) && !isFlowCancellation)
       );
 
-    const isCustomerSearch = CustomerIntentHandler.isCustomerSearchIntent(context.userInput);
+    const isCustomerCorrection = CustomerIntentHandler.isCustomerCorrectionIntent(context.userInput, context.identity || undefined, conversationId);
+    const isCustomerSearch = CustomerIntentHandler.isCustomerSearchIntent(context.userInput) && !isCustomerCorrection;
     const shouldRouteToOrderWorkspace =
       isOrderInitiation ||
       isFlowCancellation ||
@@ -135,6 +136,20 @@ export class IntentStage implements PipelineStage {
     }
 
 
+
+    // 2D. Customer Name Correction Intent ("salah nama, seharusnya PT X", "koreksi nama pelanggan X menjadi Y", etc.)
+    if (context.identity && CustomerIntentHandler.isCustomerCorrectionIntent(context.userInput, context.identity, conversationId)) {
+      const corrRes = await CustomerIntentHandler.handleCustomerCorrection(context.userInput, context.identity, conversationId);
+      context.finalResponse = {
+        type: corrRes.type,
+        content: corrRes.content,
+        proposal: corrRes.proposal,
+        results: corrRes.results,
+        metrics: undefined as any,
+      };
+      const status = corrRes.status === 'BLOCKED' ? PipelineStatus.BLOCKED : PipelineStatus.SUCCESS;
+      return { status };
+    }
 
     // 2E. Customer Creation Intent ("buat pelanggan baru", "daftarkan customer", etc.)
     if (context.identity && CustomerIntentHandler.isCustomerCreateIntent(context.userInput, context.identity, conversationId)) {

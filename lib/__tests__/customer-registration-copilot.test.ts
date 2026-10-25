@@ -225,6 +225,23 @@ describe('Targeted: Customer Registration via Copilot', () => {
               then: (resolve: any) => Promise.resolve({ data: row, error: null }).then(resolve),
             };
           },
+          update: (patch: any) => ({
+            eq: (col1: string, val1: any) => ({
+              eq: (col2: string, val2: any) => {
+                const applyUpdate = () => {
+                  const found = rows.find((r: any) => r[col1] === val1 && r[col2] === val2);
+                  if (found) {
+                    Object.assign(found, patch, { updated_at: new Date().toISOString() });
+                  }
+                  return found ? [found] : [];
+                };
+                return {
+                  select: async () => ({ data: applyUpdate(), error: null }),
+                  then: (resolve: any) => Promise.resolve({ data: applyUpdate(), error: null }).then(resolve),
+                };
+              },
+            }),
+          }),
         };
       },
     };
@@ -671,5 +688,142 @@ describe('Targeted: Customer Registration via Copilot', () => {
 
     // Ensure no new entity was created
     expect(mockEntities.length).toBe(countBefore);
+  });
+
+  // 17. Hotfix P0 (Business Verification): Post-confirmation customer name correction updates existing entity in place (no duplicate)
+  it('17. When user corrects a customer name after confirmation, Copilot updates the existing entity in place without creating a duplicate', async () => {
+    const convoId = 'convo-post-confirm-correction';
+    const context = createTestContext(csIdentityA, convoId);
+    const countBefore = mockEntities.length;
+
+    // Turn 1: User registers customer with wrong name
+    await CopilotEngine.processCommand('nama pelanggan baru PT UJI COBA SALAH', context, csIdentityA);
+    // Turn 2: User confirms registration
+    const rConfirm = await CopilotEngine.processCommand('YA', context, csIdentityA);
+    expect(rConfirm.content).toContain('Customer baru berhasil didaftarkan');
+    expect(mockEntities.length).toBe(countBefore + 1);
+
+    const createdBefore = mockEntities.find((e) => e.name === 'PT UJI COBA SALAH');
+    expect(createdBefore).toBeDefined();
+    const canonicalId = createdBefore!.id;
+    const canonicalCode = createdBefore!.entity_code;
+
+    // Turn 3: User corrects the confirmed customer name
+    const rCorrect = await CopilotEngine.processCommand(
+      'maaf salah nama, seharusnya PT UJI COBA TRANSPORT',
+      context,
+      csIdentityA,
+    );
+    expect(rCorrect.type).toBe('text');
+    expect(rCorrect.content).toContain('Koreksi nama customer berhasil disimpan pada entitas yang sama');
+    expect(rCorrect.content).toContain('**PT UJI COBA TRANSPORT**');
+    expect(rCorrect.content).toContain(canonicalId);
+
+    // Must NOT create a duplicate entity
+    expect(mockEntities.length).toBe(countBefore + 1);
+    const updated: any = mockEntities.find((e) => e.id === canonicalId);
+    expect(updated).toBeDefined();
+    expect(updated.name).toBe('PT UJI COBA TRANSPORT');
+    expect(updated.legal_name).toBe('PT UJI COBA TRANSPORT');
+    expect(updated.entity_code).toBe(canonicalCode);
+    expect(updated.phone).toBeNull();
+    expect(updated.email).toBeNull();
+    expect(updated.is_customer).toBe(true);
+    expect(mockEntities.find((e) => e.name === 'PT UJI COBA SALAH')).toBeUndefined();
+  });
+
+  // 18. Hotfix P0 (Business Verification): Pre-confirmation draft correction updates candidate without duplicate
+  it('18. Correcting customer name during pre-registration review updates draft candidate before commit', async () => {
+    const convoId = 'convo-pre-confirm-correction';
+    const context = createTestContext(csIdentityA, convoId);
+    const countBefore = mockEntities.length;
+
+    // Turn 1: Initial draft with typo
+    const r1 = await CopilotEngine.processCommand('daftarkan pelanggan baru PT UJI COBA TYPO', context, csIdentityA);
+    expect(r1.content).toContain('PT UJI COBA TYPO');
+    expect(mockEntities.length).toBe(countBefore);
+
+    // Turn 2: User corrects draft before confirming
+    const r2 = await CopilotEngine.processCommand('ralat nama pelanggan menjadi PT UJI COBA TRANSPORT', context, csIdentityA);
+    expect(r2.content).toContain('Nama Dikoreksi');
+    expect(r2.content).toContain('**PT UJI COBA TRANSPORT**');
+    expect(mockEntities.length).toBe(countBefore);
+
+    // Turn 3: User confirms "YA"
+    const r3 = await CopilotEngine.processCommand('YA', context, csIdentityA);
+    expect(r3.content).toContain('Customer baru berhasil didaftarkan');
+    expect(r3.content).toContain('**PT UJI COBA TRANSPORT**');
+    expect(mockEntities.length).toBe(countBefore + 1);
+    expect(mockEntities.find((e) => e.name === 'PT UJI COBA TYPO')).toBeUndefined();
+    expect(mockEntities.find((e) => e.name === 'PT UJI COBA TRANSPORT')).toBeDefined();
+  });
+
+  // 19. Hotfix P0 (Business Verification): Correction inside active Order Workspace updates entity + order draft and enforces SO confirmation gate
+  it('19. Correcting confirmed customer name inside Guided Order Workspace updates entity and draft in place, and only creates SO after explicit Simpan', async () => {
+    const convoId = 'convo-order-workspace-correction';
+    const context = createTestContext(csIdentityA, convoId);
+    const countBefore = mockEntities.length;
+
+    // Turn 1: Initiate order for unregistered customer with typo
+    await CopilotEngine.processCommand('buat order baru untuk PT UJI COBA KELIRU', context, csIdentityA);
+    // Turn 2: Confirm customer registration
+    const rReg = await CopilotEngine.processCommand('Ya, daftarkan', context, csIdentityA);
+    expect(rReg.content).toContain('PT UJI COBA KELIRU');
+    expect(mockEntities.length).toBe(countBefore + 1);
+    const registeredId = mockEntities.find((e) => e.name === 'PT UJI COBA KELIRU')!.id;
+
+    // Turn 3: User corrects customer name while in SERVICE_SELECTION step
+    const rCorr = await CopilotEngine.processCommand(
+      'ralat nama customer menjadi PT UJI COBA TRANSPORT',
+      context,
+      csIdentityA,
+    );
+    expect(rCorr.content).toContain('Koreksi nama customer berhasil disimpan pada entitas yang sama');
+    expect(rCorr.content).toContain(registeredId);
+    expect(rCorr.content).toContain('**PT UJI COBA TRANSPORT**');
+
+    // No duplicate customer created, and no Sales Order created yet
+    expect(mockEntities.length).toBe(countBefore + 1);
+    expect(mockEntities.find((e) => e.id === registeredId)?.name).toBe('PT UJI COBA TRANSPORT');
+    expect(mockSalesOrders.length).toBe(0);
+
+    // Turn 4 & 5: Select service and provide order details -> REVIEW gate (EXECUTE: OFF)
+    await CopilotEngine.processCommand('Trucking', context, csIdentityA);
+    const rReview = await CopilotEngine.processCommand(
+      'dari Jakarta ke Surabaya muatan 2 kontainer 20ft nilai 12 juta',
+      context,
+      csIdentityA,
+    );
+    expect(rReview.content).toContain('Ringkasan Sales Order (EXECUTE: OFF)');
+    expect(rReview.content).toContain('PT UJI COBA TRANSPORT');
+    expect(mockSalesOrders.length).toBe(0);
+
+    // Turn 6: Explicit Simpan confirmation creates Draft SO bound to the same canonical customer ID
+    const rSave = await CopilotEngine.processCommand('Simpan', context, csIdentityA);
+    expect(rSave.content).toContain('Sales Order Berhasil Dibuat!');
+    expect(mockSalesOrders.length).toBe(1);
+    expect(mockEngagements[0].customer_id).toBe(registeredId);
+  });
+
+  // 20. Hotfix P0 (Security Verification): Role authorization and tenant isolation enforced on customer name correction
+  it('20. Customer name correction enforces role permission and strict tenant isolation', async () => {
+    const contextGround = createTestContext(groundStaffIdentityA, 'convo-unauth-corr');
+    const rBlocked = await CopilotEngine.processCommand(
+      'koreksi nama pelanggan PT TRADING PERDANA SUKSES menjadi PT HACKED',
+      contextGround,
+      groundStaffIdentityA,
+    );
+    expect(rBlocked.content).toContain('Akses ditolak');
+    expect(mockEntities.find((e) => e.id === 'cust-uuid-tps')?.name).toBe('PT TRADING PERDANA SUKSES');
+
+    // Cross-tenant attempt by authorized user in TENANT_A targeting TENANT_B entity
+    const contextCsA = createTestContext(csIdentityA, 'convo-cross-tenant-corr');
+    const rNotFound = await CopilotEngine.processCommand(
+      'koreksi nama pelanggan PT LAUTAN MANDIRI BETA menjadi PT HACKED BETA',
+      contextCsA,
+      csIdentityA,
+    );
+    expect(rNotFound.content).toContain('tidak ditemukan');
+    expect(mockEntities.find((e) => e.id === 'cust-uuid-b')?.name).toBe('PT LAUTAN MANDIRI BETA');
   });
 });

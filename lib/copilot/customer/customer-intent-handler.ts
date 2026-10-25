@@ -52,8 +52,17 @@ export interface PendingCustomerRegistration {
   lastUpdated: number;
 }
 
+export interface LastRegisteredCustomer {
+  id: string;
+  name: string;
+  entity_code: string | null;
+  lastUpdated: number;
+}
+
 // In-memory pending registrations cache keyed by tenantId:userId:conversationId
 const pendingRegistrations = new Map<string, PendingCustomerRegistration>();
+// In-memory last registered customer cache keyed by tenantId:userId:conversationId
+const lastRegisteredCustomers = new Map<string, LastRegisteredCustomer>();
 
 function getPendingKey(identity: IdentityContext, conversationId?: string): string {
   const cId = (!conversationId || conversationId === 'default' || conversationId === 'default-session') ? 'default' : conversationId;
@@ -100,6 +109,43 @@ export class CustomerIntentHandler {
    */
   static resetPendingRegistrations(): void {
     pendingRegistrations.clear();
+    lastRegisteredCustomers.clear();
+  }
+
+  /**
+   * Retrieves the most recently confirmed customer registration for this session.
+   */
+  static getLastRegisteredCustomer(identity: IdentityContext, conversationId?: string): LastRegisteredCustomer | null {
+    const key = getPendingKey(identity, conversationId);
+    let last = lastRegisteredCustomers.get(key);
+    if (!last) {
+      last = lastRegisteredCustomers.get(`${identity.tenantId}:${identity.userId}:default`);
+    }
+    if (last && Date.now() - last.lastUpdated > 30 * 60 * 1000) {
+      lastRegisteredCustomers.delete(key);
+      lastRegisteredCustomers.delete(`${identity.tenantId}:${identity.userId}:default`);
+      return null;
+    }
+    return last || null;
+  }
+
+  /**
+   * Saves the most recently confirmed customer registration for this session.
+   */
+  static saveLastRegisteredCustomer(
+    identity: IdentityContext,
+    customer: { id: string; name: string; entity_code?: string | null },
+    conversationId?: string,
+  ): void {
+    const item: LastRegisteredCustomer = {
+      id: customer.id,
+      name: customer.name,
+      entity_code: customer.entity_code || null,
+      lastUpdated: Date.now(),
+    };
+    const key = getPendingKey(identity, conversationId);
+    lastRegisteredCustomers.set(key, item);
+    lastRegisteredCustomers.set(`${identity.tenantId}:${identity.userId}:default`, item);
   }
 
   /**
@@ -150,14 +196,16 @@ export class CustomerIntentHandler {
       .trim();
 
     const prefixPatterns: RegExp[] = [
-      /^(?:ya,?\s*daftarkan|ya,?\s*simpan|ya,?\s*lanjut(?:kan)?|tolong|mohon|silakan|coba)\b[\s,.:;-]*/i,
+      /^(?:ya,?\s*daftarkan|ya,?\s*simpan|ya,?\s*lanjut(?:kan)?|tolong|mohon|silakan|coba|maaf)\b[\s,.:;-]*/i,
+      /^(?:salah(?:\s+nama)?|bukan|keliru|ralat|koreksi|revisi|ganti|ubah|edit|perbarui)\b[\s,.:;-]*/i,
       /^(?:buat(?:kan)?|tambah(?:kan)?|daftarkan|daftar|registrasi(?:kan)?|bikin|simpan|input|masukkan)\b[\s,.:;-]*/i,
       /^(?:data|entitas|master|akun|profil)\b[\s,.:;-]*/i,
-      /^(?:nama\s+resmi|nama\s+lengkap|nama\s+perusahaan|nama)\b[\s,.:;-]*/i,
+      /^(?:nama\s+resmi|nama\s+lengkap|nama\s+perusahaan|nama\s+yang\s+benar|nama\s+seharusnya|nama)\b[\s,.:;-]*/i,
       /^(?:pelanggan|customer|klien|rekanan|mitra)\s+baru\b[\s,.:;-]*/i,
       /^(?:pelanggan|customer|klien|rekanan|mitra)\b[\s,.:;-]*/i,
-      /^(?:baru|resmi)\b[\s,.:;-]*/i,
-      /^(?:dengan\s+nama|atas\s+nama|bernama|yaitu|adalah|sebagai|untuk)\b[\s,.:;-]*/i,
+      /^(?:tadi|barusan|sebelumnya|baru|resmi)\b[\s,.:;-]*/i,
+      /^(?:yang\s+benar|seharusnya|harusnya|maksud\s+saya|maksudnya)\b[\s,.:;-]*/i,
+      /^(?:dengan\s+nama|atas\s+nama|bernama|menjadi|jadi|ke|yaitu|adalah|sebagai|untuk)\b[\s,.:;-]*/i,
     ];
 
     let changed = true;
@@ -735,8 +783,9 @@ export class CustomerIntentHandler {
         };
       }
 
-      // Clear pending candidate on success
+      // Clear pending candidate and record as last registered customer for potential post-confirm correction
       this.clearPendingRegistration(identity, conversationId);
+      this.saveLastRegisteredCustomer(identity, createdEntity, conversationId);
 
       return {
         handled: true,
@@ -776,6 +825,258 @@ export class CustomerIntentHandler {
         `- **Tenant Otorisasi:** \`${identity.tenantId.slice(0, 8)}...\`\n` +
         `- **Wewenang Pembuat:** Role \`${identity.role}\` (Disetujui)\n\n` +
         `Ketik **"Ya, daftarkan ${candidateName}"** atau ketik **"YA"** untuk menyimpan entitas customer secara resmi ke database master, atau ketik **"batal"** jika nama belum sesuai.`,
+    };
+  }
+
+  /**
+   * Evaluates if the user input expresses a customer name correction
+   * (either for a pending registration draft or a recently confirmed customer entity,
+   * or an explicit rename "koreksi/ubah/ralat nama pelanggan X menjadi Y").
+   */
+  static isCustomerCorrectionIntent(
+    input: string,
+    identity?: IdentityContext | null,
+    conversationId?: string,
+  ): boolean {
+    const trimmed = input.trim();
+    const lower = trimmed.toLowerCase();
+
+    // Exclude non-customer order field corrections (tujuan, asal, nilai, muatan, jumlah, qty, service, layanan, sbu)
+    if (
+      /^(?:ganti|ubah|ralat|koreksi)\s+(?:tujuan|asal|nilai|muatan|barang|komoditas|kargo|jumlah|kuantitas|qty|service|layanan|sbu)\b/i.test(
+        trimmed,
+      )
+    ) {
+      return false;
+    }
+
+    // 1. Explicit rename: "koreksi/ralat/ubah/ganti/edit nama [pelanggan/customer] X menjadi/jadi Y"
+    if (
+      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui)\s+nama\s+(?:pelanggan|customer|klien)?\s*.+\s+(?:menjadi|jadi|ke)\s+.+/i.test(
+        trimmed,
+      )
+    ) {
+      return true;
+    }
+
+    // 2. Contextual correction when pending registration or recently confirmed customer exists in session
+    if (identity) {
+      const pending = this.getPendingRegistration(identity, conversationId);
+      const lastRegistered = this.getLastRegisteredCustomer(identity, conversationId);
+      if (pending || lastRegistered) {
+        if (
+          /^(?:maaf[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi)\b/i.test(lower) ||
+          /\b(?:ralat|koreksi|revisi|ubah|ganti)\s+nama(?:\s+(?:pelanggan|customer|klien))?\b/i.test(lower) ||
+          /\b(?:nama\s+yang\s+benar|seharusnya|harusnya|maksud\s+saya)\b/i.test(lower)
+        ) {
+          const candidate = this.extractCandidateCustomerName(trimmed);
+          return candidate.length >= 2;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Handles customer name correction without creating duplicate customer entities:
+   * - If a pending draft registration exists (not yet confirmed), updates the draft candidateName.
+   * - If a confirmed customer entity exists in session (or is explicitly named), updates the existing
+   *   md_entities record in place (preserving id, entity_code, party_roles, and tenant isolation).
+   */
+  static async handleCustomerCorrection(
+    input: string,
+    identity: IdentityContext,
+    conversationId?: string,
+  ): Promise<CustomerHandlingResult> {
+    // 1. Authorization Gate: require commercial:manage or customer:register
+    let hasAuth = false;
+    try {
+      assertAnyPermission(identity, ['commercial:manage', 'customer:register']);
+      hasAuth = true;
+    } catch {
+      hasAuth = false;
+    }
+
+    if (!hasAuth) {
+      const role = identity.role || 'user';
+      return {
+        handled: true,
+        type: 'text',
+        status: 'BLOCKED',
+        content:
+          `Akses ditolak: Koreksi nama Customer pada data master memerlukan izin 'customer:register' atau 'commercial:manage'.\n\n` +
+          `Akun Anda dengan role **${role}** tidak memiliki izin perubahan data pelanggan.`,
+      };
+    }
+
+    const trimmed = input.trim();
+    const pending = this.getPendingRegistration(identity, conversationId);
+    const lastRegistered = this.getLastRegisteredCustomer(identity, conversationId);
+
+    // Check explicit "koreksi/ubah/ralat nama [pelanggan] <old> menjadi/jadi <new>"
+    const explicitRenameMatch = trimmed.match(
+      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui)\s+nama\s+(?:pelanggan|customer|klien)?\s*(.+?)\s+(?:menjadi|jadi|ke)\s+(.+)$/i,
+    );
+
+    let explicitOldName = '';
+    let newName = '';
+
+    if (explicitRenameMatch) {
+      const rawOld = explicitRenameMatch[1].trim();
+      const rawNew = explicitRenameMatch[2].trim();
+      if (!/^(?:tadi|barusan|sebelumnya|baru|ini|itu|pelanggan|customer|klien)$/i.test(rawOld)) {
+        explicitOldName = this.extractCandidateCustomerName(rawOld) || rawOld;
+      }
+      newName = this.extractCandidateCustomerName(rawNew) || rawNew;
+    } else {
+      const menjadiSplit = trimmed.match(/\b(?:menjadi|jadi|seharusnya|harusnya|yang\s+benar|maksud\s+saya)\s*[:,-]?\s*(.+)$/i);
+      if (menjadiSplit) {
+        newName = this.extractCandidateCustomerName(menjadiSplit[1]) || menjadiSplit[1].trim();
+      } else {
+        newName = this.extractCandidateCustomerName(trimmed);
+      }
+    }
+
+    if (!newName || newName.length < 2) {
+      return {
+        handled: true,
+        type: 'text',
+        status: 'REQUIRES_CLARIFICATION',
+        content: `Silakan sebutkan nama resmi customer yang benar untuk menggantikan nama sebelumnya (misalnya: *"koreksi nama pelanggan menjadi PT UJI COBA TRANSPORT"*).`,
+      };
+    }
+
+    // Case A: Pending registration draft exists (not yet committed to DB) and no explicit committed old entity was named
+    if (pending && (!explicitOldName || explicitOldName.toLowerCase() === pending.candidateName.toLowerCase())) {
+      const previousCandidate = pending.candidateName;
+      this.savePendingRegistration(identity, newName, conversationId);
+      return {
+        handled: true,
+        type: 'text',
+        status: 'REQUIRES_CLARIFICATION',
+        content:
+          `### Ringkasan Pra-Pendaftaran Customer Baru — Nama Dikoreksi (EXECUTE: OFF)\n\n` +
+          `- **Nama Sebelumnya (Draft):** ~~${previousCandidate}~~\n` +
+          `- **Nama Resmi Customer (Baru):** **${newName}**\n` +
+          `- **Tenant Otorisasi:** \`${identity.tenantId.slice(0, 8)}...\`\n\n` +
+          `Draft pendaftaran telah diperbarui tanpa membuat entitas duplikat. Ketik **"Ya, daftarkan ${newName}"** atau **"YA"** untuk menyimpan ke database master, atau ketik **"batal"** untuk membatalkan.`,
+      };
+    }
+
+    // Case B: Confirmed customer entity exists in session or was explicitly named -> Update existing md_entities row in place
+    const db = getDb();
+    let targetEntity: any = null;
+
+    if (
+      lastRegistered &&
+      (!explicitOldName || explicitOldName.toLowerCase() === lastRegistered.name.toLowerCase())
+    ) {
+      targetEntity = {
+        id: lastRegistered.id,
+        name: lastRegistered.name,
+        entity_code: lastRegistered.entity_code,
+      };
+    } else if (explicitOldName) {
+      try {
+        const { data: foundRows } = await db
+          .from('md_entities')
+          .select('id, name, legal_name, entity_code, phone, email, is_customer, is_active')
+          .eq('tenant_id', identity.tenantId)
+          .ilike('name', explicitOldName)
+          .limit(1);
+        if (foundRows && foundRows.length > 0) {
+          targetEntity = foundRows[0];
+        }
+      } catch (findErr) {
+        console.error('[CustomerIntentHandler] Correction lookup error:', findErr);
+      }
+    }
+
+    if (!targetEntity) {
+      return {
+        handled: true,
+        type: 'text',
+        status: 'NOT_FOUND',
+        content:
+          `Entitas customer yang ingin dikoreksi tidak ditemukan pada sesi ini maupun pada data master tenant Anda.\n\n` +
+          `Jika Anda ingin mendaftarkan **${newName}** sebagai customer baru, ketik *"daftarkan pelanggan baru ${newName}"*.`,
+        results: [],
+      };
+    }
+
+    const oldName = targetEntity.name;
+    let updatedEntity: any = {
+      ...targetEntity,
+      name: newName,
+      legal_name: newName,
+      phone: targetEntity.phone ?? null,
+      email: targetEntity.email ?? null,
+      is_customer: true,
+      is_active: true,
+    };
+
+    try {
+      const updateChain = db
+        .from('md_entities')
+        .update({
+          name: newName,
+          legal_name: newName,
+        })
+        .eq('id', targetEntity.id)
+        .eq('tenant_id', identity.tenantId);
+
+      if (typeof updateChain.select === 'function') {
+        const { data: updatedRows, error: updateErr } = await updateChain.select();
+        if (updateErr) {
+          return {
+            handled: true,
+            type: 'text',
+            status: 'BLOCKED',
+            content: `Gagal memperbarui nama customer pada database master: ${updateErr.message || 'Database error'}.`,
+          };
+        }
+        if (Array.isArray(updatedRows) && updatedRows.length > 0) {
+          updatedEntity = updatedRows[0];
+        } else if (updatedRows && !Array.isArray(updatedRows)) {
+          updatedEntity = updatedRows;
+        }
+      } else {
+        await updateChain;
+      }
+    } catch (err: any) {
+      return {
+        handled: true,
+        type: 'text',
+        status: 'BLOCKED',
+        content: `Gagal memperbarui nama customer pada database master: ${err?.message || 'Database error'}.`,
+      };
+    }
+
+    // Update session reference to the corrected name on the SAME canonical ID
+    this.saveLastRegisteredCustomer(
+      identity,
+      {
+        id: targetEntity.id,
+        name: newName,
+        entity_code: updatedEntity.entity_code || targetEntity.entity_code,
+      },
+      conversationId,
+    );
+
+    return {
+      handled: true,
+      type: 'text',
+      status: 'SUCCESS',
+      content:
+        `Koreksi nama customer berhasil disimpan pada entitas yang sama (tanpa membuat duplikat):\n\n` +
+        `- **Nama Sebelumnya:** ~~${oldName}~~\n` +
+        `- **Nama Resmi Baru:** **${updatedEntity.name}**\n` +
+        `- **Kode:** \`${updatedEntity.entity_code || targetEntity.entity_code || '-'}\`\n` +
+        `- **ID Kanonik:** \`${targetEntity.id}\`\n\n` +
+        `**Langkah Selanjutnya:**\n` +
+        `Ketik *"buat order baru untuk ${updatedEntity.name}"* untuk melanjutkan pembuatan Sales Order, atau buka [Master Kontak](/tenant/master/contacts).`,
+      results: [updatedEntity],
     };
   }
 }
