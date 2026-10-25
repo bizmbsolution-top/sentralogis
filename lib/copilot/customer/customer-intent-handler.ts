@@ -118,12 +118,15 @@ export class CustomerIntentHandler {
   static getLastRegisteredCustomer(identity: IdentityContext, conversationId?: string): LastRegisteredCustomer | null {
     const key = getPendingKey(identity, conversationId);
     let last = lastRegisteredCustomers.get(key);
-    if (!last) {
+    const isDefaultConv = !conversationId || conversationId === 'default' || conversationId === 'default-session';
+    if (!last && isDefaultConv) {
       last = lastRegisteredCustomers.get(`${identity.tenantId}:${identity.userId}:default`);
     }
     if (last && Date.now() - last.lastUpdated > 30 * 60 * 1000) {
       lastRegisteredCustomers.delete(key);
-      lastRegisteredCustomers.delete(`${identity.tenantId}:${identity.userId}:default`);
+      if (isDefaultConv) {
+        lastRegisteredCustomers.delete(`${identity.tenantId}:${identity.userId}:default`);
+      }
       return null;
     }
     return last || null;
@@ -154,12 +157,15 @@ export class CustomerIntentHandler {
   static getPendingRegistration(identity: IdentityContext, conversationId?: string): PendingCustomerRegistration | null {
     const key = getPendingKey(identity, conversationId);
     let pending = pendingRegistrations.get(key);
-    if (!pending) {
+    const isDefaultConv = !conversationId || conversationId === 'default' || conversationId === 'default-session';
+    if (!pending && isDefaultConv) {
       pending = pendingRegistrations.get(`${identity.tenantId}:${identity.userId}:default`);
     }
-    if (pending && Date.now() - pending.lastUpdated > 15 * 60 * 1000) {
+    if (pending && Date.now() - pending.lastUpdated > 30 * 60 * 1000) {
       pendingRegistrations.delete(key);
-      pendingRegistrations.delete(`${identity.tenantId}:${identity.userId}:default`);
+      if (isDefaultConv) {
+        pendingRegistrations.delete(`${identity.tenantId}:${identity.userId}:default`);
+      }
       return null;
     }
     return pending || null;
@@ -197,7 +203,7 @@ export class CustomerIntentHandler {
 
     const prefixPatterns: RegExp[] = [
       /^(?:ya,?\s*daftarkan|ya,?\s*simpan|ya,?\s*lanjut(?:kan)?|tolong|mohon|silakan|coba|maaf)\b[\s,.:;-]*/i,
-      /^(?:salah(?:\s+nama)?|bukan|keliru|ralat|koreksi|revisi|ganti|ubah|edit|perbarui)\b[\s,.:;-]*/i,
+      /^(?:salah(?:\s+nama)?|bukan|keliru|ralat|koreksi|revisi|ganti|ubah|edit|perbarui|perbaiki)\b[\s,.:;-]*/i,
       /^(?:buat(?:kan)?|tambah(?:kan)?|daftarkan|daftar|registrasi(?:kan)?|bikin|simpan|input|masukkan)\b[\s,.:;-]*/i,
       /^(?:data|entitas|master|akun|profil)\b[\s,.:;-]*/i,
       /^(?:nama\s+resmi|nama\s+lengkap|nama\s+perusahaan|nama\s+yang\s+benar|nama\s+seharusnya|nama)\b[\s,.:;-]*/i,
@@ -850,9 +856,9 @@ export class CustomerIntentHandler {
       return false;
     }
 
-    // 1. Explicit rename: "koreksi/ralat/ubah/ganti/edit nama [pelanggan/customer] X menjadi/jadi Y"
+    // 1. Explicit rename: "koreksi/ralat/ubah/ganti/edit/perbaiki nama [pelanggan/customer] X menjadi/jadi Y"
     if (
-      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui)\s+nama\s+(?:pelanggan|customer|klien)?\s*.+\s+(?:menjadi|jadi|ke)\s+.+/i.test(
+      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui|perbaiki)\s+nama\s+(?:pelanggan|customer|klien)?\s*.+\s+(?:menjadi|jadi|ke)\s+.+/i.test(
         trimmed,
       )
     ) {
@@ -865,9 +871,9 @@ export class CustomerIntentHandler {
       const lastRegistered = this.getLastRegisteredCustomer(identity, conversationId);
       if (pending || lastRegistered) {
         if (
-          /^(?:maaf[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi)\b/i.test(lower) ||
-          /\b(?:ralat|koreksi|revisi|ubah|ganti)\s+nama(?:\s+(?:pelanggan|customer|klien))?\b/i.test(lower) ||
-          /\b(?:nama\s+yang\s+benar|seharusnya|harusnya|maksud\s+saya)\b/i.test(lower)
+          /^(?:maaf[\s,]+|tolong[\s,]+|mohon[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi|perbaiki)\b/i.test(lower) ||
+          /\b(?:ralat|koreksi|revisi|perbaiki|ubah|ganti)\s+(?:nama|yang\s+benar)(?:\s+(?:pelanggan|customer|klien))?\b/i.test(lower) ||
+          /\b(?:nama\s+yang\s+benar|yang\s+benar|seharusnya|harusnya|maksud\s+saya)\b/i.test(lower)
         ) {
           const candidate = this.extractCandidateCustomerName(trimmed);
           return candidate.length >= 2;
@@ -914,9 +920,9 @@ export class CustomerIntentHandler {
     const pending = this.getPendingRegistration(identity, conversationId);
     const lastRegistered = this.getLastRegisteredCustomer(identity, conversationId);
 
-    // Check explicit "koreksi/ubah/ralat nama [pelanggan] <old> menjadi/jadi <new>"
+    // Check explicit "koreksi/ubah/ralat/perbaiki nama [pelanggan] <old> menjadi/jadi <new>"
     const explicitRenameMatch = trimmed.match(
-      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui)\s+nama\s+(?:pelanggan|customer|klien)?\s*(.+?)\s+(?:menjadi|jadi|ke)\s+(.+)$/i,
+      /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbarui|perbaiki)\s+nama\s+(?:pelanggan|customer|klien)?\s*(.+?)\s+(?:menjadi|jadi|ke)\s+(.+)$/i,
     );
 
     let explicitOldName = '';

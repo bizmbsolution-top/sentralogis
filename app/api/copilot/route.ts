@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { CopilotEngine } from '@/src/platforms/copilot/engine/CopilotEngine';
 import { OperationalContext } from '@/src/platforms/copilot/context/OperationalContext';
@@ -11,6 +12,9 @@ import { assertPermission } from '@/lib/application/identity/resolver';
 import { createFoundationContext } from '@/lib/copilot/foundation/integration';
 import { OperationalSummaryProvider } from '@/lib/copilot/read/summary-provider';
 import { ConversationService } from '@/lib/copilot/conversation/service';
+import { normalizeIdempotencyUuid } from '@/lib/copilot/conversation/repository';
+import { CustomerIntentHandler } from '@/lib/copilot/customer/customer-intent-handler';
+import { ConversationalOrderWorkspace } from '@/lib/copilot/workflow/conversational-order-workspace';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
@@ -47,20 +51,83 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message or image required' }, { status: 400 });
     }
 
-    // Determine target persistent conversation ID (if enabled / provided)
-    let persistentConversationId: string | null = reqConversationId || activeContext.conversationId || null;
+    // 1. Resolve or auto-create a persistent conversation owned by (tenantId, userId)
+    const candidateConvId: string | null = reqConversationId || activeContext.conversationId || null;
+    let persistentConversationId: string | null = candidateConvId;
+    let conversationTitle: string | null = null;
+    let wasConversationCreated = false;
 
-    // Persist incoming user message if conversation ID and idempotency key are provided
-    if (persistentConversationId && idempotencyKey) {
+    try {
+      const ensured = await ConversationService.ensureConversationForTurn(
+        ctx,
+        candidateConvId,
+        inputText
+      );
+      persistentConversationId = ensured.conversation.id;
+      conversationTitle = ensured.conversation.title;
+      wasConversationCreated = ensured.created;
+    } catch (ensureErr) {
+      console.warn('[Copilot API] Could not ensure persistent conversation:', ensureErr);
+    }
+
+    // 2. Hydrate durable conversation state (orderFlowState, pendingCustomerRegistration, lastRegisteredCustomer)
+    // from the conversation's latest assistant message in Supabase so multi-turn drafts survive
+    // page navigation, refreshes, and serverless instance hops without re-executing mutations.
+    let hydratedOrderFlowState = activeContext.orderFlowState || null;
+    if (persistentConversationId && !wasConversationCreated) {
+      try {
+        const existingMsgs = await ConversationService.listMessages(ctx, persistentConversationId);
+        const latestAssistant = [...existingMsgs]
+          .reverse()
+          .find((m) => m.role === 'assistant' && m.metadata?.conversationState);
+        const savedState = latestAssistant?.metadata?.conversationState;
+        if (savedState && typeof savedState === 'object') {
+          if (savedState.pendingCustomerRegistration?.candidateName) {
+            if (!CustomerIntentHandler.getPendingRegistration(ctx, persistentConversationId)) {
+              CustomerIntentHandler.savePendingRegistration(
+                ctx,
+                savedState.pendingCustomerRegistration.candidateName,
+                persistentConversationId
+              );
+            }
+          } else if (savedState.pendingCustomerRegistration === null) {
+            CustomerIntentHandler.clearPendingRegistration(ctx, persistentConversationId);
+          }
+
+          if (savedState.lastRegisteredCustomer?.id && savedState.lastRegisteredCustomer?.name) {
+            if (!CustomerIntentHandler.getLastRegisteredCustomer(ctx, persistentConversationId)) {
+              CustomerIntentHandler.saveLastRegisteredCustomer(
+                ctx,
+                savedState.lastRegisteredCustomer,
+                persistentConversationId
+              );
+            }
+          }
+
+          if (!hydratedOrderFlowState && savedState.orderFlowState) {
+            const s = savedState.orderFlowState;
+            if (s.step && s.step !== 'CONFIRMED' && s.step !== 'CANCELLED') {
+              hydratedOrderFlowState = s;
+              ConversationalOrderWorkspace.saveSessionState(ctx, s, persistentConversationId);
+            }
+          }
+        }
+      } catch (hydrateErr) {
+        console.warn('[Copilot API] Could not hydrate conversation state:', hydrateErr);
+      }
+    }
+
+    // 3. Persist incoming user message with a valid UUID idempotency key
+    const effectiveIdempotencyKey = normalizeIdempotencyUuid(idempotencyKey || crypto.randomUUID());
+    if (persistentConversationId) {
       try {
         await ConversationService.appendUserMessage(ctx, {
           conversationId: persistentConversationId,
           content: inputText,
-          idempotencyKey,
+          idempotencyKey: effectiveIdempotencyKey,
           language: 'id',
         });
       } catch (persistErr) {
-        // If conversation not found or access denied, log warning and continue without failing whole request
         console.warn('[Copilot API] Failed to persist user message:', persistErr);
       }
     }
@@ -101,7 +168,7 @@ export async function POST(req: NextRequest) {
       permissions: PermissionContext.create(ctx.permissions || []),
       conversation: ConversationContext.create({
         conversationId: persistentConversationId || 'default-session',
-        conversationMemory: activeContext.orderFlowState ? { orderFlowState: activeContext.orderFlowState } : {},
+        conversationMemory: hydratedOrderFlowState ? { orderFlowState: hydratedOrderFlowState } : {},
       }),
       workspace: WorkspaceContext.create(activeContext.workspace || {})
     });
@@ -127,18 +194,25 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    let updatedOrderFlowState: any = null;
     if (response && typeof response === 'object') {
       const rememberedFlow = context.conversation.getMemory('orderFlowState');
       if (rememberedFlow !== undefined) {
         response.orderFlowState = rememberedFlow;
+        updatedOrderFlowState = rememberedFlow;
+      } else if (persistentConversationId) {
+        updatedOrderFlowState = ConversationalOrderWorkspace.getSessionState(ctx, undefined, persistentConversationId);
       }
     }
 
-    // Persist assistant message response if conversation ID is active
+    // 4. Persist assistant message response with durable conversationState metadata
     if (persistentConversationId) {
       try {
         const assistantContent = response.content || (response as any).message || '';
         const isErrorOutcome = isPipelineError || response.content?.includes('gangguan') || response.content?.includes('antrean tinggi');
+        const currentPendingReg = CustomerIntentHandler.getPendingRegistration(ctx, persistentConversationId);
+        const currentLastCust = CustomerIntentHandler.getLastRegisteredCustomer(ctx, persistentConversationId);
+
         await ConversationService.appendAssistantMessage(ctx, {
           conversationId: persistentConversationId,
           content: assistantContent,
@@ -149,6 +223,14 @@ export async function POST(req: NextRequest) {
             metrics: response.metrics,
             status: isErrorOutcome ? 'ERROR' : 'SUCCESS',
             errorDetails: isErrorOutcome ? 'Upstream or processing degradation' : undefined,
+            proposal: response.proposal || undefined,
+            results: Array.isArray(response.results) ? response.results.slice(0, 10) : undefined,
+            timeline: response.timeline || undefined,
+            conversationState: {
+              orderFlowState: updatedOrderFlowState || null,
+              pendingCustomerRegistration: currentPendingReg || null,
+              lastRegisteredCustomer: currentLastCust || null,
+            },
           },
         });
       } catch (persistErr) {
@@ -164,6 +246,7 @@ export async function POST(req: NextRequest) {
       success: !isPipelineError,
       response: response,
       conversationId: persistentConversationId,
+      conversationTitle,
       read: {
         operationalSummary,
       }

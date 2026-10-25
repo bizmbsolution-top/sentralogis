@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import { Menu, Search, Bell } from 'lucide-react';
+import { Menu, Search, Bell, Bot } from 'lucide-react';
 import { useNavigation, getNavigationSectionLabel } from './AppShell';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useOptionalCopilotV2 } from '@/components/copilot/v2/CopilotV2Provider';
 import ProfileDropdown from './ProfileDropdown';
 
 interface TopBarProps {
@@ -13,6 +14,7 @@ interface TopBarProps {
 export default function TopBar({ onMenuClick }: TopBarProps) {
   const { activeSection } = useNavigation();
   const { profile, logout } = useAuth();
+  const copilot = useOptionalCopilotV2();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-6">
@@ -66,6 +68,26 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             className="bg-transparent text-sm text-slate-600 dark:text-slate-300 placeholder-slate-400 outline-none w-48"
           />
         </div>
+
+        {copilot && (
+          <button
+            type="button"
+            onClick={copilot.toggleRecents}
+            aria-label="Open Copilot Recents"
+            title="Copilot Recents & Histori Percakapan"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 text-xs font-semibold transition-colors"
+          >
+            <Bot className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="hidden sm:inline max-w-[140px] truncate">
+              {copilot.conversationTitle || 'Copilot Recents'}
+            </span>
+            {copilot.recentConversations.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                {copilot.recentConversations.length}
+              </span>
+            )}
+          </button>
+        )}
 
         <button
           aria-label="Notifications"

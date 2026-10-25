@@ -146,12 +146,15 @@ export class ConversationalOrderWorkspace {
     }
     const key = getSessionKey(identity, conversationId);
     let state = sessionStore.get(key);
-    if (!state) {
+    const isDefaultConv = !conversationId || conversationId === 'default' || conversationId === 'default-session';
+    if (!state && isDefaultConv) {
       state = sessionStore.get(`${identity.tenantId}:${identity.userId}:default`);
     }
     if (state && (Date.now() - state.lastUpdated > 30 * 60 * 1000 || state.step === 'CANCELLED' || state.step === 'CONFIRMED')) {
       sessionStore.delete(key);
-      sessionStore.delete(`${identity.tenantId}:${identity.userId}:default`);
+      if (isDefaultConv) {
+        sessionStore.delete(`${identity.tenantId}:${identity.userId}:default`);
+      }
       return null;
     }
     return state || null;
@@ -413,8 +416,8 @@ export class ConversationalOrderWorkspace {
       state.customerId !== 'TEMP_UNCOMMITTED_CUSTOMER' &&
       state.step !== 'CUSTOMER_SELECTION' &&
       state.step !== 'CUSTOMER_REGISTRATION' &&
-      (/^(?:maaf[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi)\s+nama(?:\s+(?:pelanggan|customer|klien))?\b/i.test(input.trim()) ||
-        /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit)\s+nama\s+(?:pelanggan|customer|klien)/i.test(input.trim()));
+      (/^(?:maaf[\s,]+|tolong[\s,]+|mohon[\s,]+)?(?:salah|bukan|keliru|ralat|koreksi|revisi|perbaiki)\s+(?:nama|yang\s+benar)(?:\s+(?:pelanggan|customer|klien))?\b/i.test(input.trim()) ||
+        /^(?:tolong\s+|mohon\s+|maaf\s+)?(?:koreksi|ralat|revisi|ubah|ganti|edit|perbaiki)\s+nama\s+(?:pelanggan|customer|klien)/i.test(input.trim()));
 
     if (isNameCorrection && state.customerId) {
       let hasRenameAuth = false;

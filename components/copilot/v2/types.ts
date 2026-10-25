@@ -129,3 +129,13 @@ export interface Conversation {
   messages: CopilotMessage[];
   createdAt: Date;
 }
+
+export interface RecentConversationItem {
+  id: string;
+  title: string | null;
+  status: 'ACTIVE' | 'ARCHIVED';
+  contextSummary?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+}

@@ -9,7 +9,11 @@
 
 import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission } from '@/lib/application/identity/resolver';
-import { ConversationRepository } from './repository';
+import {
+  ConversationRepository,
+  isValidConversationUuid,
+  isCustomConversationDbActive,
+} from './repository';
 import { HybridContextBuilder } from './hybrid-context';
 import type {
   CopilotConversation,
@@ -22,7 +26,124 @@ import type {
 } from './types';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
+const SENSITIVE_META_KEY_REGEX = /^(authorization|access_token|refresh_token|password|secret|api_key|apikey|private_key|cookie|session_token|bearer)$/i;
+
+export function sanitizeConversationMetadata(meta?: Record<string, any> | null): Record<string, any> {
+  if (!meta || typeof meta !== 'object') return {};
+  const clean: Record<string, any> = {};
+  for (const [key, val] of Object.entries(meta)) {
+    if (SENSITIVE_META_KEY_REGEX.test(key)) continue;
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      clean[key] = sanitizeConversationMetadata(val);
+    } else {
+      clean[key] = val;
+    }
+  }
+  return clean;
+}
+
 export class ConversationService {
+  /**
+   * Derive a concise, human-friendly title from the user's message.
+   */
+  static deriveConversationTitle(userMessage: string): string {
+    const raw = (userMessage || '')
+      .replace(/\[SYSTEM ENRICHED OCR TEXT[\s\S]*$/i, '')
+      .replace(/\[Attached:[\s\S]*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!raw) return 'Percakapan Baru';
+
+    // Strip leading greetings if followed by a real command
+    const strippedGreeting = raw
+      .replace(/^(?:halo|hai|selamat\s+(?:pagi|siang|sore|malam)|pagi|siang|sore|malam)[\s,!.:;-]+/i, '')
+      .trim();
+
+    const candidate = strippedGreeting.length >= 3 ? strippedGreeting : raw;
+
+    // Ignore trivial single-word confirmations as titles
+    if (/^(ya|ya,?\s*daftarkan|ok|yes|setuju|lanjut|lanjutkan|simpan|batal|batalkan|cancel|halo|hai|tes|test)$/i.test(candidate)) {
+      return 'Percakapan Baru';
+    }
+
+    if (candidate.length <= 60) {
+      return candidate;
+    }
+
+    const truncated = candidate.slice(0, 57);
+    const lastSpace = truncated.lastIndexOf(' ');
+    return (lastSpace > 25 ? truncated.slice(0, lastSpace) : truncated).trim() + '...';
+  }
+
+  /**
+   * Ensure a valid, actor-owned conversation exists for the current turn,
+   * creating one automatically if needed, and updating the default title
+   * when the first meaningful user message arrives.
+   */
+  static async ensureConversationForTurn(
+    identity: IdentityContext,
+    requestedConversationId: string | null | undefined,
+    userMessageText: string
+  ): Promise<{ conversation: CopilotConversation; created: boolean }> {
+    assertPermission(identity, 'copilot:read');
+
+    const candidateId = (requestedConversationId || '').trim();
+    const canLookup =
+      candidateId &&
+      candidateId !== 'default-session' &&
+      candidateId !== 'default' &&
+      (isValidConversationUuid(candidateId) || isCustomConversationDbActive());
+
+    const derivedTitle = this.deriveConversationTitle(userMessageText);
+
+    if (canLookup) {
+      const existing = await this.getConversation(identity, candidateId);
+      if (existing) {
+        if (
+          (!existing.title || existing.title === 'Percakapan Baru') &&
+          derivedTitle !== 'Percakapan Baru'
+        ) {
+          const updated = await this.updateConversation(identity, existing.id, {
+            title: derivedTitle,
+          });
+          if (updated) {
+            return { conversation: updated, created: false };
+          }
+        }
+        return { conversation: existing, created: false };
+      }
+    }
+
+    const created = await this.createConversation(identity, {
+      title: derivedTitle,
+    });
+    return { conversation: created, created: true };
+  }
+
+  /**
+   * Update conversation title or summary with actor ownership verification.
+   */
+  static async updateConversation(
+    identity: IdentityContext,
+    conversationId: string,
+    updates: { title?: string | null; contextSummary?: string | null }
+  ): Promise<CopilotConversation | null> {
+    assertPermission(identity, 'copilot:read');
+
+    const safeTitle =
+      updates.title !== undefined && updates.title !== null
+        ? updates.title.trim().slice(0, 120) || 'Percakapan Baru'
+        : updates.title;
+
+    return ConversationRepository.updateConversation({
+      tenantId: identity.tenantId,
+      ownerActorId: identity.userId,
+      conversationId,
+      title: safeTitle,
+      contextSummary: updates.contextSummary,
+    });
+  }
   /**
    * Create a new conversation owned by the authenticated actor.
    */
@@ -127,7 +248,10 @@ export class ConversationService {
     return ConversationRepository.appendUserMessage(
       identity.tenantId,
       identity.userId,
-      input
+      {
+        ...input,
+        metadata: sanitizeConversationMetadata(input.metadata),
+      }
     );
   }
 
@@ -147,7 +271,10 @@ export class ConversationService {
 
     return ConversationRepository.appendAssistantMessage(
       identity.tenantId,
-      input
+      {
+        ...input,
+        metadata: sanitizeConversationMetadata(input.metadata),
+      }
     );
   }
 

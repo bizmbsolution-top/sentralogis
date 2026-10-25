@@ -11,6 +11,7 @@
  *  - Soft delete support (UPDATE deleted_at = now()).
  */
 
+import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type {
   CopilotConversation,
@@ -25,10 +26,35 @@ export interface ConversationDbClient {
   rpc?(fn: string, args: Record<string, unknown>): Promise<any>;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidConversationUuid(val?: string | null): boolean {
+  if (!val || typeof val !== 'string') return false;
+  return UUID_REGEX.test(val.trim());
+}
+
+export function normalizeIdempotencyUuid(key?: string | null): string {
+  if (key && isValidConversationUuid(key)) {
+    return key.trim();
+  }
+  if (key && typeof key === 'string' && key.trim().length > 0) {
+    // Deterministically hash non-UUID idempotency keys into valid UUID v4-formatted hex
+    const hash = crypto.createHash('sha256').update(key.trim()).digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+  }
+  return crypto.randomUUID();
+}
+
 let _customDbClient: ConversationDbClient | null = null;
+let _rpcAmbiguousColumnDetected = false;
 
 export function setConversationDbClient(client: ConversationDbClient | null) {
   _customDbClient = client;
+  _rpcAmbiguousColumnDetected = false;
+}
+
+export function isCustomConversationDbActive(): boolean {
+  return _customDbClient !== null;
 }
 
 export function getConversationDb(): ConversationDbClient {
@@ -82,6 +108,9 @@ export class ConversationRepository {
     conversationId: string;
     includeDeleted?: boolean;
   }): Promise<CopilotConversation | null> {
+    if (!_customDbClient && !isValidConversationUuid(params.conversationId)) {
+      return null;
+    }
     const db = getDb();
     let query = db
       .from('copilot_conversations')
@@ -96,6 +125,9 @@ export class ConversationRepository {
 
     const { data, error } = await query.maybeSingle();
     if (error) {
+      if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid')) {
+        return null;
+      }
       throw new Error(`Failed to find conversation: ${error.message}`);
     }
     if (!data) return null;
@@ -145,6 +177,9 @@ export class ConversationRepository {
     ownerActorId: string;
     conversationId: string;
   }): Promise<boolean> {
+    if (!_customDbClient && !isValidConversationUuid(params.conversationId)) {
+      return false;
+    }
     const db = getDb();
     const now = new Date().toISOString();
     const { data, error } = await db
@@ -160,6 +195,9 @@ export class ConversationRepository {
       .select();
 
     if (error) {
+      if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid')) {
+        return false;
+      }
       throw new Error(`Failed to soft-delete conversation: ${error.message}`);
     }
 
@@ -176,6 +214,9 @@ export class ConversationRepository {
     title?: string | null;
     contextSummary?: string | null;
   }): Promise<CopilotConversation | null> {
+    if (!_customDbClient && !isValidConversationUuid(params.conversationId)) {
+      return null;
+    }
     const db = getDb();
     const updates: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -194,6 +235,9 @@ export class ConversationRepository {
       .maybeSingle();
 
     if (error) {
+      if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid')) {
+        return null;
+      }
       throw new Error(`Failed to update conversation: ${error.message}`);
     }
     if (!data) return null;
@@ -260,9 +304,12 @@ export class ConversationRepository {
     input: AppendUserMessageInput
   ): Promise<CopilotMessage> {
     const db = getDb();
+    const effectiveIdempotencyKey = _customDbClient
+      ? input.idempotencyKey
+      : normalizeIdempotencyUuid(input.idempotencyKey);
 
-    // Prefer atomic procedure if RPC available
-    if (typeof db.rpc === 'function') {
+    // Prefer atomic procedure if RPC available and not flagged with 42702 ambiguity
+    if (typeof db.rpc === 'function' && !_rpcAmbiguousColumnDetected) {
       const { data, error } = await db.rpc('append_copilot_message', {
         p_conversation_id: input.conversationId,
         p_tenant_id: tenantId,
@@ -270,11 +317,13 @@ export class ConversationRepository {
         p_role: 'user',
         p_content_original: input.content,
         p_language: input.language || 'id',
-        p_idempotency_key: input.idempotencyKey,
+        p_idempotency_key: effectiveIdempotencyKey,
         p_metadata: input.metadata || {},
       });
 
-      if (!error && data) {
+      if (error?.code === '42702') {
+        _rpcAmbiguousColumnDetected = true;
+      } else if (!error && data) {
         const row = Array.isArray(data) ? data[0] : data;
         if (row) return this.mapMessageRow(row);
       }
@@ -284,47 +333,55 @@ export class ConversationRepository {
     const existing = await this.findMessageByIdempotencyKey({
       tenantId,
       conversationId: input.conversationId,
-      idempotencyKey: input.idempotencyKey,
+      idempotencyKey: effectiveIdempotencyKey,
     });
     if (existing) {
       return existing;
     }
 
-    const nextSeq = await this.getNextSequenceNo(input.conversationId);
-    const now = new Date().toISOString();
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const nextSeq = await this.getNextSequenceNo(input.conversationId);
+      const now = new Date().toISOString();
 
-    const row = {
-      conversation_id: input.conversationId,
-      tenant_id: tenantId,
-      sender_actor_id: actorId,
-      role: 'user',
-      sequence_no: nextSeq,
-      content_original: input.content,
-      language: input.language || 'id',
-      idempotency_key: input.idempotencyKey,
-      metadata: input.metadata || {},
-      created_at: now,
-    };
+      const row = {
+        conversation_id: input.conversationId,
+        tenant_id: tenantId,
+        sender_actor_id: actorId,
+        role: 'user',
+        sequence_no: nextSeq,
+        content_original: input.content,
+        language: input.language || 'id',
+        idempotency_key: effectiveIdempotencyKey,
+        metadata: input.metadata || {},
+        created_at: now,
+      };
 
-    const { data, error } = await db
-      .from('copilot_messages')
-      .insert(row)
-      .select()
-      .single();
+      const { data, error } = await db
+        .from('copilot_messages')
+        .insert(row)
+        .select()
+        .single();
 
-    if (error) {
-      if (error.code === '23505' || error.message?.includes('duplicate key')) {
+      if (!error && data) {
+        return this.mapMessageRow(data);
+      }
+
+      lastErr = error;
+      if (error?.code === '23505' || error?.message?.includes('duplicate key')) {
         const recheck = await this.findMessageByIdempotencyKey({
           tenantId,
           conversationId: input.conversationId,
-          idempotencyKey: input.idempotencyKey,
+          idempotencyKey: effectiveIdempotencyKey,
         });
         if (recheck) return recheck;
+        // Sequence collision — retry with fresh sequence_no
+        continue;
       }
-      throw new Error(`Failed to append user message: ${error.message}`);
+      break;
     }
 
-    return this.mapMessageRow(data);
+    throw new Error(`Failed to append user message: ${lastErr?.message || 'Unknown error'}`);
   }
 
   /**
@@ -336,8 +393,8 @@ export class ConversationRepository {
   ): Promise<CopilotMessage> {
     const db = getDb();
 
-    // Prefer atomic procedure if RPC available
-    if (typeof db.rpc === 'function') {
+    // Prefer atomic procedure if RPC available and not flagged with 42702 ambiguity
+    if (typeof db.rpc === 'function' && !_rpcAmbiguousColumnDetected) {
       const { data, error } = await db.rpc('append_copilot_message', {
         p_conversation_id: input.conversationId,
         p_tenant_id: tenantId,
@@ -349,36 +406,58 @@ export class ConversationRepository {
         p_metadata: input.metadata || {},
       });
 
-      if (!error && data) {
+      if (error?.code === '42702') {
+        _rpcAmbiguousColumnDetected = true;
+      } else if (!error && data) {
         const row = Array.isArray(data) ? data[0] : data;
         if (row) return this.mapMessageRow(row);
       }
     }
 
-    const nextSeq = await this.getNextSequenceNo(input.conversationId);
-    const now = new Date().toISOString();
+    let insertedData: any = null;
+    let insertedSeq = 1;
+    let insertedNow = new Date().toISOString();
+    let lastErr: any = null;
 
-    const row = {
-      conversation_id: input.conversationId,
-      tenant_id: tenantId,
-      sender_actor_id: null,
-      role: 'assistant',
-      sequence_no: nextSeq,
-      content_original: input.content,
-      language: input.language || 'id',
-      idempotency_key: null,
-      metadata: input.metadata || {},
-      created_at: now,
-    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const nextSeq = await this.getNextSequenceNo(input.conversationId);
+      const now = new Date().toISOString();
 
-    const { data, error } = await db
-      .from('copilot_messages')
-      .insert(row)
-      .select()
-      .single();
+      const row = {
+        conversation_id: input.conversationId,
+        tenant_id: tenantId,
+        sender_actor_id: null,
+        role: 'assistant',
+        sequence_no: nextSeq,
+        content_original: input.content,
+        language: input.language || 'id',
+        idempotency_key: null,
+        metadata: input.metadata || {},
+        created_at: now,
+      };
 
-    if (error) {
-      throw new Error(`Failed to append assistant message: ${error.message}`);
+      const { data, error } = await db
+        .from('copilot_messages')
+        .insert(row)
+        .select()
+        .single();
+
+      if (!error && data) {
+        insertedData = data;
+        insertedSeq = nextSeq;
+        insertedNow = now;
+        break;
+      }
+
+      lastErr = error;
+      if (error?.code === '23505' || error?.message?.includes('duplicate key')) {
+        continue;
+      }
+      break;
+    }
+
+    if (!insertedData) {
+      throw new Error(`Failed to append assistant message: ${lastErr?.message || 'Unknown error'}`);
     }
 
     // Touch conversation last_activity_at only on successful completion of a user + assistant turn
@@ -392,7 +471,7 @@ export class ConversationRepository {
         .eq('conversation_id', input.conversationId)
         .order('sequence_no', { ascending: false });
 
-      const priorMsgs = (allMsgs || []).filter((m: any) => Number(m.sequence_no) < nextSeq);
+      const priorMsgs = (allMsgs || []).filter((m: any) => Number(m.sequence_no) < insertedSeq);
       const latestUser = priorMsgs.find((m: any) => m.role === 'user');
       const latestSuccessAssistant = priorMsgs.find(
         (m: any) => m.role === 'assistant' && m.metadata?.status !== 'ERROR'
@@ -402,11 +481,11 @@ export class ConversationRepository {
       const latestSuccessAssistantSeq = latestSuccessAssistant ? Number(latestSuccessAssistant.sequence_no) : 0;
 
       if (latestUserSeq > latestSuccessAssistantSeq) {
-        await this.touchConversationActivity(input.conversationId, tenantId, now);
+        await this.touchConversationActivity(input.conversationId, tenantId, insertedNow);
       }
     }
 
-    return this.mapMessageRow(data);
+    return this.mapMessageRow(insertedData);
   }
 
   /**

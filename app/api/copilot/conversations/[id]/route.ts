@@ -1,14 +1,25 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
 import { assertPermission } from '@/lib/application/identity/resolver';
 import { ConversationService } from '@/lib/copilot/conversation/service';
 
+function toHttpErrorStatus(error: any): number {
+  const msg = String(error?.message || '');
+  if (error?.statusCode === 401 || msg.includes('Unauthenticated') || msg.includes('no valid session')) {
+    return 401;
+  }
+  if (error?.statusCode === 403 || msg.includes('Permission') || msg.includes('Forbidden') || msg.includes('Unauthorized')) {
+    return 403;
+  }
+  return 500;
+}
+
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ctx = await resolveSessionIdentity();
+    const ctx = await resolveSessionIdentity(null, req);
     assertPermission(ctx, 'copilot:read');
 
     const resolvedParams = await params;
@@ -28,7 +39,54 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('[API /api/copilot/conversations/[id]] GET Error:', error);
-    const status = error.message?.includes('Permission') ? 403 : 500;
+    const status = toHttpErrorStatus(error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status }
+    );
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await resolveSessionIdentity(null, req);
+    assertPermission(ctx, 'copilot:read');
+
+    const resolvedParams = await params;
+    const conversationId = resolvedParams.id;
+
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
+
+    const updated = await ConversationService.updateConversation(ctx, conversationId, {
+      title: body.title,
+      contextSummary: body.contextSummary,
+    });
+
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: 'Conversation not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: updated,
+    });
+  } catch (error: any) {
+    console.error('[API /api/copilot/conversations/[id]] PATCH Error:', error);
+    const status = toHttpErrorStatus(error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status }
@@ -37,11 +95,11 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ctx = await resolveSessionIdentity();
+    const ctx = await resolveSessionIdentity(null, req);
     assertPermission(ctx, 'copilot:read');
 
     const resolvedParams = await params;
@@ -60,7 +118,7 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error('[API /api/copilot/conversations/[id]] DELETE Error:', error);
-    const status = error.message?.includes('Permission') ? 403 : 500;
+    const status = toHttpErrorStatus(error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status }

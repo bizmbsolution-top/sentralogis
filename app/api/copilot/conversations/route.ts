@@ -1,16 +1,28 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { resolveSessionIdentity } from '@/lib/application/identity/session-source';
 import { assertPermission } from '@/lib/application/identity/resolver';
 import { ConversationService } from '@/lib/copilot/conversation/service';
 
-export async function GET(req: Request) {
+function toHttpErrorStatus(error: any): number {
+  const msg = String(error?.message || '');
+  if (error?.statusCode === 401 || msg.includes('Unauthenticated') || msg.includes('no valid session')) {
+    return 401;
+  }
+  if (error?.statusCode === 403 || msg.includes('Permission') || msg.includes('Forbidden') || msg.includes('Unauthorized')) {
+    return 403;
+  }
+  return 500;
+}
+
+export async function GET(req: NextRequest) {
   try {
-    const ctx = await resolveSessionIdentity();
+    const ctx = await resolveSessionIdentity(null, req);
     assertPermission(ctx, 'copilot:read');
 
     const { searchParams } = new URL(req.url);
     const limitParam = searchParams.get('limit');
-    const limit = limitParam ? parseInt(limitParam, 10) : 50;
+    const parsedLimit = limitParam ? parseInt(limitParam, 10) : 50;
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;
 
     const conversations = await ConversationService.listConversations(ctx, { limit });
 
@@ -20,17 +32,17 @@ export async function GET(req: Request) {
     });
   } catch (error: any) {
     console.error('[API /api/copilot/conversations] GET Error:', error);
-    const status = error.message?.includes('Permission') ? 403 : 500;
+    const status = toHttpErrorStatus(error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || 'Failed to load conversations' },
       { status }
     );
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const ctx = await resolveSessionIdentity();
+    const ctx = await resolveSessionIdentity(null, req);
     assertPermission(ctx, 'copilot:read');
 
     let body: any = {};
@@ -50,9 +62,9 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error('[API /api/copilot/conversations] POST Error:', error);
-    const status = error.message?.includes('Permission') ? 403 : 500;
+    const status = toHttpErrorStatus(error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || 'Failed to create conversation' },
       { status }
     );
   }

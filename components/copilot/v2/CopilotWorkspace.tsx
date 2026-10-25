@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PanelLeft, PanelRight, Bot, X } from 'lucide-react';
+import { PanelLeft, PanelRight, Bot, X, MessageSquarePlus, RefreshCw } from 'lucide-react';
 import { CopilotV2Provider, useCopilotV2 } from './CopilotV2Provider';
 import { ContextPanel } from './ContextPanel';
 import { CopilotConversation } from './CopilotConversation';
@@ -43,6 +43,9 @@ function WorkspaceInner() {
     closeMobileContext,
     openMobileContext,
     clearConversation,
+    startNewChat,
+    conversationTitle,
+    isLoadingMessages,
   } = useCopilotV2();
 
   const [showContext, setShowContext] = useState(true);
@@ -69,7 +72,7 @@ function WorkspaceInner() {
       {/* ─── Top bar ─── */}
       <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-50">
         {/* Left */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           {isMobile ? (
             <button
               onClick={openMobileContext}
@@ -87,13 +90,31 @@ function WorkspaceInner() {
               <PanelLeft className="w-5 h-5" />
             </button>
           )}
-          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
             COPILOT
           </span>
+          <span className="text-xs font-medium text-slate-700 truncate max-w-[200px] sm:max-w-[340px]">
+            {conversationTitle || 'Percakapan Baru'}
+          </span>
+          {isLoadingMessages ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-blue-600">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span className="hidden sm:inline">Memuat...</span>
+            </span>
+          ) : null}
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={startNewChat}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-colors"
+            title="New Chat"
+            aria-label="Start new conversation"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New Chat</span>
+          </button>
           {!isMobile && (
             <button
               onClick={() => setShowDetail((p) => !p)}
@@ -109,7 +130,7 @@ function WorkspaceInner() {
             onClick={clearConversation}
             className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
             title="New conversation"
-            aria-label="Start new conversation"
+            aria-label="Reset conversation"
           >
             <Bot className="w-5 h-5" />
           </button>

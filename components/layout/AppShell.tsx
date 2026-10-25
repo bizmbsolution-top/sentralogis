@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import MobileBottomNav from './MobileBottomNav';
+import { CopilotV2Provider } from '@/components/copilot/v2/CopilotV2Provider';
+import CopilotRecentsDrawer from '@/components/copilot/CopilotRecentsDrawer';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   NavigationSection,
@@ -124,14 +126,17 @@ export default function AppShell({ children }: AppShellProps) {
         role,
       }}
     >
-      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => handleSetSidebarOpen(false)} />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <TopBar onMenuClick={() => handleSetSidebarOpen(!isSidebarOpen)} />
-          <main className="flex-1 p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-6 overflow-y-auto">{children}</main>
+      <CopilotV2Provider>
+        <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+          <Sidebar isOpen={isSidebarOpen} onClose={() => handleSetSidebarOpen(false)} />
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <TopBar onMenuClick={() => handleSetSidebarOpen(!isSidebarOpen)} />
+            <main className="flex-1 p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-6 overflow-y-auto">{children}</main>
+          </div>
+          <MobileBottomNav />
+          <CopilotRecentsDrawer />
         </div>
-        <MobileBottomNav />
-      </div>
+      </CopilotV2Provider>
     </NavigationContext.Provider>
   );
 }
