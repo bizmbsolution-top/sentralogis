@@ -21,6 +21,7 @@ import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission, assertAnyPermission } from '@/lib/application/identity/resolver';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateNextCustomerCode } from '@/lib/actions/customer-master-actions';
+import { buildMasterKontakUrl } from '@/lib/master/contact-table-utils';
 
 export interface CustomerHandlingResult {
   handled: boolean;
@@ -242,7 +243,7 @@ export class CustomerIntentHandler {
   }
 
   /**
-   * Evaluates if the user input expresses an intent to search or edit customers.
+   * Evaluates if the user input expresses an intent to search or edit customers / Master Kontak.
    */
   static isCustomerSearchIntent(input: string): boolean {
     const trimmed = input.trim().toLowerCase();
@@ -254,7 +255,7 @@ export class CustomerIntentHandler {
 
     // Customer edit / lookup intent (e.g. "edit PT UJI COBA TRANSPORT", "edit pelanggan PT X", "ubah customer PT X")
     if (
-      /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(?:data\s+)?(pelanggan|customer|klien)\b/i.test(trimmed) ||
+      /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(?:data\s+)?(pelanggan|customer|klien|kontak|master\s+kontak|master\s+customer)\b/i.test(trimmed) ||
       /^(?:tolong\s+|mohon\s+)?(edit|ubah|update|perbarui|koreksi)\s+(?:pt|cv|ud|tbk|ltd|inc)\b/i.test(trimmed)
     ) {
       return true;
@@ -266,20 +267,25 @@ export class CustomerIntentHandler {
       }
     }
 
-    // Explicit customer search phrasing
+    // Master Kontak / Master Customer / Customer code explicit search or open phrasing
     if (
-      /\b(cari|cek|lihat|temukan|daftar|list)\s+(pelanggan|customer|klien)\b/i.test(trimmed) ||
-      /^(apakah\s+ada|ada)\s+(pelanggan|customer|klien)\b/i.test(trimmed) ||
-      /^(pelanggan|customer|klien)\s+(?!baru\b)/i.test(trimmed) ||
-      /^daftar\s+(pelanggan|customer)$/i.test(trimmed) ||
+      /\b(master\s+kontak|master\s+customer|master\s+pelanggan|daftar\s+kontak|data\s+kontak)\b/i.test(trimmed) ||
+      /\b(cari|cek|lihat|temukan|daftar|list|buka|open|tampilkan|detail)\s+(?:di\s+)?(?:master\s+)?(pelanggan|customer|klien|kontak)\b/i.test(trimmed) ||
+      /^(?:buka|lihat|cek|cari|detail|open)\s+(?:kode\s+)?(cus[/_-]\d+|pelang-\d+)\b/i.test(trimmed) ||
+      /^(cus[/_-]\d+|pelang-\d+)$/i.test(trimmed) ||
+      /^(apakah\s+ada|ada)\s+(pelanggan|customer|klien|kontak)\b/i.test(trimmed) ||
+      /^(pelanggan|customer|klien|kontak)\s+(?!baru\b)/i.test(trimmed) ||
+      /^daftar\s+(pelanggan|customer|kontak)$/i.test(trimmed) ||
       /^customer$/i.test(trimmed) ||
-      /^pelanggan$/i.test(trimmed)
+      /^pelanggan$/i.test(trimmed) ||
+      /^master\s+kontak$/i.test(trimmed) ||
+      /^master\s+customer$/i.test(trimmed)
     ) {
       return true;
     }
 
     // Pattern: "apakah ada customer ABC?" or "apakah ada pelanggan ABC?"
-    if (/apakah\s+ada\s+(?:customer|pelanggan)\b/i.test(trimmed)) {
+    if (/apakah\s+ada\s+(?:customer|pelanggan|kontak)\b/i.test(trimmed)) {
       return true;
     }
 
@@ -369,11 +375,17 @@ export class CustomerIntentHandler {
     const clean = input.trim()
       .replace(/^[\s,.;!?-]+|[\s,.;!?-]+$/g, '')
       .replace(/^(?:apakah\s+ada|tolong|mohon)\s+/i, '')
-      .replace(/^(?:cari|cek|lihat|temukan|daftar|edit|ubah|update|perbarui|koreksi)\s+(?:data\s+)?(?:pelanggan|customer|klien)?\s*(?:baru\s+)?/i, '')
-      .replace(/^(?:pelanggan|customer|klien)\s*(?:baru\s+)?/i, '')
-      .replace(/^(?:apakah\s+ada)\s+(?:pelanggan|customer|klien)\s*/i, '')
+      .replace(/^(?:cari|cek|lihat|temukan|daftar|list|buka|open|tampilkan|detail|edit|ubah|update|perbarui|koreksi)\s+(?:di\s+)?(?:data\s+|master\s+)?(?:pelanggan|customer|klien|kontak)?\s*(?:baru\s+)?(?:dengan\s+)?(?:kode\s+|nama\s+)?/i, '')
+      .replace(/^(?:master\s+)?(?:pelanggan|customer|klien|kontak)\s*(?:baru\s+)?(?:dengan\s+)?(?:kode\s+|nama\s+)?/i, '')
+      .replace(/^(?:apakah\s+ada)\s+(?:pelanggan|customer|klien|kontak)\s*/i, '')
+      .replace(/^(?:di\s+)?(?:master\s+kontak|master\s+customer|master\s+pelanggan)\s*/i, '')
+      .replace(/\s+(?:di\s+)?(?:master\s+kontak|master\s+customer|master\s+pelanggan)$/i, '')
       .replace(/\?+$/, '')
       .trim();
+
+    if (/^(?:semua|all|daftar|list|master|kontak|customer|pelanggan|klien)$/i.test(clean)) {
+      return '';
+    }
 
     return clean;
   }
@@ -441,6 +453,8 @@ export class CustomerIntentHandler {
     // Zero matches
     if (rows.length === 0) {
       const displayTerm = term || 'yang dicari';
+      const searchUrl = buildMasterKontakUrl({ search: term || undefined, role: 'customer' });
+      const hqUrl = buildMasterKontakUrl({ search: term || undefined, role: 'customer', basePath: '/hq/master/contacts' });
       return {
         handled: true,
         type: 'text',
@@ -448,7 +462,7 @@ export class CustomerIntentHandler {
         content:
           `Customer **${displayTerm}** tidak ditemukan pada data master.\n\n` +
           `Apakah Anda ingin mendaftarkan customer baru atau mencari dengan kata kunci lain?\n\n` +
-          `- [Buka Form Buat Sales Order](/commercial/sales-orders/create) • [Buka Master Kontak](/tenant/master/contacts) • [Master Kontak HQ](/hq/master/contacts)`,
+          `- [Buka Form Buat Sales Order](/commercial/sales-orders/create) • [Buka Master Kontak](${searchUrl}) • [Master Kontak HQ](${hqUrl})`,
         results: [],
       };
     }
@@ -459,8 +473,21 @@ export class CustomerIntentHandler {
       const statusLabel = c.is_active !== false ? 'AKTIF' : 'NON-AKTIF';
       const codeLabel = c.entity_code ? ` (Kode: \`${c.entity_code}\`)` : '';
       const legalLine = c.legal_name ? `  - Nama Resmi: **${c.legal_name}**\n` : '';
+      const tenantUrl = buildMasterKontakUrl({
+        search: c.entity_code || c.name,
+        customerId: c.id,
+        role: 'customer',
+        action: isEditRequest ? 'edit' : 'view',
+      });
+      const hqUrl = buildMasterKontakUrl({
+        search: c.entity_code || c.name,
+        customerId: c.id,
+        role: 'customer',
+        action: isEditRequest ? 'edit' : 'view',
+        basePath: '/hq/master/contacts',
+      });
       const editGuidance = isEditRequest
-        ? `*Untuk memperbarui data resmi, NPWP, alamat, atau kontak PIC customer **${c.name}**, silakan buka [Master Customer](/tenant/master/contacts) atau [Master Kontak HQ](/hq/master/contacts).*`
+        ? `*Untuk memperbarui data resmi, NPWP, alamat, atau kontak PIC customer **${c.name}**, silakan buka [Master Customer](${tenantUrl}) atau [Master Kontak HQ](${hqUrl}).*`
         : `*Apakah Anda ingin membuat pesanan atau memperbarui data customer ini?*`;
       return {
         handled: true,
@@ -473,7 +500,7 @@ export class CustomerIntentHandler {
           `  - ID Kanonik: \`${c.id}\`\n` +
           `  - Status: **${statusLabel}**\n\n` +
           `${editGuidance}\n` +
-          `Ketik **"buat order untuk ${c.name}"**, buka [Form Buat Sales Order](/commercial/sales-orders/create?customerId=${c.id}&customer=${encodeURIComponent(c.name)}), atau [Edit di Master Customer](/tenant/master/contacts).`,
+          `Ketik **"buat order untuk ${c.name}"**, buka [Form Buat Sales Order](/commercial/sales-orders/create?customerId=${c.id}&customer=${encodeURIComponent(c.name)}), atau [Edit di Master Customer](${tenantUrl}).`,
         results: rows,
       };
     }
@@ -482,6 +509,7 @@ export class CustomerIntentHandler {
     const listItems = rows
       .map((c: any) => `- **${c.name}**${c.entity_code ? ` (Kode: \`${c.entity_code}\`)` : ''} — ID: \`${c.id}\``)
       .join('\n');
+    const multiUrl = buildMasterKontakUrl({ search: term || undefined, role: 'customer' });
 
     return {
       handled: true,
@@ -490,7 +518,7 @@ export class CustomerIntentHandler {
       content:
         `Ditemukan **${rows.length}** customer pada data master:\n\n` +
         `${listItems}\n\n` +
-        `*Silakan sebutkan nama lengkap customer untuk memilih, melihat detail, atau memulai pembuatan order.*`,
+        `*Silakan sebutkan nama lengkap customer untuk memilih, melihat detail di [Master Kontak](${multiUrl}), atau memulai pembuatan order.*`,
       results: rows,
     };
   }
@@ -558,6 +586,11 @@ export class CustomerIntentHandler {
 
     if (rows.length === 1) {
       const c = rows[0];
+      const masterUrl = buildMasterKontakUrl({
+        search: c.entity_code || c.name,
+        customerId: c.id,
+        role: 'customer',
+      });
       return {
         handled: true,
         type: 'text',
@@ -568,7 +601,8 @@ export class CustomerIntentHandler {
           `  Status: **${c.is_active !== false ? 'AKTIF' : 'NON-AKTIF'}**\n\n` +
           `Apakah tindakan yang ingin Anda lakukan?\n` +
           `1. **Buat Order Baru:** Ketik *"buat order baru untuk ${c.name}"* atau buka [Form Buat Sales Order](/commercial/sales-orders/create?customerId=${c.id}&customer=${encodeURIComponent(c.name)})\n` +
-          `2. **Cek Transaksi:** Ketik *"cek order ${c.name}"*`,
+          `2. **Cek Transaksi:** Ketik *"cek order ${c.name}"*\n` +
+          `3. **Lihat / Edit Detail Customer:** Buka [Master Kontak](${masterUrl})`,
         results: rows,
       };
     }
@@ -793,6 +827,12 @@ export class CustomerIntentHandler {
       this.clearPendingRegistration(identity, conversationId);
       this.saveLastRegisteredCustomer(identity, createdEntity, conversationId);
 
+      const createdMasterUrl = buildMasterKontakUrl({
+        search: createdEntity.entity_code || createdEntity.name,
+        customerId: createdEntity.id,
+        role: 'customer',
+      });
+
       return {
         handled: true,
         type: 'text',
@@ -806,7 +846,7 @@ export class CustomerIntentHandler {
           `Customer kini siap digunakan untuk transaksi operasional dan pesanan penjualan (Sales Order).\n\n` +
           `**Langkah Selanjutnya:**\n` +
           `Apakah Anda ingin lanjut membuat Sales Order untuk customer ini? Ketik *"buat order baru untuk ${createdEntity.name}"* atau ketik *"selesai"* jika hanya mendaftarkan customer.\n\n` +
-          `[Buka Form Buat Sales Order](/commercial/sales-orders/create?customerId=${createdEntity.id}&customer=${encodeURIComponent(createdEntity.name)}) • [Buka Master Kontak](/tenant/master/contacts)`,
+          `[Buka Form Buat Sales Order](/commercial/sales-orders/create?customerId=${createdEntity.id}&customer=${encodeURIComponent(createdEntity.name)}) • [Buka Master Kontak](${createdMasterUrl})`,
         results: [createdEntity],
       };
     }
@@ -1070,6 +1110,12 @@ export class CustomerIntentHandler {
       conversationId,
     );
 
+    const correctedMasterUrl = buildMasterKontakUrl({
+      search: updatedEntity.entity_code || targetEntity.entity_code || updatedEntity.name,
+      customerId: targetEntity.id,
+      role: 'customer',
+    });
+
     return {
       handled: true,
       type: 'text',
@@ -1081,7 +1127,7 @@ export class CustomerIntentHandler {
         `- **Kode:** \`${updatedEntity.entity_code || targetEntity.entity_code || '-'}\`\n` +
         `- **ID Kanonik:** \`${targetEntity.id}\`\n\n` +
         `**Langkah Selanjutnya:**\n` +
-        `Ketik *"buat order baru untuk ${updatedEntity.name}"* untuk melanjutkan pembuatan Sales Order, atau buka [Master Kontak](/tenant/master/contacts).`,
+        `Ketik *"buat order baru untuk ${updatedEntity.name}"* untuk melanjutkan pembuatan Sales Order, atau buka [Master Kontak](${correctedMasterUrl}).`,
       results: [updatedEntity],
     };
   }

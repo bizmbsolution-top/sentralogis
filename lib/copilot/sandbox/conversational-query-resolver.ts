@@ -585,7 +585,14 @@ export class ConversationalQueryResolver {
     // 4. Conventional JO prefix
     const joPrefixMatch = raw.match(/\b(JO-[A-Za-z0-9_-]+)\b/i);
 
-    const explicitCandidate = openMatch ? openMatch[1] : (isBareIdentifier ? trimmedInput : null);
+    const rawCandidate = openMatch ? openMatch[1] : (isBareIdentifier ? trimmedInput : null);
+    const isValidOperationalCode =
+      Boolean(rawCandidate) &&
+      /\d/.test(rawCandidate!) &&
+      /[-_/]/.test(rawCandidate!) &&
+      !/^(?:CUS|SPP|VND|BRO|PELANG)[/_-]/i.test(rawCandidate!) &&
+      !/^(?:MASTER|KONTAK|CUSTOMER|PELANGGAN|KLIEN|REKANAN|SUPPLIER|VENDOR|BROKER)$/i.test(rawCandidate!);
+    const explicitCandidate = isValidOperationalCode ? rawCandidate : null;
 
     if (explicitCandidate) {
       const upperCand = explicitCandidate.toUpperCase();

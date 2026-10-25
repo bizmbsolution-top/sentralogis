@@ -1,900 +1,1367 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { toast } from 'react-hot-toast';
-import { 
-  Plus, Search, Edit2, Trash2, X, Loader2, Users, Filter, 
-  MapPin, Phone, Mail, Globe, CheckCircle2, Building2, 
-  ChevronDown, Map as MapIcon, Info
-} from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import GoogleMapsInput from '@/components/master/GoogleMapsInput';
-import MasterCustomerModal from '@/components/master/MasterCustomerModal';
-import { assignRoleAction, revokeRoleAction } from '@/lib/actions/role-mutation-actions';
+import { Suspense, useState, useEffect, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/lib/hooks/useAuth'
+import {
+  Users,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Building2,
+  Phone,
+  Mail,
+  MapPin,
+  FileText,
+  X,
+  Check,
+  Loader2,
+  Eye,
+  GitMerge,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  MessageSquare,
+  Clock,
+} from 'lucide-react'
+import GoogleMapsInput from '@/components/master/GoogleMapsInput'
+import MasterCustomerModal from '@/components/master/MasterCustomerModal'
+import { generateNextCustomerCode } from '@/lib/actions/customer-master-actions'
+import {
+  type MasterContactEntity,
+  type PartyRoleRecord,
+  type ContactRoleFilter,
+  type ContactStatusFilter,
+  type ContactSortField,
+  type ContactSortOrder,
+  deriveInitialName,
+  sanitizeContactPhone,
+  hasCustomerRole,
+  getEntityRoles,
+  attachPartyRolesToEntities,
+  filterAndSortMasterContacts,
+  resolveParentCompany,
+} from '@/lib/master/contact-table-utils'
 
-interface EntityAddress {
-  id?: string;
-  address_name: string;
-  address_type: string;
-  address: string;
-  city: string;
-  province: string;
-  postal_code: string;
-  latitude: number;
-  longitude: number;
-  contact_person: string;
-  contact_phone: string;
+function formatUpdatedDate(dateStr?: string | null): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
-interface Entity {
-  id: string;
-  entity_code: string;
-  name: string;
-  legal_name: string;
-  tax_id: string;
-  email: string;
-  phone: string;
-  mobile: string;
-  whatsapp: string;
-  is_customer: boolean;
-  is_supplier: boolean;
-  is_vendor: boolean;
-  is_broker: boolean;
-  vendor_type: string;
-  billing_address: string;
-  billing_city: string;
-  billing_province: string;
-  billing_postal_code: string;
-  billing_latitude: number;
-  billing_longitude: number;
-  notes: string;
-  is_active: boolean;
-  tenant_id: string;
-  created_at: string;
+function formatUpdatedTime(dateStr?: string | null): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
-export default function ContactsPage() {
-  const { profile, loading: loadingAuth } = useAuth();
-  
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier' | 'vendor' | 'broker'>('all');
-  
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  
-  // Addresses State (within Modal)
-  const [otherAddresses, setOtherAddresses] = useState<EntityAddress[]>([]);
-  
+function TenantContactsContent() {
+  const { profile } = useAuth()
+  const searchParams = useSearchParams()
+
+  const [allEntities, setAllEntities] = useState<MasterContactEntity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tenantId, setTenantId] = useState<string | null>(null)
+
+  // Filters, Sorting & Pagination
+  const [activeTab, setActiveTab] = useState<ContactRoleFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortField, setSortField] = useState<ContactSortField>('updated_at')
+  const [sortOrder, setSortOrder] = useState<ContactSortOrder>('desc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+
+  // Modals
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false)
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null)
+  const [editingEntity, setEditingEntity] = useState<MasterContactEntity | null>(null)
+  const [viewingEntity, setViewingEntity] = useState<MasterContactEntity | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // General Form State (for non-customer contacts: Supplier / Vendor / Broker)
   const [formData, setFormData] = useState({
+    entity_code: '',
     name: '',
     legal_name: '',
     tax_id: '',
     email: '',
     phone: '',
-    mobile: '',
     whatsapp: '',
+    address: '',
+    city: '',
+    province: '',
+    postal_code: '',
+    country: 'Indonesia',
+    latitude: 0,
+    longitude: 0,
+    parent_id: '',
     is_customer: false,
     is_supplier: false,
     is_vendor: false,
     is_broker: false,
-    vendor_type: 'OTHER',
-    billing_address: '',
-    billing_city: '',
-    billing_province: '',
-    billing_postal_code: '',
-    billing_latitude: 0,
-    billing_longitude: 0,
-    notes: '',
+    payment_terms_days: 30,
+    credit_limit: 0,
     is_active: true,
-  });
+  })
 
-  // Sync tenant info
+  // Apply URL query parameters (e.g. from Copilot navigation: ?search=CUS/018&customerId=...&tab=customer)
   useEffect(() => {
-    if (profile?.tenant_id) {
-      setTenantId(profile.tenant_id);
-    }
-  }, [profile]);
+    if (!searchParams) return
+    const qSearch =
+      searchParams.get('search') ||
+      searchParams.get('q') ||
+      searchParams.get('code') ||
+      searchParams.get('name')
+    const qTab = (searchParams.get('tab') || searchParams.get('role') || '').toLowerCase()
+    const qStatus = (searchParams.get('status') || '').toLowerCase()
+    const qCustomerId = searchParams.get('customerId') || searchParams.get('id')
 
+    if (qSearch !== null && qSearch.trim().length > 0) {
+      setSearchTerm(qSearch.trim())
+    }
+    if (['all', 'customer', 'supplier', 'vendor', 'broker'].includes(qTab)) {
+      setActiveTab(qTab as ContactRoleFilter)
+    }
+    if (['all', 'active', 'inactive'].includes(qStatus)) {
+      setStatusFilter(qStatus as ContactStatusFilter)
+    }
+    if (qCustomerId) {
+      setHighlightedId(qCustomerId.trim())
+    }
+  }, [searchParams])
+
+  // Resolve authenticated user's canonical tenant_id
+  useEffect(() => {
+    const fetchUserTenant = async () => {
+      if ((profile as any)?.tenant_id) {
+        setTenantId((profile as any).tenant_id)
+        return
+      }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) {
+        setLoading(false)
+        return
+      }
+
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (tenantData?.id) {
+        setTenantId(tenantData.id)
+      } else {
+        setLoading(false)
+      }
+    }
+    fetchUserTenant()
+  }, [profile])
+
+  // Fetch canonical entities from public.md_entities + public.party_roles scoped by tenant_id
   const fetchEntities = useCallback(async () => {
-    if (!tenantId) return;
-    setLoading(true);
-    
-    let query = supabase.from('md_entities').select('*').eq('tenant_id', tenantId);
-    
-    if (activeTab === 'customer') query = query.eq('is_customer', true);
-    else if (activeTab === 'supplier') query = query.eq('is_supplier', true);
-    else if (activeTab === 'vendor') query = query.eq('is_vendor', true);
-    else if (activeTab === 'broker') query = query.eq('is_broker', true);
+    if (!tenantId) return
+    setLoading(true)
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    try {
+      const [entitiesRes, rolesRes] = await Promise.all([
+        supabase
+          .from('md_entities')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .order('updated_at', { ascending: false }),
+        (supabase as any)
+          .from('party_roles')
+          .select('id, tenant_id, party_id, role_type, context_type, context_id, is_primary, is_active')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
+      ])
 
-    if (error) {
-      toast.error('Gagal mengambil data kontak');
-    } else {
-      setEntities((data as any[]) || []);
+      if (entitiesRes.error) {
+        console.error('[MasterKontak] Error fetching md_entities:', entitiesRes.error)
+      } else {
+        const rawEntities = (entitiesRes.data || []) as MasterContactEntity[]
+        const rawRoles = (rolesRes.data || []) as PartyRoleRecord[]
+        const enriched = attachPartyRolesToEntities(rawEntities, rawRoles, tenantId)
+        setAllEntities(enriched)
+      }
+    } catch (err) {
+      console.error('[MasterKontak] Unexpected fetch error:', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false);
-  }, [tenantId, activeTab]);
+  }, [tenantId])
 
   useEffect(() => {
     if (tenantId) {
-      fetchEntities();
-    } else if (!loadingAuth) {
-      setLoading(false);
+      fetchEntities()
     }
-  }, [tenantId, fetchEntities, loadingAuth]);
+  }, [tenantId, fetchEntities])
 
-  const generateEntityCode = async () => {
-    if (!tenantId) return 'ENT/001';
-    
-    let prefix = 'ENT';
-    if (formData.is_customer) prefix = 'CUS';
-    else if (formData.is_supplier) prefix = 'SPP';
-    else if (formData.is_vendor) prefix = 'VND';
-    else if (formData.is_broker) prefix = 'BRO';
+  // Handle deep-link action=edit or action=view once entities are loaded
+  useEffect(() => {
+    if (!searchParams || allEntities.length === 0) return
+    const qCustomerId = searchParams.get('customerId') || searchParams.get('id')
+    const qAction = (searchParams.get('action') || '').toLowerCase()
+    if (!qCustomerId) return
 
-    try {
-      const { data } = await supabase
-        .from('md_entities')
-        .select('entity_code')
-        .eq('tenant_id', tenantId)
-        .ilike('entity_code', `${prefix}/%`)
-        .order('created_at', { ascending: false })
-        .limit(1);
+    const target = allEntities.find((e) => e.id === qCustomerId)
+    if (!target) return
 
-      if (!data || data.length === 0) return `${prefix}/001`;
-
-      const lastCode = data[0].entity_code;
-      const lastNumber = parseInt(lastCode.split('/')[1]);
-      if (isNaN(lastNumber)) return `${prefix}/001`;
-
-      const newNumber = (lastNumber + 1).toString().padStart(3, '0');
-      return `${prefix}/${newNumber}`;
-    } catch (err) {
-      return `${prefix}/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    if (qAction === 'edit' && hasCustomerRole(target)) {
+      setEditingCustomerId(target.id)
+      setIsCustomerModalOpen(true)
+    } else if (qAction === 'view') {
+      setViewingEntity(target)
     }
-  };
+  }, [searchParams, allEntities])
 
-  const handleSubmit = async () => {
+  // Reset pagination to page 1 when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, statusFilter, searchTerm, sortField, sortOrder, pageSize])
+
+  // Compute filtered, sorted, paginated table result & parent company map
+  const tableResult = useMemo(() => {
     if (!tenantId) {
-      toast.error('Identitas Tenant belum dimuat.');
-      return;
-    }
-    
-    setSubmitting(true);
-
-    try {
-      let entityId = selectedEntity?.id;
-
-if (selectedEntity) {
-         // Update
-         const { error } = await supabase
-           .from('md_entities')
-           .update({
-             name: formData.name,
-             legal_name: formData.legal_name,
-             tax_id: formData.tax_id,
-             email: formData.email,
-             phone: formData.phone,
-             mobile: formData.mobile,
-             whatsapp: formData.whatsapp,
-             vendor_type: formData.vendor_type,
-             billing_address: formData.billing_address,
-             billing_city: formData.billing_city,
-             billing_province: formData.billing_province,
-             billing_postal_code: formData.billing_postal_code,
-             billing_latitude: formData.billing_latitude,
-             billing_longitude: formData.billing_longitude,
-             notes: formData.notes,
-             is_active: formData.is_active,
-             updated_at: new Date().toISOString()
-           })
-           .eq('id', selectedEntity.id);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const code = await generateEntityCode();
-const { data, error } = await supabase
-           .from('md_entities')
-           .insert({
-             tenant_id: tenantId,
-             entity_code: code,
-             name: formData.name,
-             legal_name: formData.legal_name,
-             tax_id: formData.tax_id,
-             email: formData.email,
-             phone: formData.phone,
-             mobile: formData.mobile,
-             whatsapp: formData.whatsapp,
-             vendor_type: formData.vendor_type,
-             billing_address: formData.billing_address,
-             billing_city: formData.billing_city,
-             billing_province: formData.billing_province,
-             billing_postal_code: formData.billing_postal_code,
-             billing_latitude: formData.billing_latitude,
-             billing_longitude: formData.billing_longitude,
-             notes: formData.notes,
-             is_active: formData.is_active,
-           })
-           .select()
-           .single();
-
-        if (error) throw error;
-        entityId = (data as any)?.id;
+      return {
+        items: [] as MasterContactEntity[],
+        totalItems: 0,
+        totalPages: 1,
+        currentPage: 1,
+        pageSize,
+        parentMap: new Map(),
       }
+    }
+    return filterAndSortMasterContacts(allEntities, {
+      tenantId,
+      search: searchTerm,
+      roleFilter: activeTab,
+      statusFilter,
+      sortField,
+      sortOrder,
+      page: currentPage,
+      pageSize,
+    })
+  }, [allEntities, tenantId, searchTerm, activeTab, statusFilter, sortField, sortOrder, currentPage, pageSize])
 
-      // Handle Other Addresses
-      if (entityId) {
-        // Delete old addresses if editing
-        if (selectedEntity) {
-          await supabase.from('md_entity_addresses').delete().eq('entity_id', entityId);
+  // Role tab counts across current tenant
+  const roleCounts = useMemo(() => {
+    const counts = { all: 0, customer: 0, supplier: 0, vendor: 0, broker: 0 }
+    for (const ent of allEntities) {
+      if (!ent || ent.tenant_id !== tenantId) continue
+      counts.all++
+      const roles = getEntityRoles(ent)
+      if (roles.includes('CUSTOMER')) counts.customer++
+      if (roles.includes('SUPPLIER')) counts.supplier++
+      if (roles.includes('VENDOR')) counts.vendor++
+      if (roles.includes('BROKER')) counts.broker++
+    }
+    return counts
+  }, [allEntities, tenantId])
+
+  const generateEntityCode = async (
+    isCust: boolean,
+    isSupp: boolean,
+    isVend: boolean,
+    isBrok: boolean,
+  ): Promise<string> => {
+    let prefix = 'ENT'
+    if (isCust) prefix = 'CUS'
+    else if (isSupp) prefix = 'SPP'
+    else if (isVend) prefix = 'VND'
+    else if (isBrok) prefix = 'BRO'
+
+    if (tenantId && prefix === 'CUS') {
+      try {
+        return await generateNextCustomerCode(tenantId)
+      } catch (e) {
+        console.error('[MasterKontak] generateNextCustomerCode error:', e)
+      }
+    }
+
+    if (tenantId) {
+      try {
+        const { data } = await supabase
+          .from('md_entities')
+          .select('entity_code')
+          .eq('tenant_id', tenantId)
+          .ilike('entity_code', `${prefix}/%`)
+
+        let maxSeq = 0
+        for (const row of data || []) {
+          const m = String(row.entity_code || '').match(/^[A-Za-z]+\/(\d+)$/)
+          if (m) {
+            const num = parseInt(m[1], 10)
+            if (!Number.isNaN(num) && num > maxSeq) maxSeq = num
+          }
         }
-        
-if (otherAddresses.length > 0) {
-           const addressesToInsert = otherAddresses.map(addr => ({
-             entity_id: entityId,
-             address_name: addr.address_name,
-             address_type: addr.address_type,
-             address: addr.address,
-             city: addr.city,
-             province: addr.province,
-             postal_code: addr.postal_code,
-             latitude: addr.latitude,
-             longitude: addr.longitude,
-             contact_person: addr.contact_person,
-             contact_phone: addr.contact_phone
-           }));
-           
-           const { error: addrError } = await supabase.from('md_entity_addresses').insert(addressesToInsert);
-           if (addrError) throw addrError;
-         }
-       }
-
-       // [AI] DATA-4E-X3: Sync canonical party_roles via server actions.
-       // Direct mutation of md_entities.is_* is FORBIDDEN in W2 (BR10 §5).
-       // The server action performs canonical write + compatibility projection.
-       if (entityId) {
-         const roleTypes: Array<{ key: 'is_vendor' | 'is_customer' | 'is_supplier' | 'is_broker'; canonical: 'VENDOR' | 'CUSTOMER' | 'SUPPLIER' | 'BROKER' }> = [
-           { key: 'is_customer', canonical: 'CUSTOMER' },
-           { key: 'is_supplier', canonical: 'SUPPLIER' },
-           { key: 'is_vendor', canonical: 'VENDOR' },
-           { key: 'is_broker', canonical: 'BROKER' },
-         ];
-         const previousFlags = selectedEntity ? {
-           is_vendor: selectedEntity.is_vendor,
-           is_customer: selectedEntity.is_customer,
-           is_supplier: selectedEntity.is_supplier,
-           is_broker: selectedEntity.is_broker,
-         } : { is_vendor: false, is_customer: false, is_supplier: false, is_broker: false };
-         for (const r of roleTypes) {
-           const desired = !!formData[r.key];
-           const previous = previousFlags[r.key];
-           if (desired === previous) continue;
-           const action = desired ? assignRoleAction : revokeRoleAction;
-           const result = await action(entityId, r.canonical, 'GLOBAL', null);
-           if (!result.ok) {
-             throw new Error(`Role sync failed for ${r.canonical}: ${result.error}`);
-           }
-         }
-       }
-
-       toast.success('Data kontak berhasil disimpan');
-      setIsModalOpen(false);
-      fetchEntities();
-    } catch (error: any) {
-      console.error('Submit Contact Error:', JSON.stringify(error, null, 2), error);
-      toast.error(error?.message || error?.details || 'Terjadi kesalahan saat menyimpan data');
-    } finally {
-      setSubmitting(false);
+        return `${prefix}/${String(maxSeq + 1).padStart(3, '0')}`
+      } catch (e) {
+        console.error('[MasterKontak] Sequential code generation error:', e)
+      }
     }
-  };
+    return `${prefix}/001`
+  }
 
-  const handleDelete = async () => {
-    if (!selectedEntity) return;
-    setSubmitting(true);
-
-    try {
-      const { error } = await supabase
-        .from('md_entities')
-        .delete()
-        .eq('id', selectedEntity.id);
-
-      if (error) throw error;
-      toast.success('Kontak berhasil dihapus');
-      setIsDeleteModalOpen(false);
-      fetchEntities();
-    } catch (error: any) {
-      toast.error('Gagal menghapus data. Data ini mungkin sedang digunakan.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const fetchOtherAddresses = async (entityId: string) => {
-    const { data } = await supabase.from('md_entity_addresses').select('*').eq('entity_id', entityId);
-    setOtherAddresses((data as any[]) || []);
-  };
-
-  const handleOpenModal = (entity: Entity | null = null) => {
+  const handleOpenModal = async (entity?: MasterContactEntity) => {
     if (entity) {
-      setSelectedEntity(entity);
+      setEditingEntity(entity)
       setFormData({
-        name: entity.name,
-        legal_name: entity.legal_name || '',
+        entity_code: entity.entity_code || '',
+        name: entity.name || '',
+        legal_name: entity.legal_name || entity.name || '',
         tax_id: entity.tax_id || '',
         email: entity.email || '',
-        phone: entity.phone || '',
-        mobile: entity.mobile || '',
-        whatsapp: entity.whatsapp || '',
-        is_customer: entity.is_customer,
-        is_supplier: entity.is_supplier,
-        is_vendor: entity.is_vendor,
-        is_broker: entity.is_broker,
-        vendor_type: entity.vendor_type || 'OTHER',
-        billing_address: entity.billing_address || '',
-        billing_city: entity.billing_city || '',
-        billing_province: entity.billing_province || '',
-        billing_postal_code: entity.billing_postal_code || '',
-        billing_latitude: entity.billing_latitude || 0,
-        billing_longitude: entity.billing_longitude || 0,
-        notes: entity.notes || '',
-        is_active: entity.is_active,
-      });
-      fetchOtherAddresses(entity.id);
+        phone: sanitizeContactPhone(entity.phone),
+        whatsapp: sanitizeContactPhone(entity.whatsapp),
+        address: entity.address || entity.billing_address || '',
+        city: entity.city || '',
+        province: entity.province || '',
+        postal_code: entity.postal_code || '',
+        country: entity.country || 'Indonesia',
+        latitude: (entity as any).latitude || (entity as any).billing_latitude || 0,
+        longitude: (entity as any).longitude || (entity as any).billing_longitude || 0,
+        parent_id: entity.parent_id || '',
+        is_customer: hasCustomerRole(entity),
+        is_supplier: Boolean(entity.is_supplier),
+        is_vendor: Boolean(entity.is_vendor),
+        is_broker: Boolean(entity.is_broker),
+        payment_terms_days: entity.payment_terms_days || 30,
+        credit_limit: entity.credit_limit || 0,
+        is_active: entity.is_active ?? true,
+      })
     } else {
-      setSelectedEntity(null);
+      setEditingEntity(null)
+      const isCust = activeTab === 'customer' || activeTab === 'all'
+      const isSupp = activeTab === 'supplier'
+      const isVend = activeTab === 'vendor'
+      const isBrok = activeTab === 'broker'
+      const code = await generateEntityCode(isCust, isSupp, isVend, isBrok)
+
       setFormData({
+        entity_code: code,
         name: '',
         legal_name: '',
         tax_id: '',
         email: '',
         phone: '',
-        mobile: '',
         whatsapp: '',
-        is_customer: false,
-        is_supplier: false,
-        is_vendor: false,
-        is_broker: false,
-        vendor_type: 'OTHER',
-        billing_address: '',
-        billing_city: '',
-        billing_province: '',
-        billing_postal_code: '',
-        billing_latitude: 0,
-        billing_longitude: 0,
-        notes: '',
+        address: '',
+        city: '',
+        province: '',
+        postal_code: '',
+        country: 'Indonesia',
+        latitude: 0,
+        longitude: 0,
+        parent_id: '',
+        is_customer: isCust,
+        is_supplier: isSupp,
+        is_vendor: isVend,
+        is_broker: isBrok,
+        payment_terms_days: 30,
+        credit_limit: 0,
         is_active: true,
-      });
-      setOtherAddresses([]);
+      })
     }
-    setIsModalOpen(true);
-  };
+    setIsModalOpen(true)
+  }
 
-  const filteredEntities = entities.filter(ent => 
-    ent.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    ent.entity_code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleRoleChange = async (
+    role: 'customer' | 'supplier' | 'vendor' | 'broker',
+    checked: boolean,
+  ) => {
+    const newRoles = {
+      is_customer: role === 'customer' ? checked : formData.is_customer,
+      is_supplier: role === 'supplier' ? checked : formData.is_supplier,
+      is_vendor: role === 'vendor' ? checked : formData.is_vendor,
+      is_broker: role === 'broker' ? checked : formData.is_broker,
+    }
+
+    let newCode = formData.entity_code
+    if (!editingEntity) {
+      newCode = await generateEntityCode(
+        newRoles.is_customer,
+        newRoles.is_supplier,
+        newRoles.is_vendor,
+        newRoles.is_broker,
+      )
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      ...newRoles,
+      entity_code: newCode,
+    }))
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!tenantId) return
+    setSaving(true)
+
+    const payload = {
+      tenant_id: tenantId,
+      entity_code: formData.entity_code,
+      name: formData.name.trim(),
+      legal_name: formData.legal_name.trim() || formData.name.trim(),
+      tax_id: formData.tax_id || null,
+      email: formData.email || null,
+      phone: sanitizeContactPhone(formData.phone) || null,
+      whatsapp: sanitizeContactPhone(formData.whatsapp) || null,
+      billing_address: formData.address || null,
+      billing_city: formData.city || null,
+      billing_province: formData.province || null,
+      billing_postal_code: formData.postal_code || null,
+      billing_latitude: formData.latitude || null,
+      billing_longitude: formData.longitude || null,
+      parent_id: formData.parent_id ? formData.parent_id : null,
+      is_customer: formData.is_customer,
+      is_supplier: formData.is_supplier,
+      is_vendor: formData.is_vendor,
+      is_broker: formData.is_broker,
+      is_active: formData.is_active,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (editingEntity) {
+      const { error } = await supabase
+        .from('md_entities')
+        .update(payload)
+        .eq('id', editingEntity.id)
+        .eq('tenant_id', tenantId)
+
+      if (error) {
+        alert('Error updating contact: ' + error.message)
+      } else {
+        if (formData.is_customer) {
+          await (supabase as any).from('party_roles').upsert(
+            {
+              tenant_id: tenantId,
+              party_id: editingEntity.id,
+              role_type: 'CUSTOMER',
+              context_type: 'GLOBAL',
+              is_primary: true,
+              is_active: true,
+            },
+            { onConflict: 'tenant_id,party_id,role_type,context_type' },
+          )
+        }
+        setIsModalOpen(false)
+        fetchEntities()
+      }
+    } else {
+      const { data: inserted, error } = await supabase
+        .from('md_entities')
+        .insert([payload])
+        .select('id')
+        .single()
+
+      if (error) {
+        alert('Error creating contact: ' + error.message)
+      } else {
+        if (inserted?.id && formData.is_customer) {
+          await (supabase as any).from('party_roles').insert({
+            tenant_id: tenantId,
+            party_id: inserted.id,
+            role_type: 'CUSTOMER',
+            context_type: 'GLOBAL',
+            is_primary: true,
+            is_active: true,
+          })
+        }
+        setIsModalOpen(false)
+        fetchEntities()
+      }
+    }
+    setSaving(false)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!tenantId) return
+    if (!confirm('Apakah Anda yakin ingin menghapus data kontak ini?')) return
+
+    const { error } = await supabase
+      .from('md_entities')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+
+    if (error) {
+      alert('Gagal menghapus kontak: ' + error.message)
+    } else {
+      fetchEntities()
+    }
+  }
+
+  const handleEditAction = (ent: MasterContactEntity) => {
+    if (hasCustomerRole(ent)) {
+      setEditingCustomerId(ent.id)
+      setIsCustomerModalOpen(true)
+    } else {
+      handleOpenModal(ent)
+    }
+  }
+
+  const toggleSort = (field: ContactSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder(field === 'updated_at' ? 'desc' : 'asc')
+    }
+  }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="text-slate-900" size={24} />
-            Master Contacts
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Users className="text-blue-600" />
+            Master Kontak & Pelanggan
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Kelola data Customer, Supplier, Vendor, dan Broker dalam satu tempat.</p>
+          <p className="text-slate-500 text-sm mt-1">
+            Kelola identitas resmi pelanggan (Customer), hierarki perusahaan induk, NPWP, kontak PIC, dan rekanan operasional.
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={() => {
-              setSelectedCustomerId(null);
-              setIsCustomerModalOpen(true);
+              setEditingCustomerId(null)
+              setIsCustomerModalOpen(true)
             }}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm shadow-sm active:scale-95 shadow-blue-600/20"
-          >
-            <Building2 size={18} />
-            Daftar Customer Baru
-          </button>
-          <button 
-            onClick={() => handleOpenModal()}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all font-medium text-sm shadow-sm active:scale-95"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm transition-colors text-sm"
           >
             <Plus size={18} />
-            Add Other Contact
+            Tambah Customer
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2.5 rounded-xl font-medium flex items-center gap-2 shadow-sm transition-colors text-sm"
+          >
+            <Plus size={16} />
+            Kontak Lainnya
           </button>
         </div>
       </div>
 
-      {/* Tabs & Search */}
-      <Card className="p-4 border-slate-200 shadow-none overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar">
-            {(['all', 'customer', 'supplier', 'vendor', 'broker'] as const).map(tab => (
+      {/* Role Filter Tabs + Search + Status & Sort Controls */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Role Tabs */}
+          <div className="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg w-fit">
+            {(
+              [
+                { key: 'all', label: 'Semua', count: roleCounts.all },
+                { key: 'customer', label: 'Customer', count: roleCounts.customer },
+                { key: 'supplier', label: 'Supplier', count: roleCounts.supplier },
+                { key: 'vendor', label: 'Vendor', count: roleCounts.vendor },
+                { key: 'broker', label: 'Broker', count: roleCounts.broker },
+              ] as const
+            ).map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                  activeTab === tab 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-900'
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === tab.key
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {tab}
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                    activeTab === tab.key
+                      ? 'bg-blue-50 text-blue-700 font-bold'
+                      : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search contacts..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-            />
+
+          {/* Search + Status Filter + Sort */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-80">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                size={16}
+              />
+              <input
+                type="text"
+                placeholder="Cari Kode (CUS/018), Initial, Nama, Legal, NPWP, Induk..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  title="Reset pencarian"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <Filter size={13} className="text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as ContactStatusFilter)}
+                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none"
+                aria-label="Filter Status Kontak"
+              >
+                <option value="all">Semua Status</option>
+                <option value="active">Status: Aktif</option>
+                <option value="inactive">Status: Nonaktif</option>
+              </select>
+            </div>
+
+            {/* Sort Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <ArrowUpDown size={13} className="text-slate-400" />
+              <select
+                value={`${sortField}:${sortOrder}`}
+                onChange={(e) => {
+                  const [f, o] = e.target.value.split(':') as [ContactSortField, ContactSortOrder]
+                  setSortField(f)
+                  setSortOrder(o)
+                }}
+                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none"
+                aria-label="Urutkan Kontak"
+              >
+                <option value="updated_at:desc">Terbaru Diperbarui</option>
+                <option value="entity_code:asc">Kode Contact (A-Z)</option>
+                <option value="entity_code:desc">Kode Contact (Z-A)</option>
+                <option value="initial_name:asc">Initial Name (A-Z)</option>
+                <option value="name:asc">Nama Contact (A-Z)</option>
+                <option value="legal_name:asc">Nama Legal (A-Z)</option>
+              </select>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
 
-      {/* Table */}
-      <Card className="overflow-hidden border-slate-200 shadow-none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-4 font-semibold text-slate-700">Code</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Name</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Types</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Phone</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Email</th>
-                <th className="px-4 py-4 font-semibold text-slate-700">Status</th>
-                <th className="px-4 py-4 font-semibold text-slate-700 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin mx-auto mb-2" />
-                    <p className="text-slate-500">Memuat data...</p>
-                  </td>
-                </tr>
-              ) : filteredEntities.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                    Tidak ada data kontak ditemukan.
-                  </td>
-                </tr>
-              ) : (
-                filteredEntities.map((ent, idx) => (
-                  <tr key={ent.id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50 transition-colors' : 'bg-slate-50/30 hover:bg-slate-50 transition-colors'}>
-                    <td className="px-4 py-4 font-mono text-xs font-bold text-slate-600">{ent.entity_code}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        {(ent as any).logo_url ? (
-                          <img src={(ent as any).logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" />
-                        ) : (
-                          <div aria-hidden="true" style={{ userSelect: 'none' }} className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-100 flex items-center justify-center text-xs font-bold text-slate-400 select-none">
-                            {ent.name ? ent.name.charAt(0).toUpperCase() : '?'}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-medium text-slate-900">{ent.name}</div>
-                          {ent.legal_name && ent.legal_name !== ent.name && (
-                            <div className="text-[10px] text-slate-400 uppercase tracking-tighter">{ent.legal_name}</div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {(ent.is_customer || (ent as any).party_roles?.some((r: any) => r.role_type === 'CUSTOMER' && r.is_active !== false)) && (
-                          <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase">CUS</span>
-                        )}
-                        {ent.is_supplier && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 text-[9px] font-bold rounded uppercase">SPP</span>}
-                        {ent.is_vendor && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-bold rounded uppercase">VND {ent.vendor_type !== 'OTHER' && `(${ent.vendor_type})`}</span>}
-                        {ent.is_broker && <span className="px-1.5 py-0.5 bg-slate-50 text-slate-600 text-[9px] font-bold rounded uppercase">BRO</span>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {(() => {
-                        const rawPhone = (ent.phone || ent.mobile || '').trim();
-                        return !rawPhone || /^(CUS|SPP|VND|BRO|CUSTOMER)$/i.test(rawPhone) ? '-' : rawPhone;
-                      })()}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{ent.email || '-'}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${ent.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {ent.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => {
-                          if (ent.is_customer) {
-                            setSelectedCustomerId(ent.id);
-                            setIsCustomerModalOpen(true);
-                          } else {
-                            handleOpenModal(ent);
-                          }
-                        }}
-                        title={ent.is_customer ? 'Edit Master Customer' : 'Edit Contact'}
-                        className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-100"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => { setSelectedEntity(ent); setIsDeleteModalOpen(true); }}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Main Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl border-none">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{selectedEntity ? 'Edit Contact' : 'Add New Contact'}</h2>
-                <p className="text-xs text-slate-500 mt-1">Lengkapi informasi entitas dan alamat operasional.</p>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-8">
-              {/* Basic Info Section */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-900 font-bold border-b border-slate-100 pb-2">
-                  <Info size={18} />
-                  <span>General Information</span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="col-span-full grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {(['is_customer', 'is_supplier', 'is_vendor', 'is_broker'] as const).map(role => (
-                      <label 
-                        key={role} 
-                        className={`
-                          flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer select-none
-                          ${formData[role] ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-100 text-slate-400 hover:border-slate-200'}
-                        `}
-                      >
-                        <input 
-                          type="checkbox" 
-                          className="hidden" 
-                          checked={formData[role]}
-                          onChange={(e) => setFormData({...formData, [role]: e.target.checked})}
-                        />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{role.split('_')[1]}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  {formData.is_vendor && (
-                    <div className="col-span-full animate-in slide-in-from-top-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Vendor Type</label>
-                      <select 
-                        value={formData.vendor_type}
-                        onChange={(e) => setFormData({...formData, vendor_type: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      >
-                        <option value="OTHER">OTHER</option>
-                        <option value="TRANSPORTER">TRANSPORTER (Trucking)</option>
-                        <option value="PBM">PBM (Bongkar Muat)</option>
-                        <option value="DEPOT">DEPOT (Container)</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Display Name *</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder="e.g. PT Maju Bersama"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Legal Name</label>
-                    <input 
-                      type="text" 
-                      value={formData.legal_name}
-                      onChange={(e) => setFormData({...formData, legal_name: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">NPWP / Tax ID</label>
-                    <input 
-                      type="text" 
-                      value={formData.tax_id}
-                      onChange={(e) => setFormData({...formData, tax_id: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Email</label>
-                    <input 
-                      type="email" 
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Phone</label>
-                    <input 
-                      type="text" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">WhatsApp</label>
-                    <input 
-                      type="text" 
-                      value={formData.whatsapp}
-                      onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                  </div>
-                </div>
-              </section>
-
-              {/* Billing Address Section */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-900 font-bold border-b border-slate-100 pb-2">
-                  <MapIcon size={18} />
-                  <span>Billing Address</span>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Address (Search Maps)</label>
-                    <GoogleMapsInput 
-                      defaultValue={formData.billing_address}
-                      onPlaceSelect={(place) => {
-                        setFormData({
-                          ...formData,
-                          billing_address: place.address,
-                          billing_city: place.city,
-                          billing_province: place.province,
-                          billing_postal_code: place.postal_code,
-                          billing_latitude: place.latitude,
-                          billing_longitude: place.longitude
-                        });
-                      }}
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">City</label>
-                      <input 
-                        type="text" 
-                        value={formData.billing_city}
-                        onChange={(e) => setFormData({...formData, billing_city: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Province</label>
-                      <input 
-                        type="text" 
-                        value={formData.billing_province}
-                        onChange={(e) => setFormData({...formData, billing_province: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Postal Code</label>
-                      <input 
-                        type="text" 
-                        value={formData.billing_postal_code}
-                        onChange={(e) => setFormData({...formData, billing_postal_code: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Other Addresses Section */}
-              <section className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold">
-                    <Building2 size={18} />
-                    <span>Other Addresses</span>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => setOtherAddresses([...otherAddresses, {
-                      address_name: '', address_type: 'warehouse', address: '', city: '', province: '', postal_code: '', latitude: 0, longitude: 0, contact_person: '', contact_phone: ''
-                    }])}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                  >
-                    <Plus size={14} />
-                    Add Address
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {otherAddresses.map((addr, idx) => (
-                    <Card key={idx} className="p-4 border-slate-100 bg-slate-50 shadow-none relative animate-in slide-in-from-right-4 duration-300">
-                      <button 
-                        type="button"
-                        onClick={() => setOtherAddresses(otherAddresses.filter((_, i) => i !== idx))}
-                        className="absolute top-2 right-2 p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Location Name (e.g. Warehouse A)</label>
-                          <input 
-                            type="text" 
-                            value={addr.address_name}
-                            onChange={(e) => {
-                              const newAddrs = [...otherAddresses];
-                              newAddrs[idx].address_name = e.target.value;
-                              setOtherAddresses(newAddrs);
-                            }}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Search Google Maps</label>
-                          <GoogleMapsInput 
-                            defaultValue={addr.address}
-                            onPlaceSelect={(place) => {
-                              const newAddrs = [...otherAddresses];
-                              newAddrs[idx].address = place.address;
-                              newAddrs[idx].city = place.city;
-                              newAddrs[idx].province = place.province;
-                              newAddrs[idx].postal_code = place.postal_code;
-                              newAddrs[idx].latitude = place.latitude;
-                              newAddrs[idx].longitude = place.longitude;
-                              setOtherAddresses(newAddrs);
-                            }}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input 
-                            placeholder="Contact Person"
-                            value={addr.contact_person}
-                            onChange={(e) => {
-                              const newAddrs = [...otherAddresses];
-                              newAddrs[idx].contact_person = e.target.value;
-                              setOtherAddresses(newAddrs);
-                            }}
-                            className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs"
-                          />
-                          <input 
-                            placeholder="Contact Phone"
-                            value={addr.contact_phone}
-                            onChange={(e) => {
-                              const newAddrs = [...otherAddresses];
-                              newAddrs[idx].contact_phone = e.target.value;
-                              setOtherAddresses(newAddrs);
-                            }}
-                            className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs"
-                          />
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                  {otherAddresses.length === 0 && (
-                    <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 text-xs italic">
-                      No other addresses added yet.
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox"
-                    id="is_active_ent"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                    className="w-4 h-4 rounded border-slate-300 text-slate-900"
-                  />
-                  <label htmlFor="is_active_ent" className="text-sm font-medium text-slate-700 select-none cursor-pointer">Active Profile</label>
-                </div>
-                <div className="flex gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleSubmit}
-                    disabled={submitting || !formData.name}
-                    className="px-8 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 active:scale-95 disabled:opacity-50 transition-all font-bold text-sm flex items-center gap-2 shadow-lg shadow-slate-900/20"
-                  >
-                    {submitting && <Loader2 size={16} className="animate-spin" />}
-                    {submitting ? 'Processing...' : 'Save Contact'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-md p-6 shadow-2xl border-none">
-            <div className="flex items-center gap-3 text-rose-600 mb-4">
-              <Trash2 size={24} />
-              <h3 className="text-xl font-bold">Hapus Kontak?</h3>
-            </div>
-            <p className="text-slate-600 mb-8 leading-relaxed">
-              Anda akan menghapus data <strong className="text-slate-900">{selectedEntity?.name}</strong>. Semua data armada dan driver yang terhubung mungkin akan terpengaruh.
+      {/* Master Kontak Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 flex flex-col items-center justify-center text-slate-400">
+            <Loader2 className="animate-spin mb-2" size={32} />
+            <p>Memuat data Master Kontak...</p>
+          </div>
+        ) : tableResult.items.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">
+            <Building2 className="mx-auto mb-3 text-slate-300" size={48} />
+            <p className="text-lg font-medium text-slate-700">Data kontak tidak ditemukan</p>
+            <p className="text-sm mt-1">
+              {searchTerm
+                ? `Tidak ada kontak untuk kata kunci "${searchTerm}".`
+                : 'Silakan tambahkan Customer atau Kontak baru.'}
             </p>
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] uppercase tracking-wider font-semibold">
+                    <th
+                      className="p-3.5 cursor-pointer hover:text-blue-600 select-none whitespace-nowrap"
+                      onClick={() => toggleSort('entity_code')}
+                    >
+                      Kode Contact
+                    </th>
+                    <th
+                      className="p-3.5 cursor-pointer hover:text-blue-600 select-none whitespace-nowrap"
+                      onClick={() => toggleSort('initial_name')}
+                      title="Inisial / Nama Singkat sesuai aturan pembentukan kode & alias perusahaan"
+                    >
+                      Initial Name
+                    </th>
+                    <th
+                      className="p-3.5 cursor-pointer hover:text-blue-600 select-none"
+                      onClick={() => toggleSort('name')}
+                    >
+                      Nama Contact / Dagang
+                    </th>
+                    <th
+                      className="p-3.5 cursor-pointer hover:text-blue-600 select-none"
+                      onClick={() => toggleSort('legal_name')}
+                    >
+                      Nama Legal
+                    </th>
+                    <th className="p-3.5 whitespace-nowrap">Parent Company (Induk)</th>
+                    <th className="p-3.5 whitespace-nowrap">NPWP / Pajak</th>
+                    <th className="p-3.5">Email</th>
+                    <th className="p-3.5 whitespace-nowrap">Telepon / WhatsApp</th>
+                    <th className="p-3.5 whitespace-nowrap">Status</th>
+                    <th
+                      className="p-3.5 cursor-pointer hover:text-blue-600 select-none whitespace-nowrap"
+                      onClick={() => toggleSort('updated_at')}
+                    >
+                      Pembaruan
+                    </th>
+                    <th className="p-3.5 text-right whitespace-nowrap">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-xs">
+                  {tableResult.items.map((ent) => {
+                    const initialName = deriveInitialName(ent)
+                    const roles = getEntityRoles(ent)
+                    const parentSummary = resolveParentCompany(ent, tableResult.parentMap)
+                    const cleanPhone = sanitizeContactPhone(ent.phone || ent.mobile)
+                    const cleanWa = sanitizeContactPhone(ent.whatsapp)
+                    const emailDisplay = ent.email || ent.billing_email || ''
+                    const isHighlighted = highlightedId === ent.id
+
+                    return (
+                      <tr
+                        key={ent.id}
+                        className={`transition-colors ${
+                          isHighlighted
+                            ? 'bg-blue-50/70 hover:bg-blue-50'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        {/* 1. Kode Contact / Customer */}
+                        <td className="p-3.5 font-mono text-slate-700 font-bold whitespace-nowrap">
+                          <span className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-slate-800">
+                            {ent.entity_code || '-'}
+                          </span>
+                        </td>
+
+                        {/* 2. Initial Name */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <span
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono"
+                            title={`Initial Name: ${initialName}`}
+                          >
+                            {initialName}
+                          </span>
+                        </td>
+
+                        {/* 3. Nama Contact / Nama Dagang + Role Badges */}
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-900 text-sm leading-snug">
+                            {ent.name}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                            {roles.map((r) => {
+                              const badgeStyles: Record<string, string> = {
+                                CUSTOMER: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                SUPPLIER: 'bg-purple-50 text-purple-700 border-purple-200',
+                                VENDOR: 'bg-amber-50 text-amber-700 border-amber-200',
+                                BROKER: 'bg-blue-50 text-blue-700 border-blue-200',
+                              }
+                              return (
+                                <span
+                                  key={r}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                                    badgeStyles[r] || 'bg-slate-100 text-slate-600 border-slate-200'
+                                  }`}
+                                >
+                                  {r}
+                                </span>
+                              )
+                            })}
+                            {ent.city && (
+                              <span className="text-[11px] text-slate-400 flex items-center gap-0.5 ml-1">
+                                <MapPin size={10} /> {ent.city}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 4. Nama Legal */}
+                        <td className="p-3.5 text-slate-700 font-medium">
+                          {ent.legal_name || ent.name || '-'}
+                        </td>
+
+                        {/* 5. Parent Company / Relasi Induk */}
+                        <td className="p-3.5">
+                          {parentSummary ? (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50/80 border border-blue-200 text-blue-800 text-[11px] font-medium">
+                              <GitMerge size={12} className="text-blue-600 shrink-0" />
+                              <span className="truncate max-w-[180px]" title={parentSummary.label}>
+                                {parentSummary.label}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">Mandiri</span>
+                          )}
+                        </td>
+
+                        {/* 6. NPWP / Identitas Pajak */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          {ent.tax_id ? (
+                            <div>
+                              <span className="font-mono text-slate-700 font-medium">
+                                {ent.tax_id}
+                              </span>
+                              {ent.tax_status && (
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                  {ent.tax_status}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+
+                        {/* 7. Email */}
+                        <td className="p-3.5 text-slate-600">
+                          {emailDisplay ? (
+                            <div className="flex items-center gap-1.5">
+                              <Mail size={12} className="text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[180px]" title={emailDisplay}>
+                                {emailDisplay}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+
+                        {/* 8. Telepon / WhatsApp */}
+                        <td className="p-3.5 text-slate-600 whitespace-nowrap">
+                          {cleanPhone || cleanWa ? (
+                            <div className="space-y-0.5">
+                              {cleanPhone && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone size={12} className="text-slate-400 shrink-0" />
+                                  <span>{cleanPhone}</span>
+                                </div>
+                              )}
+                              {cleanWa && cleanWa !== cleanPhone && (
+                                <div className="flex items-center gap-1.5 text-emerald-700">
+                                  <MessageSquare size={12} className="text-emerald-500 shrink-0" />
+                                  <span>{cleanWa}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+
+                        {/* 9. Status Aktif / Nonaktif */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              ent.is_active !== false
+                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                ent.is_active !== false ? 'bg-green-500' : 'bg-red-500'
+                              }`}
+                            />
+                            {ent.is_active !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+
+                        {/* 10. Tanggal Pembaruan / Aktivitas */}
+                        <td className="p-3.5 text-slate-500 whitespace-nowrap">
+                          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-700">
+                            <Clock size={11} className="text-slate-400" />
+                            <span>{formatUpdatedDate(ent.updated_at || ent.created_at)}</span>
+                          </div>
+                          {formatUpdatedTime(ent.updated_at || ent.created_at) && (
+                            <div className="text-[10px] text-slate-400 pl-4">
+                              {formatUpdatedTime(ent.updated_at || ent.created_at)} WIB
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 11. Aksi: Lihat Detail, Edit, Hapus */}
+                        <td className="p-3.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setViewingEntity(ent)}
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Lihat Detail Kontak"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleEditAction(ent)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit Data Kontak / Customer"
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(ent.id)}
+                              className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus Kontak"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <span>
+                  Menampilkan{' '}
+                  <strong className="text-slate-800">{tableResult.items.length}</strong> dari{' '}
+                  <strong className="text-slate-800">{tableResult.totalItems}</strong> kontak
+                </span>
+                <span className="text-slate-300">|</span>
+                <label className="flex items-center gap-1.5">
+                  <span>Baris:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded px-2 py-1 text-xs font-medium text-slate-700"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={tableResult.currentPage <= 1}
+                  className="px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 font-medium"
+                >
+                  <ChevronLeft size={14} /> Prev
+                </button>
+                <span className="px-2.5 py-1 font-semibold text-slate-700">
+                  Halaman {tableResult.currentPage} / {tableResult.totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(tableResult.totalPages, p + 1))}
+                  disabled={tableResult.currentPage >= tableResult.totalPages}
+                  className="px-2.5 py-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 font-medium"
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* View Detail Modal */}
+      {viewingEntity && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-mono text-xs font-bold">
+                  {viewingEntity.entity_code || '-'}
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">{viewingEntity.name}</h2>
+                  <p className="text-xs text-slate-500">
+                    Initial Name: <strong className="font-mono">{deriveInitialName(viewingEntity)}</strong> • ID Kanonik:{' '}
+                    <code className="text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">{viewingEntity.id}</code>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingEntity(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
-                Cancel
-              </button>
-              <button 
-                onClick={handleDelete}
-                disabled={submitting}
-                className="px-6 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition-all font-medium text-sm flex items-center gap-2"
-              >
-                {submitting && <Loader2 size={16} className="animate-spin" />}
-                {submitting ? 'Deleting...' : 'Ya, Hapus'}
+                <X size={20} />
               </button>
             </div>
-          </Card>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Nama Contact / Dagang</div>
+                <div className="font-bold text-slate-800 mt-0.5">{viewingEntity.name}</div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Nama Legal Badan Usaha</div>
+                <div className="font-bold text-slate-800 mt-0.5">
+                  {viewingEntity.legal_name || viewingEntity.name || '-'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Parent Company (Induk)</div>
+                <div className="font-medium text-slate-800 mt-0.5">
+                  {resolveParentCompany(viewingEntity, tableResult.parentMap)?.label || 'Mandiri (Tidak ada induk)'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">NPWP / Identitas Pajak</div>
+                <div className="font-mono font-medium text-slate-800 mt-0.5">
+                  {viewingEntity.tax_id || '-'}{' '}
+                  {viewingEntity.tax_status ? `(${viewingEntity.tax_status})` : ''}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Email & Penagihan</div>
+                <div className="font-medium text-slate-800 mt-0.5">
+                  {viewingEntity.email || viewingEntity.billing_email || '-'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Telepon / WhatsApp</div>
+                <div className="font-medium text-slate-800 mt-0.5">
+                  {sanitizeContactPhone(viewingEntity.phone || viewingEntity.mobile) || '-'}
+                  {sanitizeContactPhone(viewingEntity.whatsapp)
+                    ? ` • WA: ${sanitizeContactPhone(viewingEntity.whatsapp)}`
+                    : ''}
+                </div>
+              </div>
+              <div className="md:col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-xs text-slate-400 font-semibold uppercase">Alamat Utama & Penagihan</div>
+                <div className="font-medium text-slate-800 mt-0.5">
+                  {viewingEntity.address || viewingEntity.billing_address || '-'}
+                  {viewingEntity.city ? `, ${viewingEntity.city}` : ''}
+                  {viewingEntity.province ? `, ${viewingEntity.province}` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                Terakhir diperbarui: <strong>{formatUpdatedDate(viewingEntity.updated_at || viewingEntity.created_at)}</strong>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewingEntity(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200/60"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => {
+                    const target = viewingEntity
+                    setViewingEntity(null)
+                    handleEditAction(target)
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
+                >
+                  <Edit2 size={14} /> Edit Lengkap
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Master Customer Modal (Dedicated V1 per SPEC-MC-2026-10-V1) */}
+      {/* Approved 5-Tab Master Customer Modal (Identitas, Hierarki, Penagihan, PIC, Ship-To) */}
       <MasterCustomerModal
         isOpen={isCustomerModalOpen}
         onClose={() => {
-          setIsCustomerModalOpen(false);
-          setSelectedCustomerId(null);
+          setIsCustomerModalOpen(false)
+          setEditingCustomerId(null)
         }}
         onSuccess={() => {
-          fetchEntities();
+          setIsCustomerModalOpen(false)
+          setEditingCustomerId(null)
+          fetchEntities()
         }}
-        selectedEntityId={selectedCustomerId}
+        selectedEntityId={editingCustomerId}
       />
+
+      {/* General Contact Modal (for non-customer contacts: Supplier / Vendor / Broker) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Building2 className="text-blue-600" />
+                {editingEntity ? 'Edit Kontak Rekanan' : 'Tambah Kontak Rekanan'}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Role Selection */}
+              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Tipe Peran Kontak
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_customer}
+                      onChange={(e) => handleRoleChange('customer', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Customer</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_supplier}
+                      onChange={(e) => handleRoleChange('supplier', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Supplier</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_vendor}
+                      onChange={(e) => handleRoleChange('vendor', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Vendor</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_broker}
+                      onChange={(e) => handleRoleChange('broker', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Broker</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Kode Kontak *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.entity_code}
+                    onChange={(e) => setFormData({ ...formData, entity_code: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    NPWP / Tax ID
+                  </label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input
+                      type="text"
+                      value={formData.tax_id}
+                      onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
+                      placeholder="00.000.000.0-000.000"
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Nama Contact / Singkat *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Contoh: PT Maju Jaya Logistik"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Nama Legal Badan Usaha
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.legal_name}
+                    onChange={(e) => setFormData({ ...formData, legal_name: e.target.value })}
+                    placeholder="Contoh: PT Maju Jaya Logistik"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="billing@company.com"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Telepon
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="021-5551234"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.whatsapp}
+                    onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                    placeholder="0812-3456-7890"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Address Info with Google Maps Input */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Alamat Utama (Cari via Google Maps)
+                  </label>
+                  <GoogleMapsInput
+                    defaultValue={formData.address}
+                    onPlaceSelect={(data) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        address: data.address,
+                        city: data.city || prev.city,
+                        province: data.province || prev.province,
+                        postal_code: data.postal_code || prev.postal_code,
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                      }))
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Kota / Kabupaten
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Provinsi
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.province}
+                      onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Kode Pos
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.postal_code}
+                      onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Status Kontak Aktif</span>
+                </label>
+              </div>
+
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3 -mx-6 -mb-6 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-200/50 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                  Simpan Kontak
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
+}
+
+export default function TenantContactsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-12 flex flex-col items-center justify-center text-slate-400">
+          <Loader2 className="animate-spin mb-2" size={32} />
+          <p>Memuat halaman Master Kontak...</p>
+        </div>
+      }
+    >
+      <TenantContactsContent />
+    </Suspense>
+  )
 }
