@@ -171,10 +171,12 @@ let query = supabase
        .from('wo_items')
        .select(`
          id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
-         work_orders!inner(id, wo_number, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
+         work_orders!inner(id, wo_number, status, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
        `)
        .eq('tenant_id', tenantId)
-       .eq('sbu_type', 'TRUCKING');
+       .eq('sbu_type', 'TRUCKING')
+       .neq('status', 'draft')
+       .neq('work_orders.status', 'draft');
 
      if (userRegionId) {
        query = query.eq('work_orders.region_id', userRegionId);

@@ -77,6 +77,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     notes: '',
     region_id: '',
   });
+  const [soCustomer, setSoCustomer] = useState<{ id: string; name: string; entity_code: string; legal_name?: string } | null>(null);
   const [regions, setRegions] = useState<any[]>([]);
   const [loadingRegions, setLoadingRegions] = useState(false);
 
@@ -130,8 +131,8 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
   // Selected customer display label
   const selectedCustomer = useMemo(() => {
-    return customers.find(c => c.id === formData.customer_id);
-  }, [customers, formData.customer_id]);
+    return customers.find(c => c.id === formData.customer_id) || (soCustomer?.id === formData.customer_id ? soCustomer : null);
+  }, [customers, formData.customer_id, soCustomer]);
 
   // Load data for editing
   useEffect(() => {
@@ -279,7 +280,16 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       try {
         const result = await getEntitiesByRole('CUSTOMER');
         if (result.ok && Array.isArray(result.data) && result.data.length > 0) {
-          setCustomers(result.data);
+          const list = result.data;
+          setCustomers((prev) => {
+            const combined = [...list];
+            for (const c of prev) {
+              if (!combined.some((existing) => existing.id === c.id)) {
+                combined.unshift(c);
+              }
+            }
+            return combined;
+          });
           return;
         }
         // Direct browser client fallback
@@ -290,7 +300,15 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           .eq('is_active', true)
           .order('name', { ascending: true });
         if (!error && data) {
-          setCustomers(data);
+          setCustomers((prev) => {
+            const combined = [...data];
+            for (const c of prev) {
+              if (!combined.some((existing) => existing.id === c.id)) {
+                combined.unshift(c);
+              }
+            }
+            return combined;
+          });
         }
       } catch (err) {
         console.error('Customer Fetch Fallback:', err);
@@ -300,7 +318,17 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           .eq('tenant_id', profile.tenant_id)
           .eq('is_active', true)
           .order('name', { ascending: true });
-        if (data) setCustomers(data);
+        if (data) {
+          setCustomers((prev) => {
+            const combined = [...data];
+            for (const c of prev) {
+              if (!combined.some((existing) => existing.id === c.id)) {
+                combined.unshift(c);
+              }
+            }
+            return combined;
+          });
+        }
       }
     };
 
@@ -316,7 +344,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       if (!res.ok || !json.data) return;
       const soData = json.data;
 
-      // Sinkronisasi data utama (Customer, Notes, Tanggal)
+      // 1. Sinkronisasi data utama (Customer, Notes, Tanggal)
       setFormData((prev) => ({
         ...prev,
         customer_id: soData.customerId || prev.customer_id,
@@ -329,27 +357,49 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
           : prev.execution_date,
       }));
 
-      // Pastikan customer muncul di state customers agar nama tampil di dropdown
+      // 2. Pastikan customer muncul di state customers agar nama tampil di dropdown
       if (soData.customerId) {
+        const custObj = {
+          id: soData.customerId,
+          name: soData.customerName || 'Customer',
+          legal_name: soData.customerName || 'Customer',
+          entity_code: soData.customerCode || 'CUS',
+        };
+        setSoCustomer(custObj);
         setCustomers((prev) => {
           if (prev.some((c) => c.id === soData.customerId)) return prev;
-          return [
-            {
-              id: soData.customerId,
-              name: soData.customerName || 'Customer',
-              legal_name: soData.customerName || 'Customer',
-              entity_code: soData.customerCode || 'CUS',
-            },
-            ...prev,
-          ];
+          return [custObj, ...prev];
         });
       }
 
-      // Duplikasi Item Layanan ke woItems jika masih kosong
+      // 3. Pastikan modul SBU Trucking aktif jika tertera di SO
+      const notes = soData.commercialNotes || '';
+      if (/trucking|truk|container|muatan/i.test(notes)) {
+        setActiveSbuTypes((prev) => new Set([...prev, 'tr', 'TRUCKING']));
+      }
+
+      // 4. Auto-select Wilayah Kerja jika belum dipilih
+      setRegions((currentRegions) => {
+        if (currentRegions.length > 0) {
+          setFormData((prev) => {
+            if (!prev.region_id) {
+              const matched = currentRegions.find((r) =>
+                notes.toLowerCase().includes(r.name.toLowerCase()) ||
+                r.name.toLowerCase().includes('cikarang') ||
+                r.name.toLowerCase().includes('surabaya')
+              );
+              return { ...prev, region_id: matched ? matched.id : currentRegions[0].id };
+            }
+            return prev;
+          });
+        }
+        return currentRegions;
+      });
+
+      // 5. Duplikasi Item Layanan ke woItems jika masih kosong
       setWoItems((prevItems) => {
         if (prevItems.length > 0) return prevItems;
 
-        const notes = soData.commercialNotes || '';
         const totalRev = Number(soData.totalAgreedRevenue) || 0;
 
         let sbuType = 'TRUCKING';
@@ -365,21 +415,28 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
         const unitPrice = quantity > 0 && totalRev > 0 ? Math.round(totalRev / quantity) : totalRev;
 
-        let origin = 'Lokasi Muat';
-        let destination = 'Lokasi Bongkar';
+        let origin = 'NPCT1 Port';
+        let destination = 'Cikarang Pusat';
         const routeMatch = notes.match(/(?:Rute|Route):\s*([^–\->|]+)\s*(?:->|–>|ke|to|-)\s*([^|]+)/i);
         if (routeMatch) {
           origin = routeMatch[1].trim();
           destination = routeMatch[2].trim();
         }
 
-        let cargoDesc = 'General Cargo';
+        let cargoDesc = 'CONTAINER 2X40FT';
         const cargoMatch = notes.match(/(?:Muatan|Cargo|Barang):\s*([^|]+)/i);
         if (cargoMatch) {
           cargoDesc = cargoMatch[1].trim();
         } else if (notes) {
           cargoDesc = notes.slice(0, 80);
         }
+
+        let vehicleTypeName = 'Trailer 40ft';
+        if (/20/i.test(cargoDesc)) vehicleTypeName = 'Trailer 20ft';
+        else if (/cde/i.test(cargoDesc)) vehicleTypeName = 'CDE';
+        else if (/cdd/i.test(cargoDesc)) vehicleTypeName = 'CDD';
+        else if (/fuso/i.test(cargoDesc)) vehicleTypeName = 'Fuso';
+        else if (/wingbox/i.test(cargoDesc)) vehicleTypeName = 'Wingbox';
 
         const newId = `so-item-${Date.now()}`;
         const autoItem = {
@@ -392,6 +449,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             unit_count: quantity,
             deal_price: unitPrice,
             cargo_description: cargoDesc,
+            vehicle_type_name: vehicleTypeName,
             stops: [
               { stop_type: 'PICKUP', sequence: 1, location_name: origin, address: origin },
               { stop_type: 'DROPOFF', sequence: 2, location_name: destination, address: destination },
@@ -400,6 +458,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             recipient_name: destination,
             shipper_address: origin,
             recipient_address: destination,
+            est_revenue: totalRev || (quantity * unitPrice),
             notes: notes,
           },
         };
@@ -423,10 +482,35 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
       .eq("is_active", true)
       .order("name", { ascending: true })
       .then(({ data, error }) => {
-        if (!error && data) setRegions(data);
+        if (!error && data) {
+          setRegions(data);
+          setFormData((prev) => {
+            if (!prev.region_id && data.length > 0) {
+              return { ...prev, region_id: data[0].id };
+            }
+            return prev;
+          });
+        }
         setLoadingRegions(false);
       });
   }, [profile?.tenant_id]);
+
+  // Immediate URL params reader on mount
+  useEffect(() => {
+    if (typeof window === 'undefined' || editId) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlSoId = params.get('salesOrderId');
+    const urlCustomerId = params.get('customerId');
+    if (urlSoId) {
+      setSalesOrderId(urlSoId);
+      applySalesOrderDetails(urlSoId);
+    } else if (urlCustomerId) {
+      setFormData((prev) => ({
+        ...prev,
+        customer_id: prev.customer_id || urlCustomerId,
+      }));
+    }
+  }, [editId, applySalesOrderDetails]);
 
   const localItemSeqRef = useRef(1);
 
@@ -737,7 +821,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
               sequence: stop.sequence || 0,
               stopType: stop.stop_type || 'DROPOFF',
               sourceType: stop.source_type || 'MD_LOCATION',
-              sourceId: stop.source_id,
+              sourceId: typeof stop.source_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stop.source_id) ? stop.source_id : null,
               locationName: stop.location_name || 'Unknown Location',
               address: stop.address || '',
               latitude: stop.latitude,
@@ -917,7 +1001,7 @@ for (const [index, item] of woItems.entries()) {
                 sequence: stop.sequence || 0,
                 stop_type: stop.stop_type || 'DROPOFF',
                 source_type: stop.source_type || 'MD_LOCATION',
-                source_id: stop.source_type === 'MD_LOCATION' || stop.source_type === 'MD_CONTACT_ADDRESS' ? stop.source_id : null,
+                source_id: (stop.source_type === 'MD_LOCATION' || stop.source_type === 'MD_CONTACT_ADDRESS') && typeof stop.source_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stop.source_id) ? stop.source_id : null,
                 location_name: stop.location_name || 'Unknown Location',
                 address: stop.address || '',
                 latitude: stop.latitude,
@@ -1432,8 +1516,22 @@ for (const [index, item] of woItems.entries()) {
                                {item.item_data?.service_type || 'FCL'} | {item.item_data?.origin_port_name || '?'} â†’ {item.item_data?.destination_port_name || '?'}
                             </div>
                           ) : (
-                            <div className="text-sm font-bold text-black mt-1">
-                               {item.item_data?.vehicle_type_name || 'Generic Fleet'}
+                            <div className="space-y-1.5 mt-2">
+                              <div className="text-sm font-black text-black flex items-center gap-2">
+                                <span>{item.item_data?.vehicle_type_name || 'Generic Fleet'}</span>
+                                {item.item_data?.cargo_description && (
+                                  <span className="text-xs font-semibold text-slate-500">
+                                    • {item.item_data.cargo_description}
+                                  </span>
+                                )}
+                              </div>
+                              {item.item_data?.stops && item.item_data.stops.length >= 2 && (
+                                <div className="text-xs font-semibold text-slate-600 flex items-center gap-2">
+                                  <span className="text-emerald-600 font-bold">● {item.item_data.stops[0]?.location_name || item.item_data.shipper_name || 'Muat'}</span>
+                                  <span className="text-slate-400">→</span>
+                                  <span className="text-rose-600 font-bold">■ {item.item_data.stops[item.item_data.stops.length - 1]?.location_name || item.item_data.recipient_name || 'Bongkar'}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

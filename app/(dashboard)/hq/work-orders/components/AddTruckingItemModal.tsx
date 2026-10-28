@@ -263,8 +263,29 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
         });
 
         setMasterLocations(locRes.data || []);
-        setVehicleTypes(vehRes.data || []);
+        const loadedVehicles = vehRes.data || [];
+        setVehicleTypes(loadedVehicles);
         setContactAddresses(allCombined);
+
+        // Pre-select vehicle type if empty and initialData has vehicle_type_name
+        if (loadedVehicles.length > 0) {
+          setFormData((prev) => {
+            if (!prev.vehicle_type_id) {
+              const preferredName = (initialData?.item_data?.vehicle_type_name || '').toLowerCase();
+              const matched = preferredName
+                ? loadedVehicles.find((v: any) =>
+                    v.type_name?.toLowerCase().includes(preferredName) ||
+                    preferredName.includes(v.type_name?.toLowerCase()) ||
+                    (preferredName.includes('40') && v.type_name?.includes('40')) ||
+                    (preferredName.includes('20') && v.type_name?.includes('20'))
+                  )
+                : null;
+              const chosen = matched || loadedVehicles[0];
+              return { ...prev, vehicle_type_id: chosen?.id || '' };
+            }
+            return prev;
+          });
+        }
       } catch (err) {
         console.error('[AddTruckingItem] Global Fetch Error:', err);
       } finally {
@@ -312,7 +333,8 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
       total_revenue: estRevenue,
       item_data: {
         ...formData,
-        vehicle_type_name: vehicleType?.type_name,
+        vehicle_type_name: vehicleType?.type_name || initialData?.item_data?.vehicle_type_name || 'Trailer 40ft',
+        cargo_description: (formData as any).cargo_description || initialData?.item_data?.cargo_description || 'CONTAINER 2X40FT',
         stops,
         est_revenue: estRevenue,
         est_distance_km: routeStats?.distanceKm,
@@ -436,6 +458,19 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
                           </button>
                         )}
                       </div>
+
+                      {stop.location_name && (
+                        <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs flex items-center justify-between text-blue-900">
+                          <div>
+                            <span className="font-extrabold uppercase text-[9px] tracking-widest text-blue-700 block mb-0.5">Alamat Otomatis dari SO</span>
+                            <span className="font-bold">{stop.location_name}</span>
+                            {stop.address && stop.address !== stop.location_name && (
+                              <span className="text-slate-500 font-normal ml-1">({stop.address})</span>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 bg-blue-200/80 text-blue-800 rounded font-black text-[9px] uppercase tracking-wider">Prefilled</span>
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap gap-2 p-1 bg-white/50 rounded-xl border border-slate-100 w-fit">
                         <button 
@@ -679,7 +714,7 @@ export default function AddTruckingItemModal({ onClose, onAdd, initialData, cust
             <div className="mt-auto flex flex-col gap-3">
               <button 
                 onClick={handleAdd}
-                disabled={!formData.vehicle_type_id || stops.some(s => !s.source_id)}
+                disabled={!formData.vehicle_type_id || stops.some(s => !s.source_id && !s.location_name && !s.address)}
                 className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-blue-500 shadow-xl shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50"
               >
                 {initialData ? 'CONFIRM & UPDATE ITEM' : 'ADD TRUCKING ITEM'}
