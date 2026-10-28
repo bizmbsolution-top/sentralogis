@@ -94,6 +94,7 @@ const SECTION_NAV: Record<NavigationSection, NavGroup[]> = {
         { label: 'Work Orders', href: '/sbu/trucking/work-orders', icon: <Truck className="w-4 h-4" /> },
         { label: 'Job Orders', href: '/hq/job-orders', icon: <ClipboardList className="w-4 h-4" /> },
         { label: 'Assignments', href: '/sbu/trucking/assignments', icon: <Package className="w-4 h-4" /> },
+        { label: 'Documents', href: '/sbu/trucking/documents', icon: <FileText className="w-4 h-4" /> },
         { label: 'Completed', href: '/sbu/trucking/completed', icon: <Package className="w-4 h-4" /> },
       ],
     },
@@ -233,6 +234,20 @@ export function resolveSections(visible: NavigationSection[], role?: string | nu
           continue;
         }
 
+        // SBU role filtering for Execution section groups
+        if (id === 'execution' && role && role.startsWith('sbu_')) {
+          const r = role.toLowerCase();
+          if ((r.includes('tr') || r.includes('truck')) && g.label !== 'Trucking') {
+            continue;
+          }
+          if ((r.includes('wh') || r.includes('warehouse')) && g.label !== 'Warehouse') {
+            continue;
+          }
+          if ((r.includes('clear') || r.includes('customs')) && g.label !== 'Customs') {
+            continue;
+          }
+        }
+
         const items = g.items.filter((item) => {
           if (id === 'administration' && g.label === 'Master Data') {
             const categories = masterDataCategoriesForPath(item.href);
@@ -268,7 +283,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     s.groups.some((g) => g.items.some((item) => isRouteActive(pathname, item.href)))
   )?.id;
 
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({ administration: true });
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({ administration: true, execution: true });
 
   // Keep the section that contains the current route expanded across navigation / mode switches.
   React.useEffect(() => {

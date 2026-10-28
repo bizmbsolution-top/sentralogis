@@ -193,7 +193,7 @@ export function getVisibleNavigationSections(
       return ['work', 'fulfillment', 'shipments', 'intelligence'];
     }
     if (role.includes('tr')) {
-      return ['work', 'execution', 'shipments', 'intelligence'];
+      return ['work', 'execution', 'intelligence'];
     }
     if (role.includes('wh')) {
       return ['work', 'execution', 'customers', 'intelligence'];

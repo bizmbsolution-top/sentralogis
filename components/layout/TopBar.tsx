@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Menu, Search, Bell, Bot } from 'lucide-react';
+import { Menu, Search, Bot } from 'lucide-react';
 import { useNavigation, getNavigationSectionLabel } from './AppShell';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useOptionalCopilotV2 } from '@/components/copilot/v2/CopilotV2Provider';
 import ProfileDropdown from './ProfileDropdown';
+import NotificationBell from './NotificationBell';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -89,13 +90,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           </button>
         )}
 
-        <button
-          aria-label="Notifications"
-          className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificationBell />
 
         <div className="pl-2 border-l border-slate-200 dark:border-slate-700 flex items-center gap-2">
           {/* User profile dropdown containing Profile links and Logout */}

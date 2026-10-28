@@ -20,6 +20,7 @@ import AddTruckingItemModal from './AddTruckingItemModal';
 import AddWarehouseItemModal from './AddWarehouseItemModal';
 import AddForwardingItemModal from './AddForwardingItemModal';
 import ContactFormModal from '@/components/master/ContactFormModal';
+import { sendNotification } from '@/lib/supabase/notifications';
 
 interface CreateWOFormProps {
   onBack: () => void;
@@ -1198,6 +1199,43 @@ for (const [index, item] of woItems.entries()) {
         toast.error(`Tersimpan dengan peringatan kontrol: ${controlWarnings.join(' | ')}`);
       } else {
         toast.success(editId ? 'Perubahan berhasil disimpan' : 'Work Order berhasil dibuat & disubmit ke SBU!');
+      }
+
+      // Trigger instant notifications to SBU staff when WO is submitted
+      if (status !== 'draft' && profile?.tenant_id) {
+        try {
+          const customer = customers.find((c) => c.id === formData.customer_id);
+          const customerLabel = customer?.name || customer?.legal_name || 'Customer';
+
+          if (activeSbuTypes.has('tr')) {
+            sendNotification(profile.tenant_id, {
+              role: 'sbu_ops_tr',
+              title: 'Work Order Baru Perlu Penugasan',
+              message: `WO ${woNumber} (${customerLabel}) siap ditugaskan ke armada truck.`,
+              link: `/sbu/trucking/work-orders?status=need_assignment`,
+              metadata: { type: 'wo_need_assignment', wo_number: woNumber, wo_id: woId },
+            }).catch(() => {});
+            sendNotification(profile.tenant_id, {
+              role: 'sbu_manager_tr',
+              title: 'Work Order Baru Perlu Penugasan',
+              message: `WO ${woNumber} (${customerLabel}) siap ditugaskan ke armada truck.`,
+              link: `/sbu/trucking/work-orders?status=need_assignment`,
+              metadata: { type: 'wo_need_assignment', wo_number: woNumber, wo_id: woId },
+            }).catch(() => {});
+          }
+
+          if (activeSbuTypes.has('wh')) {
+            sendNotification(profile.tenant_id, {
+              role: 'sbu_ops_wh',
+              title: 'Work Order Gudang Baru',
+              message: `WO ${woNumber} (${customerLabel}) siap dieksekusi di gudang.`,
+              link: `/sbu/warehouse/work-orders/${woId}`,
+              metadata: { type: 'wo_warehouse', wo_number: woNumber, wo_id: woId },
+            }).catch(() => {});
+          }
+        } catch (notifErr) {
+          console.warn('Could not dispatch SBU notification:', notifErr);
+        }
       }
 
       // Sync Sales Order status & total revenue if created from Sales Order
