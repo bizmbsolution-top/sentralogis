@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 
 // Initialize Supabase admin client to bypass RLS for webhook
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+// supabaseAdmin client provided by @/lib/supabase/admin
 
 // GET request for Meta Webhook Verification
 export async function GET(req: Request) {

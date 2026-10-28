@@ -5,16 +5,13 @@
 // with fallback for JOs whose departure_detected_at is NULL but all routes
 // completed (legacy data from the pre-geofence era).
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 import { JoAutoCompleteService } from '@/src/application/trucking/services/JoAutoCompleteService';
 
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// supabase client provided by supabaseAdmin
 
 export async function GET() {
   try {

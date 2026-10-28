@@ -2,15 +2,12 @@
 // Sync GPS positions from EasyGo to job_tracking
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 import { EasyGoSyncService } from '@/src/application/gps/EasyGoSyncService';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// supabase client provided by supabaseAdmin
 
 export async function POST(req: NextRequest) {
   try {

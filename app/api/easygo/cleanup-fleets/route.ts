@@ -1,14 +1,11 @@
 // POST /api/easygo/cleanup-fleets
 // Merge duplicate fleets: keep the one with easygo_vehicle_id, delete others
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// supabase client provided by supabaseAdmin
 
 export async function POST(req: NextRequest) {
   try {

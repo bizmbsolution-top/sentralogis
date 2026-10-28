@@ -1,15 +1,12 @@
 // [AI] Cron: Auto-confirm after 30 mins & Auto-start GPS at planned_departure_at
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 import { sendPushNotification, type PushPayload } from '@/lib/push/sender';
 
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// supabase client provided by supabaseAdmin
 
 export async function GET() {
   try {

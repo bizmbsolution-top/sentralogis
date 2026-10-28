@@ -1,16 +1,13 @@
 // GET /api/fleet-status?tenant_id=xxx
 // Returns fleet status combined with GPS live data (supports cross-tenant vendor fleets)
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase, supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isJoTrackableStatus, JO_TERMINAL_STATUSES } from '@/lib/domain/jo/status';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// supabase client provided by supabaseAdmin
 
 export async function GET(req: NextRequest) {
   try {
