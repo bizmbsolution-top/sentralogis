@@ -471,28 +471,59 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     }
   }, []);
 
-  // Fetch trucking regions for region picker
+  // Fetch trucking regions for region picker with API fallback
   useEffect(() => {
-    if (!profile?.tenant_id) return;
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) return;
     setLoadingRegions(true);
-    supabase
-      .from("md_trucking_regions")
-      .select("id, name, level")
-      .eq("tenant_id", profile.tenant_id)
-      .eq("is_active", true)
-      .order("name", { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setRegions(data);
+
+    const fetchTruckingRegions = async () => {
+      try {
+        let regionList: any[] = [];
+        // 1. Coba browser client Supabase
+        const { data, error } = await supabase
+          .from("md_trucking_regions")
+          .select("id, name, level")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          regionList = data;
+        } else {
+          // 2. Fallback ke endpoint server admin (akan auto-seed jika belum ada)
+          const res = await fetch(`/api/md/trucking-regions?tenant_id=${tenantId}`);
+          const json = await res.json().catch(() => ({}));
+          if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+            regionList = json.data;
+          }
+        }
+
+        setRegions(regionList);
+        if (regionList.length > 0) {
           setFormData((prev) => {
-            if (!prev.region_id && data.length > 0) {
-              return { ...prev, region_id: data[0].id };
+            if (!prev.region_id) {
+              const notes = (prev.notes || '').toLowerCase();
+              const matched = regionList.find((r) =>
+                (notes.includes('cikarang') && r.name.toLowerCase().includes('cikarang')) ||
+                (notes.includes('bekasi') && r.name.toLowerCase().includes('bekasi')) ||
+                (notes.includes('jakarta') && r.name.toLowerCase().includes('jakarta')) ||
+                (notes.includes('surabaya') && r.name.toLowerCase().includes('surabaya')) ||
+                notes.includes(r.name.toLowerCase())
+              );
+              return { ...prev, region_id: matched ? matched.id : regionList[0].id };
             }
             return prev;
           });
         }
+      } catch (err) {
+        console.error('Error fetching regions:', err);
+      } finally {
         setLoadingRegions(false);
-      });
+      }
+    };
+
+    fetchTruckingRegions();
   }, [profile?.tenant_id]);
 
   // Immediate URL params reader on mount
@@ -591,8 +622,15 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
 
     // [VALIDATION] Region required when TRUCKING SBU is active
     if (activeSbuTypes.has("tr") && !formData.region_id) {
-      toast.error("Wilayah tujuan wajib dipilih untuk SBU Trucking.");
-      return;
+      if (regions.length > 0) {
+        const fallbackRegion = regions.find((r) =>
+          (formData.notes || '').toLowerCase().includes(r.name.toLowerCase())
+        ) || regions[0];
+        formData.region_id = fallbackRegion.id;
+      } else {
+        toast.error("Wilayah operasional wajib dipilih untuk SBU Trucking.");
+        return;
+      }
     }
 
     // [VALIDATION] Execution datetime must be >= order datetime (date + time).
@@ -1427,7 +1465,7 @@ for (const [index, item] of woItems.entries()) {
               <Card className="p-6 border-slate-200 shadow-none !rounded-[2rem]">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                    <MapPin size={12} /> Wilayah Tujuan (Kota Surabaya) *
+                    <MapPin size={12} /> Wilayah Operasional / Tujuan *
                   </label>
                   <select
                     disabled={isReadOnly || loadingRegions}
@@ -1435,9 +1473,11 @@ for (const [index, item] of woItems.entries()) {
                     onChange={(e) => setFormData({...formData, region_id: e.target.value})}
                     className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold text-slate-900 focus:ring-4 focus:ring-blue-600/5 outline-none transition-all disabled:opacity-70"
                   >
-                    <option value="">Pilih Wilayah Kerja</option>
+                    <option value="">
+                      {loadingRegions ? 'Memuat wilayah operasional...' : regions.length === 0 ? 'Belum ada wilayah operasional terdaftar' : '-- Pilih Wilayah Operasional --'}
+                    </option>
                     {regions.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}{r.level ? ` - ${r.level}` : ''}</option>
+                      <option key={r.id} value={r.id}>{r.name}{r.level ? ` (${r.level})` : ''}</option>
                     ))}
                   </select>
                 </div>

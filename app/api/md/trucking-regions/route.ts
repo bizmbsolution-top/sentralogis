@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("md_trucking_regions")
       .select("*")
       .eq("tenant_id", tenantId)
@@ -23,7 +23,27 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    // Auto-seed standard regions if tenant has none yet
+    if (!data || data.length === 0) {
+      const defaultRegions = [
+        { tenant_id: tenantId, name: 'Jawa Barat', level: 'PROVINCE', is_active: true },
+        { tenant_id: tenantId, name: 'DKI Jakarta', level: 'PROVINCE', is_active: true },
+        { tenant_id: tenantId, name: 'Jawa Timur', level: 'PROVINCE', is_active: true },
+        { tenant_id: tenantId, name: 'Cikarang / Bekasi', level: 'CITY', is_active: true },
+        { tenant_id: tenantId, name: 'Jakarta', level: 'CITY', is_active: true },
+        { tenant_id: tenantId, name: 'Surabaya', level: 'CITY', is_active: true },
+      ];
+      const { data: seeded, error: seedErr } = await supabase
+        .from("md_trucking_regions")
+        .insert(defaultRegions)
+        .select()
+        .order("name", { ascending: true });
+      if (!seedErr && seeded) {
+        data = seeded;
+      }
+    }
+
+    return NextResponse.json({ success: true, data: data || [] });
   } catch (error: any) {
     console.error("GET trucking-regions error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
