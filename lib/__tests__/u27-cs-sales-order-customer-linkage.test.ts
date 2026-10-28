@@ -345,9 +345,9 @@ describe('CS Sales Order Creation & Customer Linkage (Phase 4B / U-27)', () => {
   });
 
   // ------------------------------------------------------------------
-  // 6. User without commercial:manage CANNOT confirm Sales Order
+  // 6. CS and Commercial can both confirm Sales Order; unprivileged roles cannot
   // ------------------------------------------------------------------
-  it('6. CONFIRMATION GATE: hq_cs is strictly prevented from confirming SO; must remain DRAFT', async () => {
+  it('6. CONFIRMATION GATE: hq_cs (sales_order:create) and commercial (commercial:manage) can both confirm SO', async () => {
     const created = await createSalesOrder(
       {
         engagementId: ENG_A1,
@@ -357,13 +357,26 @@ describe('CS Sales Order Creation & Customer Linkage (Phase 4B / U-27)', () => {
       csIdentityA,
     );
 
-    // CS attempts to confirm
-    await expect(confirmSalesOrder(created.salesOrder.id, csIdentityA)).rejects.toThrow();
+    // Unprivileged user (driver) cannot confirm
+    await expect(confirmSalesOrder(created.salesOrder.id, driverIdentityA)).rejects.toThrow();
 
-    // Commercial manager can confirm
-    const confirmed = await confirmSalesOrder(created.salesOrder.id, commercialIdentityA);
-    expect(confirmed.status).toBe('CONFIRMED');
-    expect(confirmed.confirmedAt).toBeDefined();
+    // CS can confirm
+    const confirmedByCs = await confirmSalesOrder(created.salesOrder.id, csIdentityA);
+    expect(confirmedByCs.status).toBe('CONFIRMED');
+    expect(confirmedByCs.confirmedAt).toBeDefined();
+
+    // Commercial manager can also confirm draft SOs
+    const created2 = await createSalesOrder(
+      {
+        engagementId: ENG_A1,
+        orderDate: '2026-10-18',
+        totalAgreedRevenue: 3000000,
+      },
+      commercialIdentityA,
+    );
+    const confirmedByComm = await confirmSalesOrder(created2.salesOrder.id, commercialIdentityA);
+    expect(confirmedByComm.status).toBe('CONFIRMED');
+    expect(confirmedByComm.confirmedAt).toBeDefined();
   });
 
   // ------------------------------------------------------------------

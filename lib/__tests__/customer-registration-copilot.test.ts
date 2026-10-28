@@ -467,8 +467,8 @@ describe('Targeted: Customer Registration via Copilot', () => {
     expect(partyRole?.role_type).toBe('CUSTOMER');
   });
 
-  // 8. customer:register does NOT grant commercial:manage authority (cannot confirm or cancel Sales Orders)
-  it('8. Role hq_cs with customer:register CANNOT confirm or cancel Sales Orders (requires commercial:manage)', async () => {
+  // 8. SO Confirmation: CS (sales_order:create) and Commercial (commercial:manage) can confirm; unprivileged cannot
+  it('8. Role hq_cs can confirm Sales Orders, while unprivileged role ground_staff is rejected', async () => {
     const fakeSo = {
       id: 'so-uuid-test-9999',
       tenant_id: TENANT_A,
@@ -480,11 +480,12 @@ describe('Targeted: Customer Registration via Copilot', () => {
     };
     mockSalesOrders.push(fakeSo);
 
-    // Attempting to confirm with csIdentityA must throw 403 / IdentityResolutionError
-    await expect(confirmSalesOrder('so-uuid-test-9999', csIdentityA)).rejects.toThrow(/commercial:manage/);
+    // Attempting to confirm with unprivileged groundStaffIdentityA must throw 403 / IdentityResolutionError
+    await expect(confirmSalesOrder('so-uuid-test-9999', groundStaffIdentityA)).rejects.toThrow();
 
-    // Attempting to cancel with csIdentityA must throw 403 / IdentityResolutionError
-    await expect(cancelSalesOrder('so-uuid-test-9999', csIdentityA, 'Alasan pembatalan')).rejects.toThrow(/commercial:manage/);
+    // CS can confirm Sales Order directly
+    const confirmed = await confirmSalesOrder('so-uuid-test-9999', csIdentityA);
+    expect(confirmed.status).toBe('CONFIRMED');
   });
 
   // 9. Operational non-interference: Zero operational WO / JO generation occurs

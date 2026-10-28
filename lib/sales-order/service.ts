@@ -578,7 +578,7 @@ export async function confirmSalesOrder(
   salesOrderId: string,
   context: IdentityContext,
 ): Promise<SalesOrder> {
-  assertPermission(context, 'commercial:manage');
+  assertAnyPermission(context, ['commercial:manage', 'sales_order:create']);
   const tenantId = context.tenantId;
 
   const current = await findById(tenantId, salesOrderId);
@@ -619,7 +619,7 @@ export async function cancelSalesOrder(
   context: IdentityContext,
   reason?: string,
 ): Promise<SalesOrder> {
-  assertPermission(context, 'commercial:manage');
+  assertAnyPermission(context, ['commercial:manage', 'sales_order:create']);
   const tenantId = context.tenantId;
 
   const current = await findById(tenantId, salesOrderId);
