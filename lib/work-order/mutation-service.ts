@@ -375,8 +375,11 @@ function isRpcUnavailable(data: unknown, error: DbError | null): boolean {
     if (
       error.code === 'PGRST202' ||
       error.code === '42883' ||
+      error.code === '42703' ||
       msg.includes('Could not find the function') ||
-      msg.includes('rpc_wo_mutation_execute_v1')
+      msg.includes('rpc_wo_mutation_execute_v1') ||
+      msg.includes('target_fulfillment_date') ||
+      msg.includes('does not exist')
     ) {
       return true;
     }
@@ -545,7 +548,6 @@ export class WorkOrderMutationService {
         updated_by: context.userId,
         created_at: now,
         updated_at: now,
-        ...(input.targetFulfillmentDate ? { target_fulfillment_date: input.targetFulfillmentDate } : {}),
         ...(input.transporterId ? { transporter_id: input.transporterId } : {}),
       };
 
@@ -1079,7 +1081,6 @@ export class WorkOrderMutationService {
       if (input.orderDate !== undefined) patch.order_date = input.orderDate;
       if (input.executionDate !== undefined) patch.execution_date = input.executionDate;
       if (input.executionTime !== undefined) patch.execution_time = input.executionTime;
-      if (input.targetFulfillmentDate !== undefined) patch.target_fulfillment_date = input.targetFulfillmentDate;
       if (input.notes !== undefined) patch.notes = input.notes;
       if (input.transporterId !== undefined) patch.transporter_id = input.transporterId;
 
