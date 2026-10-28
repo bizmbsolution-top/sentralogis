@@ -275,9 +275,9 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 
   [ROLE_HQ_DIRECTOR_CS]: [
     'copilot:read',
-    'commercial:read',
-    'work_order:read', 'work_order:update',
-    'job_order:read',
+    'commercial:read', 'commercial:manage',
+    'work_order:read', 'work_order:create', 'work_order:update',
+    'job_order:read', 'job_order:create',
     'customer_visibility:read',
     'intelligence:read',
   ],
@@ -342,8 +342,8 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
     'copilot:read',
     'customer:register',
     'sales_order:create', 'sales_order:read',
-    'work_order:read', 'work_order:update',
-    'job_order:read',
+    'work_order:read', 'work_order:create', 'work_order:update',
+    'job_order:read', 'job_order:create',
     'customer_visibility:read',
   ],
 
