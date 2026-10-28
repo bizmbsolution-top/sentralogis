@@ -383,6 +383,31 @@ export async function listWorkOrderItems(
   return (data || []).map(mapWorkItemRow);
 }
 
+export async function findWorkOrderItemById(
+  context: IdentityContext,
+  itemId: string,
+): Promise<WorkOrderItem | null> {
+  assertPermission(context, 'work_order:read');
+  validateUuid(itemId, 'itemId');
+
+  const { data, error } = await db()
+    .from('wo_items')
+    .select(
+      `
+      id, tenant_id, wo_id, item_code, sbu_type, status, max_jo_count,
+      unit_price, total_revenue, item_data, sbu_metadata, created_at, updated_at
+      `,
+    )
+    .eq('id', itemId)
+    .eq('tenant_id', context.tenantId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+  return mapWorkItemRow(data);
+}
+
 export async function listJobOrdersForWorkOrderItem(
   context: IdentityContext,
   workOrderItemId: string,

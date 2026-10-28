@@ -28,7 +28,13 @@ import type {
 import { findSalesOrderById } from '@/lib/sales-order/service';
 import { findFulfillmentCompositionById } from '@/lib/fulfillment/service';
 import { ShipmentService } from '@/lib/domain/shipment/shipment-service';
-import { findJobOrderById, enrichJobOrdersWithEntityNames } from '@/lib/work-order/service';
+import {
+  findJobOrderById,
+  enrichJobOrdersWithEntityNames,
+  findWorkOrderViewById,
+  findWorkOrderItemById,
+  listWorkOrderItems,
+} from '@/lib/work-order/service';
 import { FinancialService } from '@/lib/financial/service';
 
 // Custom Gateway Error
@@ -157,6 +163,32 @@ function mapInvoiceStatusColor(status: string): 'green' | 'yellow' | 'red' | 'bl
     case 'CANCELLED':
     case 'OVERDUE':
     case 'WRITTEN_OFF':
+      return 'red';
+    default:
+      return 'gray';
+  }
+}
+
+function mapWorkOrderStatusColor(status: string): 'green' | 'yellow' | 'red' | 'blue' | 'gray' {
+  const s = (status || '').trim().toLowerCase();
+  switch (s) {
+    case 'completed':
+    case 'done':
+    case 'pekerjaan selesai':
+    case 'ready_for_billing':
+    case 'verified':
+      return 'green';
+    case 'in_progress':
+    case 'assigned':
+    case 'aktif':
+    case 'on_road':
+      return 'blue';
+    case 'need_assignment':
+    case 'pending':
+    case 'draft':
+      return 'yellow';
+    case 'cancelled':
+    case 'rejected':
       return 'red';
     default:
       return 'gray';
@@ -424,6 +456,104 @@ async function getInvoiceDetail(ctx: IdentityContext, id: string): Promise<Entit
   };
 }
 
+async function getWorkOrderDetail(ctx: IdentityContext, id: string): Promise<EntityDetail> {
+  assertPermission(ctx, 'work_order:read');
+
+  let wo: any = null;
+  let targetWoId = id;
+  let matchedItem: any = null;
+
+  try {
+    wo = await findWorkOrderViewById(ctx, targetWoId);
+  } catch {
+    // If not found directly by work_orders.id, try resolving as wo_items.id
+    try {
+      const item = await findWorkOrderItemById(ctx, targetWoId);
+      if (item) {
+        matchedItem = item;
+        targetWoId = item.woId;
+        wo = await findWorkOrderViewById(ctx, targetWoId);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!wo) {
+      throw new ReadGatewayError('NOT_FOUND', 404, `Work Order ${id} not found in tenant or authorized scope.`);
+    }
+  }
+
+  // Fetch items for this work order to enrich details
+  let items: any[] = [];
+  try {
+    items = await listWorkOrderItems(ctx, wo.id);
+  } catch {
+    // ignore
+  }
+
+  const primaryItem = matchedItem || items[0];
+  const itemData = (primaryItem as any)?.itemData || {};
+  const origin = itemData?.origin || itemData?.origin_address || itemData?.pickup_address;
+  const destination = itemData?.destination || itemData?.destination_address || itemData?.delivery_address;
+  const cargo = itemData?.cargo_description || itemData?.goods_name || itemData?.cargo_type;
+
+  const isTrucking =
+    primaryItem?.sbuType === 'TRUCKING' ||
+    ctx.sbuScope === 'trucking' ||
+    (ctx.role && (ctx.role.includes('_tr') || ctx.role.includes('trucking')));
+
+  const fields: DetailField[] = [
+    { label: 'WO Number', value: wo.woNumber },
+    { label: 'Status', value: wo.status },
+    ...(wo.customerName ? [{ label: 'Customer', value: wo.customerName }] : []),
+    ...(primaryItem?.itemCode ? [{ label: 'Item Code', value: primaryItem.itemCode }] : []),
+    ...(primaryItem?.sbuType ? [{ label: 'SBU Type', value: primaryItem.sbuType }] : []),
+    ...(origin ? [{ label: 'Origin', value: origin }] : []),
+    ...(destination ? [{ label: 'Destination', value: destination }] : []),
+    ...(cargo ? [{ label: 'Muatan', value: cargo }] : []),
+    ...(primaryItem?.maxJoCount ? [{ label: 'Kebutuhan Unit', value: `${primaryItem.maxJoCount} Unit` }] : []),
+    { label: 'Order Date', value: wo.orderDate ? String(wo.orderDate).slice(0, 10) : '-' },
+    { label: 'Execution Date', value: wo.executionDate ? String(wo.executionDate).slice(0, 10) : '-' },
+  ];
+
+  const timeline: TimelineEvent[] = [];
+  if (wo.orderDate) {
+    timeline.push({
+      id: `wo-${wo.id}-ordered`,
+      date: wo.orderDate,
+      title: 'Work Order Created',
+      description: `WO ${wo.woNumber} initiated for ${wo.customerName || 'Customer'}`,
+      type: 'info',
+    });
+  }
+  if (wo.executionDate) {
+    timeline.push({
+      id: `wo-${wo.id}-execution`,
+      date: wo.executionDate,
+      title: 'Scheduled Execution Date',
+      description: `Execution planned for ${wo.executionDate}`,
+      type: 'info',
+    });
+  }
+
+  const navRoute = isTrucking
+    ? `/sbu/trucking/work-orders?status=pending&itemId=${primaryItem?.id || wo.id}&action=assign`
+    : `/hq/work-orders?q=${encodeURIComponent(wo.woNumber)}`;
+
+  return {
+    type: 'work-order' as EntityType,
+    id: wo.id,
+    title: wo.woNumber + (primaryItem?.itemCode ? ` • ${primaryItem.itemCode}` : ''),
+    subtitle: `Work Order • Customer: ${wo.customerName || 'Belum tercatat'}`,
+    status: wo.status,
+    statusColor: mapWorkOrderStatusColor(wo.status),
+    navigationRoute: navRoute,
+    fields,
+    timeline: timeline.length > 0 ? timeline : undefined,
+    evidence: [],
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Unified Public Dispatcher
 // ----------------------------------------------------------------------------
@@ -450,11 +580,15 @@ export async function getEntityDetail(
       return getJobOrderDetail(ctx, id.trim());
     case 'invoice':
       return getInvoiceDetail(ctx, id.trim());
+    case 'work-order':
+    case 'work_order':
+    case 'work-order-item':
+      return getWorkOrderDetail(ctx, id.trim());
     default:
       throw new ReadGatewayError(
         'BAD_REQUEST',
         400,
-        `Unsupported entity type: '${type}'. Authorized read scope includes only: sales-order, fulfillment, shipment, job-order, invoice.`,
+        `Unsupported entity type: '${type}'. Authorized read scope includes only: sales-order, fulfillment, shipment, job-order, invoice, work-order.`,
       );
   }
 }

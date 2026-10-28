@@ -44,6 +44,9 @@ vi.mock('@/lib/domain/shipment/shipment-service', () => {
 vi.mock('@/lib/work-order/service', () => ({
   findJobOrderById: vi.fn(),
   enrichJobOrdersWithEntityNames: vi.fn(),
+  findWorkOrderViewById: vi.fn(),
+  findWorkOrderItemById: vi.fn(),
+  listWorkOrderItems: vi.fn(),
 }));
 
 vi.mock('@/lib/financial/service', () => {
@@ -128,6 +131,13 @@ describe('Sentralogis Copilot V2 — Read Gateway Implementation Suite', () => {
       const ctx = createIdentityContext({ permissions: ['shipment:read'] });
       await expect(getEntityDetail(ctx, 'invoice', 'inv-123')).rejects.toThrow(
         /Missing required permission: commercial:read/,
+      );
+    });
+
+    test('T02-PERM-WO: rejects work-order when context lacks work_order:read', async () => {
+      const ctx = createIdentityContext({ permissions: ['shipment:read'] });
+      await expect(getEntityDetail(ctx, 'work-order', 'wo-123')).rejects.toThrow(
+        /Missing required permission: work_order:read/,
       );
     });
 
@@ -371,6 +381,44 @@ describe('Sentralogis Copilot V2 — Read Gateway Implementation Suite', () => {
       expect(detail.status).toBe('PAID');
       expect(detail.statusColor).toBe('green');
       expect(detail.fields.some((f) => f.label === 'Total Amount' && f.value.includes((77700000).toLocaleString()))).toBe(true);
+    });
+
+    test('T04-DELEG-WO: hydrates work-order via findWorkOrderViewById and normalizes', async () => {
+      const { findWorkOrderViewById, listWorkOrderItems } = await import('@/lib/work-order/service');
+      (findWorkOrderViewById as any).mockResolvedValue({
+        id: 'wo-uuid-001',
+        woNumber: 'HALU-TPS-1026-001',
+        status: 'need_assignment',
+        orderDate: '2026-10-26',
+        executionDate: '2026-10-27',
+        customerName: 'PT TPS Logistics',
+      });
+      (listWorkOrderItems as any).mockResolvedValue([
+        {
+          id: 'item-uuid-001',
+          woId: 'wo-uuid-001',
+          itemCode: 'HALU-TPS-1026-001/TR01',
+          sbuType: 'TRUCKING',
+          maxJoCount: 2,
+          itemData: {
+            origin: 'Jakarta Port',
+            destination: 'Bekasi Hub',
+            cargo_description: 'Electronics',
+          },
+        },
+      ]);
+
+      const ctx = createIdentityContext({ permissions: ['work_order:read'], sbuScope: 'trucking' as any });
+      const detail = await getEntityDetail(ctx, 'work-order', 'wo-uuid-001');
+
+      expect(detail.type).toBe('work-order');
+      expect(detail.id).toBe('wo-uuid-001');
+      expect(detail.title).toContain('HALU-TPS-1026-001');
+      expect(detail.status).toBe('need_assignment');
+      expect(detail.statusColor).toBe('yellow');
+      expect(detail.navigationRoute).toContain('/sbu/trucking/work-orders');
+      expect(detail.fields.some((f) => f.label === 'Customer' && f.value === 'PT TPS Logistics')).toBe(true);
+      expect(detail.fields.some((f) => f.label === 'Origin' && f.value === 'Jakarta Port')).toBe(true);
     });
   });
 

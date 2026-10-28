@@ -93,6 +93,7 @@ export interface EntityDetail {
   fields: DetailField[];
   timeline?: TimelineEvent[];
   evidence?: EvidenceItem[];
+  navigationRoute?: string;
 }
 
 export interface DetailField {

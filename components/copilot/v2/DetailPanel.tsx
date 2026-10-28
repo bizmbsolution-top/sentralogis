@@ -51,7 +51,7 @@ const EVIDENCE_ICONS: Record<string, React.ReactNode> = {
 // ---------------------------------------------------------------------------
 
 export function DetailPanel() {
-  const { detailPanel, closeDetail } = useCopilotV2();
+  const { detailPanel, closeDetail, activeScope } = useCopilotV2();
   const [activeTab, setActiveTab] = useState<'details' | 'timeline' | 'evidence'>('details');
 
   if (detailPanel.type === 'empty' || !detailPanel.entity) {
@@ -117,13 +117,31 @@ export function DetailPanel() {
         )}
         {entity.type === 'work-order' && (
           <div className="mt-2.5">
-            <Link
-              href={`/hq/work-orders?q=${encodeURIComponent(entity.title || entity.id)}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
-            >
-              <span>Buka di HQ Work Orders</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            {entity.navigationRoute ? (
+              <Link
+                href={entity.navigationRoute}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+              >
+                <span>{entity.navigationRoute.includes('/sbu/trucking') ? 'Buka Form Penugasan Armada (SBU)' : 'Buka Halaman Work Order'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : activeScope === 'sbu' ? (
+              <Link
+                href={`/sbu/trucking/work-orders?status=pending&itemId=${encodeURIComponent(entity.id)}&action=assign`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+              >
+                <span>Buka Form Penugasan Armada (SBU)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <Link
+                href={`/hq/work-orders?q=${encodeURIComponent(entity.title || entity.id)}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+              >
+                <span>Buka di HQ Work Orders</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
           </div>
         )}
       </div>

@@ -239,20 +239,83 @@ let query = supabase
   useEffect(() => {
     const itemId = searchParams.get('itemId');
     const action = searchParams.get('action');
+    if (!itemId && !action) return;
+
+    // 1. Try finding in loaded items first
     if (itemId && items.length > 0) {
-      const item = items.find(i => i.id === itemId);
+      const item = items.find(
+        (i) =>
+          i.id === itemId ||
+          i.wo_id === itemId ||
+          i.work_orders?.id === itemId ||
+          i.item_code === itemId
+      );
       if (item) {
         setSelectedItemForAssignment(item);
         setShowAssignmentModal(true);
+        return;
       }
-    } else if (action === 'create' && items.length > 0) {
-      const pendingItem = items.find(i => filterItemByTab(i, 'pending')) || items[0];
+    }
+
+    // 2. Direct fetch fallback: if itemId is given and not yet selected/loaded in items
+    if (itemId && (!selectedItemForAssignment || selectedItemForAssignment.id !== itemId)) {
+      let isCancelled = false;
+      (async () => {
+        try {
+          const { data: directItems, error: directErr } = await supabase
+            .from('wo_items')
+            .select(`
+              id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
+              work_orders!inner(id, wo_number, status, execution_date, execution_time, md_entities!customer_id(name, legal_name, phone))
+            `)
+            .or(`id.eq.${itemId},wo_id.eq.${itemId}`);
+
+          if (isCancelled || directErr || !directItems || directItems.length === 0) return;
+
+          const directItem = directItems[0];
+          const { data: joData } = await supabase
+            .from('job_orders')
+            .select(`
+              id, wo_item_id, status, wa_link_sent_at, assigned_at, driver_response, tracking_token, wa_token, jo_number,
+              fleet_id, driver_id, transporter_id, driver_link_token,
+              is_doc_finished, is_cost_finished,
+              transporter:md_entities!transporter_id(name),
+              driver:md_drivers(name, phone, md_entities(is_own))
+            `)
+            .eq('wo_item_id', directItem.id);
+
+          if (isCancelled) return;
+
+          const enrichedItem = {
+            ...directItem,
+            item_data:
+              typeof directItem.item_data === 'string'
+                ? JSON.parse(directItem.item_data)
+                : directItem.item_data || {},
+            job_orders: joData || [],
+          };
+
+          setSelectedItemForAssignment(enrichedItem);
+          setShowAssignmentModal(true);
+        } catch (e) {
+          console.error('[SBU-TRUCK] Direct item fetch failed:', e);
+        }
+      })();
+
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    // 3. Fallback action create
+    if (action === 'create' && items.length > 0) {
+      const pendingItem = items.find((i) => filterItemByTab(i, 'pending')) || items[0];
       if (pendingItem) {
         setSelectedItemForAssignment(pendingItem);
         setShowAssignmentModal(true);
       }
     }
-  }, [searchParams, items]);
+  }, [searchParams, items, selectedItemForAssignment]);
 
   const stats = {
     total: items.filter(i => filterItemByTab(i, 'all')).length,
@@ -829,10 +892,12 @@ const filteredItems = useMemo(() => {
           item={selectedItemForAssignment}
           onClose={() => {
             setShowAssignmentModal(false);
+            setSelectedItemForAssignment(null);
             router.replace('/sbu/trucking/work-orders');
           }}
           onSuccess={() => { 
             setShowAssignmentModal(false); 
+            setSelectedItemForAssignment(null);
             router.replace('/sbu/trucking/work-orders');
             fetchData(); 
           }}
