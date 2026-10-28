@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { SBU_MAP, type SBUType } from '@/lib/utils/sbuMapping';
@@ -27,6 +28,7 @@ interface CreateWOFormProps {
 
 // [AI] Dynamic SBU options â€” replaced hardcoded list with DB-driven data
 export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
+  const router = useRouter();
   const { profile } = useAuth();
   const [submitting, setSubmitting] = useState<'draft' | 'submit' | null>(null);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -1195,8 +1197,31 @@ for (const [index, item] of woItems.entries()) {
       if (controlWarnings.length > 0) {
         toast.error(`Tersimpan dengan peringatan kontrol: ${controlWarnings.join(' | ')}`);
       } else {
-        toast.success(editId ? 'Perubahan berhasil disimpan' : 'Berhasil disimpan');
+        toast.success(editId ? 'Perubahan berhasil disimpan' : 'Work Order berhasil dibuat & disubmit ke SBU!');
       }
+
+      // Sync Sales Order status & total revenue if created from Sales Order
+      if (salesOrderId && profile?.tenant_id) {
+        try {
+          const soPatch: any = {
+            total_agreed_revenue: totalRevenue,
+            updated_at: new Date().toISOString(),
+          };
+          if (status !== 'draft') {
+            soPatch.status = 'IN_FULFILLMENT';
+          }
+          await (supabase.from as any)('sales_orders')
+            .update(soPatch)
+            .eq('id', salesOrderId)
+            .eq('tenant_id', profile.tenant_id);
+        } catch (soUpdateErr) {
+          console.warn('Could not sync Sales Order status/revenue:', soUpdateErr);
+        }
+
+        router.push(`/commercial/sales-orders/${salesOrderId}`);
+        return;
+      }
+
       onBack();
     } catch (err: any) {
       console.error('=== SUBMIT DIAGNOSTICS ===');
@@ -1233,8 +1258,17 @@ for (const [index, item] of woItems.entries()) {
 
       <div className="max-w-[1400px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-4 pt-12">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-black font-bold transition-all uppercase tracking-widest text-[10px]">
-            <ArrowLeft size={14} /> Back to Directory
+          <button 
+            onClick={() => {
+              if (salesOrderId) {
+                router.push(`/commercial/sales-orders/${salesOrderId}`);
+              } else {
+                onBack();
+              }
+            }} 
+            className="flex items-center gap-2 text-slate-400 hover:text-black font-bold transition-all uppercase tracking-widest text-[10px]"
+          >
+            <ArrowLeft size={14} /> {salesOrderId ? 'Back to Sales Order' : 'Back to Directory'}
           </button>
           <div className="md:text-right flex flex-col md:items-end gap-3">
             <div>
