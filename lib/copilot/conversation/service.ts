@@ -18,6 +18,8 @@ import { HybridContextBuilder } from './hybrid-context';
 import type {
   CopilotConversation,
   CopilotMessage,
+  ConversationStatus,
+  ConversationScope,
   CreateConversationInput,
   ListConversationsParams,
   AppendUserMessageInput,
@@ -77,6 +79,36 @@ export class ConversationService {
   }
 
   /**
+   * Resolve effective scope based on identity role and optional requested scope.
+   * Ensures strict separation between CS (Commercial) and SBU (Operations).
+   */
+  static resolveEffectiveScope(
+    identity: IdentityContext,
+    requestedScope?: ConversationScope | string | null
+  ): ConversationScope {
+    const role = (identity.role || '').toLowerCase();
+    // Dedicated SBU operational roles are strictly locked to 'sbu'
+    if (role.startsWith('sbu_') || role === 'driver' || role === 'ground_staff') {
+      return 'sbu';
+    }
+    // Dedicated CS / Commercial roles are strictly locked to 'cs'
+    if (
+      role === 'hq_cs' ||
+      role === 'hq_director_cs' ||
+      role === 'hq_commercial_director' ||
+      role === 'hq_sales_manager' ||
+      role === 'hq_sales_staff'
+    ) {
+      return 'cs';
+    }
+    // Roles with multi-workspace access (admin, owner, general dispatcher) honor the active context
+    const cleanReq = (requestedScope || '').trim().toLowerCase();
+    if (cleanReq === 'sbu') return 'sbu';
+    if (cleanReq === 'general') return 'general';
+    return 'cs';
+  }
+
+  /**
    * Ensure a valid, actor-owned conversation exists for the current turn,
    * creating one automatically if needed, and updating the default title
    * when the first meaningful user message arrives.
@@ -84,10 +116,12 @@ export class ConversationService {
   static async ensureConversationForTurn(
     identity: IdentityContext,
     requestedConversationId: string | null | undefined,
-    userMessageText: string
+    userMessageText: string,
+    requestedScope?: ConversationScope | string | null
   ): Promise<{ conversation: CopilotConversation; created: boolean }> {
     assertPermission(identity, 'copilot:read');
 
+    const effectiveScope = this.resolveEffectiveScope(identity, requestedScope);
     const candidateId = (requestedConversationId || '').trim();
     const canLookup =
       candidateId &&
@@ -117,6 +151,7 @@ export class ConversationService {
 
     const created = await this.createConversation(identity, {
       title: derivedTitle,
+      scope: effectiveScope,
     });
     return { conversation: created, created: true };
   }
@@ -153,10 +188,13 @@ export class ConversationService {
   ): Promise<CopilotConversation> {
     assertPermission(identity, 'copilot:read');
 
+    const effectiveScope = this.resolveEffectiveScope(identity, input?.scope);
+
     const conversation = await ConversationRepository.createConversation({
       tenantId: identity.tenantId,
       ownerActorId: identity.userId,
       title: input?.title,
+      scope: effectiveScope,
     });
 
     await this.recordAuditLog({
@@ -164,7 +202,7 @@ export class ConversationService {
       actorId: identity.userId,
       operation: 'COPILOT_CONVERSATION_CREATED',
       conversationId: conversation.id,
-      details: { title: conversation.title },
+      details: { title: conversation.title, scope: effectiveScope },
     });
 
     return conversation;
@@ -179,11 +217,14 @@ export class ConversationService {
   ): Promise<CopilotConversation[]> {
     assertPermission(identity, 'copilot:read');
 
+    const effectiveScope = this.resolveEffectiveScope(identity, params?.scope);
+
     return ConversationRepository.listConversations({
       tenantId: identity.tenantId,
       ownerActorId: identity.userId,
       limit: params?.limit,
       status: params?.status,
+      scope: effectiveScope,
     });
   }
 

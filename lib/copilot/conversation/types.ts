@@ -7,12 +7,14 @@
  */
 
 export type ConversationStatus = 'ACTIVE' | 'ARCHIVED';
+export type ConversationScope = 'cs' | 'sbu' | 'general';
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface CopilotConversation {
   id: string;
   tenantId: string;
   ownerActorId: string;
+  scope?: ConversationScope;
   title: string | null;
   status: ConversationStatus;
   contextSummary: string | null;
@@ -50,11 +52,13 @@ export interface CopilotMessage {
 
 export interface CreateConversationInput {
   title?: string | null;
+  scope?: ConversationScope;
 }
 
 export interface ListConversationsParams {
   limit?: number;
   status?: ConversationStatus;
+  scope?: ConversationScope;
 }
 
 export interface AppendUserMessageInput {

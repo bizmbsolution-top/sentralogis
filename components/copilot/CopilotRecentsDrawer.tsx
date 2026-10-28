@@ -112,7 +112,7 @@ export default function CopilotRecentsDrawer() {
                 Copilot Recents
               </h2>
               <p className="text-[10px] text-slate-400 truncate">
-                Histori percakapan lintas workspace
+                {copilot.activeScope === 'sbu' ? 'SBU Operasional & Armada' : 'CS & Commercial'}
               </p>
             </div>
           </div>
@@ -136,6 +136,32 @@ export default function CopilotRecentsDrawer() {
               <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Workspace Scope Switcher Tabs */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-800/40 p-1 gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => copilot.setActiveScope('cs')}
+            className={`flex-1 py-1.5 px-2 rounded text-xs font-semibold text-center transition-all ${
+              copilot.activeScope !== 'sbu'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            CS & Komersial
+          </button>
+          <button
+            type="button"
+            onClick={() => copilot.setActiveScope('sbu')}
+            className={`flex-1 py-1.5 px-2 rounded text-xs font-semibold text-center transition-all ${
+              copilot.activeScope === 'sbu'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            SBU Operasional
+          </button>
         </div>
 
         {/* Active Conversation Continuity Card */}

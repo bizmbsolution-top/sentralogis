@@ -51,8 +51,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message or image required' }, { status: 400 });
     }
 
-    // 1. Resolve or auto-create a persistent conversation owned by (tenantId, userId)
+    // 1. Resolve or auto-create a persistent conversation owned by (tenantId, userId, scope)
     const candidateConvId: string | null = reqConversationId || activeContext.conversationId || null;
+    const requestedScope = body.scope || activeContext.scope || null;
+    const effectiveScope = ConversationService.resolveEffectiveScope(ctx, requestedScope);
+
     let persistentConversationId: string | null = candidateConvId;
     let conversationTitle: string | null = null;
     let wasConversationCreated = false;
@@ -61,7 +64,8 @@ export async function POST(req: NextRequest) {
       const ensured = await ConversationService.ensureConversationForTurn(
         ctx,
         candidateConvId,
-        inputText
+        inputText,
+        effectiveScope
       );
       persistentConversationId = ensured.conversation.id;
       conversationTitle = ensured.conversation.title;
@@ -168,7 +172,10 @@ export async function POST(req: NextRequest) {
       permissions: PermissionContext.create(ctx.permissions || []),
       conversation: ConversationContext.create({
         conversationId: persistentConversationId || 'default-session',
-        conversationMemory: hydratedOrderFlowState ? { orderFlowState: hydratedOrderFlowState } : {},
+        conversationMemory: {
+          ...(hydratedOrderFlowState ? { orderFlowState: hydratedOrderFlowState } : {}),
+          scope: effectiveScope,
+        },
       }),
       workspace: WorkspaceContext.create(activeContext.workspace || {})
     });
@@ -247,6 +254,7 @@ export async function POST(req: NextRequest) {
       response: response,
       conversationId: persistentConversationId,
       conversationTitle,
+      scope: effectiveScope,
       read: {
         operationalSummary,
       }

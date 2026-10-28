@@ -21,10 +21,14 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const limitParam = searchParams.get('limit');
+    const scopeParam = searchParams.get('scope') as any;
     const parsedLimit = limitParam ? parseInt(limitParam, 10) : 50;
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;
 
-    const conversations = await ConversationService.listConversations(ctx, { limit });
+    const conversations = await ConversationService.listConversations(ctx, {
+      limit,
+      scope: scopeParam || undefined,
+    });
 
     return NextResponse.json({
       success: true,
@@ -54,6 +58,7 @@ export async function POST(req: NextRequest) {
 
     const conversation = await ConversationService.createConversation(ctx, {
       title: body.title,
+      scope: body.scope,
     });
 
     return NextResponse.json({

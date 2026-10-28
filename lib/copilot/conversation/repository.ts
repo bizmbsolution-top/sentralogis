@@ -17,6 +17,7 @@ import type {
   CopilotConversation,
   CopilotMessage,
   ConversationStatus,
+  ConversationScope,
   AppendUserMessageInput,
   AppendAssistantMessageInput,
 } from './types';
@@ -73,24 +74,40 @@ export class ConversationRepository {
     tenantId: string;
     ownerActorId: string;
     title?: string | null;
+    scope?: ConversationScope;
   }): Promise<CopilotConversation> {
     const db = getDb();
-    const row = {
+    const effectiveScope: ConversationScope = params.scope || 'cs';
+    const rowWithScope = {
       tenant_id: params.tenantId,
       owner_actor_id: params.ownerActorId,
       title: params.title !== undefined ? params.title : 'Percakapan Baru',
+      scope: effectiveScope,
       status: 'ACTIVE',
+      context_summary: `scope:${effectiveScope}`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       last_activity_at: new Date().toISOString(),
       deleted_at: null,
     };
 
-    const { data, error } = await db
+    let { data, error } = await db
       .from('copilot_conversations')
-      .insert(row)
+      .insert(rowWithScope)
       .select()
       .single();
+
+    // Graceful fallback if column `scope` is not present in target database schema
+    if (error && (error.code === '42703' || error.message?.includes('column "scope" of relation "copilot_conversations" does not exist'))) {
+      const { scope: _, ...rowWithoutScope } = rowWithScope;
+      const fallbackResult = await db
+        .from('copilot_conversations')
+        .insert(rowWithoutScope)
+        .select()
+        .single();
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       throw new Error(`Failed to create conversation: ${error.message}`);
@@ -143,6 +160,7 @@ export class ConversationRepository {
     ownerActorId: string;
     limit?: number;
     status?: ConversationStatus;
+    scope?: ConversationScope;
   }): Promise<CopilotConversation[]> {
     const db = getDb();
     let query = db
@@ -166,7 +184,14 @@ export class ConversationRepository {
       throw new Error(`Failed to list conversations: ${error.message}`);
     }
 
-    return (data || []).map((row: any) => this.mapConversationRow(row));
+    let list = (data || []).map((row: any) => this.mapConversationRow(row));
+
+    // Filter by scope if provided
+    if (params.scope) {
+      list = list.filter((conv: CopilotConversation) => (conv.scope || 'cs') === params.scope);
+    }
+
+    return list;
   }
 
   /**
@@ -560,10 +585,27 @@ export class ConversationRepository {
   }
 
   private static mapConversationRow(row: any): CopilotConversation {
+    let scope: ConversationScope = 'cs';
+    if (row.scope) {
+      scope = row.scope as ConversationScope;
+    } else if (row.context_summary) {
+      try {
+        if (typeof row.context_summary === 'string' && row.context_summary.startsWith('scope:')) {
+          scope = row.context_summary.split(':')[1] as ConversationScope;
+        } else if (typeof row.context_summary === 'string' && row.context_summary.startsWith('{')) {
+          const parsed = JSON.parse(row.context_summary);
+          if (parsed.scope) scope = parsed.scope;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return {
       id: row.id,
       tenantId: row.tenant_id,
       ownerActorId: row.owner_actor_id,
+      scope,
       title: row.title,
       status: row.status,
       contextSummary: row.context_summary,

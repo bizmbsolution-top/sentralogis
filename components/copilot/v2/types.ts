@@ -132,6 +132,7 @@ export interface Conversation {
 
 export interface RecentConversationItem {
   id: string;
+  scope?: 'cs' | 'sbu' | 'general';
   title: string | null;
   status: 'ACTIVE' | 'ARCHIVED';
   contextSummary?: string | null;

@@ -46,6 +46,8 @@ function WorkspaceInner() {
     startNewChat,
     conversationTitle,
     isLoadingMessages,
+    activeScope,
+    setActiveScope,
   } = useCopilotV2();
 
   const [showContext, setShowContext] = useState(true);
@@ -90,9 +92,18 @@ function WorkspaceInner() {
               <PanelLeft className="w-5 h-5" />
             </button>
           )}
-          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
-            COPILOT
-          </span>
+          <button
+            type="button"
+            onClick={() => setActiveScope(activeScope === 'sbu' ? 'cs' : 'sbu')}
+            title="Klik untuk beralih mode Copilot CS / SBU"
+            className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 transition-colors ${
+              activeScope === 'sbu'
+                ? 'text-amber-700 bg-amber-50 border border-amber-300 hover:bg-amber-100'
+                : 'text-blue-700 bg-blue-50 border border-blue-300 hover:bg-blue-100'
+            }`}
+          >
+            {activeScope === 'sbu' ? 'SBU OPS' : 'CS COMM'}
+          </button>
           <span className="text-xs font-medium text-slate-700 truncate max-w-[200px] sm:max-w-[340px]">
             {conversationTitle || 'Percakapan Baru'}
           </span>

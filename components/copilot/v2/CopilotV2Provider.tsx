@@ -17,12 +17,59 @@ import {
   deleteServerConversation,
 } from "./copilot-api-client";
 import { ConversationalSandboxEngine } from "@/lib/copilot/sandbox/sandbox-engine";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/hooks/useAuth";
 import type { ConversationalContextState } from "@/lib/copilot/sandbox/types";
 
-const ACTIVE_CONV_STORAGE_KEY = "sentralogis_copilot_active_conv_id";
-const NEW_CHAT_MODE_STORAGE_KEY = "sentralogis_copilot_new_chat_mode";
+export type ActiveCopilotScope = 'cs' | 'sbu' | 'general';
+
+export function getScopeFromPathname(pathname: string | null, role: string | null | undefined): ActiveCopilotScope {
+  const normRole = (role || '').toLowerCase();
+  if (normRole.startsWith('sbu_') || normRole === 'driver' || normRole === 'ground_staff') {
+    return 'sbu';
+  }
+  if (
+    normRole === 'hq_cs' ||
+    normRole === 'hq_director_cs' ||
+    normRole === 'hq_commercial_director' ||
+    normRole === 'hq_sales_manager' ||
+    normRole === 'hq_sales_staff'
+  ) {
+    return 'cs';
+  }
+  if (!pathname) return 'cs';
+  if (
+    pathname.startsWith('/sbu') ||
+    pathname.startsWith('/hq/work-orders') ||
+    pathname.startsWith('/reporting/operational')
+  ) {
+    return 'sbu';
+  }
+  return 'cs';
+}
+
+export function getWelcomeMessage(scope: ActiveCopilotScope): CopilotMessage {
+  if (scope === 'sbu') {
+    return {
+      id: "welcome-sbu",
+      role: "assistant",
+      type: "text",
+      content: "Selamat datang di Copilot SBU Operasional. Saya siap membantu Anda memeriksa Job Order, memantau pergerakan armada, dan penugasan supir.",
+      timestamp: new Date(),
+    };
+  }
+  return {
+    id: "welcome-cs",
+    role: "assistant",
+    type: "text",
+    content: "Selamat datang di Copilot Customer Service & Commercial. Saya siap membantu Anda melayani customer, mengelola Sales Order, dan orkestrasi Work Order.",
+    timestamp: new Date(),
+  };
+}
 
 export interface CopilotV2ContextType {
+  activeScope: ActiveCopilotScope;
+  setActiveScope: (scope: ActiveCopilotScope) => void;
   messages: CopilotMessage[];
   isProcessing: boolean;
   detailPanel: DetailPanelState;
@@ -97,7 +144,27 @@ function collectEntityRefsFromMessages(msgs: CopilotMessage[]): EntityReference[
 }
 
 function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
-  const [messages, setMessages] = useState<CopilotMessage[]>([WELCOME_MESSAGE]);
+  const pathname = usePathname();
+  const { profile } = useAuth();
+
+  const [activeScope, setActiveScope] = useState<ActiveCopilotScope>(() =>
+    getScopeFromPathname(typeof window !== "undefined" ? window.location.pathname : null, null)
+  );
+  const activeScopeRef = useRef<ActiveCopilotScope>(activeScope);
+
+  useEffect(() => {
+    activeScopeRef.current = activeScope;
+  }, [activeScope]);
+
+  // Keep active scope synced with current navigation route or role
+  useEffect(() => {
+    const derived = getScopeFromPathname(pathname, profile?.role);
+    if (derived !== activeScope) {
+      setActiveScope(derived);
+    }
+  }, [pathname, profile?.role, activeScope]);
+
+  const [messages, setMessages] = useState<CopilotMessage[]>([getWelcomeMessage(activeScope)]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [detailPanel, setDetailPanel] = useState<DetailPanelState>({ type: "empty" });
   const [activeEntityRefs, setActiveEntityRefs] = useState<EntityReference[]>([]);
@@ -118,7 +185,6 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
   const historyAbortRef = useRef<AbortController | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const orderFlowStateRef = useRef<any>(null);
-  const didInitRef = useRef(false);
   const conversationStateRef = useRef<ConversationalContextState>({
     conversationHistory: [],
   });
@@ -128,13 +194,14 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
     timerRefs.current = [];
   }, []);
 
-  const refreshRecents = useCallback(async (opts?: { silent?: boolean }): Promise<RecentConversationItem[]> => {
+  const refreshRecents = useCallback(async (opts?: { silent?: boolean; scope?: ActiveCopilotScope }): Promise<RecentConversationItem[]> => {
+    const targetScope = opts?.scope || activeScopeRef.current;
     if (!opts?.silent) {
       setIsLoadingRecents(true);
       setRecentsError(null);
     }
     try {
-      const result = await fetchRecentConversations({ limit: 30 });
+      const result = await fetchRecentConversations({ limit: 30, scope: targetScope });
       if (result.success) {
         const list = Array.isArray(result.data) ? result.data : [];
         setRecentConversations(list);
@@ -183,15 +250,17 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
 
       if (typeof window !== "undefined") {
         try {
-          sessionStorage.setItem(ACTIVE_CONV_STORAGE_KEY, targetId);
-          sessionStorage.removeItem(NEW_CHAT_MODE_STORAGE_KEY);
+          const currentScope = activeScopeRef.current;
+          sessionStorage.setItem(`sentralogis_copilot_active_conv_id_${currentScope}`, targetId);
+          sessionStorage.removeItem(`sentralogis_copilot_new_chat_mode_${currentScope}`);
         } catch {
           // ignore storage quota errors
         }
       }
 
+      const welcome = getWelcomeMessage(activeScopeRef.current);
       const loadedMessages =
-        result.messages && result.messages.length > 0 ? result.messages : [WELCOME_MESSAGE];
+        result.messages && result.messages.length > 0 ? result.messages : [welcome];
       setMessages(loadedMessages);
       setActiveEntityRefs(collectEntityRefsFromMessages(loadedMessages));
       setDetailPanel({ type: "empty" });
@@ -205,45 +274,6 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (didInitRef.current) return;
-    didInitRef.current = true;
-
-    let cancelled = false;
-    (async () => {
-      const list = await refreshRecents({ silent: false });
-      if (cancelled) return;
-
-      let savedConvId: string | null = null;
-      let isNewChatMode = false;
-      if (typeof window !== "undefined") {
-        try {
-          savedConvId = sessionStorage.getItem(ACTIVE_CONV_STORAGE_KEY);
-          isNewChatMode = sessionStorage.getItem(NEW_CHAT_MODE_STORAGE_KEY) === "1";
-        } catch {
-          // ignore
-        }
-      }
-
-      if (isNewChatMode) return;
-
-      const candidateId =
-        savedConvId && list.some((c) => c.id === savedConvId)
-          ? savedConvId
-          : list.length > 0
-            ? list[0].id
-            : null;
-
-      if (candidateId) {
-        await selectConversation(candidateId);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshRecents, selectConversation]);
-
   const startNewChat = useCallback(() => {
     clearTimers();
     abortControllerRef.current?.abort();
@@ -256,20 +286,63 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
     setConversationTitle(null);
     setActiveEntityRefs([]);
     setDetailPanel({ type: "empty" });
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([getWelcomeMessage(activeScopeRef.current)]);
     setIsProcessing(false);
     setIsLoadingMessages(false);
     setRecentsError(null);
 
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.removeItem(ACTIVE_CONV_STORAGE_KEY);
-        sessionStorage.setItem(NEW_CHAT_MODE_STORAGE_KEY, "1");
+        const currentScope = activeScopeRef.current;
+        sessionStorage.removeItem(`sentralogis_copilot_active_conv_id_${currentScope}`);
+        sessionStorage.setItem(`sentralogis_copilot_new_chat_mode_${currentScope}`, "1");
       } catch {
         // ignore
       }
     }
   }, [clearTimers]);
+
+  // Handle activeScope change and initial load
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await refreshRecents({ silent: false, scope: activeScope });
+      if (cancelled) return;
+
+      let savedConvId: string | null = null;
+      let isNewChatMode = false;
+      if (typeof window !== "undefined") {
+        try {
+          savedConvId = sessionStorage.getItem(`sentralogis_copilot_active_conv_id_${activeScope}`);
+          isNewChatMode = sessionStorage.getItem(`sentralogis_copilot_new_chat_mode_${activeScope}`) === "1";
+        } catch {
+          // ignore
+        }
+      }
+
+      if (isNewChatMode) {
+        startNewChat();
+        return;
+      }
+
+      const candidateId =
+        savedConvId && list.some((c) => c.id === savedConvId)
+          ? savedConvId
+          : list.length > 0
+            ? list[0].id
+            : null;
+
+      if (candidateId) {
+        await selectConversation(candidateId);
+      } else {
+        startNewChat();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScope, refreshRecents, selectConversation, startNewChat]);
 
   const clearConversation = startNewChat;
 
@@ -394,6 +467,7 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
       try {
         const transportResult = await sendCopilotMessage(trimmed, {
           conversationId: conversationIdRef.current,
+          scope: activeScopeRef.current,
           orderFlowState: orderFlowStateRef.current,
           signal: controller.signal,
         });
@@ -405,8 +479,9 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
           setConversationId(transportResult.conversationId);
           if (typeof window !== "undefined") {
             try {
-              sessionStorage.setItem(ACTIVE_CONV_STORAGE_KEY, transportResult.conversationId);
-              sessionStorage.removeItem(NEW_CHAT_MODE_STORAGE_KEY);
+              const currentScope = activeScopeRef.current;
+              sessionStorage.setItem(`sentralogis_copilot_active_conv_id_${currentScope}`, transportResult.conversationId);
+              sessionStorage.removeItem(`sentralogis_copilot_new_chat_mode_${currentScope}`);
             } catch {
               // ignore
             }
@@ -483,6 +558,8 @@ function CopilotV2RootProvider({ children }: { children: React.ReactNode }) {
   return (
     <CopilotV2Context.Provider
       value={{
+        activeScope,
+        setActiveScope,
         messages,
         isProcessing,
         detailPanel,

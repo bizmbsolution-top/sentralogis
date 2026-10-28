@@ -27,6 +27,7 @@ import type {
 export interface CopilotApiClientOptions {
   endpoint?: string;
   conversationId?: string | null;
+  scope?: 'cs' | 'sbu' | 'general';
   idempotencyKey?: string;
   orderFlowState?: any;
   workspace?: Record<string, any>;
@@ -253,9 +254,11 @@ export async function sendCopilotMessage(
   const payload: Record<string, any> = {
     message: text,
     conversationId: options.conversationId || undefined,
+    scope: options.scope || undefined,
     idempotencyKey,
     activeContext: {
       conversationId: options.conversationId || 'default-session',
+      scope: options.scope || undefined,
       orderFlowState: options.orderFlowState || undefined,
       workspace: options.workspace || {},
     },
@@ -417,10 +420,11 @@ export interface RecentConversationsResult {
  * GET /api/copilot/conversations
  */
 export async function fetchRecentConversations(
-  options?: { limit?: number; signal?: AbortSignal }
+  options?: { limit?: number; scope?: 'cs' | 'sbu' | 'general'; signal?: AbortSignal }
 ): Promise<RecentConversationsResult> {
   const limit = options?.limit || 50;
-  const endpoint = `/api/copilot/conversations?limit=${encodeURIComponent(String(limit))}`;
+  const scopeParam = options?.scope ? `&scope=${encodeURIComponent(options.scope)}` : '';
+  const endpoint = `/api/copilot/conversations?limit=${encodeURIComponent(String(limit))}${scopeParam}`;
 
   try {
     const response = await fetch(endpoint, {

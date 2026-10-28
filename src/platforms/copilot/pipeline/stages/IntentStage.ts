@@ -36,9 +36,16 @@ export class IntentStage implements PipelineStage {
 
     // 2A. Check for non-operational conversational chat (greetings/chatter)
     if (ConversationalQueryResolver.isNonOperational(context.userInput)) {
+      const activeScope = context.context?.conversation?.getMemory ? context.context.conversation.getMemory('scope') : null;
+      const isSbu = activeScope === 'sbu' || (context.identity && (context.identity.role?.startsWith('sbu_') || context.identity.role === 'driver'));
+
+      const greetingContent = isSbu
+        ? 'Halo! Saya Sentralogis Copilot (SBU Operasional). Saya siap membantu Anda memeriksa Job Order, memantau pergerakan armada, memeriksa penugasan supir, dan kelengkapan dokumen pengiriman / POD. Ada pekerjaan operasional yang ingin Anda periksa?'
+        : 'Halo! Saya Sentralogis Copilot (Customer Service & Commercial). Saya siap membantu Anda melayani customer, memeriksa status Sales Order, mendaftarkan customer baru, dan mengorkestrasi Work Order ke SBU. Ada data atau transaksi yang ingin Anda periksa?';
+
       context.finalResponse = {
         type: 'text',
-        content: 'Halo! Saya Sentralogis Copilot. Saya siap membantu Anda memeriksa data Job Order, Work Order, Shipment, Sales Order, Customer, maupun memverifikasi rencana operasional armada. Ada data atau transaksi yang ingin Anda periksa?',
+        content: greetingContent,
         metrics: undefined as any
       };
       return { status: PipelineStatus.SUCCESS };
@@ -49,6 +56,19 @@ export class IntentStage implements PipelineStage {
     const conversationId = context.context?.conversation?.getConversationId ? context.context.conversation.getConversationId() : undefined;
     const contextFlow = context.context?.conversation?.getMemory ? context.context.conversation.getMemory('orderFlowState') : null;
     const activeOrderFlow = contextFlow || (context.identity ? ConversationalOrderWorkspace.getSessionState(context.identity, undefined, conversationId) : null);
+
+    const activeScope = context.context?.conversation?.getMemory ? context.context.conversation.getMemory('scope') : null;
+    const isSbu = activeScope === 'sbu' || (context.identity && (context.identity.role?.startsWith('sbu_') || context.identity.role === 'driver'));
+
+    // Guard: Prevent SBU staff from triggering CS customer/order registration flows
+    if (isSbu && (isOrderInitiation || (context.identity && CustomerIntentHandler.isCustomerCreateIntent(context.userInput, context.identity, conversationId)))) {
+      context.finalResponse = {
+        type: 'text',
+        content: 'Perhatian: Anda saat ini berada dalam Copilot SBU Operasional. Pendaftaran Customer baru dan penerbitan Sales Order/Quotation merupakan wewenang Customer Service (CS) / Commercial. Di SBU, Anda dapat mengelola Job Order, armada, dan penugasan supir.',
+        metrics: undefined as any
+      };
+      return { status: PipelineStatus.SUCCESS };
+    }
 
     // 2C. Check if input is an operational read query
     // Use normalized-for-classification text so a leading greeting does not
