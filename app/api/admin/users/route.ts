@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const staffList = staffRes.data || [];
     const userIds = staffList.map((s: any) => s.user_id).filter(Boolean);
 
-    let profileMap: Record<string, any> = {};
+    const profileMap: Record<string, any> = {};
     if (userIds.length > 0) {
       const { data: profs } = await (supabaseAdmin as any)
         .from('profiles')

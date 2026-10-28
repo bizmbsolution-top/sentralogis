@@ -2,14 +2,10 @@
 // Ensures a driver_profiles row exists for the driver's phone and creates a
 // driver_tenant_links row tying (profile_id, tenant_id, driver_id).
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
+import { supabaseAdmin as supabase } from "@/lib/supabase/admin";
 import { normalizePhone } from "@/lib/utils/phone";
+
+export const dynamic = 'force-dynamic';
 
 // POST /api/driver/link-profile
 // Body: { driver_id, pin? }
