@@ -6,6 +6,7 @@
 // Tenant: server-derived from profile.tenant_id (IdentityContext preserved).
 // Canonical authority: party_roles = CANONICAL; md_entities.is_* = COMPATIBILITY PROJECTION ONLY.
 
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PartyRoleService } from '@/lib/domain/party/party-role-service';
 import type { PartyRoleType } from '@/lib/domain/party/types';
@@ -29,8 +30,8 @@ async function resolveTenantForActor(actorId: string): Promise<{ tenant_id: stri
 
 export async function getEntitiesByRole(roleType: PartyRoleType): Promise<ServerActionResult<any[]>> {
   try {
-    const supabase = createAdminClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return { ok: false, error: 'Not authenticated' };
     const ctx = await resolveTenantForActor(user.id);
     if (!ctx) return { ok: false, error: 'No tenant in profile' };
@@ -56,8 +57,8 @@ export async function getEntitiesByRole(roleType: PartyRoleType): Promise<Server
 
 export async function getEntitiesWithoutRole(roleType: PartyRoleType): Promise<ServerActionResult<any[]>> {
   try {
-    const supabase = createAdminClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return { ok: false, error: 'Not authenticated' };
     const ctx = await resolveTenantForActor(user.id);
     if (!ctx) return { ok: false, error: 'No tenant in profile' };
@@ -83,8 +84,8 @@ export async function getEntitiesWithoutRole(roleType: PartyRoleType): Promise<S
 
 export async function getInternalDrivers(): Promise<ServerActionResult<any[]>> {
   try {
-    const supabase = createAdminClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return { ok: false, error: 'Not authenticated' };
     const ctx = await resolveTenantForActor(user.id);
     if (!ctx) return { ok: false, error: 'No tenant in profile' };

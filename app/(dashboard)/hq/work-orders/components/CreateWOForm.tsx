@@ -272,23 +272,145 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
     loadWOData();
   }, [editId, profile?.tenant_id]);
 
+  // 1. Customer loader with resilient direct fallback
   useEffect(() => {
     const fetchCustomers = async () => {
       if (!profile?.tenant_id) return;
       try {
         const result = await getEntitiesByRole('CUSTOMER');
-        if (result.ok) {
-          setCustomers(result.data || []);
-        } else {
-          console.error('Customer Fetch Error:', result.error);
+        if (result.ok && Array.isArray(result.data) && result.data.length > 0) {
+          setCustomers(result.data);
+          return;
+        }
+        // Direct browser client fallback
+        const { data, error } = await supabase
+          .from('md_entities')
+          .select('id, entity_code, name, legal_name, is_customer')
+          .eq('tenant_id', profile.tenant_id)
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (!error && data) {
+          setCustomers(data);
         }
       } catch (err) {
-        console.error('Customer Fetch Error:', err);
+        console.error('Customer Fetch Fallback:', err);
+        const { data } = await supabase
+          .from('md_entities')
+          .select('id, entity_code, name, legal_name, is_customer')
+          .eq('tenant_id', profile.tenant_id)
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (data) setCustomers(data);
       }
     };
-    
+
     fetchCustomers();
   }, [profile?.tenant_id]);
+
+  // Duplikasi dan sinkronisasi data Sales Order ke Work Order
+  const applySalesOrderDetails = useCallback(async (soId: string) => {
+    if (!soId) return;
+    try {
+      const res = await fetch(`/api/v1/commercial/sales-orders/${soId}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.data) return;
+      const soData = json.data;
+
+      // Sinkronisasi data utama (Customer, Notes, Tanggal)
+      setFormData((prev) => ({
+        ...prev,
+        customer_id: soData.customerId || prev.customer_id,
+        notes: prev.notes ? prev.notes : (soData.commercialNotes || ''),
+        order_date: soData.orderDate ? soData.orderDate.slice(0, 10) : prev.order_date,
+        execution_date: soData.targetFulfillmentDate
+          ? soData.targetFulfillmentDate.slice(0, 10)
+          : soData.orderDate
+          ? soData.orderDate.slice(0, 10)
+          : prev.execution_date,
+      }));
+
+      // Pastikan customer muncul di state customers agar nama tampil di dropdown
+      if (soData.customerId) {
+        setCustomers((prev) => {
+          if (prev.some((c) => c.id === soData.customerId)) return prev;
+          return [
+            {
+              id: soData.customerId,
+              name: soData.customerName || 'Customer',
+              legal_name: soData.customerName || 'Customer',
+              entity_code: soData.customerCode || 'CUS',
+            },
+            ...prev,
+          ];
+        });
+      }
+
+      // Duplikasi Item Layanan ke woItems jika masih kosong
+      setWoItems((prevItems) => {
+        if (prevItems.length > 0) return prevItems;
+
+        const notes = soData.commercialNotes || '';
+        const totalRev = Number(soData.totalAgreedRevenue) || 0;
+
+        let sbuType = 'TRUCKING';
+        if (/warehouse/i.test(notes)) sbuType = 'WAREHOUSE';
+        else if (/clearance|customs/i.test(notes)) sbuType = 'CLEARANCE';
+        else if (/forwarding/i.test(notes)) sbuType = 'FORWARDING';
+
+        let quantity = 1;
+        const qtyMatch = notes.match(/(?:Jumlah|Qty|Quantity):\s*(\d+)/i) || notes.match(/(\d+)\s*(?:unit|truck|armada|kontainer|container)/i);
+        if (qtyMatch && parseInt(qtyMatch[1], 10) > 0) {
+          quantity = parseInt(qtyMatch[1], 10);
+        }
+
+        const unitPrice = quantity > 0 && totalRev > 0 ? Math.round(totalRev / quantity) : totalRev;
+
+        let origin = 'Lokasi Muat';
+        let destination = 'Lokasi Bongkar';
+        const routeMatch = notes.match(/(?:Rute|Route):\s*([^–\->|]+)\s*(?:->|–>|ke|to|-)\s*([^|]+)/i);
+        if (routeMatch) {
+          origin = routeMatch[1].trim();
+          destination = routeMatch[2].trim();
+        }
+
+        let cargoDesc = 'General Cargo';
+        const cargoMatch = notes.match(/(?:Muatan|Cargo|Barang):\s*([^|]+)/i);
+        if (cargoMatch) {
+          cargoDesc = cargoMatch[1].trim();
+        } else if (notes) {
+          cargoDesc = notes.slice(0, 80);
+        }
+
+        const newId = `so-item-${Date.now()}`;
+        const autoItem = {
+          id: newId,
+          sbu_type: sbuType,
+          quantity,
+          unit_price: unitPrice,
+          total_revenue: totalRev || (quantity * unitPrice),
+          item_data: {
+            unit_count: quantity,
+            deal_price: unitPrice,
+            cargo_description: cargoDesc,
+            stops: [
+              { stop_type: 'PICKUP', sequence: 1, location_name: origin, address: origin },
+              { stop_type: 'DROPOFF', sequence: 2, location_name: destination, address: destination },
+            ],
+            shipper_name: origin,
+            recipient_name: destination,
+            shipper_address: origin,
+            recipient_address: destination,
+            notes: notes,
+          },
+        };
+
+        toast.success(`Data Sales Order ${soData.soNumber} berhasil disinkronkan ke Work Order!`, { icon: '📋' });
+        return [autoItem];
+      });
+    } catch (err) {
+      console.error('Failed to duplicate Sales Order details:', err);
+    }
+  }, []);
 
   // Fetch trucking regions for region picker
   useEffect(() => {
@@ -335,14 +457,7 @@ export default function CreateWOForm({ onBack, editId }: CreateWOFormProps) {
             const urlCustomerId = params.get('customerId');
             if (urlSoId) {
               setSalesOrderId(urlSoId);
-              const matchedSo = eligible.find((s: any) => s.id === urlSoId);
-              const effectiveCustomerId = urlCustomerId || matchedSo?.customer_id;
-              if (effectiveCustomerId) {
-                setFormData((prev) => ({
-                  ...prev,
-                  customer_id: prev.customer_id || effectiveCustomerId,
-                }));
-              }
+              applySalesOrderDetails(urlSoId);
             } else if (urlCustomerId) {
               setFormData((prev) => ({
                 ...prev,
@@ -1131,12 +1246,8 @@ for (const [index, item] of woItems.entries()) {
                       onChange={(e) => {
                         const nextSoId = e.target.value;
                         setSalesOrderId(nextSoId);
-                        const matchedSo = salesOrders.find((s) => s.id === nextSoId);
-                        if (matchedSo?.customer_id) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            customer_id: matchedSo.customer_id,
-                          }));
+                        if (nextSoId) {
+                          applySalesOrderDetails(nextSoId);
                         }
                       }}
                       className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-slate-900/5 outline-none transition-all text-slate-900"
