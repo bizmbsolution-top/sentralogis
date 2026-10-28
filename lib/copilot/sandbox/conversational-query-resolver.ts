@@ -391,6 +391,24 @@ export class ConversationalQueryResolver {
     } else if (/\b(assigned)\b/i.test(lower) && !lower.includes('unassigned')) {
       current.status = 'ASSIGNED';
       current.activeFilters['status'] = 'ASSIGNED';
+    } else if (
+      lower.includes('need assignment') ||
+      lower.includes('need assign') ||
+      lower.includes('belum di-assign') ||
+      lower.includes('belum diassign') ||
+      lower.includes('belum assign') ||
+      lower.includes('perlu assign') ||
+      lower.includes('belum ditugaskan') ||
+      lower.includes('butuh penugasan') ||
+      lower.includes('butuh armada') ||
+      lower.includes('butuh supir') ||
+      lower.includes('wo baru') ||
+      lower.includes('new wo') ||
+      lower.includes('work order baru') ||
+      /\b(need_assignment|need assign|perlu assign|belum assign|unassigned|wo baru|new wo)\b/i.test(lower)
+    ) {
+      current.status = 'NEED_ASSIGNMENT';
+      current.activeFilters['status'] = 'NEED_ASSIGNMENT';
     } else if (/\b(draft)\b/i.test(lower) || lower.includes('status draft')) {
       current.status = 'DRAFT';
       current.activeFilters['status'] = 'DRAFT';
@@ -422,7 +440,8 @@ export class ConversationalQueryResolver {
         'batal', 'cancelled', 'canceled', 'rejected', 'ditolak', 'selesai', 'completed', 'done',
         'semua', 'all', 'hari', 'minggu', 'pekan', 'bulan', 'tahun', 'ini', 'lalu',
         'trucking', 'truk', 'forwarding', 'warehouse', 'gudang', 'customs', 'clearance',
-        'status', 'yang', 'di', 'ke', 'dari', 'asal', 'tujuan', 'rute', 'laut', 'darat'
+        'status', 'yang', 'di', 'ke', 'dari', 'asal', 'tujuan', 'rute', 'laut', 'darat',
+        'need', 'assign', 'assignment', 'penugasan', 'tugas', 'armada', 'supir', 'driver', 'unit', 'form', 'list'
       ]);
 
       // 1. Known acronym or specific business code like "TPS"
@@ -556,7 +575,19 @@ export class ConversationalQueryResolver {
     // ------------------------------------------------------------------------
     if (lower.includes('job order') || /\bjo\b/i.test(lower)) {
       current.objectType = 'JOB_ORDER';
-    } else if (lower.includes('work order') || /\bwo\b/i.test(lower) || /\bwo-/i.test(lower)) {
+    } else if (
+      lower.includes('work order') ||
+      /\bwo\b/i.test(lower) ||
+      /\bwo-/i.test(lower) ||
+      lower.includes('need assign') ||
+      lower.includes('need assignment') ||
+      lower.includes('belum ditugaskan') ||
+      lower.includes('butuh penugasan') ||
+      lower.includes('wo baru') ||
+      lower.includes('new wo') ||
+      lower.includes('work order baru') ||
+      /\b(need assign|need_assignment|belum ditugaskan|butuh penugasan|wo baru|new wo)\b/i.test(lower)
+    ) {
       current.objectType = 'WORK_ORDER';
     } else if (
       lower.includes('sales order') ||

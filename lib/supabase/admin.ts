@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
+if (typeof globalThis !== 'undefined' && !(globalThis as any).WebSocket) {
+  (globalThis as any).WebSocket = class {};
+}
+
 /**
  * Creates a Supabase client with the service role key.
  * This client bypasses RLS and should ONLY be used in server-side contexts.

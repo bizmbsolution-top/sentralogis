@@ -40,7 +40,7 @@ export class IntentStage implements PipelineStage {
       const isSbu = activeScope === 'sbu' || (context.identity && (context.identity.role?.startsWith('sbu_') || context.identity.role === 'driver'));
 
       const greetingContent = isSbu
-        ? 'Halo! Saya Sentralogis Copilot (SBU Operasional). Saya siap membantu Anda memeriksa Job Order, memantau pergerakan armada, memeriksa penugasan supir, dan kelengkapan dokumen pengiriman / POD. Ada pekerjaan operasional yang ingin Anda periksa?'
+        ? 'Halo! Saya Sentralogis Copilot (SBU Operasional). Saya siap membantu Anda memeriksa Work Order baru yang butuh penugasan armada (need assignment), memeriksa Job Order, memantau pergerakan armada, memeriksa penugasan supir, dan kelengkapan dokumen pengiriman / POD. Ada pekerjaan operasional yang ingin Anda periksa?'
         : 'Halo! Saya Sentralogis Copilot (Customer Service & Commercial). Saya siap membantu Anda melayani customer, memeriksa status Sales Order, mendaftarkan customer baru, dan mengorkestrasi Work Order ke SBU. Ada data atau transaksi yang ingin Anda periksa?';
 
       context.finalResponse = {
@@ -110,7 +110,7 @@ export class IntentStage implements PipelineStage {
         parsedQuery.context.requestedOperation === 'STATUS_CHECK' ||
         (Boolean(parsedQuery.context.objectType && parsedQuery.context.objectType !== 'UNKNOWN') && Boolean(hasExplicitIdentifier || parsedQuery.context.destination || parsedQuery.context.origin || parsedQuery.context.status)) ||
         /^(apakah ada|cari|tampilkan|ada berapa|lihat|status|cek|buka|open|detail)\b/i.test(normalizedUserInput) ||
-        /\b(sales\s+order\s+draft|so\s+draft)\b/i.test(normalizedUserInput) ||
+        /\b(sales\s+order\s+draft|so\s+draft|wo baru|new wo|work order baru|need assign|need_assignment)\b/i.test(normalizedUserInput) ||
         (/\b(belum jalan|belum sebelum|belum tuntas|sedang berjalan|masih berjalan|in progress|ongoing|rejected|ditolak|cancelled|batal|completed|selesai)\b/i.test(normalizedUserInput) && !isFlowCancellation)
       );
 

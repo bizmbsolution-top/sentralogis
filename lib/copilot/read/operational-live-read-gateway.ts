@@ -81,6 +81,14 @@ export interface CanonicalWorkOrderRecord {
   executionDate?: string;
   capability?: string;
   linkedSoNumber?: string;
+  woItemId?: string;
+  itemCode?: string;
+  unitCount?: number;
+  assignedUnitCount?: number;
+  origin?: string;
+  destination?: string;
+  cargoDescription?: string;
+  sbuType?: string;
 }
 
 export interface CanonicalSalesOrderRecord {
@@ -121,6 +129,13 @@ export interface OperationalReadDelegate {
     period?: string;
   }): Promise<CanonicalJobOrderRecord[]>;
   findWorkOrderByNumber(ctx: IdentityContext, woNumber: string): Promise<CanonicalWorkOrderRecord | null>;
+  listWorkOrders?(ctx: IdentityContext, filters?: {
+    status?: string;
+    sbuType?: string;
+    customer?: string;
+    needAssignmentOnly?: boolean;
+    limit?: number;
+  }): Promise<CanonicalWorkOrderRecord[]>;
   findSalesOrderByNumber(ctx: IdentityContext, soNumber: string): Promise<CanonicalSalesOrderRecord | null>;
   listSalesOrders?(ctx: IdentityContext, filters?: { status?: string; customer?: string }): Promise<CanonicalSalesOrderRecord[]>;
   findShipmentByNumber(ctx: IdentityContext, shipmentNumber: string): Promise<CanonicalShipmentRecord | null>;
@@ -632,6 +647,115 @@ export const defaultProductionDelegate: OperationalReadDelegate = {
     };
   },
 
+  async listWorkOrders(
+    ctx: IdentityContext,
+    filters?: {
+      status?: string;
+      sbuType?: string;
+      customer?: string;
+      needAssignmentOnly?: boolean;
+      limit?: number;
+    }
+  ): Promise<CanonicalWorkOrderRecord[]> {
+    assertPermission(ctx, 'work_order:read');
+
+    const isTrucking =
+      filters?.sbuType === 'TRUCKING' ||
+      ctx.sbuScope === 'trucking' ||
+      (ctx.role && (ctx.role.includes('_tr') || ctx.role.includes('trucking')));
+
+    if (isTrucking) {
+      let query = (supabaseAdmin as any)
+        .from('wo_items')
+        .select(`
+          id, tenant_id, wo_id, item_code, sbu_type, status, item_data, unit_price, total_revenue, max_jo_count, created_at, updated_at,
+          work_orders!inner(id, wo_number, status, execution_date, execution_time, customer_id, md_entities!customer_id(name, legal_name, phone))
+        `)
+        .eq('tenant_id', ctx.tenantId)
+        .eq('sbu_type', 'TRUCKING')
+        .neq('status', 'draft')
+        .neq('work_orders.status', 'draft');
+
+      if (filters?.needAssignmentOnly || filters?.status === 'NEED_ASSIGNMENT') {
+        query = query.in('status', ['pending', 'need_assignment']);
+      } else if (filters?.status) {
+        query = query.ilike('status', `%${filters.status}%`);
+      }
+
+      const { data: woItems, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(filters?.limit || 20);
+
+      if (error || !woItems) return [];
+
+      const itemIds = woItems.map((item: any) => item.id);
+      let joRows: any[] = [];
+      if (itemIds.length > 0) {
+        const { data: jos } = await (supabaseAdmin as any)
+          .from('job_orders')
+          .select('id, wo_item_id, status, driver_id, fleet_id')
+          .in('wo_item_id', itemIds);
+        joRows = jos || [];
+      }
+
+      return woItems.map((item: any) => {
+        const itemData = typeof item.item_data === 'string' ? JSON.parse(item.item_data) : (item.item_data || {});
+        const locations = extractLocationsFromItemData(itemData);
+        const customerName = item.work_orders?.md_entities?.name || item.work_orders?.md_entities?.legal_name || 'Customer';
+        const assignedJos = joRows.filter((j: any) => j.wo_item_id === item.id && j.driver_id && j.fleet_id);
+        const totalUnits = Number(itemData?.unit_count || item.max_jo_count || 1);
+
+        return {
+          id: String(item.work_orders?.id || item.wo_id),
+          woNumber: String(item.work_orders?.wo_number || 'WO-PENDING'),
+          customerId: item.work_orders?.customer_id ? String(item.work_orders.customer_id) : undefined,
+          customerName,
+          status: String(item.status || 'need_assignment'),
+          capability: 'TRUCKING',
+          woItemId: String(item.id),
+          itemCode: String(item.item_code || 'TR01'),
+          unitCount: totalUnits,
+          assignedUnitCount: assignedJos.length,
+          origin: locations.origin,
+          destination: locations.destination,
+          cargoDescription: itemData.cargo_description || itemData.goods_name || itemData.cargo_type,
+          orderDate: item.created_at ? String(item.created_at).slice(0, 10) : undefined,
+          executionDate: item.work_orders?.execution_date ? String(item.work_orders.execution_date) : undefined,
+          sbuType: 'TRUCKING',
+        };
+      });
+    }
+
+    // Generic work_orders query if not trucking SBU
+    let woQuery = (supabaseAdmin as any)
+      .from('work_orders')
+      .select('id, wo_number, customer_id, status, execution_date, created_at, md_entities!customer_id(name, legal_name)')
+      .eq('tenant_id', ctx.tenantId)
+      .neq('status', 'draft');
+
+    if (filters?.needAssignmentOnly || filters?.status === 'NEED_ASSIGNMENT') {
+      woQuery = woQuery.in('status', ['submitted', 'pending', 'need_assignment']);
+    } else if (filters?.status) {
+      woQuery = woQuery.ilike('status', `%${filters.status}%`);
+    }
+
+    const { data: wos, error: woErr } = await woQuery
+      .order('created_at', { ascending: false })
+      .limit(filters?.limit || 20);
+
+    if (woErr || !wos) return [];
+
+    return wos.map((wo: any) => ({
+      id: String(wo.id),
+      woNumber: String(wo.wo_number),
+      customerId: wo.customer_id ? String(wo.customer_id) : undefined,
+      customerName: wo.md_entities?.name || wo.md_entities?.legal_name || 'Customer',
+      status: String(wo.status),
+      orderDate: wo.created_at ? String(wo.created_at).slice(0, 10) : undefined,
+      executionDate: wo.execution_date ? String(wo.execution_date) : undefined,
+    }));
+  },
+
   async findSalesOrderByNumber(ctx: IdentityContext, soNumber: string): Promise<CanonicalSalesOrderRecord | null> {
     assertAnyPermission(ctx, ['commercial:read', 'sales_order:read']);
     const all = await listSalesOrdersForTenant(ctx, { limit: 200 });
@@ -866,7 +990,97 @@ export class OperationalLiveReadGateway {
     // --- 4A. WORK ORDER BINDING (§9) ---
     if (queryContext.objectType === 'WORK_ORDER') {
       assertPermission(ctx, 'work_order:read');
-      const woNum = queryContext.activeFilters['woNumber'] || 'WO-2026-0101';
+      const explicitWoNum = queryContext.activeFilters['woNumber'];
+
+      if (!explicitWoNum && activeDelegate.listWorkOrders) {
+        const records = await activeDelegate.listWorkOrders(ctx, {
+          status: queryContext.status,
+          customer: queryContext.customer,
+          needAssignmentOnly: queryContext.status === 'NEED_ASSIGNMENT' || !queryContext.status,
+          sbuType: (ctx.sbuScope === 'trucking' || (ctx.role && (ctx.role.includes('_tr') || ctx.role.includes('trucking')))) ? 'TRUCKING' : undefined,
+        });
+
+        if (queryContext.requestedOperation === 'COUNT') {
+          const count = records.length;
+          return {
+            resolutionState: 'DIRECT_ANSWER',
+            source: 'LIVE_CANONICAL_READ',
+            readAt: now,
+            results: [],
+            counts: { total: count },
+            summaryText: `Terdapat **${count} Work Order** ${queryContext.status === 'NEED_ASSIGNMENT' ? 'yang membutuhkan penugasan armada (Need Assignment)' : 'dalam sistem'}.\n\n[Lihat di Assignment Console](/sbu/trucking/work-orders?status=pending)`,
+          };
+        }
+
+        if (records.length === 0) {
+          return {
+            resolutionState: 'DIRECT_ANSWER',
+            source: 'LIVE_CANONICAL_READ',
+            readAt: now,
+            results: [],
+            counts: { total: 0 },
+            summaryText: `Saat ini tidak ada Work Order baru yang membutuhkan penugasan armada di SBU Trucking.\n\nSemua unit telah teralokasi dengan baik. Anda dapat memeriksa seluruh riwayat di [Assignment Console](/sbu/trucking/work-orders).`,
+          };
+        }
+
+        const readResults: OperationalReadResult[] = records.map((rec) => {
+          const actionTarget = rec.woItemId
+            ? `/sbu/trucking/work-orders?status=pending&itemId=${rec.woItemId}&action=assign`
+            : `/sbu/trucking/work-orders`;
+
+          return {
+            entityType: 'WORK_ORDER',
+            entityId: rec.id,
+            displayIdentifier: rec.woNumber + (rec.itemCode ? ` • ${rec.itemCode}` : ''),
+            summary: `Work Order ${rec.woNumber} untuk ${rec.customerName || 'Customer'} (${rec.origin || '-'} ➔ ${rec.destination || '-'}, ${rec.unitCount || 1} Unit Truk).`,
+            status: rec.status,
+            customer: rec.customerName,
+            origin: rec.origin,
+            destination: rec.destination,
+            relevantDates: {
+              orderDate: rec.orderDate || '',
+              executionDate: rec.executionDate || '',
+            },
+            source: 'LIVE_CANONICAL_READ',
+            readAt: now,
+            navigationRoute: actionTarget,
+            availableActions: [
+              {
+                action: 'ASSIGN_FLEET',
+                label: 'Buka Form Penugasan',
+                type: 'NAVIGATE',
+                target: actionTarget,
+              },
+            ],
+          };
+        });
+
+        let summaryText = `Ditemukan **${records.length} Work Order** yang membutuhkan penugasan armada (Need Assignment) di SBU Trucking:\n\n`;
+        records.forEach((rec, idx) => {
+          const formUrl = `/sbu/trucking/work-orders?status=pending&itemId=${rec.woItemId || rec.id}&action=assign`;
+          summaryText += `${idx + 1}. **${rec.woNumber}** (${rec.itemCode || 'TR01'})\n`;
+          summaryText += `   • Customer: **${rec.customerName || 'Customer'}**\n`;
+          if (rec.origin || rec.destination) {
+            summaryText += `   • Rute: ${rec.origin || '-'} ➔ ${rec.destination || '-'}\n`;
+          }
+          summaryText += `   • Kebutuhan: **${rec.unitCount || 1} Unit Truk** (Teralokasi: ${rec.assignedUnitCount || 0}/${rec.unitCount || 1})\n`;
+          if (rec.cargoDescription) {
+            summaryText += `   • Muatan: ${rec.cargoDescription}\n`;
+          }
+          summaryText += `   👉 **[Buka Form Penugasan & Lengkapi Armada](${formUrl})**\n\n`;
+        });
+
+        return {
+          resolutionState: 'DIRECT_ANSWER',
+          source: 'LIVE_CANONICAL_READ',
+          readAt: now,
+          results: readResults,
+          counts: { total: records.length },
+          summaryText: summaryText.trim(),
+        };
+      }
+
+      const woNum = explicitWoNum || 'WO-2026-0101';
 
       const wo = await activeDelegate.findWorkOrderByNumber(ctx, woNum);
       if (!wo) {

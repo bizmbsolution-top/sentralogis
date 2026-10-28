@@ -80,7 +80,7 @@ const filterItemByTab = (item: any, tabId: string) => {
   
   if (tabId === 'assigned_units') return isAssignedTab;
 
-  if (tabId === 'pending') {
+  if (tabId === 'pending' || tabId === 'need_assignment') {
     if (isCompleted || isHandoverPending || isHandoverRejected || anyMoving || isAssignedTab || allRejected) return false;
     return true;
   }
@@ -119,7 +119,10 @@ export default function WorkOrderPlanningPage() {
 
   useEffect(() => {
     const status = searchParams.get('status');
-    if (status) setSelectedStatus(status);
+    if (status) {
+      if (status === 'need_assignment') setSelectedStatus('pending');
+      else setSelectedStatus(status);
+    }
   }, [searchParams]);
 
   const fetchData = useCallback(async () => {
