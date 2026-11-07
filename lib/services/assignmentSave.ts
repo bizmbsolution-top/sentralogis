@@ -230,8 +230,9 @@ export async function saveAssignments(
             ...(assign.notes ? { notes: assign.notes } : {}),
           },
           updated_at: new Date().toISOString(),
-          assigned_at: new Date().toISOString(),
-          driver_response: 'accepted',
+          assigned_at: null,
+          driver_response: 'pending',
+          accepted_at: null,
           status: 'pending',
         };
 
@@ -332,7 +333,8 @@ export async function saveAssignments(
         },
         updated_at: new Date().toISOString(),
         assigned_at: new Date().toISOString(),
-        driver_response: 'accepted',
+        driver_response: 'pending',
+        accepted_at: null,
         status:
           assign.id && assign.status && assign.status !== 'pending' && assign.status !== 'draft'
             ? assign.status
