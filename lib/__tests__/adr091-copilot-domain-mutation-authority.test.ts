@@ -409,6 +409,8 @@ export async function runAdr091Suite() {
     if (result.jobOrder?.driverId !== 'driver-2') throw new Error('Expected driver-2');
     if (result.jobOrder?.fleetId !== 'fleet-2') throw new Error('Expected fleet-2');
     if (result.jobOrder?.transporterId !== 'trans-2') throw new Error('Expected trans-2');
+    if (result.jobOrder?.driverResponse !== 'pending') throw new Error('Expected driver response pending until driver accepts');
+    if (result.jobOrder?.acceptedAt !== null) throw new Error('Expected accepted_at to remain null until driver accepts');
     const tracking = db.jobTracking.filter((t) => t.status_update === 'ASSIGNED');
     if (tracking.length !== 1) throw new Error('Expected 1 tracking record');
   });
