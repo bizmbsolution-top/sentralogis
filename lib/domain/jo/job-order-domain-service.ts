@@ -882,7 +882,9 @@ export class DriverReplacementService {
 
       return {
         success: true,
-        jobOrder: mapRowToJobOrder(JSON.parse(row.p_job_order)),
+        jobOrder: mapRowToJobOrder(
+          typeof row.p_job_order === 'string' ? JSON.parse(row.p_job_order) : row.p_job_order,
+        ),
       };
     } catch (err: unknown) {
       if (err instanceof JobOrderError) {
