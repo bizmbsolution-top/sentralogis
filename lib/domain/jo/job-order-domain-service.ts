@@ -446,12 +446,14 @@ async function upsertJobOrder(tenantId: string, assign: AssignmentSlot, payload:
       .update({ ...payload })
       .eq('id', assign.id)
       .eq('tenant_id', tenantId)
+      .in('status', ['pending', 'PENDING', 'need_assignment', 'NEED_ASSIGNMENT', 'need_assign', 'NEED_ASSIGN', 'draft', 'DRAFT'])
       .select('id');
 
      if (error) throw error;
      if (data && data.length > 0) {
        return data[0]?.id as string;
      }
+     throw new JobOrderError('JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.', 'INVALID_STATE');
   }
 
   const insertPayload: Record<string, unknown> = { ...payload, tenant_id: tenantId };
