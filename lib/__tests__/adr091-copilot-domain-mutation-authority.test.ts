@@ -193,9 +193,9 @@ class MockJobOrderDb implements JobOrderDbClient {
 
     jo.driver_id = p_new_driver_id;
     jo.driver_link_token = `mock-token-${Date.now()}`;
-    jo.driver_response = 'accepted';
-    jo.driver_response_at = new Date().toISOString();
-    jo.accepted_at = new Date().toISOString();
+    jo.driver_response = 'pending';
+    jo.driver_response_at = null;
+    jo.accepted_at = null;
     jo.status = 'ASSIGNED';
     jo.rejection_note = p_reason && p_reason.trim() !== ''
       ? `[REPLACE] ${p_reason}`
@@ -406,6 +406,8 @@ export async function runAdr091Suite() {
     const result = await assignmentService.assignDriver(ctx, { jobOrderId: joId, driverId: 'driver-2', fleetId: 'fleet-2', transporterId: 'trans-2' });
     if (result.success !== true) throw new Error(`Expected success, got ${result.error}`);
     if (result.jobOrder?.status !== 'ASSIGNED') throw new Error('Expected ASSIGNED');
+    if (result.jobOrder?.driverResponse !== 'pending') throw new Error('Replacement must wait for the new driver response');
+    if (result.jobOrder?.acceptedAt !== null) throw new Error('Replacement must clear acceptedAt until the new driver accepts');
     if (result.jobOrder?.driverId !== 'driver-2') throw new Error('Expected driver-2');
     if (result.jobOrder?.fleetId !== 'fleet-2') throw new Error('Expected fleet-2');
     if (result.jobOrder?.transporterId !== 'trans-2') throw new Error('Expected trans-2');
@@ -508,6 +510,7 @@ export async function runAdr091Suite() {
     if (newFleet?.status !== 'on_duty') throw new Error('New fleet should be on_duty');
     if (oldDriver?.status !== 'available') throw new Error('Old driver should be available');
     if (newDriver?.status !== 'on_duty') throw new Error('New driver should be on_duty');
+    if (db.jobOrders.find((j: any) => j.id === joId)?.driver_response !== 'pending') throw new Error('Persisted replacement response must remain pending');
   });
 
   await check('ADR091-B5', 'replaceDriver rejects cross-tenant JO', async () => {
