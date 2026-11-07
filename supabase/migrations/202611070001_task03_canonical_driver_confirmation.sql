@@ -70,6 +70,7 @@ BEGIN
             transporter_id = NULL,
             vendor_id = NULL,
             driver_phone = NULL,
+            driver_link_token = NULL,
             updated_at = v_now
         WHERE id = p_jo_id;
     END IF;
