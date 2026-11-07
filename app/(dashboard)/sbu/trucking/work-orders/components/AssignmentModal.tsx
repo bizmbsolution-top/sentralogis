@@ -1812,11 +1812,24 @@ export default function AssignmentModal({
                                     assign.jo_number ||
                                     `${item.item_code}-${String(idx + 1).padStart(2, "0")}`;
 
-                                  const token =
-                                    assign.driver_link_token ||
-                                    assign.id ||
-                                    assign.tracking_token;
-                                  const link = `https://www.sentralogis.com/jo/${token}`;
+                                  if (!assign.id || !tenantId) {
+                                    toast.error("Simpan dan muat ulang JO sebelum mengirim tautan driver");
+                                    return;
+                                  }
+
+                                  const { data: savedJo, error: tokenError } = await supabase
+                                    .from("job_orders")
+                                    .select("driver_link_token")
+                                    .eq("id", assign.id)
+                                    .eq("tenant_id", tenantId)
+                                    .maybeSingle();
+
+                                  if (tokenError || !savedJo?.driver_link_token) {
+                                    toast.error("Tautan driver belum tersedia. Coba muat ulang assignment.");
+                                    return;
+                                  }
+
+                                  const link = `https://www.sentralogis.com/jo/${savedJo.driver_link_token}`;
 
                                   const msg = buildDriverAssignmentMessage({
                                     driverName,
