@@ -1744,8 +1744,8 @@ export default function AssignmentModal({
                               <button
                                 onClick={async () => {
                                   setAssigning(true);
+                                  const tenantId = profile?.tenant_id;
                                   try {
-                                    const tenantId = profile?.tenant_id;
                                     if (tenantId) {
                                       const result =
                                         await saveAssignmentsAction({
