@@ -656,7 +656,7 @@ const filteredItems = useMemo(() => {
                                  return `${transName} - COMPLETED`;
                               }
                               if (jos.length > 1) return `${jos.length} Units Assigned`;
-                              if (joStatus.startsWith('MENUJU') || joStatus.startsWith('TIBA') || joStatus === 'DALAM PERJALANAN' || joStatus === 'IN_PROGRESS' || joStatus === 'PICKING_UP' || joStatus === 'DELIVERING' || joStatus === 'START JOURNEY') {
+                              if (joStatus.startsWith('MENUJU') || joStatus.startsWith('TIBA') || joStatus === 'ON JOURNEY' || joStatus === 'DALAM PERJALANAN' || joStatus === 'IN_PROGRESS' || joStatus === 'PICKING_UP' || joStatus === 'DELIVERING' || joStatus === 'START JOURNEY') {
                                 return `${transName} - ON JOURNEY`;
                               }
                               if (joStatus === 'MENUNGGU MULAI / START' || joStatus === 'MENUNGGU BERANGKAT' || firstJo.driver_response === 'accepted') {
@@ -732,7 +732,7 @@ const filteredItems = useMemo(() => {
                         if (!j.driver_id && !j.fleet_id && !j.transporter_id && !j.vendor_id) return false;
                         return j.status?.toUpperCase().startsWith('MENUJU') || 
                           j.status?.toUpperCase().startsWith('TIBA') || 
-                          ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
+                          ['ON JOURNEY', 'IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
                       });
 
                       if (onRoad || anyAccepted) {
