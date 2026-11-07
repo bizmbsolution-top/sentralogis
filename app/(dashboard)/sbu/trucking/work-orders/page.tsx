@@ -53,10 +53,10 @@ const filterItemByTab = (item: any, tabId: string) => {
     if (!hasAsset) return false;
     return j.status?.toUpperCase().startsWith('MENUJU') || 
       j.status?.toUpperCase().startsWith('TIBA') || 
-      ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
+      ['ON JOURNEY', 'IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase());
   });
 
-  const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
+  const isAssignedStatus = ['ASSIGNED', 'ACTIVE', 'PARTIALLY_ASSIGNED', 'ORDER DITERIMA', 'MENUNGGU MULAI / START', 'MENUNGGU BERANGKAT'].includes(s);
   const hasAssignedStatus = s === 'ASSIGNED' || s === 'ACTIVE';
   
   // Check if ALL JOs are in terminal state
@@ -390,7 +390,7 @@ const filteredItems = useMemo(() => {
     const anyMoving = jos.some((j: any) => 
       j.status?.toUpperCase().startsWith('MENUJU') || 
       j.status?.toUpperCase().startsWith('TIBA') || 
-      ['IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
+      ['ON JOURNEY', 'IN_PROGRESS', 'DALAM PERJALANAN', 'PICKING_UP', 'DELIVERING', 'START JOURNEY'].includes(j.status?.toUpperCase())
     );
     
     const anyAccepted = jos.some((j:any) => 
@@ -404,6 +404,10 @@ const filteredItems = useMemo(() => {
     const allRejected = jos.length > 0 && jos.every((j: any) => 
       ['REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
     );
+
+    if (s === 'PARTIALLY_ASSIGNED') {
+      return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PARTIALLY ASSIGNED</Badge>;
+    }
 
     if (s === 'HANDOVER_REJECTED' || allRejected) {
       return <Badge className="!bg-rose-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">REJECTED</Badge>;
