@@ -190,8 +190,6 @@ class MockJobOrderDb implements JobOrderDbClient {
     }
     return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
   }
-    return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
-  }
 
   private applyFilters(rows: Row[], filters: any[]): Row[] {
     let result = rows;
