@@ -405,10 +405,6 @@ const filteredItems = useMemo(() => {
       ['REJECTED', 'CANCELLED'].includes(j.status?.toUpperCase())
     );
 
-    if (s === 'PARTIALLY_ASSIGNED') {
-      return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PARTIALLY ASSIGNED</Badge>;
-    }
-
     if (s === 'HANDOVER_REJECTED' || allRejected) {
       return <Badge className="!bg-rose-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">REJECTED</Badge>;
     }
@@ -416,6 +412,10 @@ const filteredItems = useMemo(() => {
       return <Badge className="!bg-orange-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">HANDOVER PENDING</Badge>;
     }
     
+    if (s === 'PARTIALLY_ASSIGNED') {
+      return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PARTIALLY ASSIGNED</Badge>;
+    }
+
     if (anyMoving) {
       return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON ROAD</Badge>;
     }
