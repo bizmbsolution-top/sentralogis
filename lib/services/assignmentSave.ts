@@ -233,6 +233,9 @@ export async function saveAssignments(
           updated_at: new Date().toISOString(),
           assigned_at: null,
           driver_response: 'pending',
+            driver_response_at: null,
+            started_at: null,
+            rejection_note: null,
           accepted_at: null,
           status: 'pending',
         };
@@ -336,6 +339,9 @@ export async function saveAssignments(
         assigned_at: new Date().toISOString(),
         driver_link_token: generateDriverLinkToken(),
         driver_response: 'pending',
+            driver_response_at: null,
+            started_at: null,
+            rejection_note: null,
         accepted_at: null,
         status:
           assign.id && assign.status && assign.status !== 'pending' && assign.status !== 'draft'
