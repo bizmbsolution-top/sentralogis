@@ -32,6 +32,13 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Job Order tidak ditemukan');
     END IF;
 
+    IF v_jo.driver_id IS NULL
+       AND v_jo.fleet_id IS NULL
+       AND v_jo.transporter_id IS NULL
+       AND v_jo.vendor_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'JO belum memiliki assignment aktif');
+    END IF;
+
     -- A JO may only be confirmed once while it is awaiting the driver's reply.
     IF lower(coalesce(v_jo.driver_response, 'pending')) <> 'pending'
        OR lower(coalesce(v_jo.status, '')) NOT IN ('assigned', 'pending', 'need_assignment') THEN
