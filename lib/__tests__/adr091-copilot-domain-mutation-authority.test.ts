@@ -415,6 +415,20 @@ export async function runAdr091Suite() {
     if (tracking.length !== 1) throw new Error('Expected 1 tracking record');
   });
 
+  await check('ADR091-A3B', 'assignDriver prevents a second assignment after the first succeeds', async () => {
+    db.reset();
+    const joId = nextId('jo');
+    db.jobOrders.push(seedJo({ id: joId, status: 'PENDING', driver_id: null, fleet_id: null, transporter_id: null }));
+    const ctx = makeCtx();
+    const first = await assignmentService.assignDriver(ctx, { jobOrderId: joId, driverId: 'driver-2' });
+    if (first.success !== true) throw new Error('Expected first assignment to succeed');
+    const second = await assignmentService.assignDriver(ctx, { jobOrderId: joId, driverId: 'driver-3' });
+    if (second.success !== false) throw new Error('Expected duplicate assignment to be rejected');
+    if (second.code !== 'INVALID_STATE') throw new Error(`Expected INVALID_STATE, got ${second.code}`);
+    const persisted = db.jobOrders.find((row: any) => row.id === joId);
+    if (persisted?.driver_id !== 'driver-2') throw new Error('Second assignment must not overwrite the first driver');
+  });
+
   await check('ADR091-A4', 'assignDriver rejects cross-tenant JO', async () => {
     db.reset();
     const joId = nextId('jo');
