@@ -20,11 +20,7 @@ export async function POST(
     }
 
     // Resolve tenant and role from canonical membership records, never request body.
-    const [
-      { data: staffRows, error: staffError },
-      { data: ownedRows, error: ownedError },
-      { data: activeProfile, error: profileError },
-    ] = await Promise.all([
+    const [{ data: staffRows, error: staffError }, { data: ownedRows, error: ownedError }] = await Promise.all([
       supabaseAdmin
         .from('tenant_users')
         .select('id, tenant_id, role_code')
@@ -33,27 +29,17 @@ export async function POST(
         .from('tenants')
         .select('id, tenant_code')
         .eq('user_id', user.id),
-      supabaseAdmin
-        .from('user_profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .maybeSingle(),
     ]);
 
-    if (staffError || ownedError || profileError) {
-      console.error('[trucking/replace-driver] Identity lookup failed:', staffError || ownedError || profileError);
+    if (staffError || ownedError) {
+      console.error('[trucking/replace-driver] Identity lookup failed:', staffError || ownedError);
       return NextResponse.json({ error: 'Unable to resolve authorized tenant identity' }, { status: 500 });
     }
-    if (!activeProfile?.tenant_id) {
-      return NextResponse.json({ error: 'Active tenant context not found' }, { status: 403 });
-    }
 
+    // The canonical resolver selects the trusted tenant from membership/ownership.
+    // profiles has no tenant_id in the production schema; do not infer tenant from it.
     const source = resolveFromArrays(staffRows || [], ownedRows || []);
-    const identity = resolveIdentityContext({
-      userId: user.id,
-      requestedTenantId: activeProfile.tenant_id,
-      source,
-    });
+    const identity = resolveIdentityContext({ userId: user.id, source });
     assertPermission(identity, 'job_order:update');
     assertSbuAccess(identity, 'trucking');
 
