@@ -105,7 +105,7 @@ BEGIN
     RETURN;
   END IF;
 
-  v_token := SUBSTRING(ENCODE(GEN_RANDOM_BYTES(16), 'hex') FROM 1 FOR 32);
+  v_token := GEN_RANDOM_UUID()::TEXT;
 
   UPDATE public.job_orders
   SET driver_id = p_new_driver_id,
