@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { generateDriverLinkToken } from '@/lib/domain/jo/driver-link-token';
 import {
   type AssignmentSlot,
   type WoItemContext,
@@ -336,6 +337,7 @@ export async function saveAssignments(
         },
         updated_at: new Date().toISOString(),
         assigned_at: new Date().toISOString(),
+        driver_link_token: generateDriverLinkToken(),
         driver_response: 'pending',
         accepted_at: null,
         status:
