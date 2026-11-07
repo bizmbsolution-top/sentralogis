@@ -57,7 +57,7 @@ describe('Task 03 regression contracts — atomic assignment', () => {
     expect(method).toContain('upsertJobOrder(');
 
     const helperStart = assignmentService.indexOf('async function upsertJobOrder(');
-    const helperEnd = assignmentService.indexOf('\n}\n\n// ============================================================================\n// JOB ORDER ASSIGNMENT SERVICE', helperStart);
+    const helperEnd = assignmentService.indexOf('\n}', helperStart + 'async function upsertJobOrder('.length);
     expect(helperStart).toBeGreaterThanOrEqual(0);
     expect(helperEnd).toBeGreaterThan(helperStart);
     const helper = assignmentService.slice(helperStart, helperEnd);
@@ -66,7 +66,7 @@ describe('Task 03 regression contracts — atomic assignment', () => {
 
   it('legacy assignment adapter also uses the same atomic RPC', () => {
     const helperStart = assignmentSaveAdapter.indexOf('async function upsertJobOrder(');
-    const helperEnd = assignmentSaveAdapter.indexOf('\n}\n\nexport async function saveAssignments(', helperStart);
+    const helperEnd = assignmentSaveAdapter.indexOf('\n}', helperStart + 'async function upsertJobOrder('.length);
     expect(helperStart).toBeGreaterThanOrEqual(0);
     expect(helperEnd).toBeGreaterThan(helperStart);
     const helper = assignmentSaveAdapter.slice(helperStart, helperEnd);
