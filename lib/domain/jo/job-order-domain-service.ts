@@ -453,7 +453,7 @@ async function upsertJobOrder(tenantId: string, assign: AssignmentSlot, payload:
      if (data && data.length > 0) {
        return data[0]?.id as string;
      }
-     throw new JobOrderError('JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.', 'INVALID_STATE');
+     throw new JobOrderError('INVALID_STATE', 409, 'JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.');
   }
 
   const insertPayload: Record<string, unknown> = { ...payload, tenant_id: tenantId };
