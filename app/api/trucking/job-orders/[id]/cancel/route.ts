@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveFromArrays } from '@/lib/application/identity/membership-source';
-import { resolveIdentityContext, assertPermission, assertSbuAccess } from '@/lib/application/identity/resolver';
+import { resolveIdentityContext, assertPermission } from '@/lib/application/identity/resolver';
+import { assertSbuAccess } from '@/lib/application/identity/authorization';
 import { DriverReplacementService } from '@/lib/domain/jo/job-order-domain-service';
 
 export async function POST(
