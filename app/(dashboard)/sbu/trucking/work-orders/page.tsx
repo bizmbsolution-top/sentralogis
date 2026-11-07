@@ -818,21 +818,8 @@ const filteredItems = useMemo(() => {
                         const isMenungguSelesai = s === 'MENUNGGU SELESAI';
                         
                         let timerBadge = null;
-                        if (isAssigned) {
-                          if (jo.assigned_at) {
-                            const assignedTime = new Date(jo.assigned_at).getTime();
-                            const diffMs = (30 * 60 * 1000) - (now - assignedTime);
-                            
-                            if (diffMs <= 0) {
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Auto-start dimulai...</Badge>;
-                            } else {
-                              const m = Math.floor(diffMs / 60000);
-                              const secs = Math.floor((diffMs % 60000) / 1000);
-                              timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Auto-start dalam {m.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}</Badge>;
-                            }
-                          } else {
-                            timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" />  Menunggu...</Badge>;
-                          }
+                        if (isAssigned && jo.driver_response !== 'accepted') {
+                          timerBadge = <Badge className="!bg-amber-100 !text-amber-700 border-none font-bold"><Timer size={14} className="inline mr-1" /> Menunggu respons driver</Badge>;
                         }
 
                         return (
