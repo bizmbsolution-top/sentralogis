@@ -305,6 +305,27 @@ export async function PATCH(
       }
     }
 
+    // Driver execution/GPS actions are unavailable until the driver has
+    // explicitly accepted the assignment. Opening a link or sending GPS alone
+    // must never be interpreted as acceptance.
+    const isExecutionProgression =
+      isBackgroundAction ||
+      effectiveAction === "route_status" ||
+      effectiveAction === "complete_job" ||
+      status === "in_progress" ||
+      status === "completed";
+
+    if (
+      isExecutionProgression &&
+      jo.driver_response !== "accepted" &&
+      jo.status?.toUpperCase() !== "ON JOURNEY"
+    ) {
+      return NextResponse.json(
+        { error: "Driver harus menerima penugasan terlebih dahulu sebelum memulai perjalanan." },
+        { status: 409 },
+      );
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // PHOTO UPLOAD — multiple photos per location (no action required)
     // Frontend sends { route_id, pod_photo_base64, pod_photo_name, lat, lng }
