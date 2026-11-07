@@ -440,38 +440,42 @@ async function saveMasterAllowance(tenantId: string, itemData: WoItemContext, fl
   }
 }
 
-async function upsertJobOrder(tenantId: string, assign: AssignmentSlot, payload: Record<string, unknown>, isInsert: boolean): Promise<string> {
-  if (assign.id && !isInsert) {
-    const { data, error } = await db()
-      .from('job_orders')
-      .update({ ...payload })
-      .eq('id', assign.id)
-      .eq('tenant_id', tenantId)
-      .in('status', ['pending', 'PENDING', 'need_assignment', 'NEED_ASSIGNMENT', 'need_assign', 'NEED_ASSIGN', 'draft', 'DRAFT'])
-      .select('id');
+async function upsertJobOrder(
+  tenantId: string,
+  assign: AssignmentSlot,
+  payload: Record<string, unknown>,
+  isInsert: boolean,
+  operation: 'draft' | 'confirm' | 'handover',
+): Promise<string> {
+  const { data, error } = await db().rpc('assign_driver_atomic', {
+    p_tenant_id: tenantId,
+    p_job_order_id: isInsert ? null : assign.id,
+    p_payload: payload,
+    p_operation: operation,
+    p_track_assignment: false,
+  });
 
-     if (error) throw error;
-     if (data && data.length > 0) {
-       return data[0]?.id as string;
-     }
-     throw new JobOrderError('INVALID_STATE', 409, 'JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.');
+  if (error) throw error;
+
+  const result = data as {
+    success?: boolean;
+    error?: string;
+    code?: string;
+    job_order?: DbRow | string | null;
+  } | null;
+
+  if (!result?.success || !result.job_order) {
+    throw new JobOrderError(
+      (result?.code as JobOrderErrorCode) || 'DATABASE_ERROR',
+      result?.code === 'NOT_FOUND' ? 404 : 409,
+      result?.error || 'Atomic JO assignment was rejected',
+    );
   }
 
-  const insertPayload: Record<string, unknown> = { ...payload, tenant_id: tenantId };
-  const isUuid = assign.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assign.id);
-  if (isUuid) {
-    insertPayload.id = assign.id;
-  }
-
-  const { data, error } = await db()
-    .from('job_orders')
-    .insert(insertPayload)
-    .select('id')
-    .single();
-
-   if (error) throw error;
-   if (data) return data.id as string;
-   return '';
+  const row = typeof result.job_order === 'string'
+    ? JSON.parse(result.job_order) as DbRow
+    : result.job_order;
+  return String(row.id || '');
 }
 
 // ============================================================================
@@ -499,13 +503,20 @@ export class JobOrderAssignmentService {
       }
 
       const now = new Date().toISOString();
-      const updatePayload: Record<string, unknown> = {
+      const payload: Record<string, unknown> = {
+        tenant_id: context.tenantId,
+        wo_item_id: jo.woItemId,
         driver_id: input.driverId,
         fleet_id: input.fleetId || null,
         transporter_id: input.transporterId || null,
+        vendor_id: input.transporterId || null,
         driver_phone: input.driverPhone || null,
+        driver_link_token: generateDriverLinkToken(),
         driver_response: 'pending',
+        driver_response_at: null,
         accepted_at: null,
+        started_at: null,
+        rejection_note: null,
         status: 'ASSIGNED',
         assigned_at: now,
         dispatch_ready: true,
@@ -513,34 +524,40 @@ export class JobOrderAssignmentService {
         updated_at: now,
       };
 
-      if (input.notes) {
-        updatePayload.notes = input.notes;
+      if (input.notes !== undefined) payload.notes = input.notes;
+
+      const { data, error } = await db().rpc('assign_driver_atomic', {
+        p_tenant_id: context.tenantId,
+        p_job_order_id: input.jobOrderId,
+        p_payload: payload,
+        p_operation: 'confirm',
+        p_track_assignment: true,
+      });
+
+      if (error) {
+        return { success: false, error: error.message, code: 'DATABASE_ERROR' };
       }
 
-      const { data, error } = await db()
-        .from('job_orders')
-        .update(updatePayload)
-        .eq('id', input.jobOrderId)
-        .eq('tenant_id', context.tenantId)
-        // Compare-and-set: a concurrent operator can win only once.
-        .in('status', [...JO_PENDING_ASSIGNMENT_STATUSES, 'DRAFT', 'pending', 'need_assignment', 'need_assign', 'draft'])
-        .select('*')
-        .single();
+      const result = data as {
+        success?: boolean;
+        error?: string;
+        code?: string;
+        job_order?: DbRow | string | null;
+      } | null;
 
-      if (error || !data) {
+      if (!result?.success || !result.job_order) {
         return {
           success: false,
-          error: error?.message || 'Failed to assign driver',
-          code: 'DATABASE_ERROR',
+          error: result?.error || 'Atomic assignment was rejected',
+          code: result?.code || 'DATABASE_ERROR',
         };
       }
 
-      await insertJobTracking(context.tenantId, input.jobOrderId, 'ASSIGNED', `Driver assigned by ${context.userId}`);
+      const row = typeof result.job_order === 'string'
+        ? JSON.parse(result.job_order) as DbRow
+        : result.job_order;
 
-      return {
-        success: true,
-        jobOrder: mapRowToJobOrder(data),
-      };
+      return { success: true, jobOrder: mapRowToJobOrder(row) };
     } catch (err: unknown) {
       if (err instanceof JobOrderError) {
         return { success: false, error: err.message, code: err.code };
@@ -553,10 +570,6 @@ export class JobOrderAssignmentService {
     }
   }
 
-  /**
-   * Batch assign JOs for a WO item. Handles draft/confirm/handover modes.
-   * Mutates job_orders, wo_items, and optionally work_orders.
-   */
   async batchAssign(context: IdentityContext, input: BatchAssignInput): Promise<SaveAssignmentsResult> {
     assertPermission(context, 'job_order:assign');
     try {
@@ -603,7 +616,7 @@ export class JobOrderAssignmentService {
             status: 'pending',
           };
 
-          await upsertJobOrder(tenantId, assign, payload, !assign.id);
+          await upsertJobOrder(tenantId, assign, payload, !assign.id, mode);
           createdJOs.push(joNumber);
         }
 
@@ -695,7 +708,7 @@ export class JobOrderAssignmentService {
           dispatch_ready_at: new Date().toISOString(),
         };
 
-        const joId = await upsertJobOrder(tenantId, assign, payload, !assign.id);
+        const joId = await upsertJobOrder(tenantId, assign, payload, !assign.id, mode);
 
         if (assign.save_to_master && !isVendor && assign.fleet_id) {
           const fleet = input.fleets.find((f) => f.id === assign.fleet_id);
