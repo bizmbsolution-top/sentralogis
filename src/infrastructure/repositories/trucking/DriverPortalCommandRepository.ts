@@ -11,24 +11,27 @@ export class DriverPortalCommandRepository {
     await this.supabase.from("job_orders").update(updatePayload).eq("id", joId);
   }
 
-  public async acceptJob(joId: string): Promise<void> {
-    await this.supabase.from("job_orders").update({
-      status: "DRIVER_ACCEPTED",
-      driver_response: "accepted",
-      accepted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", joId);
+  private async confirmDriverResponse(joId: string, accepted: boolean, rejectionNote?: string): Promise<string> {
+    const { data, error } = await this.supabase.rpc("vendor_job_confirmation", {
+      p_jo_id: joId,
+      p_is_accepted: accepted,
+      p_is_timeout: false,
+      p_rejection_reason: rejectionNote || null,
+      p_lat: null,
+      p_lng: null,
+    });
+
+    if (error) throw new Error(error.message || "Gagal menyimpan respons driver");
+    if (!data?.success) throw new Error(data?.error || "Respons driver tidak dapat diproses");
+    return String(data.new_status || "");
   }
 
-  public async rejectJob(joId: string, rejectionNote: string): Promise<void> {
-    await this.supabase.from("job_orders").update({
-      status: "ASSIGNED",
-      driver_response: "rejected",
-      rejection_note: rejectionNote,
-      driver_id: null,
-      fleet_id: null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", joId);
+  public async acceptJob(joId: string): Promise<string> {
+    return this.confirmDriverResponse(joId, true);
+  }
+
+  public async rejectJob(joId: string, rejectionNote: string): Promise<string> {
+    return this.confirmDriverResponse(joId, false, rejectionNote);
   }
 
   public async updateRouteStatus(routeId: string, status: string, notes?: string, photoUrl?: string): Promise<void> {
