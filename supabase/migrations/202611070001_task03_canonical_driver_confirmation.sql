@@ -76,6 +76,9 @@ BEGIN
         SET status = v_new_status,
             driver_response = 'rejected',
             rejection_note = coalesce(p_rejection_reason, 'Ditolak driver'),
+            driver_response_at = v_now,
+            accepted_at = NULL,
+            started_at = NULL,
             driver_id = NULL,
             fleet_id = NULL,
             transporter_id = NULL,
@@ -84,6 +87,47 @@ BEGIN
             driver_link_token = NULL,
             updated_at = v_now
         WHERE id = p_jo_id;
+    END IF;
+
+    IF NOT p_is_accepted THEN
+        -- Release old assets only when no other active JO still uses them.
+        IF v_jo.fleet_id IS NOT NULL THEN
+            UPDATE public.md_fleets f
+            SET status = 'available'
+            WHERE f.id = v_jo.fleet_id
+              AND f.tenant_id = v_jo.tenant_id
+              AND f.status = 'on_duty'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM public.job_orders other_jo
+                  WHERE other_jo.tenant_id = v_jo.tenant_id
+                    AND other_jo.id <> p_jo_id
+                    AND other_jo.fleet_id = v_jo.fleet_id
+                    AND upper(coalesce(other_jo.status, '')) NOT IN (
+                        'NEED_ASSIGNMENT', 'NEED_ASSIGN', 'PENDING', 'REJECTED', 'CANCELLED',
+                        'COMPLETED', 'DONE', 'DELIVERED', 'PEKERJAAN SELESAI'
+                    )
+              );
+        END IF;
+
+        IF v_jo.driver_id IS NOT NULL THEN
+            UPDATE public.md_drivers d
+            SET status = 'available', is_working = FALSE
+            WHERE d.id = v_jo.driver_id
+              AND d.tenant_id = v_jo.tenant_id
+              AND d.is_working = TRUE
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM public.job_orders other_jo
+                  WHERE other_jo.tenant_id = v_jo.tenant_id
+                    AND other_jo.id <> p_jo_id
+                    AND other_jo.driver_id = v_jo.driver_id
+                    AND upper(coalesce(other_jo.status, '')) NOT IN (
+                        'NEED_ASSIGNMENT', 'NEED_ASSIGN', 'PENDING', 'REJECTED', 'CANCELLED',
+                        'COMPLETED', 'DONE', 'DELIVERED', 'PEKERJAAN SELESAI'
+                    )
+              );
+        END IF;
     END IF;
 
     IF NOT p_is_accepted AND v_jo.wo_item_id IS NOT NULL THEN
