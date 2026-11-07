@@ -17,6 +17,10 @@ DECLARE
     v_jo public.job_orders%ROWTYPE;
     v_new_status TEXT;
     v_method TEXT;
+    v_wo_id UUID;
+    v_assigned_count INTEGER := 0;
+    v_unassigned_count INTEGER := 0;
+    v_item_assigned_count INTEGER := 0;
     v_now TIMESTAMPTZ := now();
 BEGIN
     SELECT * INTO v_jo
@@ -73,6 +77,57 @@ BEGIN
             driver_link_token = NULL,
             updated_at = v_now
         WHERE id = p_jo_id;
+    END IF;
+
+    IF NOT p_is_accepted AND v_jo.wo_item_id IS NOT NULL THEN
+        -- Recompute the affected WO item and parent WO from the remaining JO
+        -- assignments while holding the item row lock.
+        SELECT wi.wo_id INTO v_wo_id
+        FROM public.wo_items wi
+        WHERE wi.id = v_jo.wo_item_id
+        FOR UPDATE;
+
+        SELECT count(*) FILTER (
+                   WHERE (jo.driver_id IS NOT NULL OR jo.fleet_id IS NOT NULL
+                          OR jo.transporter_id IS NOT NULL OR jo.vendor_id IS NOT NULL)
+                     AND lower(coalesce(jo.status, '')) NOT IN
+                         ('need_assignment', 'pending', 'rejected', 'cancelled')
+               ),
+               count(*) FILTER (
+                   WHERE (jo.driver_id IS NULL AND jo.fleet_id IS NULL
+                          AND jo.transporter_id IS NULL AND jo.vendor_id IS NULL)
+                      OR lower(coalesce(jo.status, '')) IN
+                         ('need_assignment', 'pending', 'rejected', 'cancelled')
+               )
+        INTO v_assigned_count, v_unassigned_count
+        FROM public.job_orders jo
+        JOIN public.wo_items wi ON wi.id = jo.wo_item_id
+        WHERE wi.wo_id = v_wo_id;
+
+        SELECT count(*) INTO v_item_assigned_count
+        FROM public.job_orders jo
+        WHERE jo.wo_item_id = v_jo.wo_item_id
+          AND (jo.driver_id IS NOT NULL OR jo.fleet_id IS NOT NULL
+               OR jo.transporter_id IS NOT NULL OR jo.vendor_id IS NOT NULL)
+          AND lower(coalesce(jo.status, '')) NOT IN
+              ('need_assignment', 'pending', 'rejected', 'cancelled');
+
+        UPDATE public.wo_items
+        SET status = CASE WHEN v_item_assigned_count > 0
+                          THEN 'partially_assigned'
+                          ELSE 'need_assignment' END
+        WHERE id = v_jo.wo_item_id;
+
+        IF v_wo_id IS NOT NULL THEN
+            UPDATE public.work_orders
+            SET status = CASE
+                WHEN v_assigned_count = 0 THEN 'need_assignment'
+                WHEN v_unassigned_count > 0 THEN 'partially_assigned'
+                ELSE 'assigned'
+            END
+            WHERE id = v_wo_id
+              AND tenant_id = v_jo.tenant_id;
+        END IF;
     END IF;
 
     INSERT INTO public.job_tracking (
