@@ -222,7 +222,11 @@ export type JobOrderErrorCode =
   | 'INVALID_STATE'
   | 'SAME_DRIVER'
   | 'MISSING_REASON'
-  | 'DATABASE_ERROR';
+  | 'DATABASE_ERROR'
+  | 'RESOURCE_CONFLICT'
+  | 'DRIVER_UNAVAILABLE'
+  | 'FLEET_UNAVAILABLE'
+  | 'TENANT_MISMATCH';
 
 export class JobOrderError extends Error {
   constructor(
@@ -823,6 +827,16 @@ export class JobOrderAssignmentService {
         isHandoverFlow,
       };
     } catch (err: unknown) {
+      if (err instanceof JobOrderError) {
+        return {
+          success: false,
+          savedCount: 0,
+          woItemStatus: input.woItemStatus,
+          error: err.message,
+          code: err.code,
+          isHandoverFlow: input.mode === 'handover',
+        };
+      }
       return {
         success: false,
         savedCount: 0,
