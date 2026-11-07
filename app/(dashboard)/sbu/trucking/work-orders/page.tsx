@@ -409,6 +409,11 @@ const filteredItems = useMemo(() => {
       return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">PARTIALLY ASSIGNED</Badge>;
     }
 
+    const anyOnJourney = jos.some((j: any) => j.status?.toUpperCase() === 'ON JOURNEY');
+    if (anyOnJourney) {
+      return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic">ON JOURNEY</Badge>;
+    }
+
     if (anyMoving) {
       return <Badge className="!bg-amber-500 !text-white border-none font-black text-[9px] px-3 py-1 uppercase tracking-widest italic animate-pulse">ON ROAD</Badge>;
     }
