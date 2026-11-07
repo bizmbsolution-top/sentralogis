@@ -148,38 +148,35 @@ async function upsertJobOrder(
   supabase: SupabaseClient,
   assign: AssignmentSlot,
   payload: Record<string, unknown>,
-  isInsert: boolean
+  isInsert: boolean,
+  operation: SaveAssignmentMode,
 ): Promise<string> {
-  if (assign.id && !isInsert) {
-    const tenantId = String(payload.tenant_id || '');
-    const { data, error } = await supabase
-      .from('job_orders')
-      .update({ ...payload })
-      .eq('id', assign.id)
-      .eq('tenant_id', tenantId)
-      .in('status', ['pending', 'PENDING', 'need_assignment', 'NEED_ASSIGNMENT', 'need_assign', 'NEED_ASSIGN', 'draft', 'DRAFT'])
-      .select('id');
-    if (error) throw error;
-    if (data && data.length > 0) {
-      return data[0].id;
-    }
-    throw new Error('JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.');
-  }
-
-  const insertPayload = { ...payload };
-  const isUuid = assign.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assign.id);
-  if (isUuid) {
-    insertPayload.id = assign.id;
-  }
-
-  const { data, error } = await supabase
-    .from('job_orders')
-    .insert(insertPayload)
-    .select('id')
-    .single();
+  const { data, error } = await supabase.rpc('assign_driver_atomic', {
+    p_tenant_id: String(payload.tenant_id || ''),
+    p_job_order_id: isInsert ? null : assign.id,
+    p_payload: payload,
+    p_operation: operation,
+    p_track_assignment: false,
+  });
 
   if (error) throw error;
-  return data.id;
+
+  const result = data as {
+    success?: boolean;
+    error?: string;
+    code?: string;
+    job_order?: { id?: string } | string | null;
+  } | null;
+
+  if (!result?.success || !result.job_order) {
+    throw new Error(result?.error || 'Atomic JO assignment was rejected');
+  }
+
+  const row = typeof result.job_order === 'string'
+    ? JSON.parse(result.job_order) as { id?: string }
+    : result.job_order;
+  if (!row.id) throw new Error('Atomic JO assignment returned no Job Order ID');
+  return row.id;
 }
 
 export async function saveAssignments(
@@ -240,7 +237,7 @@ export async function saveAssignments(
           status: 'pending',
         };
 
-        await upsertJobOrder(supabase, assign, payload, !assign.id);
+        await upsertJobOrder(supabase, assign, payload, !assign.id, mode);
       }
 
       const currentItemData = parseItemData(woItem.item_data) as unknown as Record<string, unknown>;
@@ -348,7 +345,7 @@ export async function saveAssignments(
         dispatch_ready_at: new Date().toISOString(),
       };
 
-      const joId = await upsertJobOrder(supabase, assign, payload, !assign.id);
+      const joId = await upsertJobOrder(supabase, assign, payload, !assign.id, mode);
 
       if (assign.save_to_master && !isVendor && assign.fleet_id) {
         const fleet = fleets.find((f) => f.id === assign.fleet_id);
