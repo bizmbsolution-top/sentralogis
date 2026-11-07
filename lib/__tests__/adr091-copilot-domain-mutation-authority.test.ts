@@ -162,6 +162,40 @@ class MockJobOrderDb implements JobOrderDbClient {
   }
 
   rpc(fn: string, args: Record<string, unknown>) {
+    if (fn === 'assign_driver_atomic') {
+      const payload = (args.p_payload || {}) as Row;
+      const tenantId = String(args.p_tenant_id);
+      const jobOrderId = args.p_job_order_id ? String(args.p_job_order_id) : null;
+      const index = jobOrderId
+        ? this.jobOrders.findIndex((row) => row.id === jobOrderId && row.tenant_id === tenantId)
+        : -1;
+
+      if (jobOrderId && index < 0) {
+        return Promise.resolve({ data: { success: false, error: 'Job Order not found', code: 'NOT_FOUND' }, error: null });
+      }
+
+      const current = index >= 0 ? this.jobOrders[index] : {};
+      const next = { ...current, ...payload, id: jobOrderId || String(payload.id || `mock-jo-${this.jobOrders.length + 1}`), tenant_id: tenantId };
+      if (index >= 0) this.jobOrders[index] = next;
+      else this.jobOrders.push(next);
+
+      if (args.p_track_assignment === true) {
+        this.jobTracking.push({
+          job_order_id: next.id,
+          status_update: 'ASSIGNED',
+          notes: 'Driver/fleet assignment reserved through the canonical atomic assignment RPC.',
+          source: 'copilot',
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      return Promise.resolve({ data: { success: true, job_order: next }, error: null });
+    }
+    if (fn === 'replace_driver_atomic') {
+      return Promise.resolve(this.mockReplaceDriverAtomic(args));
+    }
+    return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
+  }
     if (fn === 'replace_driver_atomic') {
       return Promise.resolve(this.mockReplaceDriverAtomic(args));
     }
