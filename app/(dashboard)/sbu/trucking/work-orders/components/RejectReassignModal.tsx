@@ -71,7 +71,7 @@ export default function RejectReassignModal({ show, jobOrder, onClose, onSuccess
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/trucking/job-orders/${jobOrder.id}/cancel`, {
+      const response = await fetch(`/api/trucking/job-orders/${jobOrder.id}/replace-driver`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
