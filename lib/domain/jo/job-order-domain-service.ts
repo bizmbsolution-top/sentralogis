@@ -16,6 +16,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { generateDriverLinkToken } from './driver-link-token';
 import type { IdentityContext } from '@/lib/application/identity/types';
 import { assertPermission } from '@/lib/application/identity/resolver';
 import { JO_PENDING_ASSIGNMENT_STATUSES, JO_REJECTED_STATUSES, JO_ACTIVE_STATUSES, JO_DONE_STATUSES } from './status';
@@ -686,6 +687,7 @@ export class JobOrderAssignmentService {
           },
           updated_at: new Date().toISOString(),
           assigned_at: new Date().toISOString(),
+          driver_link_token: generateDriverLinkToken(),
           driver_response: 'pending',
           accepted_at: null,
           status: assign.id && assign.status && assign.status !== 'pending' && assign.status !== 'draft' ? assign.status : 'assigned',
