@@ -48,19 +48,6 @@ describe('Task 03 regression contracts — atomic assignment', () => {
     expect(method).not.toContain(".from('job_orders')\n        .update(updatePayload)");
   });
 
-  it('batch assignment uses the same atomic resource reservation contract', () => {
-    const methodStart = assignmentService.indexOf('async batchAssign(');
-    const methodEnd = assignmentService.indexOf('\n  async ', methodStart + 1);
-    expect(methodStart).toBeGreaterThanOrEqual(0);
-
-    const method = assignmentService.slice(
-      methodStart,
-      methodEnd > methodStart ? methodEnd : undefined,
-    );
-    expect(method).toContain("rpc('assign_driver_atomic'");
-    expect(method).toContain('p_track_assignment: true');
-  });
-
   it('batch assignment delegates each JO write to the shared atomic persistence helper', () => {
     const methodStart = assignmentService.indexOf('async batchAssign(');
     const methodEnd = assignmentService.indexOf('\n  async ', methodStart + 1);
