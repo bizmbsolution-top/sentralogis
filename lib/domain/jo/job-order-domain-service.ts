@@ -485,7 +485,9 @@ export class JobOrderAssignmentService {
     try {
       const jo = await fetchJoById(context.tenantId, input.jobOrderId);
 
-      if (!JO_PENDING_ASSIGNMENT_STATUSES.includes(jo.status as any) && jo.status !== 'DRAFT') {
+      const normalizedStatus = String(jo.status || '').toUpperCase();
+      const assignableStatuses = [...JO_PENDING_ASSIGNMENT_STATUSES, 'DRAFT'];
+      if (!assignableStatuses.includes(normalizedStatus as any)) {
         return {
           success: false,
           error: `Cannot assign driver to job order in status: ${jo.status}`,
@@ -517,6 +519,8 @@ export class JobOrderAssignmentService {
         .update(updatePayload)
         .eq('id', input.jobOrderId)
         .eq('tenant_id', context.tenantId)
+        // Compare-and-set: a concurrent operator can win only once.
+        .in('status', [...JO_PENDING_ASSIGNMENT_STATUSES, 'DRAFT', 'pending', 'need_assignment', 'need_assign', 'draft'])
         .select('*')
         .single();
 
