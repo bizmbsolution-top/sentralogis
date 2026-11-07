@@ -196,11 +196,6 @@ class MockJobOrderDb implements JobOrderDbClient {
     }
     return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
   }
-    if (fn === 'replace_driver_atomic') {
-      return Promise.resolve(this.mockReplaceDriverAtomic(args));
-    }
-    return Promise.resolve({ data: null, error: { message: 'RPC not mocked' } });
-  }
 
   private mockReplaceDriverAtomic(args: Record<string, unknown>): {
     data: Array<Record<string, unknown>> | null;
