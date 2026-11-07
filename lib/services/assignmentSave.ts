@@ -150,16 +150,19 @@ async function upsertJobOrder(
   isInsert: boolean
 ): Promise<string> {
   if (assign.id && !isInsert) {
+    const tenantId = String(payload.tenant_id || '');
     const { data, error } = await supabase
       .from('job_orders')
       .update({ ...payload })
       .eq('id', assign.id)
+      .eq('tenant_id', tenantId)
+      .in('status', ['pending', 'PENDING', 'need_assignment', 'NEED_ASSIGNMENT', 'need_assign', 'NEED_ASSIGN', 'draft', 'DRAFT'])
       .select('id');
     if (error) throw error;
     if (data && data.length > 0) {
       return data[0].id;
     }
-    // If update matched 0 rows (row was deleted or ID not found), fall through to insert below
+    throw new Error('JO tidak lagi tersedia untuk assignment. Muat ulang daftar JO sebelum mencoba kembali.');
   }
 
   const insertPayload = { ...payload };
