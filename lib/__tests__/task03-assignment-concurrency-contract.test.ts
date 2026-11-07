@@ -27,6 +27,10 @@ const assignmentService = source('lib/domain/jo/job-order-domain-service.ts');
 const replacementMigration = source(
   'supabase/migrations/202611070002_task03_atomic_driver_replacement.sql',
 );
+const assignmentMigration = source(
+  'supabase/migrations/202611070003_task03_atomic_assignment.sql',
+);
+const assignmentSaveAdapter = source('lib/services/assignmentSave.ts');
 const confirmationMigration = source(
   'supabase/migrations/202611070001_task03_canonical_driver_confirmation.sql',
 );
@@ -54,6 +58,44 @@ describe('Task 03 regression contracts — atomic assignment', () => {
       methodEnd > methodStart ? methodEnd : undefined,
     );
     expect(method).toContain("rpc('assign_driver_atomic'");
+    expect(method).toContain('p_track_assignment: true');
+  });
+
+  it('batch assignment delegates each JO write to the shared atomic persistence helper', () => {
+    const methodStart = assignmentService.indexOf('async batchAssign(');
+    const methodEnd = assignmentService.indexOf('\n  async ', methodStart + 1);
+    expect(methodStart).toBeGreaterThanOrEqual(0);
+    expect(methodEnd).toBeGreaterThan(methodStart);
+    const method = assignmentService.slice(methodStart, methodEnd);
+    expect(method).toContain('upsertJobOrder(');
+
+    const helperStart = assignmentService.indexOf('async function upsertJobOrder(');
+    const helperEnd = assignmentService.indexOf('\n}\n\n// ============================================================================\n// JOB ORDER ASSIGNMENT SERVICE', helperStart);
+    expect(helperStart).toBeGreaterThanOrEqual(0);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    const helper = assignmentService.slice(helperStart, helperEnd);
+    expect(helper).toContain("rpc('assign_driver_atomic'");
+  });
+
+  it('legacy assignment adapter also uses the same atomic RPC', () => {
+    const helperStart = assignmentSaveAdapter.indexOf('async function upsertJobOrder(');
+    const helperEnd = assignmentSaveAdapter.indexOf('\n}\n\nexport async function saveAssignments(', helperStart);
+    expect(helperStart).toBeGreaterThanOrEqual(0);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    const helper = assignmentSaveAdapter.slice(helperStart, helperEnd);
+    expect(helper).toContain("rpc('assign_driver_atomic'");
+    expect(helper).not.toContain(".from('job_orders')");
+  });
+
+  it('atomic assignment RPC locks resources and checks competing active JOs', () => {
+    expect(assignmentMigration).toContain('FOR UPDATE');
+    expect(assignmentMigration).toContain('public.md_drivers');
+    expect(assignmentMigration).toContain('public.md_fleets');
+    expect(assignmentMigration).toContain('other_jo.driver_id = v_driver_id');
+    expect(assignmentMigration).toContain('other_jo.fleet_id = v_fleet_id');
+    expect(assignmentMigration).toContain('other_jo.tenant_id = p_tenant_id');
+    expect(assignmentMigration).toContain('SECURITY INVOKER');
+    expect(assignmentMigration).toContain('TO authenticated, service_role');
   });
 
   it('replacement releases the previous driver only when no other active JO uses it', () => {
