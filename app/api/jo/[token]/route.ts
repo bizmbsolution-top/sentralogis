@@ -380,13 +380,15 @@ export async function PATCH(
         );
         return NextResponse.json({ success: true });
 
-      case "accept":
-        await commandRepo.acceptJob(jo.id);
-        return NextResponse.json({ success: true });
+      case "accept": {
+        const newStatus = await commandRepo.acceptJob(jo.id);
+        return NextResponse.json({ success: true, new_status: newStatus });
+      }
 
-      case "reject":
-        await commandRepo.rejectJob(jo.id, rejection_note || "Ditolak driver");
-        return NextResponse.json({ success: true });
+      case "reject": {
+        const newStatus = await commandRepo.rejectJob(jo.id, rejection_note || "Ditolak driver");
+        return NextResponse.json({ success: true, new_status: newStatus });
+      }
 
       case "complete_job": {
         const autoCompleteService = new JoAutoCompleteService(supabase);
