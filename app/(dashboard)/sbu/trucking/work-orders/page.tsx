@@ -110,13 +110,6 @@ export default function WorkOrderPlanningPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedJoForReject, setSelectedJoForReject] = useState<any>(null);
 
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   useEffect(() => {
     const status = searchParams.get('status');
     if (status) {
